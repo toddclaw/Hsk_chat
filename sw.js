@@ -1,6 +1,6 @@
 /* Cache the shell and the wordlists so the app opens offline. API calls are
  * never cached -- they are POSTs to OpenRouter and always go to the network. */
-const CACHE = "hsk-chat-v1";
+const CACHE = "hsk-chat-v2";
 const SHELL = [
   "./", "./index.html", "./validator.js", "./manifest.json",
   "./data/hsk1.json", "./data/hsk2.json", "./data/hsk3.json",

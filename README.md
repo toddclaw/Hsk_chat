@@ -71,11 +71,30 @@ prompt handles that class instead.
 
 ## Growing the allowlist
 
-The system prompt reserves `[[NEED:词|pīn yīn|english]]`. Those tokens are stripped before
-validation, and the word is offered to the user with pinyin and gloss under the message.
-Accepting appends it to the session allowlist (persisted, listed under 词, removable).
-`data/hsk3.json` doubles as a reference dictionary for glossing words the model requests
-without supplying a gloss.
+Four ways a word joins the session allowlist, all landing in the same place (词 panel,
+persisted, removable):
+
+1. **Words you type**, automatically — on by default, toggled in the 词 panel. Anything in
+   your own message that the level does not cover is learned before the reply is generated,
+   so the model may use it in the same turn.
+2. **Tap a red word → Add.** Works on your messages and the model's.
+3. **By hand**, in the 词 panel — space- or comma-separated.
+4. **`[[NEED:词|pīn yīn|english]]`** from the model, offered under the message with
+   accept / reject buttons.
+
+Two problems the naive version gets wrong, both handled:
+
+- A violation span is a *run* of unmatchable characters, so it can fuse two words
+  (因为苹果). Runs are split against the reference list before being stored.
+- A violation can equally be *part* of a word: 西 and 问 are in HSK 1, so typing 西瓜 or
+  问题 only flags 瓜 and 题. The span is grown against the reference list first
+  (题 → 问题), and when the whole word is outside HSK 1–3 entirely (西瓜 is), the gloss
+  lookup gets the sentence too and names the word the fragment belongs to — accepted only
+  if that word actually occurs in the sentence and contains the flagged fragment.
+
+Pinyin and meaning come from `data/hsk3.json`, used as a reference dictionary. Only when a
+word is missing from it does the app spend one small API call to gloss it, batched per
+message; if that call fails the word is still added, just bare.
 
 Strict HSK 1 conversation is close to unworkable, so the level picker in the header also
 switches the whole allowlist between HSK 1 / 2 / 3 mid-conversation. The validator is

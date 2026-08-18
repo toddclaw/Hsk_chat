@@ -112,6 +112,11 @@ footer{
 #pop .py2{color:var(--accent); font-size:14px; margin-top:2px}
 #pop .d{font-size:13px; color:var(--dim); margin-top:6px}
 #pop .tag{font-size:11px; color:var(--bad); margin-top:6px}
+#pop button{margin-top:10px; width:100%; padding:8px 10px; min-height:38px}
+.toggle{display:flex; align-items:center; gap:10px; padding:10px 0}
+.toggle input{width:22px; height:22px; accent-color:var(--accent)}
+.addrow{display:flex; gap:8px; margin-top:8px}
+.addrow input{flex:1}
 .hint{color:var(--dim); font-size:14px; text-align:center; padding:24px 12px; line-height:1.7}
 </style>
 
@@ -163,8 +168,19 @@ footer{
 
 <div class="sheet" id="vocabSheet"><div class="card">
   <h2>Added vocabulary</h2>
-  <div id="vocabList"></div>
-  <div class="note">Words accepted from the model's <code>[[NEED:…]]</code> requests. They are appended to the session allowlist and persist on this device.</div>
+  <label class="toggle" for="autoAdd">
+    <input type="checkbox" id="autoAdd">
+    <span>Add the words I type automatically</span>
+  </label>
+  <div class="addrow">
+    <input id="addWord" type="text" placeholder="add a word by hand，比如 苹果" autocomplete="off">
+    <button id="addWordBtn">Add</button>
+  </div>
+  <div id="vocabList" style="margin-top:12px"></div>
+  <div class="note">Words you typed, added by hand, or accepted from the model's
+  <code>[[NEED:…]]</code> requests. They join the session allowlist — the model may then
+  use them too — and persist on this device. Pinyin and meaning come from the HSK 3
+  reference list, or from one small model lookup when the word is not in it.</div>
   <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
 </div></div>
 
@@ -202,7 +218,8 @@ const FALLBACKS = ["我不知道。", "我不会说。"];
 const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
-  pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache"
+  pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
+  autoAdd:"hsk1chat.autoAddTyped"
 };
 
 const store = {
@@ -217,6 +234,7 @@ const S = {
   model:   store.get(K.model, MODELS[0].id),
   mode:    store.get(K.mode, "without-list"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
+  autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -404,7 +422,7 @@ function tokenSpan(tok, needs) {
   if (tok.kind === "bad" || tok.kind === "latin") cls.push("bad");
   if (need) cls.push("need");
   else if (isExtra(tok.text)) cls.push("extra");
-  return '<span class="' + cls.join(" ") + '" data-w="' + escapeHtml(tok.text) +
+  return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
          '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
          '" data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
          '<i class="py">' + escapeHtml(primaryReading(e.p)) + '</i>' +
@@ -424,6 +442,7 @@ function renderMessage(turnObj, idx) {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble pinyin-" + S.pinyin;
+  bubble.dataset.src = turnObj.text;
   const toks = HSK.segment(turnObj.text, S.lex);
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs)).join("");
   el.appendChild(bubble);
@@ -471,6 +490,114 @@ function renderAll() {
   log.scrollTop = log.scrollHeight;
 }
 
+/* ---------------------------------------------------------- growing vocab */
+
+/* A violation span is a run of consecutive unmatchable characters, so it can
+ * hold more than one word (因为苹果). Split it against the HSK 3 reference list
+ * before storing, or the vocabulary panel fills up with fused compounds. */
+function splitUnknown(run) {
+  const out = [];
+  let chunk = "", i = 0;
+  const flush = () => { if (chunk) { out.push(chunk); chunk = ""; } };
+  while (i < run.length) {
+    let hit = 0;
+    for (let len = Math.min(4, run.length - i); len > 1; len--) {
+      if (S.dict.has(run.slice(i, i + len))) { hit = len; break; }
+    }
+    if (hit) { flush(); out.push(run.slice(i, i + hit)); i += hit; continue; }
+    chunk += run[i++];
+    if (chunk.length >= 4) flush();   // never store a run longer than a plausible word
+  }
+  flush();
+  return out;
+}
+
+/* A violation can be part of a word rather than the whole of it: 西 and 问 are
+ * in HSK 1, so typing 西瓜 or 问题 only flags 瓜 and 题. Grow the span outwards
+ * against the reference list so the learner gets the word, not the orphan. */
+function expandWord(text, start, end) {
+  let best = "";
+  for (let s = Math.max(0, end - 4); s <= start; s++) {
+    for (let e = Math.min(text.length, s + 4); e >= end; e--) {
+      const cand = text.slice(s, e);
+      if (cand.length > best.length && S.dict.has(cand)) best = cand;
+    }
+  }
+  return best || text.slice(start, end);
+}
+
+// Add entries, gloss them from the reference list, and return the ones still
+// missing a gloss so the caller can look them up.
+function addWords(words) {
+  const added = [];
+  words.forEach(w => {
+    if (!w || isExtra(w) || S.lex.words.has(w)) return;
+    const known = S.dict.get(w);
+    const entry = { w: w, p: known ? known.p : "", d: known ? known.d : "" };
+    S.extra.push(entry);
+    added.push(entry);
+  });
+  if (!added.length) return [];
+  store.set(K.extra, S.extra);
+  rebuildLexicon();
+  return added.filter(e => !e.d);
+}
+
+// Everything the user typed that the current level does not cover.
+function learnFromInput(text) {
+  const runs = HSK.validate(text, S.lex).filter(v => v.kind === "bad");
+  const words = [];
+  runs.forEach(v => {
+    const whole = expandWord(text, v.start, v.end);
+    if (whole.length > v.text.length) words.push(whole);
+    else splitUnknown(v.text).forEach(w => words.push(w));
+  });
+  return addWords(words);
+}
+
+/* One cheap call for words the reference list does not have. It also repairs
+ * the span: the flagged fragment can be part of a word the reference list has
+ * never heard of (西 is in HSK 1, so 西瓜 only ever flags 瓜), so the sentence
+ * goes with it and the model names the word the fragment belongs to.
+ * Fire-and-forget: a failure leaves the word added but bare. */
+async function glossWords(entries, ctx) {
+  if (!entries.length || !store.get(K.key, "")) return;
+  const list = entries.map(e => e.w).join("、");
+  try {
+    const raw = await callModel([{
+      role: "user",
+      content: "Chinese fragments flagged in this sentence: " + (ctx || "") + "\n" +
+               "Fragments: " + list + "\n" +
+               "For each fragment, give the whole word it belongs to in that sentence, " +
+               "its pinyin with tone marks, and a short English gloss.\n" +
+               "Reply with only a JSON array, no prose: " +
+               "[{\"frag\":\"瓜\",\"w\":\"西瓜\",\"p\":\"xī guā\",\"d\":\"watermelon\"}]"
+    }]);
+    const json = raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1);
+    JSON.parse(json).forEach(g => {
+      // Only entries from this batch, so a stray row cannot rewrite a word the
+      // reference list already glossed correctly.
+      const hit = entries.find(e => e.w === (g.frag || g.w));
+      if (!hit || !g.p) return;
+      // Accept a wider word only if it really occurs in the sentence the
+      // fragment came from -- otherwise keep what the learner actually typed.
+      const word = String(g.w || hit.w);
+      if (word !== hit.w && word.length <= 4 && ctx &&
+          ctx.indexOf(word) !== -1 && word.indexOf(hit.w) !== -1) {
+        if (isExtra(word)) { S.extra.splice(S.extra.indexOf(hit), 1); return; }
+        hit.w = word;
+      }
+      hit.p = String(g.p); hit.d = String(g.d || "");
+    });
+    store.set(K.extra, S.extra);
+    rebuildLexicon();
+    renderAll();
+    if ($("#vocabSheet").classList.contains("open")) renderVocab();
+  } catch (e) {
+    console.warn("gloss lookup failed", e);
+  }
+}
+
 function acceptWord(n) {
   if (!isExtra(n.w)) {
     S.extra.push({ w: n.w, p: n.p, d: n.d });
@@ -493,6 +620,8 @@ async function send() {
   input.value = ""; updateMirror(); autosize();
 
   S.history.push({ role: "user", text: text });
+  // Learn before the turn, so the model's own reply may use these words too.
+  const toGloss = S.autoAdd ? learnFromInput(text) : [];
   persist(); renderAll();
 
   const thinking = document.createElement("div");
@@ -517,6 +646,7 @@ async function send() {
     thinking.remove();
     S.busy = false; $("#send").disabled = false;
     renderAll();
+    glossWords(toGloss, text);
   }
 }
 
@@ -539,6 +669,13 @@ function autosize() {
 
 /* --------------------------------------------------------------- popover */
 
+// What the Add button will actually store, once the span is grown to a word.
+function popTarget(el, w) {
+  const bubble = el.closest(".bubble");
+  if (!bubble || !bubble.dataset.src) return w;
+  return expandWord(bubble.dataset.src, Number(el.dataset.s), Number(el.dataset.s) + w.length);
+}
+
 function showPopover(el) {
   const pop = $("#pop");
   const w = el.dataset.w, p = el.dataset.p, d = el.dataset.d, bad = el.dataset.bad === "1";
@@ -547,7 +684,17 @@ function showPopover(el) {
     '<div class="py2">' + escapeHtml(p || (known ? known.p : "")) + "</div>" +
     '<div class="d">' + escapeHtml(d || (known ? known.d : "not in the reference dictionary")) + "</div>" +
     (bad ? '<div class="tag">above level</div>' : "") +
-    (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "");
+    (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
+    (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "");
+  const add = pop.querySelector("#popAdd");
+  if (add) add.onclick = () => {
+    const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
+    const whole = src && src.src ? expandWord(src.src, at, at + w.length) : w;
+    const missing = addWords(whole.length > w.length ? [whole] : splitUnknown(w));
+    pop.classList.remove("open");
+    updateMirror(); renderAll();
+    glossWords(missing, src && src.src);
+  };
   pop.classList.add("open");
   const r = el.getBoundingClientRect(), pr = pop.getBoundingClientRect();
   pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8)) + "px";
@@ -602,7 +749,7 @@ function renderVocab() {
     const row = document.createElement("div");
     row.className = "vrow";
     row.innerHTML = '<span class="w2">' + escapeHtml(e.w) + '</span><span class="g">' +
-      escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+      (e.p || e.d ? escapeHtml(e.p) + " — " + escapeHtml(e.d) : "no pinyin or meaning yet") + "</span>";
     const del = document.createElement("button");
     del.textContent = "Remove";
     del.onclick = () => {
@@ -645,7 +792,22 @@ $("#btnPy").onclick = () => {
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
 };
-$("#btnVocab").onclick = () => { renderVocab(); openSheet("#vocabSheet"); };
+$("#btnVocab").onclick = () => {
+  $("#autoAdd").checked = S.autoAdd;
+  renderVocab(); openSheet("#vocabSheet");
+};
+$("#autoAdd").onchange = e => { S.autoAdd = e.target.checked; store.set(K.autoAdd, S.autoAdd); };
+function addByHand() {
+  const box = $("#addWord");
+  const words = box.value.trim().split(/[\s,，、]+/).filter(Boolean);
+  if (!words.length) return;
+  const missing = addWords(words);
+  box.value = "";
+  renderVocab(); updateMirror(); renderAll();
+  glossWords(missing);
+}
+$("#addWordBtn").onclick = addByHand;
+$("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addByHand(); } });
 $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
 $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
