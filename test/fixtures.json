@@ -1,0 +1,157 @@
+{
+  "good": [
+    {
+      "t": "你好！我是老师。",
+      "why": "basic HSK1 sentence"
+    },
+    {
+      "t": "你叫什么名字？",
+      "why": "question words in list"
+    },
+    {
+      "t": "我不喜欢喝茶，我喜欢喝水。",
+      "why": "negation + verbs"
+    },
+    {
+      "t": "今天天气很好。",
+      "why": "adjectival predicate"
+    },
+    {
+      "t": "我有三个中国朋友。",
+      "why": "measure word"
+    },
+    {
+      "t": "他今年二十三岁。",
+      "why": "multi-character number must combine"
+    },
+    {
+      "t": "这本书一百块钱。",
+      "why": "一百 must combine"
+    },
+    {
+      "t": "我们都是学生。",
+      "why": "们 as plural marker"
+    },
+    {
+      "t": "你去哪儿？",
+      "why": "儿 suffix comes from EXTRA_ALLOWED"
+    },
+    {
+      "t": "好啊，我们一起去。",
+      "why": "啊 comes from EXTRA_ALLOWED"
+    },
+    {
+      "t": "现在几点了？",
+      "why": "了 is in the HSK1 list"
+    },
+    {
+      "t": "请坐，喝茶吧。",
+      "why": "punctuation and 吧"
+    },
+    {
+      "t": "我的爸爸妈妈在家。",
+      "why": "compound family words"
+    },
+    {
+      "t": "对不起，我不知道。",
+      "why": "the sanctioned fallback line"
+    },
+    {
+      "t": "1234 ... !?",
+      "why": "digits and ASCII punctuation are never violations"
+    },
+    {
+      "t": "我今年八十九岁。",
+      "why": "八十九 combines; every unit character is in the list"
+    }
+  ],
+  "bad": [
+    {
+      "t": "我想要一个苹果。",
+      "expect": [
+        "苹果"
+      ],
+      "why": "苹果 is not in HSK3.0 level 1"
+    },
+    {
+      "t": "因为下雨，所以我不去。",
+      "expect": [
+        "因为",
+        "所以"
+      ],
+      "why": "above-level connectors, two separate spans"
+    },
+    {
+      "t": "他把书放在桌子上。",
+      "expect": [
+        "把"
+      ],
+      "why": "把 is above level and banned by the grammar list"
+    },
+    {
+      "t": "这个问题很复杂。",
+      "expect": [
+        "题",
+        "复杂"
+      ],
+      "why": "partial-word and whole-word violations in one line"
+    },
+    {
+      "t": "Hello, how are you?",
+      "expect": [
+        "Hello",
+        "how",
+        "are",
+        "you"
+      ],
+      "why": "English must not pass"
+    },
+    {
+      "t": "wo hen hao",
+      "expect": [
+        "wo",
+        "hen",
+        "hao"
+      ],
+      "why": "pinyin must not pass"
+    },
+    {
+      "t": "我有一千块钱。",
+      "expect": [
+        "千"
+      ],
+      "why": "千 is above level, so the numeral run must not rescue it"
+    }
+  ],
+  "spans": [
+    {
+      "t": "我想吃苹果",
+      "violations": [
+        {
+          "text": "苹果",
+          "start": 3,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "t": "复杂的问题",
+      "violations": [
+        {
+          "text": "复杂",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "text": "题",
+          "start": 4,
+          "end": 5
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "Known limitation: the validator matches words, so an above-level compound built entirely from in-list characters (想要 = 想 + 要) passes. Constraining that would require a blocklist, which the grammar section of the system prompt handles instead.",
+    "苹果, 问题, 千 and 万 are absent from HSK 3.0 level 1 (506 words). Fixtures assert against the supplied list, not against intuition."
+  ]
+}

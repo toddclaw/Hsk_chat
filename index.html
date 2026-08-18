@@ -1,0 +1,691 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HSK Chat">
+<meta name="theme-color" content="#101418">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>HSK Chat</title>
+
+<style>
+:root{
+  --bg:#0f1317; --panel:#171d23; --panel2:#1e262e; --line:#2b343d;
+  --ink:#e8edf2; --dim:#8c9aa8; --accent:#6aa9ff; --bad:#ff6b6b; --ok:#5ecb8b;
+  --tap:44px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  display:flex; flex-direction:column; overscroll-behavior:none;
+}
+button,select,input,textarea{font:inherit; color:inherit}
+button{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 12px; min-height:var(--tap)}
+button:active{background:#2a343e}
+button.primary{background:var(--accent); border-color:var(--accent); color:#08111d; font-weight:600}
+button:disabled{opacity:.45}
+
+header{
+  display:flex; gap:8px; align-items:center; padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;
+  background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;
+}
+header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px; min-height:var(--tap); max-width:42vw}
+header .grow{flex:1}
+header button{padding:8px 10px}
+
+#log{flex:1; overflow-y:auto; padding:14px 12px 4px; -webkit-overflow-scrolling:touch}
+.msg{margin:0 0 16px; max-width:88%}
+.msg.user{margin-left:auto}
+.bubble{
+  padding:12px 14px; border-radius:16px; background:var(--panel);
+  font-size:26px; line-height:2.1; letter-spacing:.02em;
+}
+.msg.user .bubble{background:#233246; border-bottom-right-radius:6px}
+.msg.bot .bubble{border-bottom-left-radius:6px}
+.meta{display:flex; gap:6px; align-items:center; margin-top:6px; font-size:12px; color:var(--dim)}
+.msg.user .meta{justify-content:flex-end}
+.badge{border:1px solid var(--line); border-radius:999px; padding:2px 8px}
+.badge.warn{color:#ffd479; border-color:#5a4a22}
+.badge.fail{color:var(--bad); border-color:#5a2626}
+
+/* Word tokens: the greedy matcher's boundaries are the tap targets. */
+.w{display:inline-flex; flex-direction:column; align-items:center; vertical-align:bottom; cursor:pointer}
+/* Hidden pinyin must not reserve width, or the ruby column stretches every
+   token to the width of its romanisation and the line looks gappy. */
+.w .py{display:none; font-size:11px; line-height:1.15; color:var(--dim); font-style:normal}
+.pinyin-all .w .py,
+.pinyin-extra .w.extra .py,
+.pinyin-extra .w.need .py,
+.pinyin-extra .w.bad .py{display:block; margin-bottom:-3px}
+.w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
+.w.extra>.t{border-bottom:2px solid var(--ok)}
+.w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
+.pending{margin-top:8px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; font-size:14px}
+.pending .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px}
+.pending b{font-size:22px}
+
+footer{
+  border-top:1px solid var(--line); background:var(--panel);
+  padding:8px 10px calc(env(safe-area-inset-bottom) + 8px); display:flex; gap:8px; align-items:flex-end;
+}
+.inputwrap{position:relative; flex:1}
+#mirror,#input{
+  font-size:20px; line-height:1.6; padding:10px 12px; border-radius:12px;
+  border:1px solid var(--line); width:100%; white-space:pre-wrap; word-break:break-word;
+}
+#mirror{position:absolute; inset:0; color:transparent; pointer-events:none; overflow:hidden; background:var(--panel2)}
+#mirror .bad{text-decoration:underline wavy var(--bad); text-underline-offset:5px}
+#input{position:relative; background:transparent; resize:none; max-height:32vh; min-height:var(--tap)}
+#input:focus{outline:1px solid var(--accent)}
+
+.sheet{
+  position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:20;
+  align-items:flex-end; justify-content:center;
+}
+.sheet.open{display:flex}
+.sheet .card{
+  background:var(--panel); width:100%; max-width:560px; max-height:88vh; overflow-y:auto;
+  border-radius:18px 18px 0 0; padding:16px 16px calc(env(safe-area-inset-bottom) + 16px);
+}
+.sheet h2{margin:0 0 12px; font-size:17px}
+.sheet label{display:block; margin:14px 0 6px; font-size:13px; color:var(--dim)}
+.sheet input[type=text],.sheet input[type=password],.sheet select{
+  width:100%; padding:11px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); min-height:var(--tap);
+}
+.note{font-size:12px; color:var(--dim); margin-top:8px; line-height:1.5}
+.vrow{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line)}
+.vrow .w2{font-size:22px; min-width:3em}
+.vrow .g{flex:1; font-size:13px; color:var(--dim)}
+.vrow button{padding:6px 10px; min-height:36px}
+.stats{font-size:13px; color:var(--dim); background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px}
+.stats td{padding:2px 10px 2px 0}
+
+#pop{
+  position:fixed; z-index:30; display:none; max-width:min(84vw,340px);
+  background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+#pop.open{display:block}
+#pop .hw{font-size:26px}
+#pop .py2{color:var(--accent); font-size:14px; margin-top:2px}
+#pop .d{font-size:13px; color:var(--dim); margin-top:6px}
+#pop .tag{font-size:11px; color:var(--bad); margin-top:6px}
+.hint{color:var(--dim); font-size:14px; text-align:center; padding:24px 12px; line-height:1.7}
+</style>
+
+<header>
+  <select id="level" title="Vocabulary level"></select>
+  <select id="model" title="Model"></select>
+  <span class="grow"></span>
+  <button id="btnPy" title="Pinyin">拼</button>
+  <button id="btnVocab" title="Vocabulary">词</button>
+  <button id="btnSet" title="Settings">⚙</button>
+</header>
+
+<div id="log"></div>
+
+<footer>
+  <div class="inputwrap">
+    <div id="mirror"></div>
+    <textarea id="input" rows="1" placeholder="用中文写…" enterkeyhint="send"></textarea>
+  </div>
+  <button id="send" class="primary">送</button>
+</footer>
+
+<div class="sheet" id="setSheet"><div class="card">
+  <h2>Settings</h2>
+  <label for="key">OpenRouter API key</label>
+  <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+  <div class="note">The key is stored in this browser's localStorage on this device only, and is sent to openrouter.ai and nowhere else. There is no backend.</div>
+
+  <label for="modelId">Model id (any OpenRouter id)</label>
+  <input id="modelId" type="text" placeholder="anthropic/claude-...">
+  <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
+  <div class="note" id="modelNote"></div>
+
+  <label for="promptMode">Prompt mode (A/B)</label>
+  <select id="promptMode">
+    <option value="without-list">without-list — rules only</option>
+    <option value="with-list">with-list — full allowlist in the prompt</option>
+  </select>
+  <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
+  <div class="stats" id="stats"></div>
+
+  <label>Data</label>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button id="clearHistory">Clear conversation</button>
+    <button id="resetStats">Reset A/B counters</button>
+  </div>
+  <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="vocabSheet"><div class="card">
+  <h2>Added vocabulary</h2>
+  <div id="vocabList"></div>
+  <div class="note">Words accepted from the model's <code>[[NEED:…]]</code> requests. They are appended to the session allowlist and persist on this device.</div>
+  <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
+</div></div>
+
+<div id="pop"></div>
+
+<script src="validator.js"></script>
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ config */
+
+/* Model ids change often and must not be typed from memory. The picker loads
+ * the live catalogue from https://openrouter.ai/api/v1/models (no key needed)
+ * and caches it; these seeds are only a starting point and any id can be typed
+ * into Settings. Verify against https://openrouter.ai/models. */
+const MODELS = [
+  { id: "anthropic/claude-sonnet-4.5", label: "Claude" },
+  { id: "google/gemini-2.5-flash",     label: "Gemini" },
+  { id: "openai/gpt-4o",               label: "GPT" }
+];
+
+const LEVELS = [
+  { id: 1, file: "data/hsk1.json", label: "HSK 1" },
+  { id: 2, file: "data/hsk2.json", label: "HSK 2" },
+  { id: 3, file: "data/hsk3.json", label: "HSK 3" }
+];
+
+const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
+const MODELS_URL= "https://openrouter.ai/api/v1/models";
+const MAX_TOKENS= 300;
+const ATTEMPTS  = 3;        // 1 generation + 2 repairs
+const WINDOW    = 20;       // turns sent to the API
+const FALLBACKS = ["我不知道。", "我不会说。"];
+
+const K = {
+  key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
+  history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
+  pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache"
+};
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ------------------------------------------------------------------- state */
+
+const S = {
+  level:   store.get(K.level, 1),
+  model:   store.get(K.model, MODELS[0].id),
+  mode:    store.get(K.mode, "without-list"),
+  pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
+  extra:   store.get(K.extra, []),
+  history: store.get(K.history, []),
+  stats:   store.get(K.stats, {}),
+  base:    [],        // the level's wordlist
+  dict:    new Map(), // HSK3 as a reference dictionary for glossing
+  lex:     null,
+  busy:    false
+};
+
+const $ = s => document.querySelector(s);
+const log = $("#log"), input = $("#input"), mirror = $("#mirror");
+
+function rebuildLexicon() { S.lex = HSK.buildLexicon(S.base, S.extra); }
+const isExtra = w => S.extra.some(e => e.w === w);
+
+/* --------------------------------------------------------------- word data */
+
+async function loadLevel(n) {
+  const lv = LEVELS.find(l => l.id === n) || LEVELS[0];
+  const r = await fetch(lv.file);
+  if (!r.ok) throw new Error(lv.file + ": " + r.status);
+  S.base = await r.json();
+  S.level = lv.id;
+  store.set(K.level, lv.id);
+  rebuildLexicon();
+}
+
+async function loadDict() {
+  try {
+    const r = await fetch("data/hsk3.json");
+    if (r.ok) (await r.json()).forEach(e => S.dict.set(e.w, e));
+  } catch (e) { /* glossing degrades to blank, nothing else breaks */ }
+}
+
+/* ------------------------------------------------------------ system prompt */
+
+function systemPrompt() {
+  const rules = [
+    "你是一个中文聊天伙伴。用户是刚开始学中文的学生（HSK " + S.level + "）。",
+    "",
+    "规则：",
+    "1. 只用很简单的词。学生不认识的词，一个也不要用。",
+    "2. 每次只说一到三个短句。不要长。",
+    "3. 不要用这些语法：把、被、就、才、动词补语（看得懂、跑出去、说完了）、难的「了」。",
+    "4. 不要用英文，不要用拼音，不要用汉字注音。只写汉字。",
+    "5. 每次说完，问学生一个很简单的问题。",
+    "6. 如果你真的需要一个学生不会的词，写 [[NEED:词|pīn yīn|english]]，一句话最多一个。",
+    "",
+    "例子：",
+    "学生：你好！",
+    "你：你好！你叫什么名字？"
+  ];
+  if (S.mode === "with-list") {
+    rules.push("", "你只可以用这些词：", S.lex ? [...S.lex.words.keys()].join(" ") : "");
+  }
+  return rules.join("\n");
+}
+
+/* -------------------------------------------------------------- NEED tokens */
+
+const NEED_RE = /\[\[NEED:([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]]*))?\]\]/g;
+
+// Pull the requests out so validation never sees the ASCII wrapper, and record
+// where each requested word sits in the cleaned text.
+function extractNeeds(text) {
+  const needs = [];
+  let out = "", last = 0, m;
+  NEED_RE.lastIndex = 0;
+  while ((m = NEED_RE.exec(text))) {
+    const w = m[1].trim();
+    const known = S.dict.get(w);
+    out += text.slice(last, m.index);
+    needs.push({
+      w: w,
+      p: (m[2] || "").trim() || (known ? known.p : ""),
+      d: (m[3] || "").trim() || (known ? known.d : ""),
+      start: out.length, end: out.length + w.length
+    });
+    out += w;
+    last = m.index + m[0].length;
+  }
+  out += text.slice(last);
+  return { text: out, needs: needs };
+}
+
+/* -------------------------------------------------------------- repair loop */
+
+function repairPrompt(violations, attempt) {
+  const latin = violations.filter(v => v.kind === "latin");
+  const words = violations.filter(v => v.kind === "bad");
+  const parts = [];
+  if (latin.length) parts.push("不要用英文，不要用拼音。只写汉字。");
+  if (words.length) {
+    const named = words.map(v => "「" + v.text + "」").join("、");
+    parts.push("你用了" + named + "。这些词太难，学生不认识，不可以用。");
+    if (attempt >= 3) {
+      // Naming a permitted substitute beats asking the model to find its own.
+      words.slice(0, 3).forEach(v => {
+        const s = HSK.suggest(v.text, S.lex, 4).map(e => e.w);
+        if (s.length) parts.push("「" + v.text + "」可以换成：" + s.join("、") + "。");
+      });
+      parts.push("只用最简单的词。");
+    }
+  }
+  parts.push("请用别的说法，再说一次。只说中文，不要解释。");
+  return parts.join("");
+}
+
+async function callModel(messages) {
+  const key = store.get(K.key, "");
+  if (!key) throw new Error("No API key. Open Settings and paste an OpenRouter key.");
+  const r = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: S.model, messages: messages, max_tokens: MAX_TOKENS, temperature: 0.6 })
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
+  const txt = body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
+  if (!txt) throw new Error("Empty response from " + S.model);
+  return txt.trim();
+}
+
+function windowed() {
+  return S.history.slice(-WINDOW).map(t => ({ role: t.role, content: t.text }));
+}
+
+/* One turn against the history already containing the user's message:
+ * generate, validate, repair, repair, else fall back.
+ * Repair exchanges live in a scratch array and never enter the stored history. */
+async function turn() {
+  const scratch = [{ role: "system", content: systemPrompt() }].concat(windowed());
+  let attempt = 0, last = null;
+
+  while (attempt < ATTEMPTS) {
+    attempt++;
+    const raw = await callModel(scratch);
+    const ex = extractNeeds(raw);
+    const violations = HSK.validate(ex.text, S.lex);
+    console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
+
+    if (!violations.length) return { text: ex.text, needs: ex.needs, attempts: attempt };
+
+    last = ex.text;
+    scratch.push({ role: "assistant", content: raw });
+    const rp = repairPrompt(violations, attempt + 1);
+    console.log("[repair]", rp);
+    scratch.push({ role: "user", content: rp });
+  }
+
+  return {
+    text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
+    needs: [], attempts: attempt, failed: true, dropped: last
+  };
+}
+
+/* ------------------------------------------------------------------ metrics */
+
+function recordTurn(attempts, failed) {
+  const s = S.stats[S.mode] || (S.stats[S.mode] = { turns: 0, retries: 0, fallbacks: 0 });
+  s.turns++;
+  s.retries += attempts - 1;
+  if (failed) s.fallbacks++;
+  store.set(K.stats, S.stats);
+  renderStats();
+}
+
+function renderStats() {
+  const rows = ["without-list", "with-list"].map(m => {
+    const s = S.stats[m] || { turns: 0, retries: 0, fallbacks: 0 };
+    const mean = s.turns ? (s.retries / s.turns).toFixed(2) : "–";
+    return "<tr><td>" + m + "</td><td>" + s.turns + " turns</td><td>" + mean +
+           " retries/turn</td><td>" + s.fallbacks + " gave up</td></tr>";
+  });
+  $("#stats").innerHTML = "<table>" + rows.join("") + "</table>";
+}
+
+/* -------------------------------------------------------------- rendering */
+
+function tokenSpan(tok, needs) {
+  const need = needs && needs.find(n => n.start === tok.start && n.w === tok.text);
+  if (tok.kind === "punct") return escapeHtml(tok.text);
+  const e = tok.entry || need || {};
+  const cls = ["w"];
+  if (tok.kind === "bad" || tok.kind === "latin") cls.push("bad");
+  if (need) cls.push("need");
+  else if (isExtra(tok.text)) cls.push("extra");
+  return '<span class="' + cls.join(" ") + '" data-w="' + escapeHtml(tok.text) +
+         '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
+         '" data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
+         '<i class="py">' + escapeHtml(primaryReading(e.p)) + '</i>' +
+         '<span class="t">' + escapeHtml(tok.text) + "</span></span>";
+}
+
+// Ruby shows one reading; alternates (好 hǎo / hào) stay in the popover.
+function primaryReading(p) { return (p || "").split(" / ")[0]; }
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderMessage(turnObj, idx) {
+  const el = document.createElement("div");
+  el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble pinyin-" + S.pinyin;
+  const toks = HSK.segment(turnObj.text, S.lex);
+  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs)).join("");
+  el.appendChild(bubble);
+
+  const bits = [];
+  if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
+  if (turnObj.failed) bits.push('<span class="badge fail">gave up</span>');
+  if (bits.length) {
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = bits.join("");
+    el.appendChild(meta);
+  }
+
+  (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w)).forEach(n => {
+    const box = document.createElement("div");
+    box.className = "pending";
+    box.innerHTML = "The model asked for a word outside the list:<div class=\"row\">" +
+      "<b>" + escapeHtml(n.w) + "</b><span>" + escapeHtml(n.p) + "</span></div>" +
+      "<div class=\"note\">" + escapeHtml(n.d) + "</div><div class=\"row\"></div>";
+    const row = box.querySelectorAll(".row")[1];
+    const yes = document.createElement("button");
+    yes.className = "primary"; yes.textContent = "Add to my words";
+    yes.onclick = () => { acceptWord(n); box.remove(); };
+    const no = document.createElement("button");
+    no.textContent = "No";
+    no.onclick = () => { n.state = "rejected"; persist(); box.remove(); };
+    row.append(yes, no);
+    el.appendChild(box);
+  });
+
+  log.appendChild(el);
+  return el;
+}
+
+function renderAll() {
+  log.innerHTML = "";
+  if (!S.history.length) {
+    log.innerHTML = '<div class="hint">Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
+      'Replies are checked against the ' + (LEVELS.find(l => l.id === S.level) || {}).label +
+      ' list and rewritten until they fit.</div>';
+    return;
+  }
+  S.history.forEach(renderMessage);
+  log.scrollTop = log.scrollHeight;
+}
+
+function acceptWord(n) {
+  if (!isExtra(n.w)) {
+    S.extra.push({ w: n.w, p: n.p, d: n.d });
+    store.set(K.extra, S.extra);
+    rebuildLexicon();
+  }
+  n.state = "accepted";
+  persist();
+  renderAll();
+}
+
+function persist() { store.set(K.history, S.history); }
+
+/* ------------------------------------------------------------------ sending */
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || S.busy) return;
+  S.busy = true; $("#send").disabled = true;
+  input.value = ""; updateMirror(); autosize();
+
+  S.history.push({ role: "user", text: text });
+  persist(); renderAll();
+
+  const thinking = document.createElement("div");
+  thinking.className = "msg bot";
+  thinking.innerHTML = '<div class="bubble" style="font-size:18px;color:var(--dim)">…</div>';
+  log.appendChild(thinking); log.scrollTop = log.scrollHeight;
+
+  try {
+    const res = await turn();
+    S.history.push({
+      role: "assistant", text: res.text, needs: res.needs,
+      attempts: res.attempts, failed: !!res.failed
+    });
+    recordTurn(res.attempts, res.failed);
+    persist();
+  } catch (err) {
+    console.error(err);
+    S.history.push({ role: "assistant", text: "我不知道。", attempts: 1, failed: true, error: String(err.message || err) });
+    persist();
+    alert(err.message || err);
+  } finally {
+    thinking.remove();
+    S.busy = false; $("#send").disabled = false;
+    renderAll();
+  }
+}
+
+/* ------------------------------------------------------- input underlining */
+
+function updateMirror() {
+  const t = input.value;
+  const toks = HSK.segment(t, S.lex);
+  mirror.innerHTML = toks.map(tk =>
+    (tk.kind === "bad" || tk.kind === "latin")
+      ? '<span class="bad">' + escapeHtml(tk.text) + "</span>"
+      : escapeHtml(tk.text)
+  ).join("") + "&nbsp;";
+}
+
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.32) + "px";
+}
+
+/* --------------------------------------------------------------- popover */
+
+function showPopover(el) {
+  const pop = $("#pop");
+  const w = el.dataset.w, p = el.dataset.p, d = el.dataset.d, bad = el.dataset.bad === "1";
+  const known = !p && !d ? S.dict.get(w) : null;
+  pop.innerHTML = '<div class="hw">' + escapeHtml(w) + "</div>" +
+    '<div class="py2">' + escapeHtml(p || (known ? known.p : "")) + "</div>" +
+    '<div class="d">' + escapeHtml(d || (known ? known.d : "not in the reference dictionary")) + "</div>" +
+    (bad ? '<div class="tag">above level</div>' : "") +
+    (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "");
+  pop.classList.add("open");
+  const r = el.getBoundingClientRect(), pr = pop.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8)) + "px";
+  pop.style.top = (r.top > pr.height + 12 ? r.top - pr.height - 8 : r.bottom + 8) + "px";
+}
+
+/* ------------------------------------------------------------------- chrome */
+
+function fillLevels() {
+  $("#level").innerHTML = LEVELS.map(l =>
+    '<option value="' + l.id + '"' + (l.id === S.level ? " selected" : "") + ">" + l.label + "</option>").join("");
+}
+
+function fillModels() {
+  const cached = store.get(K.models, null);
+  const list = (cached && cached.length ? cached : MODELS).slice();
+  if (!list.some(m => m.id === S.model)) list.unshift({ id: S.model, label: S.model });
+  $("#model").innerHTML = list.map(m =>
+    '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
+    escapeHtml(m.label) + "</option>").join("");
+  $("#modelNote").textContent = cached
+    ? "Loaded " + cached.length + " ids from OpenRouter."
+    : "Built-in ids are unverified starting points — load the live list, or paste any id from openrouter.ai/models.";
+}
+
+async function refreshModels() {
+  const btn = $("#refreshModels");
+  btn.disabled = true; btn.textContent = "Loading…";
+  try {
+    const r = await fetch(MODELS_URL);
+    const j = await r.json();
+    const keep = /^(anthropic|google|openai|deepseek|qwen|meta-llama|mistralai|x-ai)\//;
+    const list = (j.data || [])
+      .filter(m => keep.test(m.id))
+      .map(m => ({ id: m.id, label: m.name || m.id }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (!list.length) throw new Error("no models returned");
+    store.set(K.models, list);
+    fillModels();
+  } catch (e) {
+    $("#modelNote").textContent = "Could not load the list: " + (e.message || e) + ". Paste an id manually.";
+  } finally {
+    btn.disabled = false; btn.textContent = "Load model list from OpenRouter";
+  }
+}
+
+function renderVocab() {
+  const box = $("#vocabList");
+  if (!S.extra.length) { box.innerHTML = '<div class="note">No added words yet.</div>'; return; }
+  box.innerHTML = "";
+  S.extra.forEach((e, i) => {
+    const row = document.createElement("div");
+    row.className = "vrow";
+    row.innerHTML = '<span class="w2">' + escapeHtml(e.w) + '</span><span class="g">' +
+      escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+    const del = document.createElement("button");
+    del.textContent = "Remove";
+    del.onclick = () => {
+      S.extra.splice(i, 1); store.set(K.extra, S.extra);
+      rebuildLexicon(); renderVocab(); renderAll();
+    };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function openSheet(id) { $(id).classList.add("open"); }
+function closeSheet(id) { $(id).classList.remove("open"); }
+
+/* --------------------------------------------------------------- listeners */
+
+$("#send").onclick = send;
+input.addEventListener("input", () => { updateMirror(); autosize(); });
+input.addEventListener("scroll", () => { mirror.scrollTop = input.scrollTop; });
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 700) { e.preventDefault(); send(); }
+});
+
+document.addEventListener("click", e => {
+  const w = e.target.closest(".w");
+  if (w) { showPopover(w); return; }
+  if (!e.target.closest("#pop")) $("#pop").classList.remove("open");
+});
+
+$("#level").onchange = async e => {
+  await loadLevel(Number(e.target.value));
+  updateMirror(); renderAll();
+};
+$("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; };
+
+$("#btnPy").onclick = () => {
+  S.pinyin = S.pinyin === "off" ? "extra" : S.pinyin === "extra" ? "all" : "off";
+  store.set(K.pinyin, S.pinyin);
+  $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
+  $("#btnPy").title = "Pinyin: " + S.pinyin;
+  renderAll();
+};
+$("#btnVocab").onclick = () => { renderVocab(); openSheet("#vocabSheet"); };
+$("#vocabClose").onclick = () => closeSheet("#vocabSheet");
+$("#btnSet").onclick = () => {
+  $("#key").value = store.get(K.key, "");
+  $("#modelId").value = S.model;
+  $("#promptMode").value = S.mode;
+  renderStats();
+  openSheet("#setSheet");
+};
+$("#setClose").onclick = () => {
+  store.set(K.key, $("#key").value.trim());
+  const id = $("#modelId").value.trim();
+  if (id) { S.model = id; store.set(K.model, id); fillModels(); }
+  S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
+  closeSheet("#setSheet");
+};
+$("#refreshModels").onclick = refreshModels;
+$("#clearHistory").onclick = () => {
+  if (!confirm("Delete the whole conversation?")) return;
+  S.history = []; persist(); renderAll();
+};
+$("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
+[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"]].forEach(([sheet]) => {
+  $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
+});
+
+/* -------------------------------------------------------------------- boot */
+
+(async function boot() {
+  fillLevels(); fillModels();
+  $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
+  try {
+    await loadLevel(S.level);
+  } catch (e) {
+    log.innerHTML = '<div class="hint">Could not load the wordlist (' + escapeHtml(e.message) +
+      ').<br>Open this page over http, not file://.</div>';
+    return;
+  }
+  loadDict();
+  updateMirror(); autosize(); renderAll(); renderStats();
+  if (!store.get(K.key, "")) $("#btnSet").click();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
