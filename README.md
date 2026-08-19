@@ -122,6 +122,23 @@ switches the whole allowlist — HSK 1 through the combined 7–9 band — mid-c
 validator is provider- and level-agnostic; switching re-renders existing messages against
 the new list.
 
+## Fitting the screen, and text size
+
+The page must not scroll sideways, and one trap made it: flex items default to
+`min-width: auto`, so a `<select>` cannot shrink below the width of its longest option — a
+model id like `qwen/qwen3-30b-a3b-instruct-2507` pushed the header buttons past the right
+edge and took the document with them. The level select now keeps its natural width (it is a
+primary control and its options are short) and the model select absorbs all the shrinking,
+truncating instead.
+
+Message text size is a slider in Settings (16–34px) driving a `--msg` custom property, with
+a live preview line at the real size. The pinyin ruby is sized in `em`, so it scales with
+the text instead of crowding it at small sizes and disappearing at large ones.
+
+Checked by measurement rather than by eye: every element's bounding box against
+`documentElement.clientWidth`, at 375 / 390 / 430 px, at text sizes 16 / 26 / 34, with the
+chat, Settings and 词 panels open.
+
 ## Copying text out
 
 Every message has a **copy** button that copies its Chinese exactly, and the word popover
