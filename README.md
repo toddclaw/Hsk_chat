@@ -46,7 +46,17 @@ credit**, and tick **free models only** in Settings. Models priced at zero cost 
 call, and the picker shows what everything costs per million input tokens so the paid ones
 are one tap away when you want them.
 
-Free models are rate-limited and can be busy, so replies are slower and retries more
+**A free model that works: Google: Gemma 4 26B A4B (free).** Pick it by name in the
+picker — free endpoints come and go, so the live catalogue is the authority on ids, not this
+file.
+
+That recommendation matters because **most free models tried for this app returned nothing at
+all**. A free endpoint that is overloaded, withdrawn, or gated can answer with an empty
+completion, which surfaces as *Empty response from …* rather than as a reply. If a model
+gives you nothing, the app is not broken — try the next one. That is the cost of free, and
+it is why the picker sorts free models together: switching is meant to be quick.
+
+Free models are also rate-limited and can be busy, so replies are slower and retries more
 frequent — which for this app means more turns ending in 我不知道。Raising *Tries before
 giving up* helps; adding credit and choosing a paid model helps more.
 
