@@ -63,10 +63,12 @@ attempt-count badge.
 
 Non-obvious choices:
 
-- **Roman letters are a violation, not neutral.** Treating all ASCII as always-allowed
-  (as the original spec did) lets a model answer in English or pinyin and pass. Digits,
-  whitespace and punctuation stay neutral; `a-zA-Z` gets its own violation kind and its
-  own repair line.
+- **Roman letters are a violation coming back, never going out.** Treating all ASCII as
+  always-allowed (as the original spec did) lets a model answer in English or pinyin and
+  pass, so `a-zA-Z` gets its own violation kind and its own repair line. The learner's own
+  English is the opposite case — `怎么说 fried egg` is how you ask for a word you don't
+  have — so it is sent verbatim and never underlined. The asymmetry lives at the call
+  sites; `validate()` itself reports the kind and lets the caller decide.
 - **Numerals combine.** A run of number characters is accepted as one token only when
   every character in it is already in the allowlist, so 二十三 glosses as one word without
   widening the vocabulary.
@@ -88,7 +90,15 @@ persisted, removable):
 2. **Tap a red word → Add.** Works on your messages and the model's.
 3. **By hand**, in the 词 panel — space- or comma-separated.
 4. **`[[NEED:词|pīn yīn|english]]`** from the model, offered under the message with
-   accept / reject buttons.
+   accept / reject buttons. This is also how the model answers "how do you say X" — the
+   system prompt requires it, so asking in English yields the word with pinyin and gloss
+   and an Add button rather than a refusal.
+
+   The reply carrying a request is validated against a lexicon that *includes* that
+   request's words. Without this the channel defeats itself: the wrapper is stripped
+   before validation, the bare word is by definition not in the allowlist, and the request
+   the model was told to make is rejected as a violation — three retries and a give-up on
+   exactly the turns the mechanism exists to serve.
 
 Two problems the naive version gets wrong, both handled:
 

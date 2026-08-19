@@ -226,7 +226,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v4 — 2026-08-19";
+const VERSION   = "v5 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -303,13 +303,18 @@ function systemPrompt() {
     "1. 只用很简单的词。学生不认识的词，一个也不要用。",
     "2. 每次只说一到三个短句。不要长。",
     "3. 不要用这些语法：把、被、就、才、动词补语（看得懂、跑出去、说完了）、难的「了」。",
-    "4. 不要用英文，不要用拼音，不要用汉字注音。只写汉字。",
+    "4. 学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，",
+    "   不要用英文，不要用拼音，不要用汉字注音。",
     "5. 每次说完，问学生一个很简单的问题。",
     "6. 如果你真的需要一个学生不会的词，写 [[NEED:词|pīn yīn|english]]，一句话最多一个。",
+    "7. 学生问「…怎么说」的时候，一定用 [[NEED:词|pīn yīn|english]] 回答，",
+    "   这样他可以看到拼音和意思。不要用英文解释。",
     "",
     "例子：",
     "学生：你好！",
-    "你：你好！你叫什么名字？"
+    "你：你好！你叫什么名字？",
+    "学生：怎么说 fried egg",
+    "你：[[NEED:煎蛋|jiān dàn|fried egg]]。你喜欢吃吗？"
   ];
   if (S.mode === "with-list") {
     rules.push("", "你只可以用这些词：", S.lex ? [...S.lex.words.keys()].join(" ") : "");
@@ -397,7 +402,12 @@ async function turn() {
     attempt++;
     const raw = await callModel(scratch);
     const ex = extractNeeds(raw);
-    const violations = HSK.validate(ex.text, S.lex);
+    /* Validate against a lexicon that includes this reply's [[NEED:]] words.
+     * Without it the channel defeats itself: the wrapper is stripped before
+     * validation, the bare word is by definition not in the allowlist, and the
+     * request the model was told to make is rejected as a violation. */
+    const lex = ex.needs.length ? HSK.buildLexicon(S.base, S.extra.concat(ex.needs)) : S.lex;
+    const violations = HSK.validate(ex.text, lex);
     console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
 
     if (!violations.length) return { text: ex.text, needs: ex.needs, attempts: attempt };
@@ -438,12 +448,15 @@ function renderStats() {
 
 /* -------------------------------------------------------------- rendering */
 
-function tokenSpan(tok, needs) {
+/* Latin letters are a violation in the model's output -- a reply in English or
+ * pinyin would otherwise pass -- but never in the learner's own message, where
+ * English is a deliberate escape hatch for asking how to say something. */
+function tokenSpan(tok, needs, flagLatin) {
   const need = needs && needs.find(n => n.start === tok.start && n.w === tok.text);
   if (tok.kind === "punct") return escapeHtml(tok.text);
   const e = tok.entry || need || {};
   const cls = ["w"];
-  if (tok.kind === "bad" || tok.kind === "latin") cls.push("bad");
+  if (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false)) cls.push("bad");
   if (need) cls.push("need");
   else if (isExtra(tok.text)) cls.push("extra");
   return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
@@ -467,8 +480,13 @@ function renderMessage(turnObj, idx) {
   const bubble = document.createElement("div");
   bubble.className = "bubble pinyin-" + S.pinyin;
   bubble.dataset.src = turnObj.text;
-  const toks = HSK.segment(turnObj.text, S.lex);
-  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs)).join("");
+  /* Segment with this message's [[NEED:]] words in scope. They passed
+   * validation, so rendering them as violations would contradict the badge and
+   * the offer sitting right below the bubble. */
+  const lex = (turnObj.needs && turnObj.needs.length)
+    ? HSK.buildLexicon(S.base, S.extra.concat(turnObj.needs)) : S.lex;
+  const toks = HSK.segment(turnObj.text, lex);
+  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user")).join("");
   el.appendChild(bubble);
 
   const bits = [];
@@ -680,7 +698,7 @@ function updateMirror() {
   const t = input.value;
   const toks = HSK.segment(t, S.lex);
   mirror.innerHTML = toks.map(tk =>
-    (tk.kind === "bad" || tk.kind === "latin")
+    (tk.kind === "bad")
       ? '<span class="bad">' + escapeHtml(tk.text) + "</span>"
       : escapeHtml(tk.text)
   ).join("") + "&nbsp;";
