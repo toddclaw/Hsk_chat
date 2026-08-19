@@ -1,0 +1,11 @@
+#!/bin/sh
+# Blocks a commit whose tests fail -- including the release checks, which catch
+# a version bump applied to one file and not the other.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+if ! sh test/run.sh; then
+  echo
+  echo "pre-commit: tests failed, commit refused."
+  echo "Fix them, or pass --no-verify if you know why this is fine."
+  exit 1
+fi

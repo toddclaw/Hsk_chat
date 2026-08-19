@@ -29,7 +29,36 @@ is kept in `localStorage` on that device and is sent to openrouter.ai and nowher
 
 To deploy: push to GitHub and turn on Pages for the branch root. There is nothing to build.
 
-Tests: `node test/validator.test.js` and `node test/prompt.test.js` (no dependencies).
+Tests: `sh test/run.sh` runs all three suites (no dependencies):
+
+| suite | covers |
+|---|---|
+| `test/validator.test.js` | the matcher, its fixtures, and every level file's shape |
+| `test/prompt.test.js` | the per-level register profiles and prompt assembly |
+| `test/release.test.js` | release consistency — see below |
+
+**Enable the pre-commit hook once per clone:**
+
+```
+git config core.hooksPath .githooks
+```
+
+It refuses a commit whose tests fail. That exists because of a real repeated slip: a patch
+script asserted on a line that had been reworded, exited before applying the version bump,
+and the commit ran anyway — shipping code with a stale `VERSION`. `test/release.test.js`
+checks the things a diff cannot show and only fail later on a phone:
+
+- `VERSION` in `index.html` and `CACHE` in `sw.js` name the same release. Out of step, the
+  version panel reports a mismatch that is not real, or an update ships behind a cache name
+  that never changes and so never reaches an installed app.
+- Every path in the worker's `SHELL` exists. `cache.addAll` is all-or-nothing: one 404 and
+  the worker never installs, taking offline support with it silently.
+- Every script and manifest the page loads exists *and* is pre-cached, so the first offline
+  launch is not a blank screen.
+- Every level file and the reference dictionary named in `index.html` are present.
+
+Both guards are verified by deliberately breaking them: a half-applied version bump and a
+missing pre-cached icon are each refused at commit time.
 
 ## How the constraint works
 
