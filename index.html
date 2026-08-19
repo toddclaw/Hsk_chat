@@ -163,6 +163,12 @@ footer{
     <button id="clearHistory">Clear conversation</button>
     <button id="resetStats">Reset A/B counters</button>
   </div>
+  <label>Version</label>
+  <div class="stats" id="version">…</div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="checkUpdate">Check for update</button>
+  </div>
+
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
 </div></div>
 
@@ -217,6 +223,10 @@ const LEVELS = [
 // The widest list doubles as the reference dictionary for glossing words that
 // are above the level in play. Loaded in the background, never blocking.
 const REF_LIST = "data/hsk7.json";
+
+/* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
+ * phone can be checked against what is actually deployed. */
+const VERSION   = "v4 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -775,6 +785,51 @@ function renderVocab() {
   });
 }
 
+/* What is actually running on this device: the page's own stamp, the cache the
+ * service worker activated, and the data it loaded. If the first two disagree,
+ * an update is half-applied and a relaunch will finish it. */
+async function renderVersion() {
+  const rows = [["app", VERSION]];
+  try {
+    const names = await caches.keys();
+    rows.push(["worker cache", names.length ? names.join(", ") : "none"]);
+  } catch (e) { rows.push(["worker cache", "unavailable"]); }
+
+  if ("serviceWorker" in navigator) {
+    const reg = await navigator.serviceWorker.getRegistration();
+    rows.push(["service worker",
+      !reg ? "not installed" :
+      reg.waiting ? "update ready — relaunch to apply" :
+      navigator.serviceWorker.controller ? "active" : "installing"]);
+  } else {
+    rows.push(["service worker", "unsupported"]);
+  }
+
+  rows.push(["vocabulary", levelLabel() + ": " + (S.lex ? S.lex.words.size : 0) +
+                           " words, +" + S.extra.length + " added"]);
+  rows.push(["dictionary", S.dict.size + " words"]);
+  $("#version").innerHTML = "<table>" + rows.map(r =>
+    "<tr><td>" + r[0] + "</td><td>" + escapeHtml(r[1]) + "</td></tr>").join("") + "</table>";
+}
+
+async function checkUpdate() {
+  const btn = $("#checkUpdate");
+  btn.disabled = true; btn.textContent = "Checking…";
+  try {
+    const reg = "serviceWorker" in navigator && await navigator.serviceWorker.getRegistration();
+    if (reg) {
+      await reg.update();
+      if (reg.waiting) { reg.waiting.postMessage("SKIP_WAITING"); return; }  // reloads on controllerchange
+    }
+    // No worker, or nothing newer waiting: go to the network for the page itself.
+    location.reload();
+  } catch (e) {
+    btn.textContent = "Check failed — pull down to refresh";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function openSheet(id) { $(id).classList.add("open"); }
 function closeSheet(id) { $(id).classList.remove("open"); }
 
@@ -828,6 +883,7 @@ $("#btnSet").onclick = () => {
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
   renderStats();
+  renderVersion();
   openSheet("#setSheet");
 };
 $("#setClose").onclick = () => {
@@ -838,6 +894,7 @@ $("#setClose").onclick = () => {
   closeSheet("#setSheet");
 };
 $("#refreshModels").onclick = refreshModels;
+$("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
   if (!confirm("Delete the whole conversation?")) return;
   S.history = []; persist(); renderAll();
@@ -862,6 +919,24 @@ $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); re
   loadDict();
   updateMirror(); autosize(); renderAll(); renderStats();
   if (!store.get(K.key, "")) $("#btnSet").click();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    /* A new worker calls skipWaiting and claims the page; reload once so the
+     * running app is the one that was just deployed. Two guards: controllerchange
+     * also fires on the very first install, where there is nothing stale to
+     * replace and a reload would just blink the page; and a reload must never
+     * cascade into another. */
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    // updateViaCache:"none" keeps the worker script itself out of the HTTP cache,
+    // so a relaunch always sees a new sw.js rather than a cached copy.
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then(reg => reg.addEventListener("updatefound", renderVersion))
+      .catch(() => {});
+  }
 })();
 </script>

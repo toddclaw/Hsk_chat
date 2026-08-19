@@ -149,7 +149,34 @@ upstream shape — a raw dump builds a lexicon of zero words, and the app would 
 every character the model writes.
 
 The service worker caches only the shell and HSK 1 on install; the other level files and
-the reference dictionary total a few megabytes and are cached on first use instead.
+the reference dictionary total a few megabytes and are cached on first use instead. Note
+that `cache.addAll` is all-or-nothing: if any path in `SHELL` 404s, the worker never
+installs at all and the app silently loses offline support.
+
+## Updating an installed app
+
+Settings shows a version block — the page's own `VERSION` stamp, the cache the service
+worker activated, worker state, and the loaded word counts. If the first two disagree, an
+update is half-applied and one relaunch finishes it.
+
+Getting a deploy onto an installed home screen needs three things, and missing any one of
+them strands the phone on an old build:
+
+- **The shell is network-first.** Cache-first on `index.html` meant a redeploy could never
+  reach an installed app. Wordlists stay cache-first — large, rarely changed, and a stale
+  one is still correct.
+- **That fetch uses `cache: "reload"`.** A plain network-first fetch is still answered by
+  the browser's own HTTP cache; GitHub Pages sends `max-age=600`, so without this the
+  worker serves the same stale page it was meant to replace. The worker script itself is
+  registered with `updateViaCache: "none"` for the same reason.
+- **The page reloads when a new worker claims it**, guarded twice: `controllerchange` also
+  fires on first install, where a reload just blinks the page, and a reload must not
+  cascade.
+
+Measured end to end (deploy while an installed client is running, then relaunch): the new
+build renders in well under a second, the old cache is deleted, and exactly one extra
+navigation occurs. **Bump `VERSION` in `index.html` and `CACHE` in `sw.js` together on
+every deploy** — they are what the version block compares.
 
 ## Not included, on purpose
 
