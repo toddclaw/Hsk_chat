@@ -274,6 +274,39 @@ otherwise changing the level while the panel is open would silently freeze the o
 
 ---
 
+# Meeting new words at a graded-reader pace
+
+Optional, off by default, in Settings. Graded readers introduce roughly one unknown word per
+40–50 characters of text you already know; this does the same with the level above the one
+you are on.
+
+- **Pool** — everything in HSK N+1 that HSK N does not have, ordered by corpus frequency, so
+  the useful words come first. At HSK 1 that is 750 words beginning 啊, 让, 但, 自己, 可以,
+  已经, 因为.
+- **Budget** — Han characters in the partner's replies accumulate; every *R* of them earns a
+  credit, capped at 3 so a long gap cannot dump six new words into one reply. Kept per level.
+- **Offer** — holding a credit, the turn offers the three commonest words you have not met.
+  The prompt frames it as permission, not instruction: *use one if it fits naturally, none if
+  they do not.* A word forced into a conversation reads as a vocabulary drill, so a declined
+  offer simply carries to the next turn.
+- **Validation** — offered words are legal for that turn through the same path `[[NEED:]]`
+  uses, and the same slate is re-offered across repair attempts, so a reply rejected for
+  unrelated reasons never costs the introduction.
+- **Consolidation** — an introduced word is highlighted, permanently allowed, and actively
+  reused by the partner until you have seen it three times, then it becomes ordinary
+  vocabulary and stops standing out. A word met once is not learned.
+
+The 词 panel lists what has been introduced with sightings and source level, and the
+flashcard exports include them — they are exactly the words worth drilling.
+
+The arithmetic lives in `pace.js` and is tested directly (`test/pace.test.js`): pool ordering
+and exclusion, character counting that ignores punctuation and Latin, credits that carry
+their remainder and stop at the cap, slates that never re-offer, and spotting that uses the
+segmenter's boundaries so a word is not credited for appearing inside a longer one.
+
+At HSK 7–9 there is no level above to draw from and the feature reports that rather than
+doing nothing quietly.
+
 # Growing the allowlist
 
 Four ways a word joins the session allowlist, all landing in the 词 panel (persisted,

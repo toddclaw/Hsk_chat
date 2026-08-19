@@ -117,7 +117,8 @@
    * `words` is the allowlist joined by spaces, appended only in with-list mode.
    * `convert` rewrites app-authored Chinese into the active script; it runs over
    * the rules and the sample but never over `words`, which the caller already
-   * supplies in that script. */
+   * supplies in that script. `offer` are next-level words permitted this turn,
+   * `reuse` are recently introduced ones worth repeating. */
   function build(opts) {
     var style = styleFor(opts.level);
     var len = LENGTHS[opts.length] || LENGTHS.short;
@@ -138,6 +139,18 @@
               "|pīn yīn|english]] " + convert("回答，"),
       "   " + convert("这样他可以看到拼音和意思。不要用英文解释。")
     ];
+    /* Gradual introduction. The offer is permission, not an instruction: a word
+     * forced into a conversation it does not fit reads as a vocabulary drill,
+     * and the credit simply carries to the next turn instead. */
+    if (opts.offer && opts.offer.length) {
+      lines.push("9. " + convert("这次你可以用这些新词里的一个：") +
+                 opts.offer.map(function (e) { return e.w; }).join("、") +
+                 convert("。用一个就好，用得自然最重要；如果都不合适，就都不用。"));
+    }
+    if (opts.reuse && opts.reuse.length) {
+      lines.push("10. " + convert("学生最近学了这些词，请多用：") +
+                 opts.reuse.map(function (e) { return e.w; }).join("、") + convert("。"));
+    }
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
       lines.push("8. " + convert("请用繁体字回答，不要用简体字。"));

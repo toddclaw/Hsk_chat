@@ -74,13 +74,21 @@ def pinyin(forms):
 
 def convert(src, dst):
     data = json.load(open(src, encoding="utf-8"))
-    merged = {}
+    merged, freq = {}, {}
     for e in data:
         merged.setdefault(e["simplified"], []).extend(e["forms"])
+        r = e.get("frequency")
+        if r and (e["simplified"] not in freq or r < freq[e["simplified"]]):
+            freq[e["simplified"]] = r
     out = []
     for w, f in merged.items():
         f = ordered(w, f)
         entry = {"w": w, "p": pinyin(f), "d": gloss(f)}
+        # Corpus frequency rank, lower being commoner. It decides the order new
+        # words are introduced in, so the useful ones come first.
+        rank = freq.get(w)
+        if rank:
+            entry["f"] = rank
         t = traditional(w, f)
         if t:
             entry["t"] = t

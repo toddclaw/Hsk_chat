@@ -80,6 +80,11 @@ header button{padding:8px 10px; flex:0 0 auto}
 .w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
 .w.extra>.t{border-bottom:2px solid var(--ok)}
 .w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
+.w.fresh>.t{background:#2a2f45; border-bottom:2px solid var(--accent); border-radius:4px; padding:0 2px}
+.newword{margin-top:8px; padding:10px 12px; background:var(--panel2);
+  border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:12px; font-size:14px}
+.newword b{font-size:22px; margin-right:8px}
+.newword .why{color:var(--dim); font-size:12.5px; margin-top:4px}
 /* A failed call is not a reply. It gets its own card rather than a fake
    Chinese sentence, which would read as the partner refusing to answer. */
 .notice{
@@ -213,6 +218,18 @@ footer{
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
+  <label class="toggle" for="paceOn">
+    <input type="checkbox" id="paceOn">
+    <span>Introduce words from the next level</span>
+  </label>
+  <label for="paceRate" style="margin-top:4px">Pace</label>
+  <select id="paceRate"></select>
+  <div class="stats" id="paceNote"></div>
+  <div class="note">Graded readers introduce roughly one new word per 40–50 characters of
+  text you already know. The partner is offered the three commonest words you have not met
+  and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
+  word stays highlighted and gets reused until you have seen it three times.</div>
+
   <label for="script">Characters</label>
   <select id="script">
     <option value="simp">简体 — simplified</option>
@@ -300,6 +317,9 @@ footer{
   File → Import.</div>
 
   <div id="vocabList" style="margin-top:12px"></div>
+
+  <h2 style="margin-top:22px">Introduced from the next level</h2>
+  <div id="learningList"></div>
   <div class="note">Words you typed, added by hand, or accepted from the model's
   <code>[[NEED:…]]</code> requests. They join the session allowlist — the model may then
   use them too — and persist on this device. Pinyin and meaning come from the HSK 7-9
@@ -311,6 +331,7 @@ footer{
 
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
+<script src="pace.js"></script>
 <script>
 "use strict";
 
@@ -344,7 +365,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v15 — 2026-08-19";
+const VERSION   = "v16 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -359,7 +380,8 @@ const K = {
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
-  freeOnly:"hsk1chat.freeOnly"
+  freeOnly:"hsk1chat.freeOnly",
+  pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning"
 };
 
 const store = {
@@ -383,6 +405,13 @@ const S = {
   starters: store.get(K.starters, true),      // the chip row above the composer
   script:  store.get(K.script, "simp"),       // simp | trad
   freeOnly: store.get(K.freeOnly, false),     // show only zero-cost models
+  /* Gradual introduction of next-level words. `budget` is per level, since the
+   * pool it draws from is; `learning` is flat, because a word once met stays
+   * met whatever level you switch to afterwards. */
+  pace:    store.get(K.pace, { on: false, rate: HSKPace.DEFAULT_RATE }),
+  budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
+  learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
+  pool:    [],                                // next level minus this one
   simpLex: null,                              // simplified lexicon, for converting prompt text
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
@@ -405,10 +434,31 @@ function inScript(list) {
   return list.map(e => e.t ? { w: e.t, p: e.p, d: e.d, s: e.s, other: e.w } : e);
 }
 
-function rebuildLexicon() { S.lex = HSK.buildLexicon(inScript(S.base), inScript(S.extra)); }
+function rebuildLexicon() {
+  // A word once introduced stays usable, whether it is still "new" or promoted.
+  S.lex = HSK.buildLexicon(inScript(S.base), inScript(S.extra).concat(inScript(S.learning)));
+}
+
+const learned = w => S.learning.find(e => e.w === w);
+function levelBudget() {
+  return S.budget[S.level] || (S.budget[S.level] = { chars: 0, credits: 0 });
+}
 const isExtra = w => S.extra.some(e => e.w === w);
 
 /* --------------------------------------------------------------- word data */
+
+/* The pool is the next level minus this one. Loaded only when pacing is on, so
+ * nobody pays for a second wordlist they are not using. */
+async function loadPool() {
+  S.pool = [];
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!S.pace.on || !next) return;
+  try {
+    const r = await fetch(next.file);
+    if (r.ok) S.pool = HSKPace.buildPool(S.base, await r.json());
+  } catch (e) { console.warn("pool load failed", e); }
+  renderPaceNote();
+}
 
 async function loadLevel(n) {
   const lv = LEVELS.find(l => l.id === n) || LEVELS[0];
@@ -418,6 +468,7 @@ async function loadLevel(n) {
   S.level = lv.id;
   store.set(K.level, lv.id);
   rebuildLexicon();
+  await loadPool();
 }
 
 async function loadDict() {
@@ -463,19 +514,26 @@ function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
 /* The prompt actually sent. A custom one is used verbatim apart from the two
  * placeholders, so the level and length selectors stop rewriting it -- they
  * still drive validation and the token ceiling, which is where they matter. */
-function systemPrompt() {
+function systemPrompt(offer, reuse) {
   if (S.prompt) {
     let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
     if (S.mode === "with-list" && S.prompt.indexOf("{words}") === -1) {
       out += "\n\n你只可以用这些词：\n" + wordList();
     }
+    // A custom prompt still gets the pacing lines; they are mechanism, not style.
+    if (offer && offer.length) {
+      out += "\n\n" + toScript("这次你可以用这些新词里的一个：") +
+             offer.map(e => e.w).join("、") + toScript("。用一个就好。");
+    }
     return out;
   }
-  return defaultPrompt();
+  return defaultPrompt(offer, reuse);
 }
 
-function defaultPrompt() {
+function defaultPrompt(offer, reuse) {
   const p = HSKPrompt.build({
+    offer: offer || [],
+    reuse: reuse || [],
     level: S.level,
     label: levelLabel(),
     length: S.replyLength,
@@ -586,7 +644,15 @@ function windowed() {
  * generate, validate, repair, repair, else fall back.
  * Repair exchanges live in a scratch array and never enter the stored history. */
 async function turn() {
-  const scratch = [{ role: "system", content: systemPrompt() }].concat(windowed());
+  /* Offer next-level words only when a credit has been earned. The same slate
+   * is re-offered across repair attempts: a reply rejected for other reasons
+   * should not cost the introduction. */
+  const b = levelBudget();
+  const offer = (S.pace.on && b.credits > 0)
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE) : [];
+  const reuse = S.learning.filter(HSKPace.isNew).slice(-6);
+
+  const scratch = [{ role: "system", content: systemPrompt(offer, reuse) }].concat(windowed());
   let attempt = 0, last = null;
 
   while (attempt < S.attempts) {
@@ -597,13 +663,18 @@ async function turn() {
      * Without it the channel defeats itself: the wrapper is stripped before
      * validation, the bare word is by definition not in the allowlist, and the
      * request the model was told to make is rejected as a violation. */
-    const lex = ex.needs.length ? HSK.buildLexicon(S.base, S.extra.concat(ex.needs)) : S.lex;
+    // The offered words are legal this turn, exactly like a [[NEED:]] request.
+    const lex = (ex.needs.length || offer.length)
+      ? HSK.buildLexicon(inScript(S.base),
+          inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
+      : S.lex;
     const violations = HSK.validate(ex.text, lex);
     console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
 
     if (!violations.length) {
       return { text: ex.text, needs: ex.needs, attempts: attempt,
-               truncated: callModel.lastFinish === "length" };
+               truncated: callModel.lastFinish === "length",
+               offer: offer, lex: lex };
     }
 
     last = ex.text;
@@ -613,9 +684,12 @@ async function turn() {
     scratch.push({ role: "user", content: rp });
   }
 
+  // Same shape as a successful turn: the caller settles pacing against every
+  // result, and a give-up still put characters on the screen to be read.
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
-    needs: [], attempts: attempt, failed: true, dropped: last
+    needs: [], attempts: attempt, failed: true, dropped: last,
+    offer: offer, lex: S.lex
   };
 }
 
@@ -653,6 +727,10 @@ function tokenSpan(tok, needs, flagLatin) {
   if (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false)) cls.push("bad");
   if (need) cls.push("need");
   else if (isExtra(tok.text)) cls.push("extra");
+  else {
+    const l = learned(tok.text);
+    if (l && HSKPace.isNew(l)) cls.push("fresh");
+  }
   return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
          '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
          '" data-py="' + escapeHtml(primaryReading(e.p)) + '"' +
@@ -747,6 +825,18 @@ function renderMessage(turnObj, idx) {
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
   meta.appendChild(copy);
   el.appendChild(meta);
+
+  (turnObj.introduced || []).forEach(w => {
+    const e = learned(w) || { w: w, p: "", d: "" };
+    const box = document.createElement("div");
+    box.className = "newword";
+    box.innerHTML = "<b>" + escapeHtml(e.w) + "</b>" + escapeHtml(e.p) +
+      "<div>" + escapeHtml(e.d) + "</div>" +
+      '<div class="why">New word from ' +
+      escapeHtml((LEVELS.find(l => l.id === e.from) || {}).label || "the next level") +
+      " — it will come back a few more times.</div>";
+    el.appendChild(box);
+  });
 
   (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w)).forEach(n => {
     const box = document.createElement("div");
@@ -905,6 +995,38 @@ function acceptWord(n, sentence) {
 
 function persist() { store.set(K.history, S.history); }
 
+/* Settle the reply against the pacing budget: bank what was introduced, count
+ * reuse toward promotion, then earn credit from the characters just read. */
+function settlePace(res) {
+  if (!S.pace.on || !res) return [];
+  const offered = res.offer || [];
+  const b = levelBudget();
+  const toks = HSK.segment(res.text, res.lex || S.lex);
+
+  const introduced = [];
+  HSKPace.spot(toks, offered.map(e => e.w)).forEach(w => {
+    if (learned(w) || b.credits <= 0) return;
+    const e = offered.find(o => o.w === w);
+    S.learning.push({ w: w, p: e.p, d: e.d, seen: 1, from: S.level + 1 });
+    b.credits--;
+    introduced.push(w);
+  });
+
+  // Sightings of words already being learned, so reuse is what promotes them.
+  HSKPace.spot(toks, S.learning.map(e => e.w)).forEach(w => {
+    if (introduced.indexOf(w) !== -1) return;
+    const e = learned(w);
+    if (e) e.seen = (e.seen || 0) + 1;
+  });
+
+  Object.assign(b, HSKPace.earn(b, res.text, S.pace.rate));
+  store.set(K.learning, S.learning);
+  store.set(K.paceState, S.budget);
+  rebuildLexicon();
+  renderPaceNote();
+  return introduced;
+}
+
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
  * user-select:none -- but a button is one tap and cannot pick up a stray
  * character. execCommand is the fallback for iOS versions where the async
@@ -942,16 +1064,22 @@ function cardBack(e) {
   return [e.p, e.d, e.s].filter(Boolean).join(" — ");
 }
 
+// Words the app introduced are exactly the ones worth drilling, so they go on
+// cards alongside the ones you added yourself.
+function cardWords() {
+  return S.extra.concat(S.learning);
+}
+
 function ankiCsv() {
   const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
-  return "#separator:comma\n#html:true\n" + S.extra.map(e =>
+  return "#separator:comma\n#html:true\n" + cardWords().map(e =>
     q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
 }
 
 // Pleco's flashcard import format: headword, pinyin, definition, tab separated.
 function plecoTsv() {
   const clean = t => String(t || "").replace(/[\t\r\n]+/g, " ");
-  return S.extra.map(e =>
+  return cardWords().map(e =>
     [clean(e.w), clean(e.p), clean([e.d, e.s].filter(Boolean).join(" // "))].join("\t")).join("\n") + "\n";
 }
 
@@ -1018,6 +1146,8 @@ async function send() {
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated
     });
+    const introduced = settlePace(res);
+    if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
     recordTurn(res.attempts, res.failed);
     persist();
   } catch (err) {
@@ -1165,6 +1295,38 @@ async function refreshModels() {
   }
 }
 
+function renderLearning() {
+  const box = $("#learningList");
+  if (!box) return;
+  const list = S.learning.slice().reverse();
+  if (!list.length) {
+    box.innerHTML = S.pace.on
+      ? '<div class="note">Nothing introduced yet — keep reading.</div>' : "";
+    return;
+  }
+  box.innerHTML = "";
+  list.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "vrow";
+    const n = e.seen || 0;
+    row.innerHTML = '<span class="w2">' + escapeHtml(e.w) + '</span><span class="g">' +
+      escapeHtml(e.p) + " — " + escapeHtml(e.d) +
+      '<br><span style="opacity:.7">' +
+      (HSKPace.isNew(e) ? "seen " + n + " of " + HSKPace.PROMOTE_AT : "known") +
+      ", from " + escapeHtml((LEVELS.find(l => l.id === e.from) || {}).label || "?") +
+      "</span></span>";
+    const del = document.createElement("button");
+    del.textContent = "Remove";
+    del.onclick = () => {
+      S.learning = S.learning.filter(x => x !== e);
+      store.set(K.learning, S.learning);
+      rebuildLexicon(); renderLearning(); renderPaceNote(); renderAll();
+    };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
 function renderVocab() {
   const box = $("#vocabList");
   if (!S.extra.length) { box.innerHTML = '<div class="note">No added words yet.</div>'; return; }
@@ -1254,6 +1416,25 @@ function renderStarters() {
   });
 }
 
+/* What the pacing is doing right now, in the terms the setting is described in. */
+function renderPaceNote() {
+  const box = $("#paceNote");
+  if (!box) return;
+  if (!S.pace.on) { box.textContent = "Off — only the level's own words are used."; return; }
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!next) { box.textContent = "No level above " + levelLabel() + " to draw from."; return; }
+  const b = levelBudget();
+  const met = S.learning.filter(e => e.from === S.level + 1).length;
+  const still = S.learning.filter(HSKPace.isNew).length;
+  box.innerHTML = "<table>" +
+    "<tr><td>from</td><td>" + escapeHtml(next.label) + " — " + met + " of " +
+      (S.pool.length + met) + " met</td></tr>" +
+    "<tr><td>still new</td><td>" + still + " word" + (still === 1 ? "" : "s") +
+      " being reused</td></tr>" +
+    "<tr><td>credit</td><td>" + b.credits + " ready, " + b.chars + "/" + S.pace.rate +
+      " characters toward the next</td></tr></table>";
+}
+
 function applyFont(px) {
   document.documentElement.style.setProperty("--msg", px + "px");
 }
@@ -1291,7 +1472,7 @@ $("#btnPy").onclick = () => {
 };
 $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
-  renderVocab(); openSheet("#vocabSheet");
+  renderVocab(); renderLearning(); openSheet("#vocabSheet");
 };
 $("#autoAdd").onchange = e => { S.autoAdd = e.target.checked; store.set(K.autoAdd, S.autoAdd); };
 function addByHand() {
@@ -1305,7 +1486,7 @@ function addByHand() {
 }
 $("#addWordBtn").onclick = addByHand;
 function exportCards(kind) {
-  if (!S.extra.length) { $("#expNote").textContent = "No added words to export yet."; return; }
+  if (!cardWords().length) { $("#expNote").textContent = "No words to export yet."; return; }
   const stamp = new Date().toISOString().slice(0, 10);
   if (kind === "anki") deliver(ankiCsv(), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
   else deliver(plecoTsv(), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
@@ -1318,6 +1499,11 @@ $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#paceOn").checked = S.pace.on;
+  $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
+    '<option value="' + n + '"' + (n === S.pace.rate ? " selected" : "") + ">one new word per " +
+    n + " characters" + (n === 45 ? " — graded-reader pace" : "") + "</option>").join("");
+  renderPaceNote();
   $("#freeOnly").checked = S.freeOnly;
   $("#script").value = S.script;
   $("#fontSize").value = S.font;
@@ -1390,6 +1576,17 @@ $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
   store.set(K.font, S.font);
+};
+$("#paceOn").onchange = async e => {
+  S.pace = { on: e.target.checked, rate: S.pace.rate };
+  store.set(K.pace, S.pace);
+  await loadPool();
+  renderPaceNote();
+};
+$("#paceRate").onchange = e => {
+  S.pace = { on: S.pace.on, rate: Number(e.target.value) || HSKPace.DEFAULT_RATE };
+  store.set(K.pace, S.pace);
+  renderPaceNote();
 };
 $("#freeOnly").onchange = e => {
   S.freeOnly = e.target.checked;

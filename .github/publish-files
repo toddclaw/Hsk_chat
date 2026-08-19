@@ -1,6 +1,7 @@
 index.html
 validator.js
 prompt.js
+pace.js
 sw.js
 manifest.json
 icon-192.png
