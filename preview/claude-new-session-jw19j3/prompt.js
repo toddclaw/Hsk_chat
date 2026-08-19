@@ -127,7 +127,13 @@
       convert("你是一个中文聊天伙伴。用户是学中文的学生") + "（" + opts.label + "）。",
       "",
       convert("规则：") ,
-      "1. " + convert(style.vocab),
+      /* When words are on offer, rule 1 has to say so. Left absolute it
+       * contradicts the offer outright -- "never use a word the student does
+       * not know" against "you may use one of these" -- and a model resolving
+       * that conflict obeys the rule stated first and stated without exception,
+       * so the offer is silently ignored every turn. */
+      "1. " + convert(style.vocab) +
+        ((opts.offer && opts.offer.length) ? convert("（第 10 条的新词除外。）") : ""),
       "2. " + convert(len.rule),
       "3. " + convert(style.grammar),
       "4. " + convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，"),
@@ -148,9 +154,10 @@
      * forced into a conversation it does not fit reads as a vocabulary drill,
      * and the credit simply carries to the next turn instead. */
     if (opts.offer && opts.offer.length) {
-      lines.push("10. " + convert("这次你可以用这些新词里的一个：") +
+      lines.push("10. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
                  opts.offer.map(function (e) { return e.w; }).join("、") +
-                 convert("。用一个就好，用得自然最重要；如果都不合适，就都不用。"));
+                 convert("。只用一个，放在自然的句子里；" +
+                         "只有在实在放不进去的时候，才一个都不用。"));
     }
     if (opts.reuse && opts.reuse.length) {
       lines.push("11. " + convert("学生最近学了这些词，请多用：") +

@@ -365,7 +365,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v17 — 2026-08-19";
+const VERSION   = "v18 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -455,7 +455,13 @@ async function loadPool() {
   if (!S.pace.on || !next) return;
   try {
     const r = await fetch(next.file);
-    if (r.ok) S.pool = HSKPace.buildPool(S.base, await r.json());
+    /* Exclude everything already usable, not just the level list: the particles
+     * in EXTRA_ALLOWED and any word already added or introduced. Offering 啊,
+     * which is permitted at every level, would spend a credit on nothing. */
+    if (r.ok) {
+      const known = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
+      S.pool = HSKPace.buildPool(known, await r.json());
+    }
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
 }
@@ -1430,9 +1436,14 @@ function renderPaceNote() {
   const b = levelBudget();
   const met = S.learning.filter(e => e.from === S.level + 1).length;
   const still = S.learning.filter(HSKPace.isNew).length;
+  const offering = b.credits > 0
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE).map(e => e.w).join("、")
+    : "";
   box.innerHTML = "<table>" +
     "<tr><td>from</td><td>" + escapeHtml(next.label) + " — " + met + " of " +
       (S.pool.length + met) + " met</td></tr>" +
+    (offering ? "<tr><td>offering</td><td>" + escapeHtml(offering) +
+      "</td></tr>" : "") +
     "<tr><td>still new</td><td>" + still + " word" + (still === 1 ? "" : "s") +
       " being reused</td></tr>" +
     "<tr><td>credit</td><td>" + b.credits + " ready, " + b.chars + "/" + S.pace.rate +

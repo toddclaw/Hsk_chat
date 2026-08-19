@@ -290,15 +290,23 @@ Optional, off by default, in Settings. Graded readers introduce roughly one unkn
 40–50 characters of text you already know; this does the same with the level above the one
 you are on.
 
-- **Pool** — everything in HSK N+1 that HSK N does not have, ordered by corpus frequency, so
-  the useful words come first. At HSK 1 that is 750 words beginning 啊, 让, 但, 自己, 可以,
+- **Pool** — everything in HSK N+1 that is not already usable — the level below, the
+  always-allowed particles, and anything you have added or been introduced to — ordered by
+  corpus frequency, so the useful words come first. (Without the particles excluded, the very
+  first offer at HSK 1 was 啊, which is permitted at every level: a credit spent on nothing.) At HSK 1 that is 750 words beginning 啊, 让, 但, 自己, 可以,
   已经, 因为.
 - **Budget** — Han characters in the partner's replies accumulate; every *R* of them earns a
   credit, capped at 3 so a long gap cannot dump six new words into one reply. Kept per level.
-- **Offer** — holding a credit, the turn offers the three commonest words you have not met.
-  The prompt frames it as permission, not instruction: *use one if it fits naturally, none if
-  they do not.* A word forced into a conversation reads as a vocabulary drill, so a declined
-  offer simply carries to the next turn.
+- **Offer** — holding a credit, the turn offers the three commonest words you have not met,
+  and asks for one to be used in a natural sentence, declining only if none can be. A word
+  forced in reads as a vocabulary drill, so a declined offer carries to the next turn.
+
+  **Rule 1 has to grant the exception explicitly.** Left absolute — *never use a word the
+  student does not know* — it forbids exactly what the offer permits, and a model resolving
+  that contradiction obeys the rule stated first and stated without exception. The offer was
+  ignored every turn until rule 1 gained *（第 10 条的新词除外。）*. Settings shows the words
+  currently on offer, so a model that keeps declining is visible rather than looking like a
+  feature that does nothing.
 - **Validation** — offered words are legal for that turn through the same path `[[NEED:]]`
   uses, and the same slate is re-offered across repair attempts, so a reply rejected for
   unrelated reasons never costs the introduction.
