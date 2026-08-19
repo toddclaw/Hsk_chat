@@ -117,10 +117,23 @@ for (const n of levels) {
 // The conversion has to actually do something, or the checks above are vacuous.
 check(toTrad("我学习中文", 1) === "我學習中文", "conversion is word-level and real",
   toTrad("我学习中文", 1));
-check(P.build({ level: 1, label: "HSK 1", length: "short", script: "trad" }).includes("8. "),
+// Assert on the rule, not its number: numbering is presentation and shifts
+// whenever a rule is added.
+check(P.build({ level: 1, label: "HSK 1", length: "short", script: "trad" }).includes("繁体字"),
   "traditional mode adds the write-in-traditional rule");
-check(!P.build({ level: 1, label: "HSK 1", length: "short" }).includes("8. "),
+check(!P.build({ level: 1, label: "HSK 1", length: "short" }).includes("繁体字"),
   "simplified mode does not");
+// Every prompt tells the model not to wrap its answer in scaffolding.
+for (const n of levels) {
+  check(P.build({ level: n, label: "HSK " + n, length: "short" }).includes("[0.0:]"),
+    `L${n}: warns against timestamps and brackets`);
+}
+// The rules the model reads must be numbered in order.
+const numbered = P.build({ level: 1, label: "HSK 1", length: "short", script: "trad",
+  offer: [{ w: "让" }], reuse: [{ w: "但" }] })
+  .split("\n").filter(l => /^\d+\./.test(l)).map(l => parseInt(l, 10));
+check(numbered.every((n, i) => i === 0 || n > numbered[i - 1]),
+  "rules are numbered in ascending order", numbered.join(","));
 
 // 8. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");

@@ -365,7 +365,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v16 — 2026-08-19";
+const VERSION   = "v17 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -658,7 +658,9 @@ async function turn() {
   while (attempt < S.attempts) {
     attempt++;
     const raw = await callModel(scratch);
-    const ex = extractNeeds(raw);
+    // Formatting the model wrapped around its answer is not a vocabulary
+    // mistake; strip it rather than spending a repair attempt on it.
+    const ex = extractNeeds(HSK.stripScaffold(raw));
     /* Validate against a lexicon that includes this reply's [[NEED:]] words.
      * Without it the channel defeats itself: the wrapper is stripped before
      * validation, the bare word is by definition not in the allowlist, and the
@@ -724,7 +726,8 @@ function tokenSpan(tok, needs, flagLatin) {
   if (tok.kind === "punct") return escapeHtml(tok.text);
   const e = tok.entry || need || {};
   const cls = ["w"];
-  if (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false)) cls.push("bad");
+  const ownAscii = flagLatin === false && HSK.isAscii(tok.text);
+  if (!ownAscii && (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false))) cls.push("bad");
   if (need) cls.push("need");
   else if (isExtra(tok.text)) cls.push("extra");
   else {
@@ -929,7 +932,8 @@ function addWords(words, sentence) {
 
 // Everything the user typed that the current level does not cover.
 function learnFromInput(text) {
-  const runs = HSK.validate(text, S.lex).filter(v => v.kind === "bad");
+  const runs = HSK.validate(text, S.lex)
+    .filter(v => v.kind === "bad" && !HSK.isAscii(v.text));
   const words = [];
   runs.forEach(v => {
     const whole = expandWord(text, v.start, v.end);
@@ -1171,7 +1175,7 @@ function updateMirror() {
   const t = input.value;
   const toks = HSK.segment(t, S.lex);
   mirror.innerHTML = toks.map(tk =>
-    (tk.kind === "bad")
+    (tk.kind === "bad" && !HSK.isAscii(tk.text))
       ? '<span class="bad">' + escapeHtml(tk.text) + "</span>"
       : escapeHtml(tk.text)
   ).join("") + "&nbsp;";

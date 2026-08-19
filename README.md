@@ -193,6 +193,16 @@ fixes.
   violation kind and its own repair line. Your English is the opposite case and is sent
   verbatim. The asymmetry lives at the call sites; `validate()` reports the kind and lets
   the caller decide.
+- **Model scaffolding is stripped, not repaired.** A model can wrap its answer in subtitle
+  timestamps (`[0.0:] 我喜欢听中文歌。`), markdown emphasis or headings. That is formatting,
+  not a vocabulary mistake, so `stripScaffold()` removes it before validation rather than
+  spending repair attempts on it: bracket groups containing no Chinese, and `* _ \` #`.
+  Bracket groups *with* Chinese inside are left alone, as are Chinese quotation marks.
+  The always-allowed ASCII set is now deliberately narrow — brackets and markdown characters
+  counting as punctuation is exactly how those timestamps reached the screen unchallenged, so
+  anything left after stripping is a violation and does reach the repair loop.
+- **The learner's own ASCII is never a mistake.** Symbols in your own message (`50%`, `—`)
+  are neither underlined nor learned as vocabulary; the same characters in a reply are.
 - **Numerals combine.** A run of number characters is one token only when every character
   in it is already allowed, so 二十三 glosses as one word without widening the vocabulary.
 - **`EXTRA_ALLOWED`** in `validator.js` covers particles the published lists omit (啊, 呀,

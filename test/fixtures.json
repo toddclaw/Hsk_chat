@@ -152,6 +152,39 @@
   ],
   "notes": [
     "Known limitation: the validator matches words, so an above-level compound built entirely from in-list characters (想要 = 想 + 要) passes. Constraining that would require a blocklist, which the grammar section of the system prompt handles instead.",
-    "苹果, 问题, 千 and 万 are absent from HSK 3.0 level 1 (506 words). Fixtures assert against the supplied list, not against intuition."
+    "苹果, 问题, 千 and 万 are absent from HSK 3.0 level 1 (506 words). Fixtures assert against the supplied list, not against intuition.",
+    "Brackets, asterisks and hashes are no longer in the always-allowed ASCII set: treating them as punctuation is how subtitle timestamps reached the screen unchallenged."
+  ],
+  "scaffold": [
+    {
+      "raw": "[0.0:] 我喜欢听中文歌。\n[4.8:] 中文歌很好听。\n[24.0:28.0] 一起听中文歌。",
+      "clean": "我喜欢听中文歌。\n中文歌很好听。\n一起听中文歌。",
+      "why": "subtitle timestamps a model emitted around an otherwise fine reply"
+    },
+    {
+      "raw": "**我很好**",
+      "clean": "我很好",
+      "why": "markdown emphasis"
+    },
+    {
+      "raw": "# 你好\n我是你的朋友。",
+      "clean": "你好\n我是你的朋友。",
+      "why": "a markdown heading"
+    },
+    {
+      "raw": "[music] 我们一起唱歌。",
+      "clean": "我们一起唱歌。",
+      "why": "a bracketed stage direction"
+    },
+    {
+      "raw": "我说「你好」。",
+      "clean": "我说「你好」。",
+      "why": "Chinese quotation marks are text, not scaffolding"
+    },
+    {
+      "raw": "[这是中文]",
+      "clean": "[这是中文]",
+      "why": "a bracket group containing Chinese is left alone"
+    }
   ]
 }

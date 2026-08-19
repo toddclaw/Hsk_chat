@@ -55,6 +55,19 @@ check(HSK.segment("不便宜", wideLex).map(t => t.text).join("|") === "不|便�
   "不便宜 segments as 不 + 便宜, not 不便 + 宜",
   HSK.segment("不便宜", wideLex).map(t => t.text).join("|"));
 
+/* Model scaffolding: formatting wrapped around the answer rather than said.
+ * It used to pass validation because brackets and digits counted as
+ * punctuation, so a reply arrived on screen reading "[0.0:] 我喜欢听中文歌。" */
+for (const c of fx.scaffold) {
+  const got = HSK.stripScaffold(c.raw);
+  check(got === c.clean, `scaffold: ${c.why}`, JSON.stringify(got) + " != " + JSON.stringify(c.clean));
+}
+check(HSK.validate("[0.0:] 我很好。", lex).length > 0,
+  "unstripped brackets are a violation, not punctuation");
+check(HSK.validate(HSK.stripScaffold("[0.0:] 我很好。"), lex).length === 0,
+  "and stripping them leaves a clean reply");
+check(HSK.isAscii("50%") && !HSK.isAscii("我"), "isAscii distinguishes the learner's own symbols");
+
 const sug = HSK.suggest("想要", lex, 4).map(e => e.w);
 check(sug.length > 0 && sug.every(w => /[想要]/.test(w)),
   "suggest: returns allowlist entries sharing a character", JSON.stringify(sug));

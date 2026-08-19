@@ -137,23 +137,24 @@
               "|pīn yīn|english]]" + convert("，一句话最多一个。"),
       "7. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
               "|pīn yīn|english]] " + convert("回答，"),
-      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。")
+      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。"),
+      "8. " + convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。")
     ];
+    if (opts.script === "trad") {
+      // The one rule with no simplified counterpart: say which script to write.
+      lines.push("9. " + convert("请用繁体字回答，不要用简体字。"));
+    }
     /* Gradual introduction. The offer is permission, not an instruction: a word
      * forced into a conversation it does not fit reads as a vocabulary drill,
      * and the credit simply carries to the next turn instead. */
     if (opts.offer && opts.offer.length) {
-      lines.push("9. " + convert("这次你可以用这些新词里的一个：") +
+      lines.push("10. " + convert("这次你可以用这些新词里的一个：") +
                  opts.offer.map(function (e) { return e.w; }).join("、") +
                  convert("。用一个就好，用得自然最重要；如果都不合适，就都不用。"));
     }
     if (opts.reuse && opts.reuse.length) {
-      lines.push("10. " + convert("学生最近学了这些词，请多用：") +
+      lines.push("11. " + convert("学生最近学了这些词，请多用：") +
                  opts.reuse.map(function (e) { return e.w; }).join("、") + convert("。"));
-    }
-    if (opts.script === "trad") {
-      // The one rule with no simplified counterpart: say which script to write.
-      lines.push("8. " + convert("请用繁体字回答，不要用简体字。"));
     }
     lines.push(
       "",
