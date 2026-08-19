@@ -333,6 +333,47 @@ python3 -m http.server 8000
 
 Deploy by pushing: Pages serves the branch root, and there is nothing to build.
 
+## Deploying, and testing a branch without touching the live page
+
+`.github/workflows/pages.yml` publishes **every** branch to one Pages site:
+
+| branch | URL |
+|---|---|
+| `main` | `https://toddclaw.github.io/Hsk_chat/` |
+| anything else | `https://toddclaw.github.io/Hsk_chat/preview/<branch>/` |
+
+So the public page is always `main`, and testing a branch on a phone never involves changing
+a repository setting. Slashes in branch names become dashes
+(`claude/new-session-jw19j3` → `preview/claude-new-session-jw19j3/`). Deleting a branch
+deletes its preview.
+
+**One-time setup:** Settings → Pages → *Deploy from a branch* → **`gh-pages`** / root. The
+workflow creates that branch on its first run. Until you switch, everything keeps serving
+from `main` as before.
+
+Two details that make this safe:
+
+- Publishing `main` clears the site root but explicitly spares `preview/`, so a release
+  never wipes the previews.
+- The workflow copies an **explicit list** (`.github/publish-files`), not everything minus
+  exclusions — adding a file to the repo should not publish it by accident.
+  `test/release.test.js` fails if that list stops covering something `index.html` loads or
+  the service worker pre-caches, which is the one kind of breakage that would appear only
+  after deploying.
+
+The workflow runs `sh test/run.sh` before publishing, so a red branch never reaches a URL —
+`main` included.
+
+Each preview is a separate service-worker scope, so a preview cannot poison the live app's
+cache. It is the *same origin*, though, which means it shares `localStorage`: your key
+carries over (convenient), and so does your history and vocabulary (be careful with
+destructive testing).
+
+For the fastest loop, skip deploying altogether — run `python3 -m http.server 8000` on a
+computer and open `http://<its-lan-ip>:8000` from the phone on the same wifi. Everything
+works except the service worker, which needs a secure context, and that is the part you
+least want while iterating.
+
 ## Tests
 
 `sh test/run.sh` runs all three, no dependencies:
