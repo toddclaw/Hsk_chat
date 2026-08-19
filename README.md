@@ -46,7 +46,31 @@ credit**, and tick **free models only** in Settings. Models priced at zero cost 
 call, and the picker shows what everything costs per million input tokens so the paid ones
 are one tap away when you want them.
 
-Free models are rate-limited and can be busy, so replies are slower and retries more
+**A free model that works: Google: Gemma 4 26B A4B (free).** Pick it by name in the
+picker — free endpoints come and go, so the live catalogue is the authority on ids, not this
+file.
+
+That recommendation matters because **most free models tried for this app returned nothing at
+all**. A free endpoint that is overloaded, withdrawn or gated answers with an empty
+completion — an HTTP 200 with no content in it.
+
+The app treats that as a normal thing to route around rather than as a crash. A failed call
+becomes a card in the conversation naming what happened and what to do, with a button
+straight to the model picker:
+
+| | |
+|---|---|
+| empty completion | *That model sent back an empty reply* — pick another |
+| 429 | rate limited; free models share a small quota |
+| 401 / 403 | the key was rejected |
+| 402 | that model needs credit |
+| anything else | network or OpenRouter itself; sending again often works |
+
+Notices are **not** conversation: they never go to the model in the next turn's history, and
+they are never rendered as Chinese. An earlier version pushed `我不知道。` on failure, which
+read as the partner refusing to answer when in fact no answer had been requested.
+
+Free models are also rate-limited and can be busy, so replies are slower and retries more
 frequent — which for this app means more turns ending in 我不知道。Raising *Tries before
 giving up* helps; adding credit and choosing a paid model helps more.
 
@@ -169,6 +193,16 @@ fixes.
   violation kind and its own repair line. Your English is the opposite case and is sent
   verbatim. The asymmetry lives at the call sites; `validate()` reports the kind and lets
   the caller decide.
+- **Model scaffolding is stripped, not repaired.** A model can wrap its answer in subtitle
+  timestamps (`[0.0:] 我喜欢听中文歌。`), markdown emphasis or headings. That is formatting,
+  not a vocabulary mistake, so `stripScaffold()` removes it before validation rather than
+  spending repair attempts on it: bracket groups containing no Chinese, and `* _ \` #`.
+  Bracket groups *with* Chinese inside are left alone, as are Chinese quotation marks.
+  The always-allowed ASCII set is now deliberately narrow — brackets and markdown characters
+  counting as punctuation is exactly how those timestamps reached the screen unchallenged, so
+  anything left after stripping is a violation and does reach the repair loop.
+- **The learner's own ASCII is never a mistake.** Symbols in your own message (`50%`, `—`)
+  are neither underlined nor learned as vocabulary; the same characters in a reply are.
 - **Numerals combine.** A run of number characters is one token only when every character
   in it is already allowed, so 二十三 glosses as one word without widening the vocabulary.
 - **`EXTRA_ALLOWED`** in `validator.js` covers particles the published lists omit (啊, 呀,
@@ -249,6 +283,56 @@ Saving compares against what the box was filled with, not a freshly generated de
 otherwise changing the level while the panel is open would silently freeze the old wording.
 
 ---
+
+# Meeting new words at a graded-reader pace
+
+Optional, off by default, in Settings. Graded readers introduce roughly one unknown word per
+40–50 characters of text you already know; this does the same with the level above the one
+you are on.
+
+- **Pool** — everything in HSK N+1 that is not already usable — the level below, the
+  always-allowed particles, and anything you have added or been introduced to — ordered by
+  corpus frequency, so the useful words come first. (Without the particles excluded, the very
+  first offer at HSK 1 was 啊, which is permitted at every level: a credit spent on nothing.) At HSK 1 that is 750 words beginning 啊, 让, 但, 自己, 可以,
+  已经, 因为.
+- **Budget** — Han characters in the partner's replies accumulate; every *R* of them earns a
+  credit, capped at 3 so a long gap cannot dump six new words into one reply. Kept per level.
+- **Offer** — holding a credit, the turn offers the three commonest words you have not met,
+  and asks for one to be used in a natural sentence, declining only if none can be. A word
+  forced in reads as a vocabulary drill, so a declined offer carries to the next turn.
+
+- **Escalation** — asking politely does not work with every model; some read the offer as
+  optional and never take it, however the rule is worded. After **two** turns where an offer
+  went unused, the commonest word stops being a suggestion and becomes a condition of the
+  reply, enforced by the same repair loop that enforces vocabulary rather than by stronger
+  wording: a reply without it is sent back asking for it. A reply that is otherwise legal but
+  still lacks the word is kept and shown rather than discarded for the fallback — the
+  conversation is never degraded to make a point — and the decline is counted so the next
+  turn tries again.
+
+  **Rule 1 has to grant the exception explicitly.** Left absolute — *never use a word the
+  student does not know* — it forbids exactly what the offer permits, and a model resolving
+  that contradiction obeys the rule stated first and stated without exception. The offer was
+  ignored every turn until rule 1 gained *（第 10 条的新词除外。）*. Settings shows the words
+  currently on offer, so a model that keeps declining is visible rather than looking like a
+  feature that does nothing.
+- **Validation** — offered words are legal for that turn through the same path `[[NEED:]]`
+  uses, and the same slate is re-offered across repair attempts, so a reply rejected for
+  unrelated reasons never costs the introduction.
+- **Consolidation** — an introduced word is highlighted, permanently allowed, and actively
+  reused by the partner until you have seen it three times, then it becomes ordinary
+  vocabulary and stops standing out. A word met once is not learned.
+
+The 词 panel lists what has been introduced with sightings and source level, and the
+flashcard exports include them — they are exactly the words worth drilling.
+
+The arithmetic lives in `pace.js` and is tested directly (`test/pace.test.js`): pool ordering
+and exclusion, character counting that ignores punctuation and Latin, credits that carry
+their remainder and stop at the cap, slates that never re-offer, and spotting that uses the
+segmenter's boundaries so a word is not credited for appearing inside a longer one.
+
+At HSK 7–9 there is no level above to draw from and the feature reports that rather than
+doing nothing quietly.
 
 # Growing the allowlist
 
