@@ -51,10 +51,24 @@ picker — free endpoints come and go, so the live catalogue is the authority on
 file.
 
 That recommendation matters because **most free models tried for this app returned nothing at
-all**. A free endpoint that is overloaded, withdrawn, or gated can answer with an empty
-completion, which surfaces as *Empty response from …* rather than as a reply. If a model
-gives you nothing, the app is not broken — try the next one. That is the cost of free, and
-it is why the picker sorts free models together: switching is meant to be quick.
+all**. A free endpoint that is overloaded, withdrawn or gated answers with an empty
+completion — an HTTP 200 with no content in it.
+
+The app treats that as a normal thing to route around rather than as a crash. A failed call
+becomes a card in the conversation naming what happened and what to do, with a button
+straight to the model picker:
+
+| | |
+|---|---|
+| empty completion | *That model sent back an empty reply* — pick another |
+| 429 | rate limited; free models share a small quota |
+| 401 / 403 | the key was rejected |
+| 402 | that model needs credit |
+| anything else | network or OpenRouter itself; sending again often works |
+
+Notices are **not** conversation: they never go to the model in the next turn's history, and
+they are never rendered as Chinese. An earlier version pushed `我不知道。` on failure, which
+read as the partner refusing to answer when in fact no answer had been requested.
 
 Free models are also rate-limited and can be busy, so replies are slower and retries more
 frequent — which for this app means more turns ending in 我不知道。Raising *Tries before
