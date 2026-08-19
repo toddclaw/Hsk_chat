@@ -135,7 +135,21 @@ const numbered = P.build({ level: 1, label: "HSK 1", length: "short", script: "t
 check(numbered.every((n, i) => i === 0 || n > numbered[i - 1]),
   "rules are numbered in ascending order", numbered.join(","));
 
-// 8. An unknown level must not produce a prompt with no constraints at all.
+/* 8. The offer must not contradict the vocabulary rule. Left absolute, rule 1
+ *    forbids exactly what the offer permits, and a model obeying the rule
+ *    stated first ignores the offer every turn -- which is what happened. */
+const offered = P.build({ level: 1, label: "HSK 1", length: "short",
+  offer: [{ w: "让" }, { w: "但" }] });
+const rule1 = offered.split("\n").find(l => l.startsWith("1. "));
+check(/第 10 条|除外/.test(rule1), "rule 1 carves out an exception when words are on offer", rule1);
+const plain1 = P.build({ level: 1, label: "HSK 1", length: "short" })
+  .split("\n").find(l => l.startsWith("1. "));
+check(!/除外/.test(plain1), "and stays absolute when nothing is on offer", plain1);
+check(offered.includes("让、但"), "the offered words are named");
+check(/请用/.test(offered.split("\n").find(l => l.startsWith("10. "))),
+  "the offer asks for a word rather than merely permitting one");
+
+// 9. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);

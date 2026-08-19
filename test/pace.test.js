@@ -24,6 +24,18 @@ check(["让", "自己", "可以"].every(w => pool.slice(0, 12).some(e => e.w ===
   "the commonest additions come first", pool.slice(0, 6).map(e => e.w).join(" "));
 check((pool[pool.length - 1].f || Infinity) >= (pool[0].f || 0), "unranked words sort last");
 
+/* The pool must exclude everything already usable, not just the level list.
+ * 啊 lives in EXTRA_ALLOWED and is permitted at every level, so offering it
+ * would spend a credit on a word the learner already has. */
+const withParticles = P.buildPool(l1.concat(HSK.EXTRA_ALLOWED), l2);
+check(!withParticles.some(e => e.w === "啊"),
+  "always-allowed particles are never offered as new");
+check(withParticles.length === pool.length - 1,
+  "and excluding them removes exactly those words",
+  `${withParticles.length} vs ${pool.length}`);
+const withAdded = P.buildPool(l1.concat([{ w: "让" }]), l2);
+check(!withAdded.some(e => e.w === "让"), "a word already added is never offered as new");
+
 // --- counting ---------------------------------------------------------------
 check(P.countHan("我很好，谢谢你！") === 6, "counts Han characters only, not punctuation",
   String(P.countHan("我很好，谢谢你！")));
