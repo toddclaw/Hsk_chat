@@ -120,6 +120,23 @@ switches the whole allowlist — HSK 1 through the combined 7–9 band — mid-c
 validator is provider- and level-agnostic; switching re-renders existing messages against
 the new list.
 
+## Copying text out
+
+Every message has a **copy** button that copies its Chinese exactly, and the word popover
+has a copy for the single word. Selecting by hand works too, and gives the same thing.
+
+Getting that right took two fixes that are easy to get wrong:
+
+- **The ruby is CSS generated content** (`.w::before { content: attr(data-py) }`), not a
+  DOM node. As a real element the pinyin came out interleaved with the characters —
+  `wǒ我hěn很hǎo好` — and `user-select: none` does not help, because Chromium still puts
+  such text into `Selection.toString()`.
+- **Word tokens are `inline-block`, not `inline-flex`.** A flex box serializes as a block,
+  so a selected line copied out one word per line.
+
+Pasting into the composer needs nothing special, and pasted text is validated and learned
+like anything typed.
+
 ## The A/B flag
 
 HSKStory reports that including the vocabulary list in the prompt makes output *worse*.

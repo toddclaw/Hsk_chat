@@ -49,16 +49,26 @@ header button{padding:8px 10px}
 .badge{border:1px solid var(--line); border-radius:999px; padding:2px 8px}
 .badge.warn{color:#ffd479; border-color:#5a4a22}
 .badge.fail{color:var(--bad); border-color:#5a2626}
+.copy{border:1px solid var(--line); border-radius:999px; padding:2px 9px; min-height:0;
+      background:none; color:var(--dim); font-size:12px; cursor:pointer}
+.copy:active{color:var(--ink)}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
-.w{display:inline-flex; flex-direction:column; align-items:center; vertical-align:bottom; cursor:pointer}
+.bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
+/* inline-block, not inline-flex: a flex box serializes as a block, so copying a
+   selected line came out one word per line. */
+.w{display:inline-block; text-align:center; vertical-align:bottom; cursor:pointer}
+/* The ruby is CSS generated content, not a DOM node, so selecting a line and
+   copying it yields the Chinese alone. user-select:none is not enough --
+   Chromium still puts such text into Selection.toString(). */
+.w::before{content:attr(data-py); display:none; font-size:11px; line-height:1.15;
+           color:var(--dim); font-style:normal; margin-bottom:-3px}
 /* Hidden pinyin must not reserve width, or the ruby column stretches every
    token to the width of its romanisation and the line looks gappy. */
-.w .py{display:none; font-size:11px; line-height:1.15; color:var(--dim); font-style:normal}
-.pinyin-all .w .py,
-.pinyin-extra .w.extra .py,
-.pinyin-extra .w.need .py,
-.pinyin-extra .w.bad .py{display:block; margin-bottom:-3px}
+.pinyin-all .w::before,
+.pinyin-extra .w.extra::before,
+.pinyin-extra .w.need::before,
+.pinyin-extra .w.bad::before{display:block}
 .w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
 .w.extra>.t{border-bottom:2px solid var(--ok)}
 .w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
@@ -226,7 +236,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v5 — 2026-08-19";
+const VERSION   = "v6 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -461,8 +471,8 @@ function tokenSpan(tok, needs, flagLatin) {
   else if (isExtra(tok.text)) cls.push("extra");
   return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
          '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
-         '" data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
-         '<i class="py">' + escapeHtml(primaryReading(e.p)) + '</i>' +
+         '" data-py="' + escapeHtml(primaryReading(e.p)) + '"' +
+         ' data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
          '<span class="t">' + escapeHtml(tok.text) + "</span></span>";
 }
 
@@ -492,12 +502,15 @@ function renderMessage(turnObj, idx) {
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
   if (turnObj.failed) bits.push('<span class="badge fail">gave up</span>');
-  if (bits.length) {
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.innerHTML = bits.join("");
-    el.appendChild(meta);
-  }
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = bits.join("");
+  const copy = document.createElement("button");
+  copy.className = "copy";
+  copy.textContent = "copy";
+  copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
+  meta.appendChild(copy);
+  el.appendChild(meta);
 
   (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w)).forEach(n => {
     const box = document.createElement("div");
@@ -653,6 +666,32 @@ function acceptWord(n) {
 
 function persist() { store.set(K.history, S.history); }
 
+/* Copy without the pinyin. Selecting by hand works too -- the ruby is
+ * user-select:none -- but a button is one tap and cannot pick up a stray
+ * character. execCommand is the fallback for iOS versions where the async
+ * clipboard API is unavailable outside a secure context. */
+async function copyText(text, btn) {
+  const done = () => {
+    if (!btn) return;
+    const was = btn.textContent;
+    btn.textContent = "copied";
+    setTimeout(() => { btn.textContent = was; }, 1200);
+  };
+  try {
+    await navigator.clipboard.writeText(text);
+    done();
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);      // iOS needs the explicit range
+    try { document.execCommand("copy"); done(); } catch (e2) { console.warn("copy failed", e2); }
+    ta.remove();
+  }
+}
+
 /* ------------------------------------------------------------------ sending */
 
 async function send() {
@@ -727,7 +766,10 @@ function showPopover(el) {
     '<div class="d">' + escapeHtml(d || (known ? known.d : "not in the reference dictionary")) + "</div>" +
     (bad ? '<div class="tag">above level</div>' : "") +
     (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
-    (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "");
+    (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "") +
+    '<button id="popCopy">Copy 「' + escapeHtml(w) + "」</button>";
+  const cp = pop.querySelector("#popCopy");
+  if (cp) cp.onclick = () => copyText(w, cp);
   const add = pop.querySelector("#popAdd");
   if (add) add.onclick = () => {
     const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
