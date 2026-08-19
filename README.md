@@ -50,6 +50,24 @@ it right first time. The A/B counters in Settings measure exactly that.
 The first thing to do in Settings is **Load model list from OpenRouter**: the three ids
 compiled into the page are unverified starting points, and model ids change often.
 
+## A model that works well
+
+**Qwen: Qwen3 30B A3B Instruct 2507** (`qwen/qwen3-30b-a3b-instruct-2507`) — very cheap, and
+it generally gets there after a few retries. Pick it from the loaded catalogue rather than
+typing the id, since ids change.
+
+The "after a few retries" part is the point, and it is worth setting up for:
+
+- **Raise *Tries before giving up* to 4 or 5.** The retries are what make this model work,
+  and at its price several of them still cost less than one call to a frontier model. The
+  default 3 will give up on turns it would have solved.
+- Watch the retry counters rather than the price when comparing it with anything else. A
+  model that converges on the second try beats a cheaper one that needs five.
+
+It is a reasonable default for this app generally: the task is short, simple Chinese under a
+hard constraint, which rewards instruction-following and Chinese-native training far more
+than reasoning ability.
+
 ---
 
 # What the app does
@@ -144,6 +162,31 @@ from in-list characters (想要 = 想 + 要) passes. The grammar rules in the sy
 handle that class instead.
 
 ---
+
+# Simplified or traditional
+
+Settings → **Characters** switches the whole app between 简体 and 繁體: the allowlist, the
+starters, the prompt and the validator.
+
+No second dataset was needed. The HSK dumps carry a `traditional` form on every entry and
+the converter had been discarding it; `data/*.json` now ships `t` alongside `w`, present
+only where the two differ (6,352 of 10,969 entries at HSK 7–9). Traditional mode swaps which
+form is the lexicon key and keeps the other on the entry, so the word popover shows both.
+Nothing in `validator.js` knows about scripts — it matches whatever keys it is given.
+
+The app's own Chinese — rules, samples, starters — is converted **word by word against the
+wordlist**, not character by character. That is where the ambiguity lives: 干 is 幹 or 乾
+depending on the word around it, and the wordlist already knows which. Anything unmatched is
+left alone. Traditional mode also adds a rule telling the model to write 繁體字.
+
+About 3% of entries list several traditional variants (岸/㟁, 幫/幇/幚); the form belonging to
+the word's main reading is the one used.
+
+`test/prompt.test.js` validates every sample and starter **after conversion** against the
+traditional lexicon, plus a check that the conversion is doing real work — otherwise those
+assertions would pass vacuously on unconverted text.
+
+Words you added keep the form you added them in; switching scripts does not rewrite them.
 
 # The prompt grows with the level
 

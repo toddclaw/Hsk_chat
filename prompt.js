@@ -113,32 +113,45 @@
     return LEVEL_STYLE[level] || LEVEL_STYLE[1];
   }
 
-  /* opts: { level, label, length, words }
-   * `words` is the allowlist joined by spaces, appended only in with-list mode. */
+  /* opts: { level, label, length, words, script, convert }
+   * `words` is the allowlist joined by spaces, appended only in with-list mode.
+   * `convert` rewrites app-authored Chinese into the active script; it runs over
+   * the rules and the sample but never over `words`, which the caller already
+   * supplies in that script. */
   function build(opts) {
     var style = styleFor(opts.level);
     var len = LENGTHS[opts.length] || LENGTHS.short;
+    var convert = opts.convert || function (t) { return t; };
     var lines = [
-      "你是一个中文聊天伙伴。用户是学中文的学生（" + opts.label + "）。",
+      convert("你是一个中文聊天伙伴。用户是学中文的学生") + "（" + opts.label + "）。",
       "",
-      "规则：",
-      "1. " + style.vocab,
-      "2. " + len.rule,
-      "3. " + style.grammar,
-      "4. 学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，",
-      "   不要用英文，不要用拼音，不要用汉字注音。",
-      "5. 每次说完，问学生一个问题。",
-      "6. 如果你真的需要一个学生不会的词，写 [[NEED:词|pīn yīn|english]]，一句话最多一个。",
-      "7. 学生问「…怎么说」的时候，一定用 [[NEED:词|pīn yīn|english]] 回答，",
-      "   这样他可以看到拼音和意思。不要用英文解释。",
-      "",
-      "例子：",
-      "学生：你好！",
-      "你：" + style.sample,
-      "学生：怎么说 fried egg",
-      "你：[[NEED:煎蛋|jiān dàn|fried egg]]。你喜欢吃吗？"
+      convert("规则：") ,
+      "1. " + convert(style.vocab),
+      "2. " + convert(len.rule),
+      "3. " + convert(style.grammar),
+      "4. " + convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，"),
+      "   " + convert("不要用英文，不要用拼音，不要用汉字注音。"),
+      "5. " + convert("每次说完，问学生一个问题。"),
+      "6. " + convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
+              "|pīn yīn|english]]" + convert("，一句话最多一个。"),
+      "7. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
+              "|pīn yīn|english]] " + convert("回答，"),
+      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。")
     ];
-    if (opts.words) lines.push("", "你只可以用这些词：", opts.words);
+    if (opts.script === "trad") {
+      // The one rule with no simplified counterpart: say which script to write.
+      lines.push("8. " + convert("请用繁体字回答，不要用简体字。"));
+    }
+    lines.push(
+      "",
+      convert("例子："),
+      convert("学生：你好！"),
+      convert("你：") + convert(style.sample),
+      convert("学生：") + "怎么说 fried egg",
+      convert("你：") + "[[NEED:" + convert("煎蛋") + "|jiān dàn|fried egg]]" +
+        convert("。你喜欢吃吗？")
+    );
+    if (opts.words) lines.push("", convert("你只可以用这些词："), opts.words);
     return lines.join("\n");
   }
 
