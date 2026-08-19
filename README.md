@@ -137,6 +137,28 @@ Getting that right took two fixes that are easy to get wrong:
 Pasting into the composer needs nothing special, and pasted text is validated and learned
 like anything typed.
 
+## Reply length and the system prompt
+
+A model that answers in one short line is usually obeying the prompt, not failing: the
+default rule is 每次只说一到两个短句。不要长。Settings → **Reply length** switches between
+short (1–2 sentences), medium (3–4) and longer (5–6). Each setting changes three things
+together — the sentence rule, the `max_tokens` ceiling (300 / 500 / 800), and the length of
+the worked example in the prompt, which anchors style more strongly than the rule does. All
+three examples validate clean at HSK 1, so the prompt never demonstrates above-level words.
+
+`finish_reason: "length"` now shows as a **cut off** badge. Silent truncation and a model
+choosing to stop look identical in the output and have opposite fixes.
+
+Settings also exposes the **system prompt** itself. Untouched it keeps tracking the level
+and length pickers; edit it and it is sent as written, with `{level}` and `{words}`
+substituted. Saving compares the text against what the box was filled with, not against a
+freshly generated default — otherwise changing the level or reply length while the panel is
+open would silently freeze the old wording as a custom prompt. `with-list` still appends the
+allowlist unless the custom text places it with `{words}`.
+
+Longer replies mean more opportunities to reach above level, so the retry counters are the
+thing to watch after raising it.
+
 ## The A/B flag
 
 HSKStory reports that including the vocabulary list in the prompt makes output *worse*.

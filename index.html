@@ -101,6 +101,9 @@ footer{
 }
 .sheet h2{margin:0 0 12px; font-size:17px}
 .sheet label{display:block; margin:14px 0 6px; font-size:13px; color:var(--dim)}
+.sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
+  border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
+  resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .sheet input[type=text],.sheet input[type=password],.sheet select{
   width:100%; padding:11px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); min-height:var(--tap);
 }
@@ -159,6 +162,22 @@ footer{
   <input id="modelId" type="text" placeholder="anthropic/claude-...">
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
+
+  <label for="replyLength">Reply length</label>
+  <select id="replyLength"></select>
+  <div class="note">Longer replies give more to read, and more chances to reach for a word
+  above your level — watch the retry counters below.</div>
+
+  <label for="sysPrompt">System prompt</label>
+  <textarea id="sysPrompt" spellcheck="false"></textarea>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="resetPrompt">Reset to default</button>
+    <span class="note" id="promptState" style="margin:0;align-self:center"></span>
+  </div>
+  <div class="note">Edit and it is sent as written; leave it alone and it keeps tracking the
+  level and reply-length settings. <code>{level}</code> and <code>{words}</code> are
+  substituted. The validator does not care what is in here — an instruction to use hard
+  words just costs retries.</div>
 
   <label for="promptMode">Prompt mode (A/B)</label>
   <select id="promptMode">
@@ -236,11 +255,28 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v6 — 2026-08-19";
+const VERSION   = "v7 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
-const MAX_TOKENS= 300;
+/* How much the partner says per turn. The terse default is why a well-behaved
+ * model answers in one short line: it is being told to. Longer settings raise
+ * the sentence count, the token ceiling, and the length of the worked example,
+ * which anchors the model's style more strongly than the rule does. */
+const LENGTHS = {
+  short:  { label: "short — 1-2 sentences", rule: "每次只说一到两个短句。不要长。",
+            maxTokens: 300,
+            example: "你好！你叫什么名字？" },
+  medium: { label: "medium — 3-4 sentences", rule: "每次说三到四个句子。先说你自己的事，再问学生。",
+            maxTokens: 500,
+            example: "你好！我很高兴。我是你的中文朋友。你叫什么名字？" },
+  long:   { label: "longer — 5-6 sentences", rule:
+              "每次说五到六个句子。说说你自己，说说你今天做什么，也可以说说你喜欢的东西。" +
+              "句子要短，可是要多说一点。最后问学生一个问题。",
+            maxTokens: 800,
+            example: "你好！我很高兴。我是你的中文朋友。我喜欢喝茶，也喜欢看书。" +
+                     "今天天气很好。你叫什么名字？" }
+};
 const ATTEMPTS  = 3;        // 1 generation + 2 repairs
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
@@ -249,7 +285,8 @@ const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
-  autoAdd:"hsk1chat.autoAddTyped"
+  autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
+  prompt:"hsk1chat.systemPrompt"
 };
 
 const store = {
@@ -265,6 +302,8 @@ const S = {
   mode:    store.get(K.mode, "without-list"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
+  replyLength: store.get(K.length, "short"),  // short | medium | long
+  prompt:  store.get(K.prompt, ""),           // "" = track the generated default
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -301,17 +340,35 @@ async function loadDict() {
 
 /* ------------------------------------------------------------ system prompt */
 
+function lengthSpec() { return LENGTHS[S.replyLength] || LENGTHS.short; }
+
 function levelLabel() {
   return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
 }
 
+function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
+
+/* The prompt actually sent. A custom one is used verbatim apart from the two
+ * placeholders, so the level and length selectors stop rewriting it -- they
+ * still drive validation and the token ceiling, which is where they matter. */
 function systemPrompt() {
+  if (S.prompt) {
+    let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
+    if (S.mode === "with-list" && S.prompt.indexOf("{words}") === -1) {
+      out += "\n\n你只可以用这些词：\n" + wordList();
+    }
+    return out;
+  }
+  return defaultPrompt();
+}
+
+function defaultPrompt() {
   const rules = [
     "你是一个中文聊天伙伴。用户是学中文的学生（" + levelLabel() + "）。",
     "",
     "规则：",
     "1. 只用很简单的词。学生不认识的词，一个也不要用。",
-    "2. 每次只说一到三个短句。不要长。",
+    "2. " + lengthSpec().rule,
     "3. 不要用这些语法：把、被、就、才、动词补语（看得懂、跑出去、说完了）、难的「了」。",
     "4. 学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，",
     "   不要用英文，不要用拼音，不要用汉字注音。",
@@ -322,13 +379,11 @@ function systemPrompt() {
     "",
     "例子：",
     "学生：你好！",
-    "你：你好！你叫什么名字？",
+    "你：" + lengthSpec().example,
     "学生：怎么说 fried egg",
     "你：[[NEED:煎蛋|jiān dàn|fried egg]]。你喜欢吃吗？"
   ];
-  if (S.mode === "with-list") {
-    rules.push("", "你只可以用这些词：", S.lex ? [...S.lex.words.keys()].join(" ") : "");
-  }
+  if (S.mode === "with-list") rules.push("", "你只可以用这些词：", wordList());
   return rules.join("\n");
 }
 
@@ -382,18 +437,25 @@ function repairPrompt(violations, attempt) {
   return parts.join("");
 }
 
-async function callModel(messages) {
+async function callModel(messages, maxTokens) {
   const key = store.get(K.key, "");
   if (!key) throw new Error("No API key. Open Settings and paste an OpenRouter key.");
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: S.model, messages: messages, max_tokens: MAX_TOKENS, temperature: 0.6 })
+    body: JSON.stringify({
+      model: S.model, messages: messages,
+      max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7
+    })
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
-  const txt = body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
+  const choice = (body.choices && body.choices[0]) || {};
+  const txt = choice.message && choice.message.content;
   if (!txt) throw new Error("Empty response from " + S.model);
+  // finish_reason "length" means the ceiling cut the reply off mid-sentence,
+  // which is a different problem from the model choosing to stop.
+  callModel.lastFinish = choice.finish_reason || "";
   return txt.trim();
 }
 
@@ -420,7 +482,10 @@ async function turn() {
     const violations = HSK.validate(ex.text, lex);
     console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
 
-    if (!violations.length) return { text: ex.text, needs: ex.needs, attempts: attempt };
+    if (!violations.length) {
+      return { text: ex.text, needs: ex.needs, attempts: attempt,
+               truncated: callModel.lastFinish === "length" };
+    }
 
     last = ex.text;
     scratch.push({ role: "assistant", content: raw });
@@ -502,6 +567,7 @@ function renderMessage(turnObj, idx) {
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
   if (turnObj.failed) bits.push('<span class="badge fail">gave up</span>');
+  if (turnObj.truncated) bits.push('<span class="badge warn">cut off — raise reply length</span>');
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.innerHTML = bits.join("");
@@ -627,7 +693,7 @@ async function glossWords(entries, ctx) {
                "its pinyin with tone marks, and a short English gloss.\n" +
                "Reply with only a JSON array, no prose: " +
                "[{\"frag\":\"瓜\",\"w\":\"西瓜\",\"p\":\"xī guā\",\"d\":\"watermelon\"}]"
-    }]);
+    }], 200);
     const json = raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1);
     JSON.parse(json).forEach(g => {
       // Only entries from this batch, so a stray row cannot rewrite a word the
@@ -714,7 +780,7 @@ async function send() {
     const res = await turn();
     S.history.push({
       role: "assistant", text: res.text, needs: res.needs,
-      attempts: res.attempts, failed: !!res.failed
+      attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated
     });
     recordTurn(res.attempts, res.failed);
     persist();
@@ -942,6 +1008,10 @@ $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#replyLength").innerHTML = Object.keys(LENGTHS).map(k =>
+    '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
+    escapeHtml(LENGTHS[k].label) + "</option>").join("");
+  fillPrompt();
   renderStats();
   renderVersion();
   openSheet("#setSheet");
@@ -951,7 +1021,32 @@ $("#setClose").onclick = () => {
   const id = $("#modelId").value.trim();
   if (id) { S.model = id; store.set(K.model, id); fillModels(); }
   S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
+  S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
+  /* Only an actual edit makes the prompt custom. Untouched text leaves the
+   * setting as it was -- tracking stays tracking, custom stays custom. */
+  const typed = $("#sysPrompt").value.trim();
+  if (typed !== promptShown.trim()) {
+    S.prompt = typed;
+    store.set(K.prompt, S.prompt);
+  }
   closeSheet("#setSheet");
+};
+/* What the textarea was last filled with. Saving compares against this, not
+ * against a freshly generated default: changing the level or reply length while
+ * the panel is open moves the default out from under the text, and comparing
+ * with the new one would silently save the old wording as a custom prompt. */
+let promptShown = "";
+
+function fillPrompt() {
+  promptShown = S.prompt || defaultPrompt();
+  $("#sysPrompt").value = promptShown;
+  $("#promptState").textContent = S.prompt ? "custom" : "tracking settings";
+}
+$("#resetPrompt").onclick = () => {
+  S.prompt = ""; store.set(K.prompt, "");
+  // Reflect the current level/length picks, not the ones in force when opened.
+  S.replyLength = $("#replyLength").value;
+  fillPrompt();
 };
 $("#refreshModels").onclick = refreshModels;
 $("#checkUpdate").onclick = checkUpdate;
