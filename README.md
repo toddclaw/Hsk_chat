@@ -50,6 +50,24 @@ it right first time. The A/B counters in Settings measure exactly that.
 The first thing to do in Settings is **Load model list from OpenRouter**: the three ids
 compiled into the page are unverified starting points, and model ids change often.
 
+## A model that works well
+
+**Qwen: Qwen3 30B A3B Instruct 2507** (`qwen/qwen3-30b-a3b-instruct-2507`) — very cheap, and
+it generally gets there after a few retries. Pick it from the loaded catalogue rather than
+typing the id, since ids change.
+
+The "after a few retries" part is the point, and it is worth setting up for:
+
+- **Raise *Tries before giving up* to 4 or 5.** The retries are what make this model work,
+  and at its price several of them still cost less than one call to a frontier model. The
+  default 3 will give up on turns it would have solved.
+- Watch the retry counters rather than the price when comparing it with anything else. A
+  model that converges on the second try beats a cheaper one that needs five.
+
+It is a reasonable default for this app generally: the task is short, simple Chinese under a
+hard constraint, which rewards instruction-following and Chinese-native training far more
+than reasoning ability.
+
 ---
 
 # What the app does
