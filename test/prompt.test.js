@@ -70,7 +70,22 @@ check(P.LENGTHS.short.maxTokens < P.LENGTHS.medium.maxTokens &&
       P.LENGTHS.medium.maxTokens < P.LENGTHS.long.maxTokens,
   "token ceilings increase with length");
 
-// 6. An unknown level must not produce a prompt with no constraints at all.
+// 6. Conversation starters must be sayable at the level that offers them. A
+//    starter the app would immediately underline as out of level is worse than
+//    offering nothing -- it teaches the learner a sentence they may not use.
+for (const n of levels) {
+  const list = P.startersFor(n);
+  check(Array.isArray(list) && list.length >= 5, `L${n}: has starters`, JSON.stringify(list));
+  for (const t of list) {
+    const v = HSK.validate(t, lex[n]).map(x => x.text);
+    check(v.length === 0, `L${n} starter validates: ${t}`, "flagged: " + v.join(", "));
+  }
+  check(list.every(t => /[？]$/.test(t)), `L${n}: every starter is a question`,
+    list.filter(t => !/[？]$/.test(t)).join(" | "));
+}
+check(P.startersFor(99) === P.STARTERS[1], "unknown level falls back to HSK 1 starters");
+
+// 7. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);

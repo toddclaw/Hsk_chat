@@ -84,8 +84,23 @@ header button{padding:8px 10px; flex:0 0 auto}
 .pending .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px}
 .pending b{font-size:22px}
 
+/* Starters sit directly above the composer rather than below it: on iOS the
+   keyboard covers anything under the text box the moment it opens. */
+#starters{
+  display:flex; gap:8px; overflow-x:auto; padding:8px 10px; background:var(--panel);
+  border-top:1px solid var(--line); -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#starters::-webkit-scrollbar{display:none}
+#starters:empty{display:none}
+#starters button{
+  flex:0 0 auto; white-space:nowrap; font-size:17px; padding:7px 13px;
+  min-height:0; border-radius:999px; color:var(--ink);
+}
+#starters button:active{background:var(--accent); color:#08111d}
+
 footer{
-  border-top:1px solid var(--line); background:var(--panel);
+  border-top:none; background:var(--panel);
   padding:8px 10px calc(env(safe-area-inset-bottom) + 8px); display:flex; gap:8px; align-items:flex-end;
 }
 .inputwrap{position:relative; flex:1}
@@ -153,6 +168,8 @@ footer{
 
 <div id="log"></div>
 
+<div id="starters"></div>
+
 <footer>
   <div class="inputwrap">
     <div id="mirror"></div>
@@ -171,6 +188,11 @@ footer{
   <input id="modelId" type="text" placeholder="anthropic/claude-...">
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
+
+  <label class="toggle" for="showStarters">
+    <input type="checkbox" id="showStarters">
+    <span>Show conversation starters</span>
+  </label>
 
   <label for="fontSize">Text size</label>
   <input id="fontSize" type="range" min="16" max="34" step="1" style="width:100%">
@@ -289,7 +311,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v11 — 2026-08-19";
+const VERSION   = "v12 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -303,7 +325,7 @@ const K = {
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
-  font:"hsk1chat.fontSize"
+  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters"
 };
 
 const store = {
@@ -324,6 +346,7 @@ const S = {
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
+  starters: store.get(K.starters, true),      // the chip row above the composer
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -1033,6 +1056,25 @@ async function checkUpdate() {
   }
 }
 
+/* Tapping fills the composer instead of sending: the learner sees the sentence
+ * they are about to say, can edit it, and the words get underlined and learned
+ * like anything typed. */
+function renderStarters() {
+  const box = $("#starters");
+  box.innerHTML = "";
+  if (!S.starters) return;
+  HSKPrompt.startersFor(S.level).forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = t;
+    b.onclick = () => {
+      input.value = t;
+      updateMirror(); autosize(); input.focus();
+      box.scrollLeft = 0;
+    };
+    box.appendChild(b);
+  });
+}
+
 function applyFont(px) {
   document.documentElement.style.setProperty("--msg", px + "px");
 }
@@ -1057,7 +1099,7 @@ document.addEventListener("click", e => {
 
 $("#level").onchange = async e => {
   await loadLevel(Number(e.target.value));
-  updateMirror(); renderAll();
+  updateMirror(); renderAll(); renderStarters();
 };
 $("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; };
 
@@ -1098,6 +1140,7 @@ $("#btnSet").onclick = () => {
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
   $("#fontSize").value = S.font;
+  $("#showStarters").checked = S.starters;
   $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
   $("#ankiFront").value = S.anki.front; $("#ankiBack").value = S.anki.back;
   $("#attempts").innerHTML = ATTEMPT_CHOICES.map(n =>
@@ -1152,6 +1195,11 @@ $("#resetPrompt").onclick = () => {
   fillPrompt();
 };
 // Live, so the preview line under the slider shows the real size as it moves.
+$("#showStarters").onchange = e => {
+  S.starters = e.target.checked;
+  store.set(K.starters, S.starters);
+  renderStarters();
+};
 $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
@@ -1182,7 +1230,7 @@ $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); re
     return;
   }
   loadDict();
-  updateMirror(); autosize(); renderAll(); renderStats();
+  updateMirror(); autosize(); renderAll(); renderStats(); renderStarters();
   if (!store.get(K.key, "")) $("#btnSet").click();
   if ("serviceWorker" in navigator) {
     /* A new worker calls skipWaiting and claims the page; reload once so the

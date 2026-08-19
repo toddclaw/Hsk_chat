@@ -151,6 +151,24 @@ switches the whole allowlist — HSK 1 through the combined 7–9 band — mid-c
 validator is provider- and level-agnostic; switching re-renders existing messages against
 the new list.
 
+## Conversation starters
+
+At HSK 1 the hard part is not saying a sentence, it is knowing which sentence is even
+sayable. A scrollable row of tappable starters sits directly above the composer — above
+rather than below it, because on iOS the keyboard covers anything under the text box the
+moment it opens. Tapping fills the composer instead of sending, so the learner sees the
+sentence before it goes, can edit it, and its words get underlined and learned like
+anything typed.
+
+The starters live in `prompt.js` beside the register profiles, one set per level, and
+`test/prompt.test.js` validates **every line against its own level's allowlist**. A starter
+the app would immediately underline as out of level is worse than offering nothing: it
+hands the learner a sentence they are not allowed to use. Several first drafts failed that
+check and were rewritten — 怎么样 and 英文 are not HSK 1, 季节 is not HSK 3, 平衡 and 节奏
+are not HSK 5.
+
+Toggle the row off in Settings.
+
 ## Fitting the screen, and text size
 
 The page must not scroll sideways, and one trap made it: flex items default to

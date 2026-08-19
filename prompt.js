@@ -62,6 +62,41 @@
     }
   };
 
+  /* Conversation starters, in each level's own vocabulary. At HSK 1 the hard
+   * part is not saying a sentence, it is knowing which sentence is even
+   * sayable; these are the ones that are. Every line validates against its own
+   * level (see the test suite) -- a starter the app would then underline as
+   * out of level would be worse than none. */
+  var STARTERS = {
+    1: ["你好！你叫什么名字？", "你是哪国人？", "你今天好吗？", "你喜欢吃什么？",
+        "你会说中文吗？", "你家有几个人？", "今天热吗？", "你几点睡觉？",
+        "你想喝茶还是喝水？", "你有中国朋友吗？", "你的家在哪儿？", "你想去哪儿？"],
+    2: ["你昨天做什么了？", "你有什么爱好？", "你喜欢什么运动？", "你去过中国吗？",
+        "你平时几点起床？", "周末你想做什么？", "你会做饭吗？", "你最喜欢什么颜色？",
+        "你觉得中文难不难？", "你家离公司远吗？"],
+    3: ["你为什么开始学中文？", "你喜欢夏天还是冬天？", "你觉得学中文难吗？",
+        "你以后有什么打算？", "你喜欢住在城市还是农村？", "你最近在忙什么？",
+        "你昨天晚上做了什么？", "你觉得什么样的朋友最重要？", "你周末一般怎么过？"],
+    4: ["你觉得什么样的工作最有意思？", "你小时候的梦想是什么？", "你旅行的时候喜欢做什么？",
+        "你觉得学一门语言最重要的是什么？", "你怎么安排自己的时间？",
+        "你最近有没有养成什么好习惯？", "你觉得网上购物方便吗？",
+        "你更喜欢一个人还是跟朋友一起？"],
+    5: ["你觉得科技让生活变得更好了吗？", "你怎么安排工作和休息的时间？", "你最近读了什么书？",
+        "你觉得环境问题严重吗？", "你认为年轻人的压力主要来自哪里？",
+        "你觉得什么样的教育最有用？", "你相信努力比运气更重要吗？",
+        "你觉得城市的生活压力大吗？"],
+    6: ["你觉得社会的变化让人更幸福了吗？", "你认为传统文化还有多少影响？",
+        "你怎么看待人工智能的发展？", "你觉得什么决定了一个人的性格？",
+        "你认为成功的标准是什么？", "你觉得网络让人们更亲近还是更孤独？"],
+    7: ["你觉得语言会不会影响一个人的思维方式？", "你怎么看待现代社会的焦虑感？",
+        "你认为什么样的生活才算有意义？", "你觉得文化差异最难跨越的地方在哪里？",
+        "你相信人的性格是天生的还是后天形成的？", "你觉得这个时代最大的挑战是什么？"]
+  };
+
+  function startersFor(level) {
+    return STARTERS[level] || STARTERS[1];
+  }
+
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
   var LENGTHS = {
@@ -107,7 +142,8 @@
     return lines.join("\n");
   }
 
-  var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, styleFor: styleFor, build: build };
+  var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
+              styleFor: styleFor, startersFor: startersFor, build: build };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
