@@ -113,8 +113,12 @@ than reasoning ability.
 
 # What the app does
 
-**Levels.** The picker in the header switches the whole allowlist between HSK 1 and the
-combined 7–9 band, mid-conversation. Existing messages re-render against the new list.
+**Levels.** The picker in the header switches the whole allowlist between **HSK 0.5** and the
+combined 7–9 band, mid-conversation. HSK 0.5 is a first-week level of 150 words: corpus
+frequency alone is the wrong ordering for it — 谢谢, 再见 and 名字 are rare in a corpus and
+taught in lesson one — so `tools/make_hsk0.py` seeds the course-essential words and fills the
+rest by frequency from HSK 1. It is always a strict subset of HSK 1, and its grammar rule is
+stricter: no 了 at all, and sentences under about eight characters. Existing messages re-render against the new list.
 
 **Conversation starters.** A scrollable row above the composer, in that level's own
 vocabulary. At HSK 1 the hard part is not saying a sentence, it is knowing which sentence
@@ -132,7 +136,16 @@ you ask for a word you do not have.
 (automatic, toggleable), tapped in a message, added by hand, or requested by the model.
 Added words join the allowlist, so the partner may use them too.
 
-**Copy** buttons on every message and word; selection by hand gives the same clean text.
+**Copy and speak** on every message, and in the word popover. Speech uses the device's own
+Chinese voice through the Web Speech API — with none installed the browser either stays
+silent or reads Chinese with an English voice, so Settings says which voice is in use, or
+where to install one. Speaking speed defaults to 0.8×, since the default rate is quick for a
+learner. (Audio was a non-goal in the original design; it is here because it was asked for.)
+
+**Try again** on any turn that ended in the fallback, and on every error card. A turn can
+fail for reasons that have nothing to do with what you said — a busy free endpoint, a model
+that would not come down to level this time — and retyping the message to retry is silly.
+The failed reply or card is dropped first, so the history stays honest.
 
 **Export flashcards** for Pleco or Anki, with the sentence you met each word in.
 
@@ -142,6 +155,8 @@ Added words join the allowlist, so the partner may use them too.
 |---|---|
 | **API key** | OpenRouter key, stored on this device only |
 | **Model** | any OpenRouter id; load the live catalogue here |
+| **Sort models** | by price (free first) or by name (A–Z) |
+| **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |
 | **Text size** | 16–34px, with a live preview |
 | **Reply length** | short (1–2 sentences) / medium (3–4) / longer (5–6) |

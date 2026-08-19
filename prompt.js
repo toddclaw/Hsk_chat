@@ -14,6 +14,15 @@
    * at HSK 2 and 4 -- and above HSK 5 the direction reverses into encouragement.
    * Every sample validates clean against its own level (see the test suite). */
   var LEVEL_STYLE = {
+    /* A first-week level: the 150 commonest and most-taught words of HSK 1.
+     * The grammar rule is stricter than HSK 1's -- no 了 at all, and sentences
+     * short enough to hold in your head while you decode them. */
+    0: {
+      vocab: "只用最简单的词。学生刚开始学中文，只会一百多个词。",
+      grammar: "只用最短的句子：谁 + 做什么。不要用「了」「过」「把」「被」，" +
+               "不要用长句子，一句话不要超过七八个字。",
+      sample: "你好！我很好。你叫什么名字？"
+    },
     1: {
       vocab: "只用很简单的词。学生不认识的词，一个也不要用。",
       grammar: "只用最简单的句子：谁 + 做什么。不要用：把、被、就、才、" +
@@ -68,6 +77,9 @@
    * level (see the test suite) -- a starter the app would then underline as
    * out of level would be worse than none. */
   var STARTERS = {
+    0: ["你好！你叫什么名字？", "你今天好吗？", "你喜欢吃什么？", "你会说中文吗？",
+        "你家有几个人？", "你喜欢喝茶吗？", "你是学生吗？", "现在几点？",
+        "你几岁？", "你的老师是谁？"],
     1: ["你好！你叫什么名字？", "你是哪国人？", "你今天好吗？", "你喜欢吃什么？",
         "你会说中文吗？", "你家有几个人？", "今天热吗？", "你几点睡觉？",
         "你想喝茶还是喝水？", "你有中国朋友吗？", "你的家在哪儿？", "你想去哪儿？"],

@@ -215,6 +215,11 @@ footer{
     <input type="checkbox" id="freeOnly">
     <span>Free models only</span>
   </label>
+  <label for="modelSort">Sort models</label>
+  <select id="modelSort">
+    <option value="price">by price — free first</option>
+    <option value="name">by name — A to Z</option>
+  </select>
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
@@ -243,6 +248,10 @@ footer{
     <input type="checkbox" id="showStarters">
     <span>Show conversation starters</span>
   </label>
+
+  <label for="speechRate">Speaking speed</label>
+  <select id="speechRate"></select>
+  <div class="note" id="voiceNote"></div>
 
   <label for="fontSize">Text size</label>
   <input id="fontSize" type="range" min="16" max="34" step="1" style="width:100%">
@@ -350,6 +359,7 @@ const MODELS = [
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
+  { id: 0, file: "data/hsk0.json", label: "HSK 0.5" },
   { id: 1, file: "data/hsk1.json", label: "HSK 1" },
   { id: 2, file: "data/hsk2.json", label: "HSK 2" },
   { id: 3, file: "data/hsk3.json", label: "HSK 3" },
@@ -365,7 +375,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v19 — 2026-08-19";
+const VERSION   = "v20 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -380,7 +390,8 @@ const K = {
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
-  freeOnly:"hsk1chat.freeOnly",
+  speechRate:"hsk1chat.speechRate",
+  freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning"
 };
 
@@ -404,7 +415,9 @@ const S = {
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
   script:  store.get(K.script, "simp"),       // simp | trad
+  speechRate: store.get(K.speechRate, 0.8),   // learners need it slower than default
   freeOnly: store.get(K.freeOnly, false),     // show only zero-cost models
+  modelSort: store.get(K.modelSort, "price"), // price | name
   /* Gradual introduction of next-level words. `budget` is per level, since the
    * pool it draws from is; `learning` is flat, because a word once met stays
    * met whatever level you switch to afterwards. */
@@ -817,8 +830,11 @@ function renderNotice(turnObj) {
       (turnObj.detail ? " — " + escapeHtml(turnObj.detail) : "") + "</div>" : "");
   const row = document.createElement("div");
   row.className = "row";
+  const again = document.createElement("button");
+  again.className = "primary";
+  again.textContent = "Try again";
+  again.onclick = () => retryLast();
   const act = document.createElement("button");
-  act.className = "primary";
   act.textContent = n.action;
   act.onclick = () => $("#btnSet").click();
   const dismiss = document.createElement("button");
@@ -827,7 +843,7 @@ function renderNotice(turnObj) {
     S.history = S.history.filter(t => t !== turnObj);
     persist(); renderAll();
   };
-  row.append(act, dismiss);
+  row.append(again, act, dismiss);
   el.appendChild(row);
   log.appendChild(el);
   return el;
@@ -857,11 +873,22 @@ function renderMessage(turnObj, idx) {
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.innerHTML = bits.join("");
+  if (turnObj.failed) {
+    const again = document.createElement("button");
+    again.className = "copy";
+    again.textContent = "try again";
+    again.onclick = e => { e.stopPropagation(); retryLast(); };
+    meta.appendChild(again);
+  }
+  const say = document.createElement("button");
+  say.className = "copy";
+  say.textContent = "speak";
+  say.onclick = e => { e.stopPropagation(); speak(turnObj.text, say); };
   const copy = document.createElement("button");
   copy.className = "copy";
   copy.textContent = "copy";
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
-  meta.appendChild(copy);
+  meta.append(say, copy);
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -1071,6 +1098,36 @@ function settlePace(res) {
   return introduced;
 }
 
+/* Speech was a non-goal in the original design; it is here because it was
+ * asked for. The Web Speech API needs a Chinese voice installed on the device
+ * to be any use -- without one the browser either stays silent or reads the
+ * characters with an English voice, so say which rather than appearing broken. */
+function zhVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const want = S.script === "trad" ? ["zh-TW", "zh-HK", "zh-CN"] : ["zh-CN", "zh-SG", "zh-TW"];
+  const voices = speechSynthesis.getVoices() || [];
+  for (const tag of want) {
+    const v = voices.find(v => (v.lang || "").replace("_", "-").toLowerCase() === tag.toLowerCase());
+    if (v) return v;
+  }
+  return voices.find(v => /^zh/i.test(v.lang || "")) || null;
+}
+
+function speak(text, btn) {
+  if (!("speechSynthesis" in window)) { if (btn) btn.textContent = "no speech"; return; }
+  speechSynthesis.cancel();                       // a second tap stops the first
+  const u = new SpeechSynthesisUtterance(text);
+  const v = zhVoice();
+  if (v) u.voice = v;
+  u.lang = v ? v.lang : (S.script === "trad" ? "zh-TW" : "zh-CN");
+  u.rate = S.speechRate;
+  if (!v && btn) {
+    btn.textContent = "no 中文 voice";
+    setTimeout(() => { btn.textContent = "speak"; }, 2000);
+  }
+  speechSynthesis.speak(u);
+}
+
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
  * user-select:none -- but a button is one tap and cannot pick up a stray
  * character. execCommand is the fallback for iOS versions where the async
@@ -1178,6 +1235,24 @@ async function send() {
   // Learn before the turn, so the model's own reply may use these words too.
   const toGloss = S.autoAdd ? learnFromInput(text) : [];
   persist(); renderAll();
+  return runTurn(toGloss, text);
+}
+
+/* Re-run the last exchange. A turn can end badly for reasons that have nothing
+ * to do with what was said -- a busy free endpoint, a model that would not come
+ * down to level this time -- and retyping the message to try again is silly.
+ * The failed reply or error card is dropped first so history stays honest. */
+async function retryLast() {
+  if (S.busy) return;
+  while (S.history.length && S.history[S.history.length - 1].role !== "user") S.history.pop();
+  if (!S.history.length) return;
+  const text = S.history[S.history.length - 1].text;
+  S.busy = true; $("#send").disabled = true;
+  persist(); renderAll();
+  return runTurn([], text);
+}
+
+async function runTurn(toGloss, text) {
 
   const thinking = document.createElement("div");
   thinking.className = "msg bot";
@@ -1247,11 +1322,14 @@ function showPopover(el) {
     (bad ? '<div class="tag">above level</div>' : "") +
     (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
     (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "") +
+    '<button id="popSpeak">🔊 ' + escapeHtml(w) + "</button>" +
     '<button id="popCopy">Copy 「' + escapeHtml(w) + "」</button>" +
     '<a class="applink" style="display:block;text-align:center;margin-top:8px" href="' +
       escapeHtml(plecoUrl(w)) + '">Look up 「' + escapeHtml(w) + "」in Pleco</a>";
   const cp = pop.querySelector("#popCopy");
   if (cp) cp.onclick = () => copyText(w, cp);
+  const sp = pop.querySelector("#popSpeak");
+  if (sp) sp.onclick = () => speak(w, sp);
   const add = pop.querySelector("#popAdd");
   if (add) add.onclick = () => {
     const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
@@ -1282,9 +1360,19 @@ function priceLabel(m) {
   return " · $" + (m.inM < 1 ? m.inM.toFixed(2) : m.inM.toFixed(1)) + "/M";
 }
 
+/* Sorting happens at render, not at fetch, so changing the order does not need
+ * the catalogue reloaded. Price order puts the free ones first, which is the
+ * point of it; name order is strictly alphabetical, which is the point of that. */
+function sortModels(list) {
+  return list.slice().sort((a, b) => S.modelSort === "name"
+    ? String(a.label || a.id).localeCompare(String(b.label || b.id))
+    : (a.free === b.free ? ((a.inM || 0) - (b.inM || 0) || a.id.localeCompare(b.id))
+                         : (a.free ? -1 : 1)));
+}
+
 function fillModels() {
   const cached = store.get(K.models, null);
-  const all = (cached && cached.length ? cached : MODELS).slice();
+  const all = sortModels((cached && cached.length ? cached : MODELS).slice());
   let list = all;
   if (S.freeOnly) {
     const free = all.filter(m => m.free);
@@ -1325,8 +1413,7 @@ async function refreshModels() {
         inM: inTok * 1e6,        // dollars per million input tokens
         outM: outTok * 1e6
       };
-    }).sort((a, b) =>
-      (a.free === b.free) ? (a.inM - b.inM || a.id.localeCompare(b.id)) : (a.free ? -1 : 1));
+    });
     if (!list.length) throw new Error("no models returned");
     store.set(K.models, list);
     fillModels();
@@ -1554,7 +1641,16 @@ $("#btnSet").onclick = () => {
     n + " characters" + (n === 45 ? " — graded-reader pace" : "") + "</option>").join("");
   renderPaceNote();
   $("#freeOnly").checked = S.freeOnly;
+  $("#modelSort").value = S.modelSort;
   $("#script").value = S.script;
+  $("#speechRate").innerHTML = [0.5, 0.6, 0.7, 0.8, 0.9, 1].map(r =>
+    '<option value="' + r + '"' + (r === S.speechRate ? " selected" : "") + ">" +
+    (r === 1 ? "normal" : r + "× — slower") + "</option>").join("");
+  const v = zhVoice();
+  $("#voiceNote").textContent = !("speechSynthesis" in window)
+    ? "This browser has no speech support."
+    : v ? "Using " + v.name + " (" + v.lang + ")."
+        : "No Chinese voice found on this device. iOS: Settings → Accessibility → Spoken Content → Voices → Chinese.";
   $("#fontSize").value = S.font;
   $("#showStarters").checked = S.starters;
   $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
@@ -1621,6 +1717,10 @@ $("#showStarters").onchange = e => {
   store.set(K.starters, S.starters);
   renderStarters();
 };
+$("#speechRate").onchange = e => {
+  S.speechRate = Number(e.target.value) || 0.8;
+  store.set(K.speechRate, S.speechRate);
+};
 $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
@@ -1636,6 +1736,10 @@ $("#paceRate").onchange = e => {
   S.pace = { on: S.pace.on, rate: Number(e.target.value) || HSKPace.DEFAULT_RATE };
   store.set(K.pace, S.pace);
   renderPaceNote();
+};
+$("#modelSort").onchange = e => {
+  S.modelSort = e.target.value; store.set(K.modelSort, S.modelSort);
+  fillModels();
 };
 $("#freeOnly").onchange = e => {
   S.freeOnly = e.target.checked;
