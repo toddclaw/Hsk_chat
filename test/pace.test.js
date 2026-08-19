@@ -80,6 +80,14 @@ const lex2 = HSK.buildLexicon(l1.concat([{ w: "一定", p: "yī dìng", d: "cert
 check(P.spot(HSK.segment("我们一起走。", lex2), ["一定"]).length === 0,
   "a word is not credited for appearing inside another word");
 
+/* Escalation. Asking politely stops working with some models -- they read the
+ * offer as optional and never take it -- so after two declined offers the word
+ * stops being a suggestion. */
+check(P.FORCE_AFTER === 2, "forces after two declines");
+check(!P.shouldForce(0) && !P.shouldForce(1), "one decline is not enough");
+check(P.shouldForce(2) && P.shouldForce(5), "two or more forces the word");
+check(!P.shouldForce(undefined), "an absent counter is not a decline");
+
 // --- promotion --------------------------------------------------------------
 check(P.isNew({ seen: 0 }) && P.isNew({ seen: 2 }) && !P.isNew({ seen: 3 }),
   `new until ${P.PROMOTE_AT} sightings`);

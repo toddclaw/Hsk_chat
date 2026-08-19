@@ -13,6 +13,16 @@
   var CREDIT_CAP = 3;      // so a long gap cannot dump six new words at once
   var SLATE = 3;           // candidates offered per turn
   var PROMOTE_AT = 3;      // sightings before a word stops being new
+  var FORCE_AFTER = 2;     // declined offers before the word is required
+
+  /* Asking politely stops working with some models: they read "use one if it
+   * fits" as optional and never take it. After this many turns where an offer
+   * went unused, the top word stops being a suggestion and becomes a condition
+   * the reply has to satisfy -- enforced by the same repair loop that enforces
+   * vocabulary, not by stronger wording. */
+  function shouldForce(declines) {
+    return (declines || 0) >= FORCE_AFTER;
+  }
 
   /* Words in the next level that the current one does not have, commonest
    * first. Entries without a frequency rank sort last -- unranked means the
@@ -73,6 +83,7 @@
 
   var api = {
     DEFAULT_RATE: DEFAULT_RATE, CREDIT_CAP: CREDIT_CAP, SLATE: SLATE, PROMOTE_AT: PROMOTE_AT,
+    FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

@@ -154,10 +154,16 @@
      * forced into a conversation it does not fit reads as a vocabulary drill,
      * and the credit simply carries to the next turn instead. */
     if (opts.offer && opts.offer.length) {
-      lines.push("10. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
-                 opts.offer.map(function (e) { return e.w; }).join("、") +
-                 convert("。只用一个，放在自然的句子里；" +
-                         "只有在实在放不进去的时候，才一个都不用。"));
+      if (opts.require) {
+        // No longer a suggestion: the reply is rejected without it.
+        lines.push("10. " + convert("这次一定要用「") + opts.require +
+                   convert("」这个词，放在一句话里。这是必须的。"));
+      } else {
+        lines.push("10. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
+                   opts.offer.map(function (e) { return e.w; }).join("、") +
+                   convert("。只用一个，放在自然的句子里；" +
+                           "只有在实在放不进去的时候，才一个都不用。"));
+      }
     }
     if (opts.reuse && opts.reuse.length) {
       lines.push("11. " + convert("学生最近学了这些词，请多用：") +

@@ -149,7 +149,18 @@ check(offered.includes("让、但"), "the offered words are named");
 check(/请用/.test(offered.split("\n").find(l => l.startsWith("10. "))),
   "the offer asks for a word rather than merely permitting one");
 
-// 9. An unknown level must not produce a prompt with no constraints at all.
+/* 9. Forcing. When the offer has been declined too often the word becomes a
+ *    condition rather than a suggestion, and the wording has to stop hedging. */
+const forced = P.build({ level: 1, label: "HSK 1", length: "short",
+  offer: [{ w: "让" }, { w: "但" }], require: "让" });
+const rule10 = forced.split("\n").find(l => l.startsWith("10. "));
+check(/一定要用/.test(rule10) && rule10.includes("让"), "the required word is demanded", rule10);
+check(!/都不用/.test(rule10), "and the escape clause is gone", rule10);
+check(!rule10.includes("但"), "only the one word is named, so there is no ambiguity", rule10);
+check(/除外/.test(forced.split("\n").find(l => l.startsWith("1. "))),
+  "rule 1 still grants the exception while forcing");
+
+// 10. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);
