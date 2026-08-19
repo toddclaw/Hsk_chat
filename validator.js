@@ -60,15 +60,6 @@
     return { words: words, maxLen: maxLen };
   }
 
-  // Longest allowlist entry starting at i, or 0.
-  function matchAt(text, i, lex) {
-    var max = Math.min(lex.maxLen, text.length - i);
-    for (var len = max; len > 0; len--) {
-      if (lex.words.has(text.slice(i, i + len))) return len;
-    }
-    return 0;
-  }
-
   // Longest run of number characters at i whose every character is allowed.
   function numRunAt(text, i, lex) {
     var j = i;
@@ -76,55 +67,81 @@
     return j - i;
   }
 
-  /* One pass produces both the violation list and the word boundaries the UI
-   * needs for tap-to-gloss. Token kinds:
+  /* Segmentation is a shortest-path problem, not a greedy walk. Pure greedy
+   * maximum matching strands characters whenever a longer word starting
+   * earlier wins: with 不便 in the list, 不便宜 segments as 不便 + 宜 and reports
+   * 宜 as out of level, though 不 + 便宜 covers it exactly. That false positive
+   * grows with the list, so choose the segmentation that leaves the fewest
+   * characters unmatched, breaking ties toward fewer (longer) words.
+   *
+   * Token kinds:
    *   word  - in the allowlist (entry attached)
    *   num   - a merged numeral run (entry synthesized)
    *   punct - whitespace / punctuation / digits
    *   bad   - out of level
    *   latin - roman letters (pinyin or English crept in) */
   function segment(text, lex) {
-    var out = [];
-    var i = 0;
-    function push(kind, start, end, entry) {
-      out.push({ kind: kind, start: start, end: end, text: text.slice(start, end), entry: entry || null });
-    }
-    while (i < text.length) {
+    var n = text.length;
+    if (!n) return [];
+
+    // best[i] = cheapest way to cover text[i..n): [unmatchedChars, tokens]
+    var best = new Array(n + 1);
+    var take = new Array(n + 1);   // chosen [length, kind] at i
+    best[n] = [0, 0];
+
+    for (var i = n - 1; i >= 0; i--) {
+      var options = [];
       if (isPunct(text[i])) {
-        var p = i;
-        while (i < text.length && isPunct(text[i])) i++;
-        push("punct", p, i);
-        continue;
-      }
-      if (isLatin(text[i])) {
-        var l = i;
-        while (i < text.length && isLatin(text[i])) i++;
-        push("latin", l, i);
-        continue;
+        var pe = i;
+        while (pe < n && isPunct(text[pe])) pe++;
+        options.push([pe - i, "punct"]);
+      } else if (isLatin(text[i])) {
+        var le = i;
+        while (le < n && isLatin(text[le])) le++;
+        options.push([le - i, "latin"]);
+      } else {
+        var max = Math.min(lex.maxLen, n - i);
+        for (var len = max; len > 0; len--) {
+          if (lex.words.has(text.slice(i, i + len))) options.push([len, "word"]);
+        }
+        var run = numRunAt(text, i, lex);
+        if (run > 1) options.push([run, "num"]);
+        options.push([1, "bad"]);          // always a way forward
       }
 
-      var m = matchAt(text, i, lex);
-      var n = numRunAt(text, i, lex);
-      if (n > m && n > 1) {
+      var bestCost = null, bestTake = null;
+      for (var o = 0; o < options.length; o++) {
+        var l = options[o][0], kind = options[o][1];
+        var rest = best[i + l];
+        var unmatched = rest[0] + (kind === "bad" || kind === "latin" ? l : 0);
+        var tokens = rest[1] + 1;
+        if (!bestCost || unmatched < bestCost[0] ||
+            (unmatched === bestCost[0] && tokens < bestCost[1])) {
+          bestCost = [unmatched, tokens];
+          bestTake = [l, kind];
+        }
+      }
+      best[i] = bestCost;
+      take[i] = bestTake;
+    }
+
+    // Walk the chosen path, merging adjacent out-of-level characters so 想要
+    // surfaces as one violation rather than two.
+    var out = [];
+    for (var p = 0; p < n;) {
+      var step = take[p], end = p + step[0], kind = step[1];
+      if (kind === "bad") {
+        while (end < n && take[end][1] === "bad") end += take[end][0];
+      }
+      var entry = null;
+      if (kind === "word") entry = lex.words.get(text.slice(p, end));
+      else if (kind === "num") {
         var parts = [];
-        for (var k = 0; k < n; k++) parts.push((lex.words.get(text[i + k]) || {}).p || "");
-        push("num", i, i + n, { w: text.slice(i, i + n), p: parts.join(" ").trim(), d: "number" });
-        i += n;
-        continue;
+        for (var k = p; k < end; k++) parts.push((lex.words.get(text[k]) || {}).p || "");
+        entry = { w: text.slice(p, end), p: parts.join(" ").trim(), d: "number" };
       }
-      if (m) {
-        push("word", i, i + m, lex.words.get(text.slice(i, i + m)));
-        i += m;
-        continue;
-      }
-
-      // No match: extend over consecutive characters that also fail to match,
-      // so 想要 surfaces as one violation rather than two.
-      var start = i;
-      i++;
-      while (i < text.length && !isPunct(text[i]) && !isLatin(text[i]) &&
-             !matchAt(text, i, lex) && !(numRunAt(text, i, lex) > 1)) i++;
-      push("bad", start, i);
+      out.push({ kind: kind, start: p, end: end, text: text.slice(p, end), entry: entry });
+      p = end;
     }
     return out;
   }

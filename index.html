@@ -202,11 +202,21 @@ const MODELS = [
   { id: "openai/gpt-4o",               label: "GPT" }
 ];
 
+/* HSK 3.0 bands, cumulative: each file contains every word from the levels
+ * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
   { id: 1, file: "data/hsk1.json", label: "HSK 1" },
   { id: 2, file: "data/hsk2.json", label: "HSK 2" },
-  { id: 3, file: "data/hsk3.json", label: "HSK 3" }
+  { id: 3, file: "data/hsk3.json", label: "HSK 3" },
+  { id: 4, file: "data/hsk4.json", label: "HSK 4" },
+  { id: 5, file: "data/hsk5.json", label: "HSK 5" },
+  { id: 6, file: "data/hsk6.json", label: "HSK 6" },
+  { id: 7, file: "data/hsk7.json", label: "HSK 7-9" }
 ];
+
+// The widest list doubles as the reference dictionary for glossing words that
+// are above the level in play. Loaded in the background, never blocking.
+const REF_LIST = "data/hsk7.json";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -239,7 +249,7 @@ const S = {
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
   base:    [],        // the level's wordlist
-  dict:    new Map(), // HSK3 as a reference dictionary for glossing
+  dict:    new Map(), // REF_LIST, for glossing words above the current level
   lex:     null,
   busy:    false
 };
@@ -264,16 +274,20 @@ async function loadLevel(n) {
 
 async function loadDict() {
   try {
-    const r = await fetch("data/hsk3.json");
+    const r = await fetch(REF_LIST);
     if (r.ok) (await r.json()).forEach(e => S.dict.set(e.w, e));
   } catch (e) { /* glossing degrades to blank, nothing else breaks */ }
 }
 
 /* ------------------------------------------------------------ system prompt */
 
+function levelLabel() {
+  return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
+}
+
 function systemPrompt() {
   const rules = [
-    "你是一个中文聊天伙伴。用户是刚开始学中文的学生（HSK " + S.level + "）。",
+    "你是一个中文聊天伙伴。用户是学中文的学生（" + levelLabel() + "）。",
     "",
     "规则：",
     "1. 只用很简单的词。学生不认识的词，一个也不要用。",
@@ -482,7 +496,7 @@ function renderAll() {
   log.innerHTML = "";
   if (!S.history.length) {
     log.innerHTML = '<div class="hint">Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
-      'Replies are checked against the ' + (LEVELS.find(l => l.id === S.level) || {}).label +
+      'Replies are checked against the ' + levelLabel() +
       ' list and rewritten until they fit.</div>';
     return;
   }

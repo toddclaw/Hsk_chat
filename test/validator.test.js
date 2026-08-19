@@ -42,17 +42,47 @@ const seg = HSK.segment("我今年二十三岁了。", lex).map(t => t.text);
 check(JSON.stringify(seg) === JSON.stringify(["我", "今年", "二十三", "岁", "了", "。"]),
   "segment: 二十三 merges into one token", JSON.stringify(seg));
 
+/* Greedy maximum matching strands a character whenever a longer word starting
+ * earlier wins the position -- with 不便 in the list, 不便宜 used to segment as
+ * 不便 + 宜 and report 宜 as out of level. Only shows up on the larger lists. */
+const wide = JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk7.json"), "utf8"));
+const wideLex = HSK.buildLexicon(wide);
+for (const t of ["因为西瓜不便宜。", "这个问题很复杂。", "他的中文水平不错。"]) {
+  const v = HSK.validate(t, wideLex).map(x => x.text);
+  check(v.length === 0, `no stranded characters at HSK 7-9: ${t}`, "flagged: " + v.join(", "));
+}
+check(HSK.segment("不便宜", wideLex).map(t => t.text).join("|") === "不|便宜",
+  "不便宜 segments as 不 + 便宜, not 不便 + 宜",
+  HSK.segment("不便宜", wideLex).map(t => t.text).join("|"));
+
 const sug = HSK.suggest("想要", lex, 4).map(e => e.w);
 check(sug.length > 0 && sug.every(w => /[想要]/.test(w)),
   "suggest: returns allowlist entries sharing a character", JSON.stringify(sug));
 
-// Every character of every allowlist entry must round-trip cleanly, or the
-// loop will burn retries on the list's own vocabulary.
-let selfFail = 0;
-for (const e of words) {
-  if (HSK.validate(e.w, lex).length) { selfFail++; if (selfFail < 6) console.log("  self-check miss:", e.w); }
+/* Every level file must be in the app's {w,p,d} shape and must validate against
+ * itself: a raw upstream dump loads as a lexicon of zero words, and the app then
+ * flags every character the model writes. Each entry must also round-trip, or the
+ * loop burns retries on the list's own vocabulary. */
+const levels = fs.readdirSync(path.join(__dirname, "../data"))
+  .filter(f => /^hsk\d+\.json$/.test(f))
+  .sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+
+check(levels.length > 0, "data/: at least one level file exists");
+
+for (const file of levels) {
+  const entries = JSON.parse(fs.readFileSync(path.join(__dirname, "../data", file), "utf8"));
+  const shaped = Array.isArray(entries) && entries.every(e => e && typeof e.w === "string" && e.w);
+  check(shaped, `${file}: converted to {w,p,d} (run tools/convert.py on raw dumps)`,
+    shaped ? "" : "first entry: " + JSON.stringify(entries[0]).slice(0, 120));
+  if (!shaped) continue;
+
+  const l = HSK.buildLexicon(entries);
+  let miss = 0;
+  for (const e of entries) {
+    if (HSK.validate(e.w, l).length) { miss++; if (miss < 4) console.log(`  ${file} self-check miss:`, e.w); }
+  }
+  check(miss === 0, `${file}: all ${entries.length} entries validate against their own list`, `${miss} failed`);
 }
-check(selfFail === 0, `self-check: all ${words.length} entries validate against their own list`, `${selfFail} failed`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

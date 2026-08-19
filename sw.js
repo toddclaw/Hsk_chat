@@ -1,10 +1,12 @@
 /* Cache the shell and the wordlists so the app opens offline. API calls are
  * never cached -- they are POSTs to OpenRouter and always go to the network. */
-const CACHE = "hsk-chat-v2";
+const CACHE = "hsk-chat-v3";
+/* Install caches only what a first launch needs. The other level files and the
+ * reference dictionary total several megabytes, so they are cached on demand by
+ * the fetch handler the first time they are actually used. */
 const SHELL = [
   "./", "./index.html", "./validator.js", "./manifest.json",
-  "./data/hsk1.json", "./data/hsk2.json", "./data/hsk3.json",
-  "./icon-192.png", "./icon-512.png"
+  "./data/hsk1.json", "./icon-192.png", "./icon-512.png"
 ];
 
 self.addEventListener("install", e => {
