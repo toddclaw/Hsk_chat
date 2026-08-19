@@ -1,0 +1,1255 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HSK Chat">
+<meta name="theme-color" content="#101418">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>HSK Chat</title>
+
+<style>
+:root{
+  --bg:#0f1317; --panel:#171d23; --panel2:#1e262e; --line:#2b343d;
+  --ink:#e8edf2; --dim:#8c9aa8; --accent:#6aa9ff; --bad:#ff6b6b; --ok:#5ecb8b;
+  --tap:44px;
+  --msg:26px;          /* message text size, set from Settings */
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  display:flex; flex-direction:column; overscroll-behavior:none;
+}
+button,select,input,textarea{font:inherit; color:inherit}
+button{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 12px; min-height:var(--tap)}
+button:active{background:#2a343e}
+button.primary{background:var(--accent); border-color:var(--accent); color:#08111d; font-weight:600}
+button:disabled{opacity:.45}
+
+header{
+  display:flex; gap:8px; align-items:center; padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;
+  background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;
+}
+/* Flex items default to min-width:auto, so a select cannot shrink below the
+   width of its longest option -- a model id like "Qwen3 30B A3B Instruct 2507"
+   then pushed the buttons off the right edge of the screen. */
+header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+  padding:8px 6px; min-height:var(--tap); min-width:0}
+/* The level is a primary control and its options are short, so it keeps its
+   natural width; the model select absorbs all the shrinking. */
+header select#level{flex:0 0 auto}
+header select#model{flex:1 1 0}
+header button{padding:8px 10px; flex:0 0 auto}
+
+#log{flex:1; overflow-y:auto; padding:14px 12px 4px; -webkit-overflow-scrolling:touch}
+.msg{margin:0 0 16px; max-width:88%}
+.msg.user{margin-left:auto}
+.bubble{
+  padding:12px 14px; border-radius:16px; background:var(--panel);
+  font-size:var(--msg); line-height:2.1; letter-spacing:.02em;
+}
+.msg.user .bubble{background:#233246; border-bottom-right-radius:6px}
+.msg.bot .bubble{border-bottom-left-radius:6px}
+.meta{display:flex; gap:6px; align-items:center; margin-top:6px; font-size:12px; color:var(--dim)}
+.msg.user .meta{justify-content:flex-end}
+.badge{border:1px solid var(--line); border-radius:999px; padding:2px 8px}
+.badge.warn{color:#ffd479; border-color:#5a4a22}
+.badge.fail{color:var(--bad); border-color:#5a2626}
+.copy{border:1px solid var(--line); border-radius:999px; padding:2px 9px; min-height:0;
+      background:none; color:var(--dim); font-size:12px; cursor:pointer}
+.copy:active{color:var(--ink)}
+
+/* Word tokens: the greedy matcher's boundaries are the tap targets. */
+.bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
+/* inline-block, not inline-flex: a flex box serializes as a block, so copying a
+   selected line came out one word per line. */
+.w{display:inline-block; text-align:center; vertical-align:bottom; cursor:pointer}
+/* The ruby is CSS generated content, not a DOM node, so selecting a line and
+   copying it yields the Chinese alone. user-select:none is not enough --
+   Chromium still puts such text into Selection.toString(). */
+.w::before{content:attr(data-py); display:none; font-size:.42em; line-height:1.15;
+           color:var(--dim); font-style:normal; margin-bottom:-3px}
+/* Hidden pinyin must not reserve width, or the ruby column stretches every
+   token to the width of its romanisation and the line looks gappy. */
+.pinyin-all .w::before,
+.pinyin-extra .w.extra::before,
+.pinyin-extra .w.need::before,
+.pinyin-extra .w.bad::before{display:block}
+.w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
+.w.extra>.t{border-bottom:2px solid var(--ok)}
+.w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
+.pending{margin-top:8px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; font-size:14px}
+.pending .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px}
+.pending b{font-size:22px}
+
+/* Starters sit directly above the composer rather than below it: on iOS the
+   keyboard covers anything under the text box the moment it opens. */
+#starters{
+  display:flex; gap:8px; overflow-x:auto; padding:8px 10px; background:var(--panel);
+  border-top:1px solid var(--line); -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#starters::-webkit-scrollbar{display:none}
+#starters:empty{display:none}
+#starters button{
+  flex:0 0 auto; white-space:nowrap; font-size:17px; padding:7px 13px;
+  min-height:0; border-radius:999px; color:var(--ink);
+}
+#starters button:active{background:var(--accent); color:#08111d}
+
+footer{
+  border-top:none; background:var(--panel);
+  padding:8px 10px calc(env(safe-area-inset-bottom) + 8px); display:flex; gap:8px; align-items:flex-end;
+}
+.inputwrap{position:relative; flex:1}
+#mirror,#input{
+  font-size:20px; line-height:1.6; padding:10px 12px; border-radius:12px;
+  border:1px solid var(--line); width:100%; white-space:pre-wrap; word-break:break-word;
+}
+#mirror{position:absolute; inset:0; color:transparent; pointer-events:none; overflow:hidden; background:var(--panel2)}
+#mirror .bad{text-decoration:underline wavy var(--bad); text-underline-offset:5px}
+#input{position:relative; background:transparent; resize:none; max-height:32vh; min-height:var(--tap)}
+#input:focus{outline:1px solid var(--accent)}
+
+.sheet{
+  position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:20;
+  align-items:flex-end; justify-content:center;
+}
+.sheet.open{display:flex}
+.sheet .card{
+  background:var(--panel); width:100%; max-width:560px; max-height:88vh; overflow-y:auto;
+  border-radius:18px 18px 0 0; padding:16px 16px calc(env(safe-area-inset-bottom) + 16px);
+}
+.sheet h2{margin:0 0 12px; font-size:17px}
+.sheet label{display:block; margin:14px 0 6px; font-size:13px; color:var(--dim)}
+.sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
+  border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
+  resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.sheet input[type=text],.sheet input[type=password],.sheet select{
+  width:100%; padding:11px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); min-height:var(--tap);
+}
+.note{font-size:12px; color:var(--dim); margin-top:8px; line-height:1.5}
+.vrow{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line)}
+.vrow .w2{font-size:22px; min-width:3em}
+.vrow .g{flex:1; font-size:13px; color:var(--dim)}
+.vrow button{padding:6px 10px; min-height:36px}
+.applink{display:inline-block; padding:6px 10px; min-height:36px; line-height:24px;
+  border:1px solid var(--line); border-radius:10px; color:var(--accent); text-decoration:none}
+.stats{font-size:13px; color:var(--dim); background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px}
+.stats td{padding:2px 10px 2px 0}
+
+#pop{
+  position:fixed; z-index:30; display:none; max-width:min(84vw,340px);
+  background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+#pop.open{display:block}
+#pop .hw{font-size:26px}
+#pop .py2{color:var(--accent); font-size:14px; margin-top:2px}
+#pop .d{font-size:13px; color:var(--dim); margin-top:6px}
+#pop .tag{font-size:11px; color:var(--bad); margin-top:6px}
+#pop button{margin-top:10px; width:100%; padding:8px 10px; min-height:38px}
+.toggle{display:flex; align-items:center; gap:10px; padding:10px 0}
+.toggle input{width:22px; height:22px; accent-color:var(--accent)}
+.addrow{display:flex; gap:8px; margin-top:8px}
+.addrow input{flex:1}
+.hint{color:var(--dim); font-size:14px; text-align:center; padding:24px 12px; line-height:1.7}
+</style>
+
+<header>
+  <select id="level" title="Vocabulary level"></select>
+  <select id="model" title="Model"></select>
+  <button id="btnPy" title="Pinyin">拼</button>
+  <button id="btnVocab" title="Vocabulary">词</button>
+  <button id="btnSet" title="Settings">⚙</button>
+</header>
+
+<div id="log"></div>
+
+<div id="starters"></div>
+
+<footer>
+  <div class="inputwrap">
+    <div id="mirror"></div>
+    <textarea id="input" rows="1" placeholder="用中文写…" enterkeyhint="send"></textarea>
+  </div>
+  <button id="send" class="primary">送</button>
+</footer>
+
+<div class="sheet" id="setSheet"><div class="card">
+  <h2>Settings</h2>
+  <label for="key">OpenRouter API key</label>
+  <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+  <div class="note">The key is stored in this browser's localStorage on this device only, and is sent to openrouter.ai and nowhere else. There is no backend.</div>
+
+  <label for="modelId">Model id (any OpenRouter id)</label>
+  <input id="modelId" type="text" placeholder="anthropic/claude-...">
+  <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
+  <div class="note" id="modelNote"></div>
+
+  <label class="toggle" for="showStarters">
+    <input type="checkbox" id="showStarters">
+    <span>Show conversation starters</span>
+  </label>
+
+  <label for="fontSize">Text size</label>
+  <input id="fontSize" type="range" min="16" max="34" step="1" style="width:100%">
+  <div class="bubble" id="fontPreview" style="margin-top:8px">你好！这是现在的大小。</div>
+
+  <label for="replyLength">Reply length</label>
+  <select id="replyLength"></select>
+  <div class="note">Longer replies give more to read, and more chances to reach for a word
+  above your level — watch the retry counters below.</div>
+
+  <label for="sysPrompt">System prompt</label>
+  <textarea id="sysPrompt" spellcheck="false"></textarea>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="resetPrompt">Reset to default</button>
+    <span class="note" id="promptState" style="margin:0;align-self:center"></span>
+  </div>
+  <div class="note">Edit and it is sent as written; leave it alone and it keeps tracking the
+  level and reply-length settings. <code>{level}</code> and <code>{words}</code> are
+  substituted. The validator does not care what is in here — an instruction to use hard
+  words just costs retries.</div>
+
+  <label>Anki cards</label>
+  <div class="addrow"><input id="ankiDeck" type="text" placeholder="deck (Default)"><input id="ankiType" type="text" placeholder="note type (Basic)"></div>
+  <div class="addrow"><input id="ankiFront" type="text" placeholder="front field (Front)"><input id="ankiBack" type="text" placeholder="back field (Back)"></div>
+  <div class="note">Used by the per-word <b>Anki</b> links in the 词 panel, which hand the
+  card to AnkiMobile. The deck, note type and field names must match your collection
+  exactly, or AnkiMobile rejects the card. Nested decks use <code>::</code>.</div>
+
+  <label for="attempts">Tries before giving up</label>
+  <select id="attempts"></select>
+  <div class="note">Each try is another API call. One means no repairs at all: a reply that
+  breaks the level goes straight to 我不知道。</div>
+
+  <label for="promptMode">Prompt mode (A/B)</label>
+  <select id="promptMode">
+    <option value="without-list">without-list — rules only</option>
+    <option value="with-list">with-list — full allowlist in the prompt</option>
+  </select>
+  <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
+  <div class="stats" id="stats"></div>
+
+  <label>Data</label>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button id="clearHistory">Clear conversation</button>
+    <button id="resetStats">Reset A/B counters</button>
+  </div>
+  <label>Version</label>
+  <div class="stats" id="version">…</div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="checkUpdate">Check for update</button>
+  </div>
+
+  <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="vocabSheet"><div class="card">
+  <h2>Added vocabulary</h2>
+  <label class="toggle" for="autoAdd">
+    <input type="checkbox" id="autoAdd">
+    <span>Add the words I type automatically</span>
+  </label>
+  <div class="addrow">
+    <input id="addWord" type="text" placeholder="add a word by hand，比如 苹果" autocomplete="off">
+    <button id="addWordBtn">Add</button>
+  </div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button id="expAnki">Export for Anki</button>
+    <button id="expPleco">Export for Pleco</button>
+  </div>
+  <div class="note" id="expNote">On the phone these open the share sheet — send the file to
+  Pleco, or to Files and import it in Anki. Pleco: Flashcards → Import Cards. Anki desktop:
+  File → Import.</div>
+
+  <div id="vocabList" style="margin-top:12px"></div>
+  <div class="note">Words you typed, added by hand, or accepted from the model's
+  <code>[[NEED:…]]</code> requests. They join the session allowlist — the model may then
+  use them too — and persist on this device. Pinyin and meaning come from the HSK 7-9
+  reference list, or from one small model lookup when the word is not in it.</div>
+  <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
+</div></div>
+
+<div id="pop"></div>
+
+<script src="validator.js"></script>
+<script src="prompt.js"></script>
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ config */
+
+/* Model ids change often and must not be typed from memory. The picker loads
+ * the live catalogue from https://openrouter.ai/api/v1/models (no key needed)
+ * and caches it; these seeds are only a starting point and any id can be typed
+ * into Settings. Verify against https://openrouter.ai/models. */
+const MODELS = [
+  { id: "anthropic/claude-sonnet-4.5", label: "Claude" },
+  { id: "google/gemini-2.5-flash",     label: "Gemini" },
+  { id: "openai/gpt-4o",               label: "GPT" }
+];
+
+/* HSK 3.0 bands, cumulative: each file contains every word from the levels
+ * below it. Level 7 is the combined 7-9 band. */
+const LEVELS = [
+  { id: 1, file: "data/hsk1.json", label: "HSK 1" },
+  { id: 2, file: "data/hsk2.json", label: "HSK 2" },
+  { id: 3, file: "data/hsk3.json", label: "HSK 3" },
+  { id: 4, file: "data/hsk4.json", label: "HSK 4" },
+  { id: 5, file: "data/hsk5.json", label: "HSK 5" },
+  { id: 6, file: "data/hsk6.json", label: "HSK 6" },
+  { id: 7, file: "data/hsk7.json", label: "HSK 7-9" }
+];
+
+// The widest list doubles as the reference dictionary for glossing words that
+// are above the level in play. Loaded in the background, never blocking.
+const REF_LIST = "data/hsk7.json";
+
+/* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
+ * phone can be checked against what is actually deployed. */
+const VERSION   = "v12 — 2026-08-19";
+
+const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
+const MODELS_URL= "https://openrouter.ai/api/v1/models";
+const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
+const WINDOW    = 20;       // turns sent to the API
+const FALLBACKS = ["我不知道。", "我不会说。"];
+
+const K = {
+  key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
+  history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
+  pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
+  autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
+  prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
+  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters"
+};
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+/* ------------------------------------------------------------------- state */
+
+const S = {
+  level:   store.get(K.level, 1),
+  model:   store.get(K.model, MODELS[0].id),
+  mode:    store.get(K.mode, "without-list"),
+  pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
+  autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
+  replyLength: store.get(K.length, "short"),  // short | medium | long
+  prompt:  store.get(K.prompt, ""),           // "" = track the generated default
+  attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
+  anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
+  font:    store.get(K.font, 26),             // message text size in px
+  starters: store.get(K.starters, true),      // the chip row above the composer
+  extra:   store.get(K.extra, []),
+  history: store.get(K.history, []),
+  stats:   store.get(K.stats, {}),
+  base:    [],        // the level's wordlist
+  dict:    new Map(), // REF_LIST, for glossing words above the current level
+  lex:     null,
+  busy:    false
+};
+
+const $ = s => document.querySelector(s);
+const log = $("#log"), input = $("#input"), mirror = $("#mirror");
+
+function rebuildLexicon() { S.lex = HSK.buildLexicon(S.base, S.extra); }
+const isExtra = w => S.extra.some(e => e.w === w);
+
+/* --------------------------------------------------------------- word data */
+
+async function loadLevel(n) {
+  const lv = LEVELS.find(l => l.id === n) || LEVELS[0];
+  const r = await fetch(lv.file);
+  if (!r.ok) throw new Error(lv.file + ": " + r.status);
+  S.base = await r.json();
+  S.level = lv.id;
+  store.set(K.level, lv.id);
+  rebuildLexicon();
+}
+
+async function loadDict() {
+  try {
+    const r = await fetch(REF_LIST);
+    if (r.ok) (await r.json()).forEach(e => S.dict.set(e.w, e));
+  } catch (e) { /* glossing degrades to blank, nothing else breaks */ }
+}
+
+/* ------------------------------------------------------------ system prompt */
+
+function lengthSpec() { return HSKPrompt.LENGTHS[S.replyLength] || HSKPrompt.LENGTHS.short; }
+
+function levelLabel() {
+  return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
+}
+
+function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
+
+/* The prompt actually sent. A custom one is used verbatim apart from the two
+ * placeholders, so the level and length selectors stop rewriting it -- they
+ * still drive validation and the token ceiling, which is where they matter. */
+function systemPrompt() {
+  if (S.prompt) {
+    let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
+    if (S.mode === "with-list" && S.prompt.indexOf("{words}") === -1) {
+      out += "\n\n你只可以用这些词：\n" + wordList();
+    }
+    return out;
+  }
+  return defaultPrompt();
+}
+
+function defaultPrompt() {
+  return HSKPrompt.build({
+    level: S.level,
+    label: levelLabel(),
+    length: S.replyLength,
+    words: S.mode === "with-list" ? wordList() : ""
+  });
+}
+
+/* -------------------------------------------------------------- NEED tokens */
+
+const NEED_RE = /\[\[NEED:([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]]*))?\]\]/g;
+
+// Pull the requests out so validation never sees the ASCII wrapper, and record
+// where each requested word sits in the cleaned text.
+function extractNeeds(text) {
+  const needs = [];
+  let out = "", last = 0, m;
+  NEED_RE.lastIndex = 0;
+  while ((m = NEED_RE.exec(text))) {
+    const w = m[1].trim();
+    const known = S.dict.get(w);
+    out += text.slice(last, m.index);
+    needs.push({
+      w: w,
+      p: (m[2] || "").trim() || (known ? known.p : ""),
+      d: (m[3] || "").trim() || (known ? known.d : ""),
+      start: out.length, end: out.length + w.length
+    });
+    out += w;
+    last = m.index + m[0].length;
+  }
+  out += text.slice(last);
+  return { text: out, needs: needs };
+}
+
+/* -------------------------------------------------------------- repair loop */
+
+function repairPrompt(violations, attempt) {
+  const latin = violations.filter(v => v.kind === "latin");
+  const words = violations.filter(v => v.kind === "bad");
+  const parts = [];
+  if (latin.length) parts.push("不要用英文，不要用拼音。只写汉字。");
+  if (words.length) {
+    const named = words.map(v => "「" + v.text + "」").join("、");
+    parts.push("你用了" + named + "。这些词太难，学生不认识，不可以用。");
+    if (attempt >= 3) {
+      // Naming a permitted substitute beats asking the model to find its own.
+      words.slice(0, 3).forEach(v => {
+        const s = HSK.suggest(v.text, S.lex, 4).map(e => e.w);
+        if (s.length) parts.push("「" + v.text + "」可以换成：" + s.join("、") + "。");
+      });
+      parts.push("只用最简单的词。");
+    }
+  }
+  parts.push("请用别的说法，再说一次。只说中文，不要解释。");
+  return parts.join("");
+}
+
+async function callModel(messages, maxTokens) {
+  const key = store.get(K.key, "");
+  if (!key) throw new Error("No API key. Open Settings and paste an OpenRouter key.");
+  const r = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: S.model, messages: messages,
+      max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7
+    })
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
+  const choice = (body.choices && body.choices[0]) || {};
+  const txt = choice.message && choice.message.content;
+  if (!txt) throw new Error("Empty response from " + S.model);
+  // finish_reason "length" means the ceiling cut the reply off mid-sentence,
+  // which is a different problem from the model choosing to stop.
+  callModel.lastFinish = choice.finish_reason || "";
+  return txt.trim();
+}
+
+function windowed() {
+  return S.history.slice(-WINDOW).map(t => ({ role: t.role, content: t.text }));
+}
+
+/* One turn against the history already containing the user's message:
+ * generate, validate, repair, repair, else fall back.
+ * Repair exchanges live in a scratch array and never enter the stored history. */
+async function turn() {
+  const scratch = [{ role: "system", content: systemPrompt() }].concat(windowed());
+  let attempt = 0, last = null;
+
+  while (attempt < S.attempts) {
+    attempt++;
+    const raw = await callModel(scratch);
+    const ex = extractNeeds(raw);
+    /* Validate against a lexicon that includes this reply's [[NEED:]] words.
+     * Without it the channel defeats itself: the wrapper is stripped before
+     * validation, the bare word is by definition not in the allowlist, and the
+     * request the model was told to make is rejected as a violation. */
+    const lex = ex.needs.length ? HSK.buildLexicon(S.base, S.extra.concat(ex.needs)) : S.lex;
+    const violations = HSK.validate(ex.text, lex);
+    console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
+
+    if (!violations.length) {
+      return { text: ex.text, needs: ex.needs, attempts: attempt,
+               truncated: callModel.lastFinish === "length" };
+    }
+
+    last = ex.text;
+    scratch.push({ role: "assistant", content: raw });
+    const rp = repairPrompt(violations, attempt + 1);
+    console.log("[repair]", rp);
+    scratch.push({ role: "user", content: rp });
+  }
+
+  return {
+    text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
+    needs: [], attempts: attempt, failed: true, dropped: last
+  };
+}
+
+/* ------------------------------------------------------------------ metrics */
+
+function recordTurn(attempts, failed) {
+  const s = S.stats[S.mode] || (S.stats[S.mode] = { turns: 0, retries: 0, fallbacks: 0 });
+  s.turns++;
+  s.retries += attempts - 1;
+  if (failed) s.fallbacks++;
+  store.set(K.stats, S.stats);
+  renderStats();
+}
+
+function renderStats() {
+  const rows = ["without-list", "with-list"].map(m => {
+    const s = S.stats[m] || { turns: 0, retries: 0, fallbacks: 0 };
+    const mean = s.turns ? (s.retries / s.turns).toFixed(2) : "–";
+    return "<tr><td>" + m + "</td><td>" + s.turns + " turns</td><td>" + mean +
+           " retries/turn</td><td>" + s.fallbacks + " gave up</td></tr>";
+  });
+  $("#stats").innerHTML = "<table>" + rows.join("") + "</table>";
+}
+
+/* -------------------------------------------------------------- rendering */
+
+/* Latin letters are a violation in the model's output -- a reply in English or
+ * pinyin would otherwise pass -- but never in the learner's own message, where
+ * English is a deliberate escape hatch for asking how to say something. */
+function tokenSpan(tok, needs, flagLatin) {
+  const need = needs && needs.find(n => n.start === tok.start && n.w === tok.text);
+  if (tok.kind === "punct") return escapeHtml(tok.text);
+  const e = tok.entry || need || {};
+  const cls = ["w"];
+  if (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false)) cls.push("bad");
+  if (need) cls.push("need");
+  else if (isExtra(tok.text)) cls.push("extra");
+  return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
+         '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
+         '" data-py="' + escapeHtml(primaryReading(e.p)) + '"' +
+         ' data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
+         '<span class="t">' + escapeHtml(tok.text) + "</span></span>";
+}
+
+// Ruby shows one reading; alternates (好 hǎo / hào) stay in the popover.
+function primaryReading(p) { return (p || "").split(" / ")[0]; }
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderMessage(turnObj, idx) {
+  const el = document.createElement("div");
+  el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
+
+  const bubble = document.createElement("div");
+  bubble.className = "bubble pinyin-" + S.pinyin;
+  bubble.dataset.src = turnObj.text;
+  /* Segment with this message's [[NEED:]] words in scope. They passed
+   * validation, so rendering them as violations would contradict the badge and
+   * the offer sitting right below the bubble. */
+  const lex = (turnObj.needs && turnObj.needs.length)
+    ? HSK.buildLexicon(S.base, S.extra.concat(turnObj.needs)) : S.lex;
+  const toks = HSK.segment(turnObj.text, lex);
+  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user")).join("");
+  el.appendChild(bubble);
+
+  const bits = [];
+  if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
+  if (turnObj.failed) bits.push('<span class="badge fail">gave up</span>');
+  if (turnObj.truncated) bits.push('<span class="badge warn">cut off — raise reply length</span>');
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = bits.join("");
+  const copy = document.createElement("button");
+  copy.className = "copy";
+  copy.textContent = "copy";
+  copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
+  meta.appendChild(copy);
+  el.appendChild(meta);
+
+  (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w)).forEach(n => {
+    const box = document.createElement("div");
+    box.className = "pending";
+    box.innerHTML = "The model asked for a word outside the list:<div class=\"row\">" +
+      "<b>" + escapeHtml(n.w) + "</b><span>" + escapeHtml(n.p) + "</span></div>" +
+      "<div class=\"note\">" + escapeHtml(n.d) + "</div><div class=\"row\"></div>";
+    const row = box.querySelectorAll(".row")[1];
+    const yes = document.createElement("button");
+    yes.className = "primary"; yes.textContent = "Add to my words";
+    yes.onclick = () => { acceptWord(n, turnObj.text); box.remove(); };
+    const no = document.createElement("button");
+    no.textContent = "No";
+    no.onclick = () => { n.state = "rejected"; persist(); box.remove(); };
+    row.append(yes, no);
+    el.appendChild(box);
+  });
+
+  log.appendChild(el);
+  return el;
+}
+
+function renderAll() {
+  log.innerHTML = "";
+  if (!S.history.length) {
+    log.innerHTML = '<div class="hint">Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
+      'Replies are checked against the ' + levelLabel() +
+      ' list and rewritten until they fit.</div>';
+    return;
+  }
+  S.history.forEach(renderMessage);
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ---------------------------------------------------------- growing vocab */
+
+/* A violation span is a run of consecutive unmatchable characters, so it can
+ * hold more than one word (因为苹果). Split it against the HSK 7-9 reference list
+ * before storing, or the vocabulary panel fills up with fused compounds. */
+function splitUnknown(run) {
+  const out = [];
+  let chunk = "", i = 0;
+  const flush = () => { if (chunk) { out.push(chunk); chunk = ""; } };
+  while (i < run.length) {
+    let hit = 0;
+    for (let len = Math.min(4, run.length - i); len > 1; len--) {
+      if (S.dict.has(run.slice(i, i + len))) { hit = len; break; }
+    }
+    if (hit) { flush(); out.push(run.slice(i, i + hit)); i += hit; continue; }
+    chunk += run[i++];
+    if (chunk.length >= 4) flush();   // never store a run longer than a plausible word
+  }
+  flush();
+  return out;
+}
+
+/* A violation can be part of a word rather than the whole of it: 西 and 问 are
+ * in HSK 1, so typing 西瓜 or 问题 only flags 瓜 and 题. Grow the span outwards
+ * against the reference list so the learner gets the word, not the orphan. */
+function expandWord(text, start, end) {
+  let best = "";
+  for (let s = Math.max(0, end - 4); s <= start; s++) {
+    for (let e = Math.min(text.length, s + 4); e >= end; e--) {
+      const cand = text.slice(s, e);
+      if (cand.length > best.length && S.dict.has(cand)) best = cand;
+    }
+  }
+  return best || text.slice(start, end);
+}
+
+// Add entries, gloss them from the reference list, and return the ones still
+// missing a gloss so the caller can look them up.
+/* `sentence` is the line the word was met in. It is the most useful half of a
+ * flashcard and cannot be recovered later, so it is captured at add time. */
+function addWords(words, sentence) {
+  const added = [];
+  words.forEach(w => {
+    if (!w || isExtra(w) || S.lex.words.has(w)) return;
+    const known = S.dict.get(w);
+    const entry = { w: w, p: known ? known.p : "", d: known ? known.d : "",
+                    s: (sentence || "").trim() };
+    S.extra.push(entry);
+    added.push(entry);
+  });
+  if (!added.length) return [];
+  store.set(K.extra, S.extra);
+  rebuildLexicon();
+  return added.filter(e => !e.d);
+}
+
+// Everything the user typed that the current level does not cover.
+function learnFromInput(text) {
+  const runs = HSK.validate(text, S.lex).filter(v => v.kind === "bad");
+  const words = [];
+  runs.forEach(v => {
+    const whole = expandWord(text, v.start, v.end);
+    if (whole.length > v.text.length) words.push(whole);
+    else splitUnknown(v.text).forEach(w => words.push(w));
+  });
+  return addWords(words, text);
+}
+
+/* One cheap call for words the reference list does not have. It also repairs
+ * the span: the flagged fragment can be part of a word the reference list has
+ * never heard of (西 is in HSK 1, so 西瓜 only ever flags 瓜), so the sentence
+ * goes with it and the model names the word the fragment belongs to.
+ * Fire-and-forget: a failure leaves the word added but bare. */
+async function glossWords(entries, ctx) {
+  if (!entries.length || !store.get(K.key, "")) return;
+  const list = entries.map(e => e.w).join("、");
+  try {
+    const raw = await callModel([{
+      role: "user",
+      content: "Chinese fragments flagged in this sentence: " + (ctx || "") + "\n" +
+               "Fragments: " + list + "\n" +
+               "For each fragment, give the whole word it belongs to in that sentence, " +
+               "its pinyin with tone marks, and a short English gloss.\n" +
+               "Reply with only a JSON array, no prose: " +
+               "[{\"frag\":\"瓜\",\"w\":\"西瓜\",\"p\":\"xī guā\",\"d\":\"watermelon\"}]"
+    }], 200);
+    const json = raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1);
+    JSON.parse(json).forEach(g => {
+      // Only entries from this batch, so a stray row cannot rewrite a word the
+      // reference list already glossed correctly.
+      const hit = entries.find(e => e.w === (g.frag || g.w));
+      if (!hit || !g.p) return;
+      // Accept a wider word only if it really occurs in the sentence the
+      // fragment came from -- otherwise keep what the learner actually typed.
+      const word = String(g.w || hit.w);
+      if (word !== hit.w && word.length <= 4 && ctx &&
+          ctx.indexOf(word) !== -1 && word.indexOf(hit.w) !== -1) {
+        if (isExtra(word)) { S.extra.splice(S.extra.indexOf(hit), 1); return; }
+        hit.w = word;
+      }
+      hit.p = String(g.p); hit.d = String(g.d || "");
+    });
+    store.set(K.extra, S.extra);
+    rebuildLexicon();
+    renderAll();
+    if ($("#vocabSheet").classList.contains("open")) renderVocab();
+  } catch (e) {
+    console.warn("gloss lookup failed", e);
+  }
+}
+
+function acceptWord(n, sentence) {
+  if (!isExtra(n.w)) {
+    S.extra.push({ w: n.w, p: n.p, d: n.d, s: (sentence || "").trim() });
+    store.set(K.extra, S.extra);
+    rebuildLexicon();
+  }
+  n.state = "accepted";
+  persist();
+  renderAll();
+}
+
+function persist() { store.set(K.history, S.history); }
+
+/* Copy without the pinyin. Selecting by hand works too -- the ruby is
+ * user-select:none -- but a button is one tap and cannot pick up a stray
+ * character. execCommand is the fallback for iOS versions where the async
+ * clipboard API is unavailable outside a secure context. */
+async function copyText(text, btn) {
+  const done = () => {
+    if (!btn) return;
+    const was = btn.textContent;
+    btn.textContent = "copied";
+    setTimeout(() => { btn.textContent = was; }, 1200);
+  };
+  try {
+    await navigator.clipboard.writeText(text);
+    done();
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);      // iOS needs the explicit range
+    try { document.execCommand("copy"); done(); } catch (e2) { console.warn("copy failed", e2); }
+    ta.remove();
+  }
+}
+
+/* -------------------------------------------------------------- flashcards */
+
+/* Neither app can be written to directly from a web page. Pleco has no
+ * add-a-card URL, and AnkiConnect is a desktop HTTP server on localhost that a
+ * phone cannot reach and an https page could not call anyway. What does work:
+ * a delimited file both apps import, and AnkiMobile's x-callback-url for one
+ * card at a time. */
+function cardBack(e) {
+  return [e.p, e.d, e.s].filter(Boolean).join(" — ");
+}
+
+function ankiCsv() {
+  const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
+  return "#separator:comma\n#html:true\n" + S.extra.map(e =>
+    q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
+}
+
+// Pleco's flashcard import format: headword, pinyin, definition, tab separated.
+function plecoTsv() {
+  const clean = t => String(t || "").replace(/[\t\r\n]+/g, " ");
+  return S.extra.map(e =>
+    [clean(e.w), clean(e.p), clean([e.d, e.s].filter(Boolean).join(" // "))].join("\t")).join("\n") + "\n";
+}
+
+/* iOS will not let a page save a file on its own, so the share sheet is the
+ * real delivery route -- it can hand the file straight to Pleco or Files.
+ * Download is the desktop path, clipboard the last resort. */
+async function deliver(text, filename, btn) {
+  const file = new File([text], filename, { type: "text/plain" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;   // user dismissed the sheet
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    copyText(text, btn);
+  }
+}
+
+function ankiAddUrl(e) {
+  const a = S.anki;
+  const q = t => encodeURIComponent(t);
+  return "anki://x-callback-url/addnote?type=" + q(a.type) + "&deck=" + q(a.deck) +
+         "&fld" + q(a.front) + "=" + q(e.w) +
+         "&fld" + q(a.back) + "=" + q([e.p, e.d, e.s].filter(Boolean).join("<br>")) +
+         "&x-success=" + q(location.href);
+}
+
+function plecoUrl(word) {
+  return "plecoapi://x-callback-url/s?q=" + encodeURIComponent(word) +
+         "&x-source=" + encodeURIComponent("HSK Chat") +
+         "&x-success=" + encodeURIComponent(location.href);
+}
+
+/* ------------------------------------------------------------------ sending */
+
+async function send() {
+  const text = input.value.trim();
+  if (!text || S.busy) return;
+  S.busy = true; $("#send").disabled = true;
+  input.value = ""; updateMirror(); autosize();
+
+  S.history.push({ role: "user", text: text });
+  // Learn before the turn, so the model's own reply may use these words too.
+  const toGloss = S.autoAdd ? learnFromInput(text) : [];
+  persist(); renderAll();
+
+  const thinking = document.createElement("div");
+  thinking.className = "msg bot";
+  thinking.innerHTML = '<div class="bubble" style="font-size:18px;color:var(--dim)">…</div>';
+  log.appendChild(thinking); log.scrollTop = log.scrollHeight;
+
+  try {
+    const res = await turn();
+    S.history.push({
+      role: "assistant", text: res.text, needs: res.needs,
+      attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated
+    });
+    recordTurn(res.attempts, res.failed);
+    persist();
+  } catch (err) {
+    console.error(err);
+    S.history.push({ role: "assistant", text: "我不知道。", attempts: 1, failed: true, error: String(err.message || err) });
+    persist();
+    alert(err.message || err);
+  } finally {
+    thinking.remove();
+    S.busy = false; $("#send").disabled = false;
+    renderAll();
+    glossWords(toGloss, text);
+  }
+}
+
+/* ------------------------------------------------------- input underlining */
+
+function updateMirror() {
+  const t = input.value;
+  const toks = HSK.segment(t, S.lex);
+  mirror.innerHTML = toks.map(tk =>
+    (tk.kind === "bad")
+      ? '<span class="bad">' + escapeHtml(tk.text) + "</span>"
+      : escapeHtml(tk.text)
+  ).join("") + "&nbsp;";
+}
+
+function autosize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.32) + "px";
+}
+
+/* --------------------------------------------------------------- popover */
+
+// What the Add button will actually store, once the span is grown to a word.
+function popTarget(el, w) {
+  const bubble = el.closest(".bubble");
+  if (!bubble || !bubble.dataset.src) return w;
+  return expandWord(bubble.dataset.src, Number(el.dataset.s), Number(el.dataset.s) + w.length);
+}
+
+function showPopover(el) {
+  const pop = $("#pop");
+  const w = el.dataset.w, p = el.dataset.p, d = el.dataset.d, bad = el.dataset.bad === "1";
+  const known = !p && !d ? S.dict.get(w) : null;
+  pop.innerHTML = '<div class="hw">' + escapeHtml(w) + "</div>" +
+    '<div class="py2">' + escapeHtml(p || (known ? known.p : "")) + "</div>" +
+    '<div class="d">' + escapeHtml(d || (known ? known.d : "not in the reference dictionary")) + "</div>" +
+    (bad ? '<div class="tag">above level</div>' : "") +
+    (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
+    (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "") +
+    '<button id="popCopy">Copy 「' + escapeHtml(w) + "」</button>" +
+    '<a class="applink" style="display:block;text-align:center;margin-top:8px" href="' +
+      escapeHtml(plecoUrl(w)) + '">Look up 「' + escapeHtml(w) + "」in Pleco</a>";
+  const cp = pop.querySelector("#popCopy");
+  if (cp) cp.onclick = () => copyText(w, cp);
+  const add = pop.querySelector("#popAdd");
+  if (add) add.onclick = () => {
+    const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
+    const whole = src && src.src ? expandWord(src.src, at, at + w.length) : w;
+    const missing = addWords(whole.length > w.length ? [whole] : splitUnknown(w), src && src.src);
+    pop.classList.remove("open");
+    updateMirror(); renderAll();
+    glossWords(missing, src && src.src);
+  };
+  pop.classList.add("open");
+  const r = el.getBoundingClientRect(), pr = pop.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pr.width - 8)) + "px";
+  pop.style.top = (r.top > pr.height + 12 ? r.top - pr.height - 8 : r.bottom + 8) + "px";
+}
+
+/* ------------------------------------------------------------------- chrome */
+
+function fillLevels() {
+  $("#level").innerHTML = LEVELS.map(l =>
+    '<option value="' + l.id + '"' + (l.id === S.level ? " selected" : "") + ">" + l.label + "</option>").join("");
+}
+
+function fillModels() {
+  const cached = store.get(K.models, null);
+  const list = (cached && cached.length ? cached : MODELS).slice();
+  if (!list.some(m => m.id === S.model)) list.unshift({ id: S.model, label: S.model });
+  $("#model").innerHTML = list.map(m =>
+    '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
+    escapeHtml(m.label) + "</option>").join("");
+  $("#modelNote").textContent = cached
+    ? "Loaded " + cached.length + " ids from OpenRouter."
+    : "Built-in ids are unverified starting points — load the live list, or paste any id from openrouter.ai/models.";
+}
+
+async function refreshModels() {
+  const btn = $("#refreshModels");
+  btn.disabled = true; btn.textContent = "Loading…";
+  try {
+    const r = await fetch(MODELS_URL);
+    const j = await r.json();
+    const keep = /^(anthropic|google|openai|deepseek|qwen|meta-llama|mistralai|x-ai)\//;
+    const list = (j.data || [])
+      .filter(m => keep.test(m.id))
+      .map(m => ({ id: m.id, label: m.name || m.id }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (!list.length) throw new Error("no models returned");
+    store.set(K.models, list);
+    fillModels();
+  } catch (e) {
+    $("#modelNote").textContent = "Could not load the list: " + (e.message || e) + ". Paste an id manually.";
+  } finally {
+    btn.disabled = false; btn.textContent = "Load model list from OpenRouter";
+  }
+}
+
+function renderVocab() {
+  const box = $("#vocabList");
+  if (!S.extra.length) { box.innerHTML = '<div class="note">No added words yet.</div>'; return; }
+  box.innerHTML = "";
+  S.extra.forEach((e, i) => {
+    const row = document.createElement("div");
+    row.className = "vrow";
+    row.innerHTML = '<span class="w2">' + escapeHtml(e.w) + '</span><span class="g">' +
+      (e.p || e.d ? escapeHtml(e.p) + " — " + escapeHtml(e.d) : "no pinyin or meaning yet") +
+      (e.s ? '<br><span style="opacity:.7">' + escapeHtml(e.s) + "</span>" : "") + "</span>";
+    const anki = document.createElement("a");
+    anki.href = ankiAddUrl(e); anki.textContent = "Anki";
+    anki.className = "applink";
+    row.appendChild(anki);
+    const del = document.createElement("button");
+    del.textContent = "Remove";
+    del.onclick = () => {
+      S.extra.splice(i, 1); store.set(K.extra, S.extra);
+      rebuildLexicon(); renderVocab(); renderAll();
+    };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+/* What is actually running on this device: the page's own stamp, the cache the
+ * service worker activated, and the data it loaded. If the first two disagree,
+ * an update is half-applied and a relaunch will finish it. */
+async function renderVersion() {
+  const rows = [["app", VERSION]];
+  try {
+    const names = await caches.keys();
+    rows.push(["worker cache", names.length ? names.join(", ") : "none"]);
+  } catch (e) { rows.push(["worker cache", "unavailable"]); }
+
+  if ("serviceWorker" in navigator) {
+    const reg = await navigator.serviceWorker.getRegistration();
+    rows.push(["service worker",
+      !reg ? "not installed" :
+      reg.waiting ? "update ready — relaunch to apply" :
+      navigator.serviceWorker.controller ? "active" : "installing"]);
+  } else {
+    rows.push(["service worker", "unsupported"]);
+  }
+
+  rows.push(["vocabulary", levelLabel() + ": " + (S.lex ? S.lex.words.size : 0) +
+                           " words, +" + S.extra.length + " added"]);
+  rows.push(["dictionary", S.dict.size + " words"]);
+  $("#version").innerHTML = "<table>" + rows.map(r =>
+    "<tr><td>" + r[0] + "</td><td>" + escapeHtml(r[1]) + "</td></tr>").join("") + "</table>";
+}
+
+async function checkUpdate() {
+  const btn = $("#checkUpdate");
+  btn.disabled = true; btn.textContent = "Checking…";
+  try {
+    const reg = "serviceWorker" in navigator && await navigator.serviceWorker.getRegistration();
+    if (reg) {
+      await reg.update();
+      if (reg.waiting) { reg.waiting.postMessage("SKIP_WAITING"); return; }  // reloads on controllerchange
+    }
+    // No worker, or nothing newer waiting: go to the network for the page itself.
+    location.reload();
+  } catch (e) {
+    btn.textContent = "Check failed — pull down to refresh";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* Tapping fills the composer instead of sending: the learner sees the sentence
+ * they are about to say, can edit it, and the words get underlined and learned
+ * like anything typed. */
+function renderStarters() {
+  const box = $("#starters");
+  box.innerHTML = "";
+  if (!S.starters) return;
+  HSKPrompt.startersFor(S.level).forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = t;
+    b.onclick = () => {
+      input.value = t;
+      updateMirror(); autosize(); input.focus();
+      box.scrollLeft = 0;
+    };
+    box.appendChild(b);
+  });
+}
+
+function applyFont(px) {
+  document.documentElement.style.setProperty("--msg", px + "px");
+}
+
+function openSheet(id) { $(id).classList.add("open"); }
+function closeSheet(id) { $(id).classList.remove("open"); }
+
+/* --------------------------------------------------------------- listeners */
+
+$("#send").onclick = send;
+input.addEventListener("input", () => { updateMirror(); autosize(); });
+input.addEventListener("scroll", () => { mirror.scrollTop = input.scrollTop; });
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 700) { e.preventDefault(); send(); }
+});
+
+document.addEventListener("click", e => {
+  const w = e.target.closest(".w");
+  if (w) { showPopover(w); return; }
+  if (!e.target.closest("#pop")) $("#pop").classList.remove("open");
+});
+
+$("#level").onchange = async e => {
+  await loadLevel(Number(e.target.value));
+  updateMirror(); renderAll(); renderStarters();
+};
+$("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; };
+
+$("#btnPy").onclick = () => {
+  S.pinyin = S.pinyin === "off" ? "extra" : S.pinyin === "extra" ? "all" : "off";
+  store.set(K.pinyin, S.pinyin);
+  $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
+  $("#btnPy").title = "Pinyin: " + S.pinyin;
+  renderAll();
+};
+$("#btnVocab").onclick = () => {
+  $("#autoAdd").checked = S.autoAdd;
+  renderVocab(); openSheet("#vocabSheet");
+};
+$("#autoAdd").onchange = e => { S.autoAdd = e.target.checked; store.set(K.autoAdd, S.autoAdd); };
+function addByHand() {
+  const box = $("#addWord");
+  const words = box.value.trim().split(/[\s,，、]+/).filter(Boolean);
+  if (!words.length) return;
+  const missing = addWords(words);
+  box.value = "";
+  renderVocab(); updateMirror(); renderAll();
+  glossWords(missing);
+}
+$("#addWordBtn").onclick = addByHand;
+function exportCards(kind) {
+  if (!S.extra.length) { $("#expNote").textContent = "No added words to export yet."; return; }
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (kind === "anki") deliver(ankiCsv(), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
+  else deliver(plecoTsv(), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
+}
+$("#expAnki").onclick = () => exportCards("anki");
+$("#expPleco").onclick = () => exportCards("pleco");
+$("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addByHand(); } });
+$("#vocabClose").onclick = () => closeSheet("#vocabSheet");
+$("#btnSet").onclick = () => {
+  $("#key").value = store.get(K.key, "");
+  $("#modelId").value = S.model;
+  $("#promptMode").value = S.mode;
+  $("#fontSize").value = S.font;
+  $("#showStarters").checked = S.starters;
+  $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
+  $("#ankiFront").value = S.anki.front; $("#ankiBack").value = S.anki.back;
+  $("#attempts").innerHTML = ATTEMPT_CHOICES.map(n =>
+    '<option value="' + n + '"' + (n === S.attempts ? " selected" : "") + ">" + n +
+    (n === 1 ? " — no repairs" : n === 3 ? " — default" : "") + "</option>").join("");
+  $("#replyLength").innerHTML = Object.keys(HSKPrompt.LENGTHS).map(k =>
+    '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
+    escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
+  fillPrompt();
+  renderStats();
+  renderVersion();
+  openSheet("#setSheet");
+};
+$("#setClose").onclick = () => {
+  store.set(K.key, $("#key").value.trim());
+  const id = $("#modelId").value.trim();
+  if (id) { S.model = id; store.set(K.model, id); fillModels(); }
+  S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
+  S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
+  S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
+  S.anki = {
+    deck:  $("#ankiDeck").value.trim()  || "Default",
+    type:  $("#ankiType").value.trim()  || "Basic",
+    front: $("#ankiFront").value.trim() || "Front",
+    back:  $("#ankiBack").value.trim()  || "Back"
+  };
+  store.set(K.anki, S.anki);
+  /* Only an actual edit makes the prompt custom. Untouched text leaves the
+   * setting as it was -- tracking stays tracking, custom stays custom. */
+  const typed = $("#sysPrompt").value.trim();
+  if (typed !== promptShown.trim()) {
+    S.prompt = typed;
+    store.set(K.prompt, S.prompt);
+  }
+  closeSheet("#setSheet");
+};
+/* What the textarea was last filled with. Saving compares against this, not
+ * against a freshly generated default: changing the level or reply length while
+ * the panel is open moves the default out from under the text, and comparing
+ * with the new one would silently save the old wording as a custom prompt. */
+let promptShown = "";
+
+function fillPrompt() {
+  promptShown = S.prompt || defaultPrompt();
+  $("#sysPrompt").value = promptShown;
+  $("#promptState").textContent = S.prompt ? "custom" : "tracking settings";
+}
+$("#resetPrompt").onclick = () => {
+  S.prompt = ""; store.set(K.prompt, "");
+  // Reflect the current level/length picks, not the ones in force when opened.
+  S.replyLength = $("#replyLength").value;
+  fillPrompt();
+};
+// Live, so the preview line under the slider shows the real size as it moves.
+$("#showStarters").onchange = e => {
+  S.starters = e.target.checked;
+  store.set(K.starters, S.starters);
+  renderStarters();
+};
+$("#fontSize").oninput = e => {
+  S.font = Number(e.target.value) || 26;
+  applyFont(S.font);
+  store.set(K.font, S.font);
+};
+$("#refreshModels").onclick = refreshModels;
+$("#checkUpdate").onclick = checkUpdate;
+$("#clearHistory").onclick = () => {
+  if (!confirm("Delete the whole conversation?")) return;
+  S.history = []; persist(); renderAll();
+};
+$("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
+[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"]].forEach(([sheet]) => {
+  $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
+});
+
+/* -------------------------------------------------------------------- boot */
+
+(async function boot() {
+  applyFont(S.font);
+  fillLevels(); fillModels();
+  $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
+  try {
+    await loadLevel(S.level);
+  } catch (e) {
+    log.innerHTML = '<div class="hint">Could not load the wordlist (' + escapeHtml(e.message) +
+      ').<br>Open this page over http, not file://.</div>';
+    return;
+  }
+  loadDict();
+  updateMirror(); autosize(); renderAll(); renderStats(); renderStarters();
+  if (!store.get(K.key, "")) $("#btnSet").click();
+  if ("serviceWorker" in navigator) {
+    /* A new worker calls skipWaiting and claims the page; reload once so the
+     * running app is the one that was just deployed. Two guards: controllerchange
+     * also fires on the very first install, where there is nothing stale to
+     * replace and a reload would just blink the page; and a reload must never
+     * cascade into another. */
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    // updateViaCache:"none" keeps the worker script itself out of the HTTP cache,
+    // so a relaunch always sees a new sw.js rather than a cached copy.
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then(reg => reg.addEventListener("updatefound", renderVersion))
+      .catch(() => {});
+  }
+})();
+</script>
