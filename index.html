@@ -112,6 +112,8 @@ footer{
 .vrow .w2{font-size:22px; min-width:3em}
 .vrow .g{flex:1; font-size:13px; color:var(--dim)}
 .vrow button{padding:6px 10px; min-height:36px}
+.applink{display:inline-block; padding:6px 10px; min-height:36px; line-height:24px;
+  border:1px solid var(--line); border-radius:10px; color:var(--accent); text-decoration:none}
 .stats{font-size:13px; color:var(--dim); background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px}
 .stats td{padding:2px 10px 2px 0}
 
@@ -179,6 +181,13 @@ footer{
   substituted. The validator does not care what is in here — an instruction to use hard
   words just costs retries.</div>
 
+  <label>Anki cards</label>
+  <div class="addrow"><input id="ankiDeck" type="text" placeholder="deck (Default)"><input id="ankiType" type="text" placeholder="note type (Basic)"></div>
+  <div class="addrow"><input id="ankiFront" type="text" placeholder="front field (Front)"><input id="ankiBack" type="text" placeholder="back field (Back)"></div>
+  <div class="note">Used by the per-word <b>Anki</b> links in the 词 panel, which hand the
+  card to AnkiMobile. The deck, note type and field names must match your collection
+  exactly, or AnkiMobile rejects the card. Nested decks use <code>::</code>.</div>
+
   <label for="attempts">Tries before giving up</label>
   <select id="attempts"></select>
   <div class="note">Each try is another API call. One means no repairs at all: a reply that
@@ -216,6 +225,14 @@ footer{
     <input id="addWord" type="text" placeholder="add a word by hand，比如 苹果" autocomplete="off">
     <button id="addWordBtn">Add</button>
   </div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button id="expAnki">Export for Anki</button>
+    <button id="expPleco">Export for Pleco</button>
+  </div>
+  <div class="note" id="expNote">On the phone these open the share sheet — send the file to
+  Pleco, or to Files and import it in Anki. Pleco: Flashcards → Import Cards. Anki desktop:
+  File → Import.</div>
+
   <div id="vocabList" style="margin-top:12px"></div>
   <div class="note">Words you typed, added by hand, or accepted from the model's
   <code>[[NEED:…]]</code> requests. They join the session allowlist — the model may then
@@ -291,7 +308,7 @@ const K = {
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
-  prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts"
+  prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki"
 };
 
 const store = {
@@ -310,6 +327,7 @@ const S = {
   replyLength: store.get(K.length, "short"),  // short | medium | long
   prompt:  store.get(K.prompt, ""),           // "" = track the generated default
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
+  anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -593,7 +611,7 @@ function renderMessage(turnObj, idx) {
     const row = box.querySelectorAll(".row")[1];
     const yes = document.createElement("button");
     yes.className = "primary"; yes.textContent = "Add to my words";
-    yes.onclick = () => { acceptWord(n); box.remove(); };
+    yes.onclick = () => { acceptWord(n, turnObj.text); box.remove(); };
     const no = document.createElement("button");
     no.textContent = "No";
     no.onclick = () => { n.state = "rejected"; persist(); box.remove(); };
@@ -655,12 +673,15 @@ function expandWord(text, start, end) {
 
 // Add entries, gloss them from the reference list, and return the ones still
 // missing a gloss so the caller can look them up.
-function addWords(words) {
+/* `sentence` is the line the word was met in. It is the most useful half of a
+ * flashcard and cannot be recovered later, so it is captured at add time. */
+function addWords(words, sentence) {
   const added = [];
   words.forEach(w => {
     if (!w || isExtra(w) || S.lex.words.has(w)) return;
     const known = S.dict.get(w);
-    const entry = { w: w, p: known ? known.p : "", d: known ? known.d : "" };
+    const entry = { w: w, p: known ? known.p : "", d: known ? known.d : "",
+                    s: (sentence || "").trim() };
     S.extra.push(entry);
     added.push(entry);
   });
@@ -679,7 +700,7 @@ function learnFromInput(text) {
     if (whole.length > v.text.length) words.push(whole);
     else splitUnknown(v.text).forEach(w => words.push(w));
   });
-  return addWords(words);
+  return addWords(words, text);
 }
 
 /* One cheap call for words the reference list does not have. It also repairs
@@ -725,9 +746,9 @@ async function glossWords(entries, ctx) {
   }
 }
 
-function acceptWord(n) {
+function acceptWord(n, sentence) {
   if (!isExtra(n.w)) {
-    S.extra.push({ w: n.w, p: n.p, d: n.d });
+    S.extra.push({ w: n.w, p: n.p, d: n.d, s: (sentence || "").trim() });
     store.set(K.extra, S.extra);
     rebuildLexicon();
   }
@@ -762,6 +783,69 @@ async function copyText(text, btn) {
     try { document.execCommand("copy"); done(); } catch (e2) { console.warn("copy failed", e2); }
     ta.remove();
   }
+}
+
+/* -------------------------------------------------------------- flashcards */
+
+/* Neither app can be written to directly from a web page. Pleco has no
+ * add-a-card URL, and AnkiConnect is a desktop HTTP server on localhost that a
+ * phone cannot reach and an https page could not call anyway. What does work:
+ * a delimited file both apps import, and AnkiMobile's x-callback-url for one
+ * card at a time. */
+function cardBack(e) {
+  return [e.p, e.d, e.s].filter(Boolean).join(" — ");
+}
+
+function ankiCsv() {
+  const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
+  return "#separator:comma\n#html:true\n" + S.extra.map(e =>
+    q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
+}
+
+// Pleco's flashcard import format: headword, pinyin, definition, tab separated.
+function plecoTsv() {
+  const clean = t => String(t || "").replace(/[\t\r\n]+/g, " ");
+  return S.extra.map(e =>
+    [clean(e.w), clean(e.p), clean([e.d, e.s].filter(Boolean).join(" // "))].join("\t")).join("\n") + "\n";
+}
+
+/* iOS will not let a page save a file on its own, so the share sheet is the
+ * real delivery route -- it can hand the file straight to Pleco or Files.
+ * Download is the desktop path, clipboard the last resort. */
+async function deliver(text, filename, btn) {
+  const file = new File([text], filename, { type: "text/plain" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;   // user dismissed the sheet
+  }
+  try {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    copyText(text, btn);
+  }
+}
+
+function ankiAddUrl(e) {
+  const a = S.anki;
+  const q = t => encodeURIComponent(t);
+  return "anki://x-callback-url/addnote?type=" + q(a.type) + "&deck=" + q(a.deck) +
+         "&fld" + q(a.front) + "=" + q(e.w) +
+         "&fld" + q(a.back) + "=" + q([e.p, e.d, e.s].filter(Boolean).join("<br>")) +
+         "&x-success=" + q(location.href);
+}
+
+function plecoUrl(word) {
+  return "plecoapi://x-callback-url/s?q=" + encodeURIComponent(word) +
+         "&x-source=" + encodeURIComponent("HSK Chat") +
+         "&x-success=" + encodeURIComponent(location.href);
 }
 
 /* ------------------------------------------------------------------ sending */
@@ -839,14 +923,16 @@ function showPopover(el) {
     (bad ? '<div class="tag">above level</div>' : "") +
     (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
     (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "") +
-    '<button id="popCopy">Copy 「' + escapeHtml(w) + "」</button>";
+    '<button id="popCopy">Copy 「' + escapeHtml(w) + "」</button>" +
+    '<a class="applink" style="display:block;text-align:center;margin-top:8px" href="' +
+      escapeHtml(plecoUrl(w)) + '">Look up 「' + escapeHtml(w) + "」in Pleco</a>";
   const cp = pop.querySelector("#popCopy");
   if (cp) cp.onclick = () => copyText(w, cp);
   const add = pop.querySelector("#popAdd");
   if (add) add.onclick = () => {
     const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
     const whole = src && src.src ? expandWord(src.src, at, at + w.length) : w;
-    const missing = addWords(whole.length > w.length ? [whole] : splitUnknown(w));
+    const missing = addWords(whole.length > w.length ? [whole] : splitUnknown(w), src && src.src);
     pop.classList.remove("open");
     updateMirror(); renderAll();
     glossWords(missing, src && src.src);
@@ -905,7 +991,12 @@ function renderVocab() {
     const row = document.createElement("div");
     row.className = "vrow";
     row.innerHTML = '<span class="w2">' + escapeHtml(e.w) + '</span><span class="g">' +
-      (e.p || e.d ? escapeHtml(e.p) + " — " + escapeHtml(e.d) : "no pinyin or meaning yet") + "</span>";
+      (e.p || e.d ? escapeHtml(e.p) + " — " + escapeHtml(e.d) : "no pinyin or meaning yet") +
+      (e.s ? '<br><span style="opacity:.7">' + escapeHtml(e.s) + "</span>" : "") + "</span>";
+    const anki = document.createElement("a");
+    anki.href = ankiAddUrl(e); anki.textContent = "Anki";
+    anki.className = "applink";
+    row.appendChild(anki);
     const del = document.createElement("button");
     del.textContent = "Remove";
     del.onclick = () => {
@@ -1008,12 +1099,22 @@ function addByHand() {
   glossWords(missing);
 }
 $("#addWordBtn").onclick = addByHand;
+function exportCards(kind) {
+  if (!S.extra.length) { $("#expNote").textContent = "No added words to export yet."; return; }
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (kind === "anki") deliver(ankiCsv(), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
+  else deliver(plecoTsv(), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
+}
+$("#expAnki").onclick = () => exportCards("anki");
+$("#expPleco").onclick = () => exportCards("pleco");
 $("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addByHand(); } });
 $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
 $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
+  $("#ankiFront").value = S.anki.front; $("#ankiBack").value = S.anki.back;
   $("#attempts").innerHTML = ATTEMPT_CHOICES.map(n =>
     '<option value="' + n + '"' + (n === S.attempts ? " selected" : "") + ">" + n +
     (n === 1 ? " — no repairs" : n === 3 ? " — default" : "") + "</option>").join("");
@@ -1032,6 +1133,13 @@ $("#setClose").onclick = () => {
   S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
   S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
   S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
+  S.anki = {
+    deck:  $("#ankiDeck").value.trim()  || "Default",
+    type:  $("#ankiType").value.trim()  || "Basic",
+    front: $("#ankiFront").value.trim() || "Front",
+    back:  $("#ankiBack").value.trim()  || "Back"
+  };
+  store.set(K.anki, S.anki);
   /* Only an actual edit makes the prompt custom. Untouched text leaves the
    * setting as it was -- tracking stays tracking, custom stays custom. */
   const typed = $("#sysPrompt").value.trim();
