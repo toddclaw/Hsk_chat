@@ -80,6 +80,18 @@ header button{padding:8px 10px; flex:0 0 auto}
 .w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
 .w.extra>.t{border-bottom:2px solid var(--ok)}
 .w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
+/* A failed call is not a reply. It gets its own card rather than a fake
+   Chinese sentence, which would read as the partner refusing to answer. */
+.notice{
+  max-width:88%; margin:0 auto 16px; padding:12px 14px; font-size:14px; line-height:1.6;
+  background:var(--panel2); border:1px solid var(--line); border-left:3px solid #ffd479;
+  border-radius:12px; color:var(--ink);
+}
+.notice b{display:block; margin-bottom:4px}
+.notice .why{color:var(--dim); font-size:12.5px; margin-top:6px; word-break:break-word}
+.notice .row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+.notice button{padding:6px 11px; min-height:36px; font-size:13px}
+
 .pending{margin-top:8px; padding:10px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; font-size:14px}
 .pending .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px}
 .pending b{font-size:22px}
@@ -332,7 +344,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v14 — 2026-08-19";
+const VERSION   = "v15 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -526,9 +538,17 @@ function repairPrompt(violations, attempt) {
   return parts.join("");
 }
 
+// Failures carry a kind, because the useful response differs: a missing key is
+// fixed in Settings, an empty completion by choosing another model.
+function callError(kind, message) {
+  const e = new Error(message);
+  e.kind = kind;
+  return e;
+}
+
 async function callModel(messages, maxTokens) {
   const key = store.get(K.key, "");
-  if (!key) throw new Error("No API key. Open Settings and paste an OpenRouter key.");
+  if (!key) throw callError("nokey", "No API key yet.");
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
@@ -538,10 +558,17 @@ async function callModel(messages, maxTokens) {
     })
   });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
+  const detail = (body.error && body.error.message) || "";
+  if (!r.ok) {
+    if (r.status === 401 || r.status === 403) throw callError("auth", detail || "Key rejected.");
+    if (r.status === 429) throw callError("rate", detail || "Rate limited.");
+    if (r.status === 402) throw callError("credit", detail || "Payment required.");
+    throw callError("http", detail || ("OpenRouter returned " + r.status + "."));
+  }
   const choice = (body.choices && body.choices[0]) || {};
   const txt = choice.message && choice.message.content;
-  if (!txt) throw new Error("Empty response from " + S.model);
+  // The common free-tier outcome: a 200 with nothing in it.
+  if (!txt) throw callError("empty", detail);
   // finish_reason "length" means the ceiling cut the reply off mid-sentence,
   // which is a different problem from the model choosing to stop.
   callModel.lastFinish = choice.finish_reason || "";
@@ -549,7 +576,10 @@ async function callModel(messages, maxTokens) {
 }
 
 function windowed() {
-  return S.history.slice(-WINDOW).map(t => ({ role: t.role, content: t.text }));
+  // Notices are UI, not conversation: sending them would teach the model that
+  // English error text belongs in the chat.
+  return S.history.filter(t => t.role === "user" || t.role === "assistant")
+    .slice(-WINDOW).map(t => ({ role: t.role, content: t.text }));
 }
 
 /* One turn against the history already containing the user's message:
@@ -638,7 +668,57 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
+/* What each failure means and what to do about it. Free endpoints answering
+ * with nothing is the common case, not an edge case, so it reads as a normal
+ * thing to route around rather than as a crash. */
+const NOTICES = {
+  empty:  { title: "That model sent back an empty reply.",
+            body: "Free models are often busy, withdrawn or gated, and answer with nothing at all. Nothing is broken — pick another model and carry on.",
+            action: "Choose another model" },
+  rate:   { title: "Rate limited.",
+            body: "Free models share a small quota. Wait a moment and send again, or switch to another model.",
+            action: "Choose another model" },
+  auth:   { title: "OpenRouter rejected the key.",
+            body: "Check it was pasted whole, and that it has not been revoked.",
+            action: "Open settings" },
+  nokey:  { title: "No API key yet.",
+            body: "Make one at openrouter.ai/keys — no credit needed if you stay on free models.",
+            action: "Open settings" },
+  credit: { title: "That model needs credit.",
+            body: "Add credit at openrouter.ai, or tick “free models only” and choose a free model.",
+            action: "Choose another model" },
+  http:   { title: "The request failed.",
+            body: "This is usually the network or OpenRouter itself. Sending again often works.",
+            action: "Open settings" }
+};
+
+function renderNotice(turnObj) {
+  const n = NOTICES[turnObj.kind] || NOTICES.http;
+  const el = document.createElement("div");
+  el.className = "notice";
+  el.innerHTML = "<b>" + escapeHtml(n.title) + "</b>" + escapeHtml(n.body) +
+    (turnObj.model ? '<div class="why">' + escapeHtml(turnObj.model) +
+      (turnObj.detail ? " — " + escapeHtml(turnObj.detail) : "") + "</div>" : "");
+  const row = document.createElement("div");
+  row.className = "row";
+  const act = document.createElement("button");
+  act.className = "primary";
+  act.textContent = n.action;
+  act.onclick = () => $("#btnSet").click();
+  const dismiss = document.createElement("button");
+  dismiss.textContent = "Dismiss";
+  dismiss.onclick = () => {
+    S.history = S.history.filter(t => t !== turnObj);
+    persist(); renderAll();
+  };
+  row.append(act, dismiss);
+  el.appendChild(row);
+  log.appendChild(el);
+  return el;
+}
+
 function renderMessage(turnObj, idx) {
+  if (turnObj.role === "notice") return renderNotice(turnObj);
   const el = document.createElement("div");
   el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
 
@@ -942,9 +1022,11 @@ async function send() {
     persist();
   } catch (err) {
     console.error(err);
-    S.history.push({ role: "assistant", text: "我不知道。", attempts: 1, failed: true, error: String(err.message || err) });
+    // err.message is empty when the API gave no reason; String(err) would turn
+    // that into the word "Error", which reads as a detail and is not one.
+    S.history.push({ role: "notice", kind: err.kind || "http",
+                     detail: (err && err.message) || "", model: S.model });
     persist();
-    alert(err.message || err);
   } finally {
     thinking.remove();
     S.busy = false; $("#send").disabled = false;
