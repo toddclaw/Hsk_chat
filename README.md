@@ -56,8 +56,9 @@ Each turn runs up to three attempts:
 3. on violations again, name them *and* supply permitted substitutes, found by scanning
    the allowlist for entries sharing a character with the violation.
 
-After three failures the app returns a sanctioned in-level refusal (`我不知道。`) with a
-**gave up** badge, so a failure never reads as an answer. Repair exchanges live in a
+The number of tries is a setting (1–6, default 3); each one is another API call, and 1
+means no repairs at all. After the last failure the app returns a sanctioned in-level
+refusal (`我不知道。`) with a **gave up** badge, so a failure never reads as an answer. Repair exchanges live in a
 scratch array and never enter stored history. Retries are invisible apart from an
 attempt-count badge.
 

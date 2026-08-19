@@ -179,6 +179,11 @@ footer{
   substituted. The validator does not care what is in here — an instruction to use hard
   words just costs retries.</div>
 
+  <label for="attempts">Tries before giving up</label>
+  <select id="attempts"></select>
+  <div class="note">Each try is another API call. One means no repairs at all: a reply that
+  breaks the level goes straight to 我不知道。</div>
+
   <label for="promptMode">Prompt mode (A/B)</label>
   <select id="promptMode">
     <option value="without-list">without-list — rules only</option>
@@ -255,7 +260,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v7 — 2026-08-19";
+const VERSION   = "v8 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -277,7 +282,7 @@ const LENGTHS = {
             example: "你好！我很高兴。我是你的中文朋友。我喜欢喝茶，也喜欢看书。" +
                      "今天天气很好。你叫什么名字？" }
 };
-const ATTEMPTS  = 3;        // 1 generation + 2 repairs
+const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
@@ -286,7 +291,7 @@ const K = {
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
-  prompt:"hsk1chat.systemPrompt"
+  prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts"
 };
 
 const store = {
@@ -304,6 +309,7 @@ const S = {
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
   replyLength: store.get(K.length, "short"),  // short | medium | long
   prompt:  store.get(K.prompt, ""),           // "" = track the generated default
+  attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -470,7 +476,7 @@ async function turn() {
   const scratch = [{ role: "system", content: systemPrompt() }].concat(windowed());
   let attempt = 0, last = null;
 
-  while (attempt < ATTEMPTS) {
+  while (attempt < S.attempts) {
     attempt++;
     const raw = await callModel(scratch);
     const ex = extractNeeds(raw);
@@ -1008,6 +1014,9 @@ $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#attempts").innerHTML = ATTEMPT_CHOICES.map(n =>
+    '<option value="' + n + '"' + (n === S.attempts ? " selected" : "") + ">" + n +
+    (n === 1 ? " — no repairs" : n === 3 ? " — default" : "") + "</option>").join("");
   $("#replyLength").innerHTML = Object.keys(LENGTHS).map(k =>
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(LENGTHS[k].label) + "</option>").join("");
@@ -1022,6 +1031,7 @@ $("#setClose").onclick = () => {
   if (id) { S.model = id; store.set(K.model, id); fillModels(); }
   S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
   S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
+  S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
   /* Only an actual edit makes the prompt custom. Untouched text leaves the
    * setting as it was -- tracking stays tracking, custom stays custom. */
   const typed = $("#sysPrompt").value.trim();
