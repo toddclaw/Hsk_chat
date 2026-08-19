@@ -39,11 +39,28 @@ screen*). Firefox and Samsung Internet have the same option in their menus. Ever
 works exactly as on iOS, with one exception noted under
 [flashcards](#flashcards-pleco-and-anki): AnkiDroid does not accept the one-tap card links.
 
+## Running it for free
+
+Make an account at [openrouter.ai/keys](https://openrouter.ai/keys), create a key, **add no
+credit**, and tick **free models only** in Settings. Models priced at zero cost nothing to
+call, and the picker shows what everything costs per million input tokens so the paid ones
+are one tap away when you want them.
+
+Free models are rate-limited and can be busy, so replies are slower and retries more
+frequent — which for this app means more turns ending in 我不知道。Raising *Tries before
+giving up* helps; adding credit and choosing a paid model helps more.
+
+**A key is still required, and that is not a limitation I can engineer away.** Something has
+to hold a secret to call an API, and this app has no backend — a key shipped inside a static
+page is readable by anyone who opens it and would be abused and revoked within a day. The
+alternatives are worse: a shared proxy means running a server and paying for everyone's
+conversations, and running a model in the browser means a multi-gigabyte download that
+current phones cannot hold. A free account with your own key is the honest version of free.
+
 ## What it costs
 
-You need an [OpenRouter](https://openrouter.ai/keys) account with a little credit. A turn
-sends roughly 1k tokens and gets back ~100, so at cheap-model rates it is a fraction of a
-cent; a retry costs another round. **Optimise for retry rate, not sticker price** — a cheap
+If you do add credit: a turn sends roughly 1k tokens and gets back ~100, so at cheap-model
+rates it is a fraction of a cent; a retry costs another round. **Optimise for retry rate, not sticker price** — a cheap
 model that averages two retries costs more, and feels slower, than a better one that gets
 it right first time. The A/B counters in Settings measure exactly that.
 
@@ -315,6 +332,47 @@ python3 -m http.server 8000
 ```
 
 Deploy by pushing: Pages serves the branch root, and there is nothing to build.
+
+## Deploying, and testing a branch without touching the live page
+
+`.github/workflows/pages.yml` publishes **every** branch to one Pages site:
+
+| branch | URL |
+|---|---|
+| `main` | `https://toddclaw.github.io/Hsk_chat/` |
+| anything else | `https://toddclaw.github.io/Hsk_chat/preview/<branch>/` |
+
+So the public page is always `main`, and testing a branch on a phone never involves changing
+a repository setting. Slashes in branch names become dashes
+(`claude/new-session-jw19j3` → `preview/claude-new-session-jw19j3/`). Deleting a branch
+deletes its preview.
+
+**One-time setup:** Settings → Pages → *Deploy from a branch* → **`gh-pages`** / root. The
+workflow creates that branch on its first run. Until you switch, everything keeps serving
+from `main` as before.
+
+Two details that make this safe:
+
+- Publishing `main` clears the site root but explicitly spares `preview/`, so a release
+  never wipes the previews.
+- The workflow copies an **explicit list** (`.github/publish-files`), not everything minus
+  exclusions — adding a file to the repo should not publish it by accident.
+  `test/release.test.js` fails if that list stops covering something `index.html` loads or
+  the service worker pre-caches, which is the one kind of breakage that would appear only
+  after deploying.
+
+The workflow runs `sh test/run.sh` before publishing, so a red branch never reaches a URL —
+`main` included.
+
+Each preview is a separate service-worker scope, so a preview cannot poison the live app's
+cache. It is the *same origin*, though, which means it shares `localStorage`: your key
+carries over (convenient), and so does your history and vocabulary (be careful with
+destructive testing).
+
+For the fastest loop, skip deploying altogether — run `python3 -m http.server 8000` on a
+computer and open `http://<its-lan-ip>:8000` from the phone on the same wifi. Everything
+works except the service worker, which needs a secure context, and that is the part you
+least want while iterating.
 
 ## Tests
 

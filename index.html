@@ -182,10 +182,22 @@ footer{
   <h2>Settings</h2>
   <label for="key">OpenRouter API key</label>
   <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
-  <div class="note">The key is stored in this browser's localStorage on this device only, and is sent to openrouter.ai and nowhere else. There is no backend.</div>
+  <div class="note"><b>Free setup:</b> make an account at
+  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
+  create a key, add no credit, then tick <b>free models only</b> below. Models priced at zero
+  cost nothing to call. They are rate-limited and can be busy, so replies may be slower and
+  retries more frequent; adding credit and picking a paid model fixes that.
+  <br><br>A key is still required — there is no backend here to hold one for you, and a key
+  shipped inside a page like this would be abused and revoked within a day. The key you paste
+  stays in this browser's localStorage on this device, and is sent to openrouter.ai and
+  nowhere else.</div>
 
   <label for="modelId">Model id (any OpenRouter id)</label>
   <input id="modelId" type="text" placeholder="anthropic/claude-...">
+  <label class="toggle" for="freeOnly">
+    <input type="checkbox" id="freeOnly">
+    <span>Free models only</span>
+  </label>
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
@@ -320,7 +332,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v13 — 2026-08-19";
+const VERSION   = "v14 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -334,7 +346,8 @@ const K = {
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
-  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script"
+  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
+  freeOnly:"hsk1chat.freeOnly"
 };
 
 const store = {
@@ -357,6 +370,7 @@ const S = {
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
   script:  store.get(K.script, "simp"),       // simp | trad
+  freeOnly: store.get(K.freeOnly, false),     // show only zero-cost models
   simpLex: null,                              // simplified lexicon, for converting prompt text
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
@@ -1004,16 +1018,36 @@ function fillLevels() {
     '<option value="' + l.id + '"' + (l.id === S.level ? " selected" : "") + ">" + l.label + "</option>").join("");
 }
 
+// A model's cost is the thing worth seeing while choosing one, so it goes in
+// the label rather than in a note somewhere else.
+function priceLabel(m) {
+  if (m.free) return " · free";
+  if (typeof m.inM !== "number") return "";
+  return " · $" + (m.inM < 1 ? m.inM.toFixed(2) : m.inM.toFixed(1)) + "/M";
+}
+
 function fillModels() {
   const cached = store.get(K.models, null);
-  const list = (cached && cached.length ? cached : MODELS).slice();
-  if (!list.some(m => m.id === S.model)) list.unshift({ id: S.model, label: S.model });
+  const all = (cached && cached.length ? cached : MODELS).slice();
+  let list = all;
+  if (S.freeOnly) {
+    const free = all.filter(m => m.free);
+    if (free.length) list = free;                 // never leave the picker empty
+  }
+  /* The selected model always stays in the list, or the picker would silently
+   * switch what you are talking to. Carry its catalogue entry across so a paid
+   * model kept under the free filter still shows its name and price rather
+   * than a bare id. */
+  if (!list.some(m => m.id === S.model)) {
+    const known = all.find(m => m.id === S.model);
+    list = [known || { id: S.model, label: S.model }].concat(list);
+  }
   $("#model").innerHTML = list.map(m =>
     '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
-    escapeHtml(m.label) + "</option>").join("");
-  $("#modelNote").textContent = cached
-    ? "Loaded " + cached.length + " ids from OpenRouter."
-    : "Built-in ids are unverified starting points — load the live list, or paste any id from openrouter.ai/models.";
+    escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+  if (!cached) {
+    $("#modelNote").textContent = "Built-in ids are unverified starting points — load the live list to see what is free and what each costs.";
+  }
 }
 
 async function refreshModels() {
@@ -1022,14 +1056,26 @@ async function refreshModels() {
   try {
     const r = await fetch(MODELS_URL);
     const j = await r.json();
-    const keep = /^(anthropic|google|openai|deepseek|qwen|meta-llama|mistralai|x-ai)\//;
-    const list = (j.data || [])
-      .filter(m => keep.test(m.id))
-      .map(m => ({ id: m.id, label: m.name || m.id }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+    /* Price comes back per token as a string. Zero on both sides is what makes
+     * a model free to call; the ":free" suffix is a naming convention and not
+     * something to rely on by itself. */
+    const list = (j.data || []).map(m => {
+      const pr = m.pricing || {};
+      const inTok = parseFloat(pr.prompt || "0"), outTok = parseFloat(pr.completion || "0");
+      return {
+        id: m.id,
+        label: m.name || m.id,
+        free: (inTok === 0 && outTok === 0) || /:free$/.test(m.id),
+        inM: inTok * 1e6,        // dollars per million input tokens
+        outM: outTok * 1e6
+      };
+    }).sort((a, b) =>
+      (a.free === b.free) ? (a.inM - b.inM || a.id.localeCompare(b.id)) : (a.free ? -1 : 1));
     if (!list.length) throw new Error("no models returned");
     store.set(K.models, list);
     fillModels();
+    const free = list.filter(m => m.free).length;
+    $("#modelNote").textContent = "Loaded " + list.length + " models, " + free + " of them free.";
   } catch (e) {
     $("#modelNote").textContent = "Could not load the list: " + (e.message || e) + ". Paste an id manually.";
   } finally {
@@ -1190,6 +1236,7 @@ $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#freeOnly").checked = S.freeOnly;
   $("#script").value = S.script;
   $("#fontSize").value = S.font;
   $("#showStarters").checked = S.starters;
@@ -1261,6 +1308,14 @@ $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
   store.set(K.font, S.font);
+};
+$("#freeOnly").onchange = e => {
+  S.freeOnly = e.target.checked;
+  store.set(K.freeOnly, S.freeOnly);
+  fillModels();
+  if (S.freeOnly && !store.get(K.models, null)) {
+    $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
+  }
 };
 $("#refreshModels").onclick = refreshModels;
 $("#checkUpdate").onclick = checkUpdate;

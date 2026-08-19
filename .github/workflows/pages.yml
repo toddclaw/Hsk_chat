@@ -1,0 +1,110 @@
+# Publishes every branch to one Pages site:
+#
+#   main            -> https://toddclaw.github.io/Hsk_chat/
+#   any other       -> https://toddclaw.github.io/Hsk_chat/preview/<branch>/
+#
+# so the public page is always main and testing a branch never touches it.
+# Pages must be set to deploy from the `gh-pages` branch, root folder — once.
+name: Publish
+
+on:
+  push:
+    branches: ["**"]
+  delete:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-publish          # one writer at a time; gh-pages is a shared branch
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same suites the pre-commit hook runs. A branch that fails them is
+      # not worth previewing, and main must never publish red.
+      - name: Test
+        run: sh test/run.sh
+
+      - name: Work out where this branch publishes
+        id: dest
+        run: |
+          branch="${GITHUB_REF#refs/heads/}"
+          if [ "$branch" = "main" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+            echo "url=" >> "$GITHUB_OUTPUT"
+          else
+            # slashes are legal in branch names but not wanted in a path
+            safe=$(printf '%s' "$branch" | tr '/' '-')
+            echo "dir=preview/$safe" >> "$GITHUB_OUTPUT"
+            echo "url=preview/$safe/" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to gh-pages
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin gh-pages --depth=1 || true
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git worktree add ../site origin/gh-pages
+          else
+            git worktree add --detach ../site
+            (cd ../site && git checkout --orphan gh-pages && git rm -rf . >/dev/null 2>&1 || true)
+          fi
+
+          target="../site/${{ steps.dest.outputs.dir }}"
+
+          # Clear the destination first so deleted files really disappear. When
+          # publishing main that is the site root, minus preview/ -- otherwise a
+          # push to main would wipe every branch's preview.
+          if [ "${{ steps.dest.outputs.dir }}" = "." ]; then
+            find ../site -mindepth 1 -maxdepth 1 ! -name .git ! -name preview -exec rm -rf {} +
+          else
+            rm -rf "$target"
+          fi
+          mkdir -p "$target"
+
+          # An explicit list, not an exclusion list: adding a file to the repo
+          # should never publish it by accident. test/release.test.js fails if
+          # this drifts from what index.html actually loads.
+          for f in $(cat .github/publish-files); do
+            [ -e "$f" ] && cp -R "$f" "$target/"
+          done
+          touch ../site/.nojekyll
+
+          cd ../site
+          git add -A
+          git diff --quiet --cached || git commit -m "Publish ${GITHUB_REF#refs/heads/} (${GITHUB_SHA::7})"
+          git push origin HEAD:gh-pages
+
+      - name: Say where it went
+        run: |
+          echo "### Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/${{ steps.dest.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    # Deleting a branch takes its preview with it, so they do not pile up.
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch' && github.event.ref != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 1
+      - name: Remove the preview
+        run: |
+          safe=$(printf '%s' "${{ github.event.ref }}" | tr '/' '-')
+          if [ -d "preview/$safe" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git rm -r --quiet "preview/$safe"
+            git commit -m "Remove preview for deleted branch ${{ github.event.ref }}"
+            git push origin HEAD:gh-pages
+          fi

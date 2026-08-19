@@ -65,5 +65,26 @@ for (const f of levels) check(fs.existsSync(path.join(root, f)), `level file: ${
 const ref = (index.match(/const REF_LIST = "([^"]+)"/) || [])[1];
 check(ref && fs.existsSync(path.join(root, ref)), `reference dictionary ${ref} exists`);
 
+/* 5. The deploy list cannot drift from what the page needs. The workflow copies
+ *    exactly these paths, so anything index.html loads or the worker pre-caches
+ *    must appear here or the published site is broken in a way no local test
+ *    would show. */
+const listPath = path.join(root, ".github/publish-files");
+if (fs.existsSync(listPath)) {
+  const published = fs.readFileSync(listPath, "utf8").split("\n").map(l => l.trim()).filter(Boolean);
+  for (const p of published) {
+    check(fs.existsSync(path.join(root, p)), `publish list: ${p} exists`);
+  }
+  const needed = assets.concat(shellPaths).filter(p => p && p !== "" && p !== "/");
+  for (const n of needed) {
+    const top = n.split("/")[0];
+    check(published.includes(n) || published.includes(top),
+      `publish list covers ${n}`,
+      "add it to .github/publish-files or the deployed site will 404 on it");
+  }
+} else {
+  check(false, ".github/publish-files exists", "the deploy workflow reads it");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
