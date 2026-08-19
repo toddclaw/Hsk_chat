@@ -28,6 +28,14 @@ def reading(form):
     return fix_umlaut(form.get("transcriptions", {}).get("pinyin", "").strip())
 
 
+def traditional(word, forms):
+    """The traditional form of the preferred reading, omitted when it matches
+    the simplified. About 3% of entries list several (variant characters such as
+    岸/㟁, 幫/幇/幚); taking the preferred reading's form picks the standard one."""
+    t = (forms[0].get("traditional") or "").strip()
+    return t if t and t != word else None
+
+
 def is_surname(form):
     ms = form.get("meanings", [])
     return bool(ms) and all(m.lower().startswith("surname") for m in ms)
@@ -69,7 +77,14 @@ def convert(src, dst):
     merged = {}
     for e in data:
         merged.setdefault(e["simplified"], []).extend(e["forms"])
-    out = [{"w": w, "p": pinyin(ordered(w, f)), "d": gloss(ordered(w, f))} for w, f in merged.items()]
+    out = []
+    for w, f in merged.items():
+        f = ordered(w, f)
+        entry = {"w": w, "p": pinyin(f), "d": gloss(f)}
+        t = traditional(w, f)
+        if t:
+            entry["t"] = t
+        out.append(entry)
     out.sort(key=lambda x: x["w"])
     with open(dst, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))

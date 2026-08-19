@@ -189,6 +189,15 @@ footer{
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
+  <label for="script">Characters</label>
+  <select id="script">
+    <option value="simp">简体 — simplified</option>
+    <option value="trad">繁體 — traditional</option>
+  </select>
+  <div class="note">Switches the allowlist, the starters and the prompt. Words you added
+  keep the form you added them in. About 3% of entries list several traditional variants
+  (岸/㟁, 幫/幇/幚); the one belonging to the word's main reading is used.</div>
+
   <label class="toggle" for="showStarters">
     <input type="checkbox" id="showStarters">
     <span>Show conversation starters</span>
@@ -311,7 +320,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v12 — 2026-08-19";
+const VERSION   = "v13 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -325,7 +334,7 @@ const K = {
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
-  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters"
+  font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script"
 };
 
 const store = {
@@ -347,6 +356,8 @@ const S = {
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
+  script:  store.get(K.script, "simp"),       // simp | trad
+  simpLex: null,                              // simplified lexicon, for converting prompt text
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -359,7 +370,16 @@ const S = {
 const $ = s => document.querySelector(s);
 const log = $("#log"), input = $("#input"), mirror = $("#mirror");
 
-function rebuildLexicon() { S.lex = HSK.buildLexicon(S.base, S.extra); }
+/* The data ships simplified with the traditional form alongside (`t`, present
+ * only where it differs). Traditional mode swaps which one is the key, keeping
+ * the other on the entry so the popover can show both. Nothing in validator.js
+ * knows about scripts -- it matches whatever keys it is given. */
+function inScript(list) {
+  if (S.script !== "trad") return list;
+  return list.map(e => e.t ? { w: e.t, p: e.p, d: e.d, s: e.s, other: e.w } : e);
+}
+
+function rebuildLexicon() { S.lex = HSK.buildLexicon(inScript(S.base), inScript(S.extra)); }
 const isExtra = w => S.extra.some(e => e.w === w);
 
 /* --------------------------------------------------------------- word data */
@@ -377,13 +397,36 @@ async function loadLevel(n) {
 async function loadDict() {
   try {
     const r = await fetch(REF_LIST);
-    if (r.ok) (await r.json()).forEach(e => S.dict.set(e.w, e));
+    if (r.ok) {
+      const list = await r.json();
+      // Indexed under both forms, so glossing and span-widening work in either
+      // script; the simplified lexicon is what converts prompt text.
+      list.forEach(e => {
+        S.dict.set(e.w, e);
+        if (e.t) S.dict.set(e.t, { w: e.t, p: e.p, d: e.d, other: e.w });
+      });
+      S.simpLex = HSK.buildLexicon(list);
+      if (S.script === "trad") { renderStarters(); renderAll(); }
+    }
   } catch (e) { /* glossing degrades to blank, nothing else breaks */ }
 }
 
 /* ------------------------------------------------------------ system prompt */
 
 function lengthSpec() { return HSKPrompt.LENGTHS[S.replyLength] || HSKPrompt.LENGTHS.short; }
+
+/* Convert app-authored Chinese (prompt rules, samples, starters) word by word.
+ * Word-level rather than character-level because that is where the ambiguity
+ * lives: 干 is 幹 or 乾 depending on the word it sits in, and the wordlist
+ * already knows which. Anything unmatched is left alone. */
+function toScript(text) {
+  if (S.script !== "trad" || !S.simpLex) return text;
+  return HSK.segment(text, S.simpLex).map(tok => {
+    if (tok.kind !== "word") return tok.text;
+    const e = S.simpLex.words.get(tok.text);
+    return (e && e.t) || tok.text;
+  }).join("");
+}
 
 function levelLabel() {
   return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
@@ -406,12 +449,17 @@ function systemPrompt() {
 }
 
 function defaultPrompt() {
-  return HSKPrompt.build({
+  const p = HSKPrompt.build({
     level: S.level,
     label: levelLabel(),
     length: S.replyLength,
-    words: S.mode === "with-list" ? wordList() : ""
+    script: S.script,
+    // wordList() is already in the active script, so it must not be converted
+    // a second time; build() appends it after the conversion hook.
+    words: S.mode === "with-list" ? wordList() : "",
+    convert: toScript
   });
+  return p;
 }
 
 /* -------------------------------------------------------------- NEED tokens */
@@ -564,6 +612,7 @@ function tokenSpan(tok, needs, flagLatin) {
   return '<span class="' + cls.join(" ") + '" data-s="' + tok.start + '" data-w="' + escapeHtml(tok.text) +
          '" data-p="' + escapeHtml(e.p || "") + '" data-d="' + escapeHtml(e.d || "") +
          '" data-py="' + escapeHtml(primaryReading(e.p)) + '"' +
+         ' data-other="' + escapeHtml(e.other || e.t || "") + '"' +
          ' data-bad="' + (cls.indexOf("bad") > -1 ? 1 : 0) + '">' +
          '<span class="t">' + escapeHtml(tok.text) + "</span></span>";
 }
@@ -923,6 +972,8 @@ function showPopover(el) {
   pop.innerHTML = '<div class="hw">' + escapeHtml(w) + "</div>" +
     '<div class="py2">' + escapeHtml(p || (known ? known.p : "")) + "</div>" +
     '<div class="d">' + escapeHtml(d || (known ? known.d : "not in the reference dictionary")) + "</div>" +
+    (el.dataset.other ? '<div class="d" style="opacity:.75">' +
+        (S.script === "trad" ? "简体" : "繁體") + "：" + escapeHtml(el.dataset.other) + "</div>" : "") +
     (bad ? '<div class="tag">above level</div>' : "") +
     (isExtra(w) ? '<div class="tag" style="color:var(--ok)">added to your words</div>' : "") +
     (bad && !isExtra(w) ? '<button id="popAdd">+ Add 「' + escapeHtml(popTarget(el, w)) + "」to my words</button>" : "") +
@@ -1063,7 +1114,7 @@ function renderStarters() {
   const box = $("#starters");
   box.innerHTML = "";
   if (!S.starters) return;
-  HSKPrompt.startersFor(S.level).forEach(t => {
+  HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
     const b = document.createElement("button");
     b.textContent = t;
     b.onclick = () => {
@@ -1139,6 +1190,7 @@ $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
+  $("#script").value = S.script;
   $("#fontSize").value = S.font;
   $("#showStarters").checked = S.starters;
   $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
@@ -1159,6 +1211,11 @@ $("#setClose").onclick = () => {
   const id = $("#modelId").value.trim();
   if (id) { S.model = id; store.set(K.model, id); fillModels(); }
   S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
+  const script = $("#script").value;
+  if (script !== S.script) {
+    S.script = script; store.set(K.script, S.script);
+    rebuildLexicon(); renderStarters(); renderAll(); updateMirror();
+  }
   S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
   S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
   S.anki = {

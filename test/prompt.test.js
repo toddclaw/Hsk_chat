@@ -85,7 +85,44 @@ for (const n of levels) {
 }
 check(P.startersFor(99) === P.STARTERS[1], "unknown level falls back to HSK 1 starters");
 
-// 7. An unknown level must not produce a prompt with no constraints at all.
+/* 7. Traditional mode. The app converts its own Chinese word by word against
+ *    the wordlist, so every sample and starter must still validate once
+ *    converted -- otherwise the app hands the learner text its own validator
+ *    rejects, which is the failure this suite exists to prevent. */
+const tradLex = {}, tradMap = {};
+for (const n of levels) {
+  const entries = JSON.parse(
+    fs.readFileSync(path.join(__dirname, `../data/hsk${n}.json`), "utf8"));
+  tradLex[n] = HSK.buildLexicon(entries.map(e => e.t ? { w: e.t, p: e.p, d: e.d } : e));
+  tradMap[n] = HSK.buildLexicon(entries);          // simplified keys, entries carry .t
+}
+const toTrad = (text, n) => HSK.segment(text, tradMap[n]).map(tok => {
+  if (tok.kind !== "word") return tok.text;
+  const e = tradMap[n].words.get(tok.text);
+  return (e && e.t) || tok.text;
+}).join("");
+
+for (const n of levels) {
+  const sample = toTrad(P.LEVEL_STYLE[n].sample, n);
+  const v = HSK.validate(sample, tradLex[n]).map(x => x.text);
+  check(v.length === 0, `L${n}: sample validates in traditional — ${sample}`,
+    "flagged: " + v.join(", "));
+  for (const t of P.startersFor(n)) {
+    const conv = toTrad(t, n);
+    const sv = HSK.validate(conv, tradLex[n]).map(x => x.text);
+    check(sv.length === 0, `L${n} traditional starter validates: ${conv}`,
+      "flagged: " + sv.join(", "));
+  }
+}
+// The conversion has to actually do something, or the checks above are vacuous.
+check(toTrad("我学习中文", 1) === "我學習中文", "conversion is word-level and real",
+  toTrad("我学习中文", 1));
+check(P.build({ level: 1, label: "HSK 1", length: "short", script: "trad" }).includes("8. "),
+  "traditional mode adds the write-in-traditional rule");
+check(!P.build({ level: 1, label: "HSK 1", length: "short" }).includes("8. "),
+  "simplified mode does not");
+
+// 8. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);

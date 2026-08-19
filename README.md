@@ -163,6 +163,31 @@ handle that class instead.
 
 ---
 
+# Simplified or traditional
+
+Settings → **Characters** switches the whole app between 简体 and 繁體: the allowlist, the
+starters, the prompt and the validator.
+
+No second dataset was needed. The HSK dumps carry a `traditional` form on every entry and
+the converter had been discarding it; `data/*.json` now ships `t` alongside `w`, present
+only where the two differ (6,352 of 10,969 entries at HSK 7–9). Traditional mode swaps which
+form is the lexicon key and keeps the other on the entry, so the word popover shows both.
+Nothing in `validator.js` knows about scripts — it matches whatever keys it is given.
+
+The app's own Chinese — rules, samples, starters — is converted **word by word against the
+wordlist**, not character by character. That is where the ambiguity lives: 干 is 幹 or 乾
+depending on the word around it, and the wordlist already knows which. Anything unmatched is
+left alone. Traditional mode also adds a rule telling the model to write 繁體字.
+
+About 3% of entries list several traditional variants (岸/㟁, 幫/幇/幚); the form belonging to
+the word's main reading is the one used.
+
+`test/prompt.test.js` validates every sample and starter **after conversion** against the
+traditional lexicon, plus a check that the conversion is doing real work — otherwise those
+assertions would pass vacuously on unconverted text.
+
+Words you added keep the form you added them in; switching scripts does not rewrite them.
+
 # The prompt grows with the level
 
 `prompt.js` holds a register profile per band — a vocabulary rule, a grammar rule, a worked
