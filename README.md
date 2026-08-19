@@ -10,6 +10,7 @@ Safari → Share → Add to Home Screen.
 ```
 index.html        markup, CSS and app logic
 validator.js      the matcher (shared by the page and the tests)
+prompt.js         per-level register profiles and prompt assembly
 data/hsk1..7.json the allowlists: {"w":"你好","p":"nǐ hǎo","d":"hello"}
 test/             fixtures + a dependency-free test runner
 tools/            one-shot scripts: wordlist conversion, icon generation
@@ -28,7 +29,7 @@ is kept in `localStorage` on that device and is sent to openrouter.ai and nowher
 
 To deploy: push to GitHub and turn on Pages for the branch root. There is nothing to build.
 
-Tests: `node test/validator.test.js` (no dependencies).
+Tests: `node test/validator.test.js` and `node test/prompt.test.js` (no dependencies).
 
 ## How the constraint works
 
@@ -138,20 +139,45 @@ Getting that right took two fixes that are easy to get wrong:
 Pasting into the composer needs nothing special, and pasted text is validated and learned
 like anything typed.
 
-## Reply length and the system prompt
+## The prompt grows with the level
 
-A model that answers in one short line is usually obeying the prompt, not failing: the
-default rule is 每次只说一到两个短句。不要长。Settings → **Reply length** switches between
-short (1–2 sentences), medium (3–4) and longer (5–6). Each setting changes three things
-together — the sentence rule, the `max_tokens` ceiling (300 / 500 / 800), and the length of
-the worked example in the prompt, which anchors style more strongly than the rule does. All
-three examples validate clean at HSK 1, so the prompt never demonstrates above-level words.
+`prompt.js` holds a register profile per HSK band — a vocabulary rule, a grammar rule, and a
+worked sample — and `build()` assembles them with the length setting and the fixed
+machinery (the `[[NEED:]]` channel, the English rule).
+
+The grammar rule is the part that matters. It starts as a banlist and turns into
+permission:
+
+| | grammar |
+|---|---|
+| HSK 1 | 谁 + 做什么 only; 把, 被, 就, 才, complements and non-trivial 了 all banned |
+| HSK 2 | 了, 过, 在…呢, 一点儿, 比 unlocked; 把 and 被 still out |
+| HSK 3 | **把** unlocked, resultative complements, 因为…所以, 虽然…但是 |
+| HSK 4 | **被** unlocked, directional complements, 不但…而且, 除了…以外 |
+| HSK 5 | 使, 让, 由于, 尽管…还是, 无论…都, common 成语; no bans left |
+| HSK 6 | formal register, 书面语, 成语; "don't sacrifice expression for simplicity" |
+| HSK 7–9 | native register — 成语, 俗语, complex structures |
+
+Forbidding 把 at HSK 5 forbids grammar the learner met at HSK 2, which is what made every
+level sound the same.
+
+`test/prompt.test.js` checks the parts a person cannot eyeball: every sample validates
+against **its own level's** allowlist (a prompt that demonstrates a word the validator
+rejects teaches the model to fail), every sample from HSK 4 up is genuinely illegal at
+HSK 1 (so the ladder climbs rather than just changing wording), the bans really do
+disappear by HSK 5, and assembly keeps each level's own rules while the `[[NEED:]]` channel
+and the English rule survive intact.
+
+**Reply length** is deliberately level-neutral, so the two axes compose instead of fighting:
+short (1–2 sentences), medium (3–4), longer (5–6), each with its own `max_tokens` ceiling
+(300 / 500 / 800). A model that answers in one line is usually obeying the prompt, not
+failing.
 
 `finish_reason: "length"` now shows as a **cut off** badge. Silent truncation and a model
 choosing to stop look identical in the output and have opposite fixes.
 
-Settings also exposes the **system prompt** itself. Untouched it keeps tracking the level
-and length pickers; edit it and it is sent as written, with `{level}` and `{words}`
+Settings also exposes the **assembled system prompt** itself. Untouched it keeps tracking
+the level and length pickers; edit it and it is sent as written, with `{level}` and `{words}`
 substituted. Saving compares the text against what the box was filled with, not against a
 freshly generated default — otherwise changing the level or reply length while the panel is
 open would silently freeze the old wording as a custom prompt. `with-list` still appends the

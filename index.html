@@ -244,6 +244,7 @@ footer{
 <div id="pop"></div>
 
 <script src="validator.js"></script>
+<script src="prompt.js"></script>
 <script>
 "use strict";
 
@@ -277,28 +278,10 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v9 — 2026-08-19";
+const VERSION   = "v10 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
-/* How much the partner says per turn. The terse default is why a well-behaved
- * model answers in one short line: it is being told to. Longer settings raise
- * the sentence count, the token ceiling, and the length of the worked example,
- * which anchors the model's style more strongly than the rule does. */
-const LENGTHS = {
-  short:  { label: "short — 1-2 sentences", rule: "每次只说一到两个短句。不要长。",
-            maxTokens: 300,
-            example: "你好！你叫什么名字？" },
-  medium: { label: "medium — 3-4 sentences", rule: "每次说三到四个句子。先说你自己的事，再问学生。",
-            maxTokens: 500,
-            example: "你好！我很高兴。我是你的中文朋友。你叫什么名字？" },
-  long:   { label: "longer — 5-6 sentences", rule:
-              "每次说五到六个句子。说说你自己，说说你今天做什么，也可以说说你喜欢的东西。" +
-              "句子要短，可是要多说一点。最后问学生一个问题。",
-            maxTokens: 800,
-            example: "你好！我很高兴。我是你的中文朋友。我喜欢喝茶，也喜欢看书。" +
-                     "今天天气很好。你叫什么名字？" }
-};
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
@@ -364,7 +347,7 @@ async function loadDict() {
 
 /* ------------------------------------------------------------ system prompt */
 
-function lengthSpec() { return LENGTHS[S.replyLength] || LENGTHS.short; }
+function lengthSpec() { return HSKPrompt.LENGTHS[S.replyLength] || HSKPrompt.LENGTHS.short; }
 
 function levelLabel() {
   return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
@@ -387,28 +370,12 @@ function systemPrompt() {
 }
 
 function defaultPrompt() {
-  const rules = [
-    "你是一个中文聊天伙伴。用户是学中文的学生（" + levelLabel() + "）。",
-    "",
-    "规则：",
-    "1. 只用很简单的词。学生不认识的词，一个也不要用。",
-    "2. " + lengthSpec().rule,
-    "3. 不要用这些语法：把、被、就、才、动词补语（看得懂、跑出去、说完了）、难的「了」。",
-    "4. 学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，",
-    "   不要用英文，不要用拼音，不要用汉字注音。",
-    "5. 每次说完，问学生一个很简单的问题。",
-    "6. 如果你真的需要一个学生不会的词，写 [[NEED:词|pīn yīn|english]]，一句话最多一个。",
-    "7. 学生问「…怎么说」的时候，一定用 [[NEED:词|pīn yīn|english]] 回答，",
-    "   这样他可以看到拼音和意思。不要用英文解释。",
-    "",
-    "例子：",
-    "学生：你好！",
-    "你：" + lengthSpec().example,
-    "学生：怎么说 fried egg",
-    "你：[[NEED:煎蛋|jiān dàn|fried egg]]。你喜欢吃吗？"
-  ];
-  if (S.mode === "with-list") rules.push("", "你只可以用这些词：", wordList());
-  return rules.join("\n");
+  return HSKPrompt.build({
+    level: S.level,
+    label: levelLabel(),
+    length: S.replyLength,
+    words: S.mode === "with-list" ? wordList() : ""
+  });
 }
 
 /* -------------------------------------------------------------- NEED tokens */
@@ -1118,9 +1085,9 @@ $("#btnSet").onclick = () => {
   $("#attempts").innerHTML = ATTEMPT_CHOICES.map(n =>
     '<option value="' + n + '"' + (n === S.attempts ? " selected" : "") + ">" + n +
     (n === 1 ? " — no repairs" : n === 3 ? " — default" : "") + "</option>").join("");
-  $("#replyLength").innerHTML = Object.keys(LENGTHS).map(k =>
+  $("#replyLength").innerHTML = Object.keys(HSKPrompt.LENGTHS).map(k =>
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
-    escapeHtml(LENGTHS[k].label) + "</option>").join("");
+    escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
   fillPrompt();
   renderStats();
   renderVersion();
