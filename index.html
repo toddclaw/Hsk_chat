@@ -236,7 +236,7 @@ footer{
   <div id="vocabList" style="margin-top:12px"></div>
   <div class="note">Words you typed, added by hand, or accepted from the model's
   <code>[[NEED:…]]</code> requests. They join the session allowlist — the model may then
-  use them too — and persist on this device. Pinyin and meaning come from the HSK 3
+  use them too — and persist on this device. Pinyin and meaning come from the HSK 7-9
   reference list, or from one small model lookup when the word is not in it.</div>
   <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
 </div></div>
@@ -277,7 +277,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v8 — 2026-08-19";
+const VERSION   = "v9 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -638,7 +638,7 @@ function renderAll() {
 /* ---------------------------------------------------------- growing vocab */
 
 /* A violation span is a run of consecutive unmatchable characters, so it can
- * hold more than one word (因为苹果). Split it against the HSK 3 reference list
+ * hold more than one word (因为苹果). Split it against the HSK 7-9 reference list
  * before storing, or the vocabulary panel fills up with fused compounds. */
 function splitUnknown(run) {
   const out = [];

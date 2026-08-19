@@ -160,6 +160,36 @@ allowlist unless the custom text places it with `{words}`.
 Longer replies mean more opportunities to reach above level, so the retry counters are the
 thing to watch after raising it.
 
+## Flashcards: Pleco and Anki
+
+Neither app can be written to directly from a web page, and it is worth being precise about
+why:
+
+- **Pleco has no add-a-card URL.** Its `plecoapi://` scheme covers lookup, not card
+  creation. Cards get in through its own flashcard import.
+- **AnkiConnect is desktop-only** — an HTTP server on `localhost:8765`. A phone cannot reach
+  the desktop, and an https page cannot call plain http anyway.
+
+So the 词 panel exports a file, and hands single cards over by URL:
+
+- **Export for Anki** — CSV with `#separator` / `#html` headers, two columns: the word, and
+  pinyin / meaning / the sentence it was met in, joined with `<br>`. Anki desktop: File →
+  Import.
+- **Export for Pleco** — tab-separated headword / pinyin / definition, Pleco's documented
+  import format. Pleco: Flashcards → Import Cards.
+- **Per-word Anki link** — [AnkiMobile's `anki://x-callback-url/addnote`](https://docs.ankimobile.net/url-schemes.html),
+  configured in Settings with deck, note type and field names (they must match the
+  collection exactly, and nested decks use `::`).
+- **Look up in Pleco** in the word popover — [`plecoapi://x-callback-url/s`](https://www.plecoforums.com/threads/urls-scheme-in-pleco.5875/),
+  with `x-success` set so Pleco offers a button back to the app.
+
+Delivery is via the Web Share API, because iOS will not let a page save a file on its own;
+the share sheet can hand the file straight to Pleco or to Files. Download is the desktop
+path and clipboard the last resort.
+
+Each added word now stores the **sentence it was met in**, captured at add time because it
+cannot be recovered later. It is the most useful half of a flashcard.
+
 ## The A/B flag
 
 HSKStory reports that including the vocabulary list in the prompt makes output *worse*.
