@@ -39,11 +39,28 @@ screen*). Firefox and Samsung Internet have the same option in their menus. Ever
 works exactly as on iOS, with one exception noted under
 [flashcards](#flashcards-pleco-and-anki): AnkiDroid does not accept the one-tap card links.
 
+## Running it for free
+
+Make an account at [openrouter.ai/keys](https://openrouter.ai/keys), create a key, **add no
+credit**, and tick **free models only** in Settings. Models priced at zero cost nothing to
+call, and the picker shows what everything costs per million input tokens so the paid ones
+are one tap away when you want them.
+
+Free models are rate-limited and can be busy, so replies are slower and retries more
+frequent — which for this app means more turns ending in 我不知道。Raising *Tries before
+giving up* helps; adding credit and choosing a paid model helps more.
+
+**A key is still required, and that is not a limitation I can engineer away.** Something has
+to hold a secret to call an API, and this app has no backend — a key shipped inside a static
+page is readable by anyone who opens it and would be abused and revoked within a day. The
+alternatives are worse: a shared proxy means running a server and paying for everyone's
+conversations, and running a model in the browser means a multi-gigabyte download that
+current phones cannot hold. A free account with your own key is the honest version of free.
+
 ## What it costs
 
-You need an [OpenRouter](https://openrouter.ai/keys) account with a little credit. A turn
-sends roughly 1k tokens and gets back ~100, so at cheap-model rates it is a fraction of a
-cent; a retry costs another round. **Optimise for retry rate, not sticker price** — a cheap
+If you do add credit: a turn sends roughly 1k tokens and gets back ~100, so at cheap-model
+rates it is a fraction of a cent; a retry costs another round. **Optimise for retry rate, not sticker price** — a cheap
 model that averages two retries costs more, and feels slower, than a better one that gets
 it right first time. The A/B counters in Settings measure exactly that.
 
