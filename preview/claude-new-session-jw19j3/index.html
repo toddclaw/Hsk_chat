@@ -365,7 +365,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v18 — 2026-08-19";
+const VERSION   = "v19 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -520,26 +520,29 @@ function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
 /* The prompt actually sent. A custom one is used verbatim apart from the two
  * placeholders, so the level and length selectors stop rewriting it -- they
  * still drive validation and the token ceiling, which is where they matter. */
-function systemPrompt(offer, reuse) {
+function systemPrompt(offer, reuse, required) {
   if (S.prompt) {
     let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
     if (S.mode === "with-list" && S.prompt.indexOf("{words}") === -1) {
       out += "\n\n你只可以用这些词：\n" + wordList();
     }
     // A custom prompt still gets the pacing lines; they are mechanism, not style.
-    if (offer && offer.length) {
+    if (required) {
+      out += "\n\n" + toScript("这次一定要用「") + required + toScript("」这个词。");
+    } else if (offer && offer.length) {
       out += "\n\n" + toScript("这次你可以用这些新词里的一个：") +
              offer.map(e => e.w).join("、") + toScript("。用一个就好。");
     }
     return out;
   }
-  return defaultPrompt(offer, reuse);
+  return defaultPrompt(offer, reuse, required);
 }
 
-function defaultPrompt(offer, reuse) {
+function defaultPrompt(offer, reuse, required) {
   const p = HSKPrompt.build({
     offer: offer || [],
     reuse: reuse || [],
+    require: required || "",
     level: S.level,
     label: levelLabel(),
     length: S.replyLength,
@@ -657,9 +660,12 @@ async function turn() {
   const offer = (S.pace.on && b.credits > 0)
     ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE) : [];
   const reuse = S.learning.filter(HSKPace.isNew).slice(-6);
+  // After enough declined offers the top word becomes a condition of the reply.
+  const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
 
-  const scratch = [{ role: "system", content: systemPrompt(offer, reuse) }].concat(windowed());
-  let attempt = 0, last = null;
+  const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required) }]
+    .concat(windowed());
+  let attempt = 0, last = null, missed = null;
 
   while (attempt < S.attempts) {
     attempt++;
@@ -680,9 +686,28 @@ async function turn() {
     console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
 
     if (!violations.length) {
-      return { text: ex.text, needs: ex.needs, attempts: attempt,
-               truncated: callModel.lastFinish === "length",
-               offer: offer, lex: lex };
+      /* A reply that is otherwise legal but omits the required word is not a
+       * vocabulary failure, so it is kept as the best answer so far and asked
+       * about again rather than thrown away. */
+      if (required && HSKPace.spot(HSK.segment(ex.text, lex), [required]).length === 0) {
+        missed = missed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
+        if (attempt < S.attempts) {
+          scratch.push({ role: "assistant", content: raw });
+          scratch.push({ role: "user", content:
+            "请一定要用「" + required + "」这个词，放在一句话里，再说一次。其他的规则不变。" });
+          console.log("[require]", required);
+          continue;
+        }
+      } else {
+        return { text: ex.text, needs: ex.needs, attempts: attempt,
+                 truncated: callModel.lastFinish === "length",
+                 offer: offer, required: required, lex: lex };
+      }
+    }
+    if (!violations.length) {
+      // Attempts exhausted with the word still missing: show the good reply.
+      return Object.assign({}, missed, { offer: offer, required: required, softMiss: true,
+                                         truncated: callModel.lastFinish === "length" });
     }
 
     last = ex.text;
@@ -694,6 +719,10 @@ async function turn() {
 
   // Same shape as a successful turn: the caller settles pacing against every
   // result, and a give-up still put characters on the screen to be read.
+  // A reply that only ever lacked the required word still beats the fallback.
+  if (missed) {
+    return Object.assign({}, missed, { offer: offer, required: required, softMiss: true });
+  }
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
     needs: [], attempts: attempt, failed: true, dropped: last,
@@ -1028,6 +1057,11 @@ function settlePace(res) {
     const e = learned(w);
     if (e) e.seen = (e.seen || 0) + 1;
   });
+
+  /* Declines drive the escalation. A turn that offered something and came back
+   * without it counts; any introduction clears the count. */
+  if (introduced.length) b.declines = 0;
+  else if (offered.length) b.declines = (b.declines || 0) + 1;
 
   Object.assign(b, HSKPace.earn(b, res.text, S.pace.rate));
   store.set(K.learning, S.learning);

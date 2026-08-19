@@ -301,6 +301,15 @@ you are on.
   and asks for one to be used in a natural sentence, declining only if none can be. A word
   forced in reads as a vocabulary drill, so a declined offer carries to the next turn.
 
+- **Escalation** — asking politely does not work with every model; some read the offer as
+  optional and never take it, however the rule is worded. After **two** turns where an offer
+  went unused, the commonest word stops being a suggestion and becomes a condition of the
+  reply, enforced by the same repair loop that enforces vocabulary rather than by stronger
+  wording: a reply without it is sent back asking for it. A reply that is otherwise legal but
+  still lacks the word is kept and shown rather than discarded for the fallback — the
+  conversation is never degraded to make a point — and the decline is counted so the next
+  turn tries again.
+
   **Rule 1 has to grant the exception explicitly.** Left absolute — *never use a word the
   student does not know* — it forbids exactly what the offer permits, and a model resolving
   that contradiction obeys the rule stated first and stated without exception. The offer was
