@@ -14,7 +14,11 @@
 
   // Punctuation the learner never has to look up.
   var CJK_PUNCT = "，。？！、；：“”‘’（）《》〈〉【】…—·～￥、｜";
-  var ASCII_OK = " \t\r\n.,?!;:'\"()[]{}<>-–—/\\*#@%&+=_~`$^|0123456789";
+  /* Deliberately narrow. Everything here is invisible to the learner as
+   * punctuation; brackets, markdown markers and the like are not punctuation at
+   * all but model scaffolding, and letting them count as "always allowed" is how
+   * subtitle timestamps such as [0.0:] reached the screen unchallenged. */
+  var ASCII_OK = " \t\r\n.,?!;:'\"()-–—0123456789";
 
   // Number characters combine freely (二十三, 一百五十) but only ever count as
   // allowed when every character in the run is itself in the allowlist, so this
@@ -30,6 +34,22 @@
     { w: "嗯", p: "ǹg", d: "mm; uh-huh" },
     { w: "哦", p: "ó", d: "oh" }
   ];
+
+  /* Formatting the model wrapped around its answer rather than said. Bracketed
+   * groups with no Chinese in them (timestamps, [music], [Speaker 1]) and
+   * markdown emphasis are removed before validation: they are not vocabulary
+   * mistakes, so making the repair loop pay for them would be wasteful, and
+   * showing them to a learner is worse. Anything left over is still a violation.
+   */
+  function stripScaffold(text) {
+    return String(text || "")
+      .replace(/\[[^\]\n]*\]/g, function (m) { return /[一-鿿]/.test(m) ? m : ""; })
+      .replace(/[*_`#]+/g, "")
+      .replace(/^[ \t]+/gm, "")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
 
   function isPunct(ch) {
     return ASCII_OK.indexOf(ch) !== -1 || CJK_PUNCT.indexOf(ch) !== -1;
@@ -174,7 +194,9 @@
     segment: segment,
     validate: validate,
     suggest: suggest,
-    isPunct: isPunct
+    isPunct: isPunct,
+    stripScaffold: stripScaffold,
+    isAscii: function (t) { return /^[\x00-\x7F]*$/.test(t); }
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

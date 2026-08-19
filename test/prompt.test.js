@@ -117,12 +117,50 @@ for (const n of levels) {
 // The conversion has to actually do something, or the checks above are vacuous.
 check(toTrad("我学习中文", 1) === "我學習中文", "conversion is word-level and real",
   toTrad("我学习中文", 1));
-check(P.build({ level: 1, label: "HSK 1", length: "short", script: "trad" }).includes("8. "),
+// Assert on the rule, not its number: numbering is presentation and shifts
+// whenever a rule is added.
+check(P.build({ level: 1, label: "HSK 1", length: "short", script: "trad" }).includes("繁体字"),
   "traditional mode adds the write-in-traditional rule");
-check(!P.build({ level: 1, label: "HSK 1", length: "short" }).includes("8. "),
+check(!P.build({ level: 1, label: "HSK 1", length: "short" }).includes("繁体字"),
   "simplified mode does not");
+// Every prompt tells the model not to wrap its answer in scaffolding.
+for (const n of levels) {
+  check(P.build({ level: n, label: "HSK " + n, length: "short" }).includes("[0.0:]"),
+    `L${n}: warns against timestamps and brackets`);
+}
+// The rules the model reads must be numbered in order.
+const numbered = P.build({ level: 1, label: "HSK 1", length: "short", script: "trad",
+  offer: [{ w: "让" }], reuse: [{ w: "但" }] })
+  .split("\n").filter(l => /^\d+\./.test(l)).map(l => parseInt(l, 10));
+check(numbered.every((n, i) => i === 0 || n > numbered[i - 1]),
+  "rules are numbered in ascending order", numbered.join(","));
 
-// 8. An unknown level must not produce a prompt with no constraints at all.
+/* 8. The offer must not contradict the vocabulary rule. Left absolute, rule 1
+ *    forbids exactly what the offer permits, and a model obeying the rule
+ *    stated first ignores the offer every turn -- which is what happened. */
+const offered = P.build({ level: 1, label: "HSK 1", length: "short",
+  offer: [{ w: "让" }, { w: "但" }] });
+const rule1 = offered.split("\n").find(l => l.startsWith("1. "));
+check(/第 10 条|除外/.test(rule1), "rule 1 carves out an exception when words are on offer", rule1);
+const plain1 = P.build({ level: 1, label: "HSK 1", length: "short" })
+  .split("\n").find(l => l.startsWith("1. "));
+check(!/除外/.test(plain1), "and stays absolute when nothing is on offer", plain1);
+check(offered.includes("让、但"), "the offered words are named");
+check(/请用/.test(offered.split("\n").find(l => l.startsWith("10. "))),
+  "the offer asks for a word rather than merely permitting one");
+
+/* 9. Forcing. When the offer has been declined too often the word becomes a
+ *    condition rather than a suggestion, and the wording has to stop hedging. */
+const forced = P.build({ level: 1, label: "HSK 1", length: "short",
+  offer: [{ w: "让" }, { w: "但" }], require: "让" });
+const rule10 = forced.split("\n").find(l => l.startsWith("10. "));
+check(/一定要用/.test(rule10) && rule10.includes("让"), "the required word is demanded", rule10);
+check(!/都不用/.test(rule10), "and the escape clause is gone", rule10);
+check(!rule10.includes("但"), "only the one word is named, so there is no ambiguity", rule10);
+check(/除外/.test(forced.split("\n").find(l => l.startsWith("1. "))),
+  "rule 1 still grants the exception while forcing");
+
+// 10. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);

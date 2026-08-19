@@ -117,7 +117,8 @@
    * `words` is the allowlist joined by spaces, appended only in with-list mode.
    * `convert` rewrites app-authored Chinese into the active script; it runs over
    * the rules and the sample but never over `words`, which the caller already
-   * supplies in that script. */
+   * supplies in that script. `offer` are next-level words permitted this turn,
+   * `reuse` are recently introduced ones worth repeating. */
   function build(opts) {
     var style = styleFor(opts.level);
     var len = LENGTHS[opts.length] || LENGTHS.short;
@@ -126,7 +127,13 @@
       convert("你是一个中文聊天伙伴。用户是学中文的学生") + "（" + opts.label + "）。",
       "",
       convert("规则：") ,
-      "1. " + convert(style.vocab),
+      /* When words are on offer, rule 1 has to say so. Left absolute it
+       * contradicts the offer outright -- "never use a word the student does
+       * not know" against "you may use one of these" -- and a model resolving
+       * that conflict obeys the rule stated first and stated without exception,
+       * so the offer is silently ignored every turn. */
+      "1. " + convert(style.vocab) +
+        ((opts.offer && opts.offer.length) ? convert("（第 10 条的新词除外。）") : ""),
       "2. " + convert(len.rule),
       "3. " + convert(style.grammar),
       "4. " + convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，"),
@@ -136,11 +143,31 @@
               "|pīn yīn|english]]" + convert("，一句话最多一个。"),
       "7. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
               "|pīn yīn|english]] " + convert("回答，"),
-      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。")
+      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。"),
+      "8. " + convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。")
     ];
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
-      lines.push("8. " + convert("请用繁体字回答，不要用简体字。"));
+      lines.push("9. " + convert("请用繁体字回答，不要用简体字。"));
+    }
+    /* Gradual introduction. The offer is permission, not an instruction: a word
+     * forced into a conversation it does not fit reads as a vocabulary drill,
+     * and the credit simply carries to the next turn instead. */
+    if (opts.offer && opts.offer.length) {
+      if (opts.require) {
+        // No longer a suggestion: the reply is rejected without it.
+        lines.push("10. " + convert("这次一定要用「") + opts.require +
+                   convert("」这个词，放在一句话里。这是必须的。"));
+      } else {
+        lines.push("10. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
+                   opts.offer.map(function (e) { return e.w; }).join("、") +
+                   convert("。只用一个，放在自然的句子里；" +
+                           "只有在实在放不进去的时候，才一个都不用。"));
+      }
+    }
+    if (opts.reuse && opts.reuse.length) {
+      lines.push("11. " + convert("学生最近学了这些词，请多用：") +
+                 opts.reuse.map(function (e) { return e.w; }).join("、") + convert("。"));
     }
     lines.push(
       "",
