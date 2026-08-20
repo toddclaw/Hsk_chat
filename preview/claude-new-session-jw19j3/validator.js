@@ -13,7 +13,7 @@
   "use strict";
 
   // Punctuation the learner never has to look up.
-  var CJK_PUNCT = "，。？！、；：“”‘’（）《》〈〉【】…—·～￥、｜";
+  var CJK_PUNCT = "，。？！、；：“”‘’「」（）《》〈〉【】…—·～￥、｜";
   /* Deliberately narrow. Everything here is invisible to the learner as
    * punctuation; brackets, markdown markers and the like are not punctuation at
    * all but model scaffolding, and letting them count as "always allowed" is how

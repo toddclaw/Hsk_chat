@@ -285,6 +285,27 @@ assertions would pass vacuously on unconverted text.
 
 Words you added keep the form you added them in; switching scripts does not rewrite them.
 
+## Correcting the learner's own Chinese
+
+A rule at every level: when the student's grammar or word choice is off, restate what they
+meant correctly — in words they already have, simplified further if needed — and then
+actually continue the conversation rather than only correcting. That last clause matters:
+without it, a correction reads as a substitute for a reply, which is the same failure shape
+as the echo problem it sits next to in the prompt (rule 6) but for a different reason —
+an echo hands the sentence back unchanged, a correction restates it fixed.
+
+`prompt.js` numbers its rules by array position now rather than by hand-typed digits, after
+inserting this rule shifted every rule below it and required editing five call sites and two
+tests to keep up. A test asserts the numbering is gap-free and collision-free across every
+level with every conditional rule (script, offer, required word, reuse) active at once — the
+exact combination that broke before.
+
+Finding a natural mocked correction (你说「我很喜欢喝茶」。) also caught a real gap: 「」
+corner quotation marks — the quoting style the prompt's own instructions use — were not in
+the always-allowed punctuation set, so a model quoting a correction back in that style would
+have had it rejected as vocabulary. Fixed in `validator.js`, with a fixture proving the
+brackets survive `stripScaffold()` rather than being taken for model formatting.
+
 # The prompt grows with the level
 
 `prompt.js` holds a register profile per band — a vocabulary rule, a grammar rule, a worked
