@@ -351,6 +351,26 @@ otherwise changing the level while the panel is open would silently freeze the o
 
 ---
 
+# Words you already know
+
+Settings → **Words I already know at the next level** opens a searchable, checkbox list of
+the next level's pool — the same list pacing draws from, paged 150 at a time so a jump of a
+few thousand words (HSK 6 → 7–9) does not render as one giant DOM dump. Ticking a word joins
+it to the allowlist immediately: it stops being flagged, and pacing stops spending a credit
+offering something you already had.
+
+It is kept as its own list (`S.known`), separate from words the app taught you (`S.extra`):
+it has no sentence context, was not learned through a conversation, and so stays out of the
+词 panel and the flashcard exports on purpose — this is a suppression list, not vocabulary
+earned.
+
+The two pools that use this data stay genuinely separate. The browser needs every next-level
+word listed, ticked ones included, so you can change your mind and untick them; pacing needs
+ticked ones removed from what it may offer, or a credit gets spent confirming something you
+already know. One list serves both: `S.pool` never excludes known-ahead words, and pacing
+filters them out only at the moment it draws a slate. Excluding them from `S.pool` itself was
+the first attempt, and it meant a ticked checkbox made its own row vanish with no way back.
+
 # Meeting new words at a graded-reader pace
 
 Optional, off by default, in Settings. Graded readers introduce roughly one unknown word per
