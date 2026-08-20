@@ -68,6 +68,20 @@ check(HSK.validate(HSK.stripScaffold("[0.0:] 我很好。"), lex).length === 0,
   "and stripping them leaves a clean reply");
 check(HSK.isAscii("50%") && !HSK.isAscii("我"), "isAscii distinguishes the learner's own symbols");
 
+/* Echoing. A partner under tight vocabulary and length limits can satisfy
+ * every rule by handing the learner's question back -- 你喜欢喝茶吗？ answered
+ * with 你喜欢喝吗？ -- which reads as not having understood a word of it. */
+const l0lex = HSK.buildLexicon(
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk0.json"), "utf8")));
+for (const c of fx.echo) {
+  const got = HSK.echoesQuestion(c.reply, c.said, l0lex);
+  check(got === c.echo, `echo (${c.echo ? "yes" : "no"}): ${c.why}`,
+    `${c.reply} ← ${c.said}`);
+}
+check(HSK.contentWords("我也很喜欢喝茶。", l0lex).join() === ["喜欢", "喝", "茶"].join(),
+  "content words drop the function words that say nothing about topic",
+  HSK.contentWords("我也很喜欢喝茶。", l0lex).join());
+
 const sug = HSK.suggest("想要", lex, 4).map(e => e.w);
 check(sug.length > 0 && sug.every(w => /[想要]/.test(w)),
   "suggest: returns allowlist entries sharing a character", JSON.stringify(sug));
@@ -96,6 +110,50 @@ for (const file of levels) {
   }
   check(miss === 0, `${file}: all ${entries.length} entries validate against their own list`, `${miss} failed`);
 }
+
+/* Levels must nest. HSK 1.0 and HSK 3.0 disagree about 14 words -- 猫, 苹果,
+ * 怎么样, 火车站 among them -- and without nesting a learner moving from HSK 0.5
+ * to HSK 1 would lose vocabulary they had been using. tools/nest_levels.py
+ * carries lower levels upward; this is what keeps it true. */
+const ordered = levels.slice().sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+let below = null;
+for (const file of ordered) {
+  const words = new Set(JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../data", file), "utf8")).map(e => e.w));
+  if (below) {
+    const lost = [...below.words].filter(w => !words.has(w));
+    check(lost.length === 0, `${file} contains everything in ${below.file}`,
+      "would lose: " + lost.slice(0, 8).join(" "));
+  }
+  below = { file: file, words: words };
+}
+
+/* Word boundaries for what the learner just met. The level's own lexicon cuts
+ * in the wrong place -- it only knows that level's words -- so the reference
+ * dictionary decides. Getting this wrong stores a fragment as a word AND
+ * legalises it, so the partner starts using it back. */
+const refLex = HSK.buildLexicon(
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk7.json"), "utf8")));
+for (const c of fx.boundaries) {
+  const lvl = HSK.buildLexicon(
+    JSON.parse(fs.readFileSync(path.join(__dirname, `../data/hsk${c.level}.json`), "utf8")));
+  const learned = [];
+  HSK.validate(c.t, lvl).filter(v => v.kind === "bad" && !HSK.isAscii(v.text))
+    .forEach(v => HSK.wordsAt(c.t, v.start, v.end, refLex).forEach(w => learned.push(w)));
+  const same = learned.length === c.learn.length &&
+    c.learn.every(w => learned.includes(w));
+  check(same, `boundaries at HSK ${c.level}: ${c.t}`,
+    `want [${c.learn}] got [${learned}] — ${c.why}`);
+}
+// 起走 is the span HSK 0.5 flags: 我0 喜1 欢2 跟3 狗4 一5 起6 走7
+check(HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join() === "一起,走",
+  "the reported case resolves to 一起 and 走, never the fragment 起走",
+  HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join());
+check(HSK.splitRun("托德", refLex).join() === "托德",
+  "an unknown run stays whole rather than becoming single characters");
+check(HSK.wordsAt("因为苹果", 0, 4, refLex).join() === "因为,苹果",
+  "a run holding two words is still split into both",
+  HSK.wordsAt("因为苹果", 0, 4, refLex).join());
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

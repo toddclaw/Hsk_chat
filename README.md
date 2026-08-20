@@ -114,11 +114,21 @@ than reasoning ability.
 # What the app does
 
 **Levels.** The picker in the header switches the whole allowlist between **HSK 0.5** and the
-combined 7–9 band, mid-conversation. HSK 0.5 is a first-week level of 150 words: corpus
-frequency alone is the wrong ordering for it — 谢谢, 再见 and 名字 are rare in a corpus and
-taught in lesson one — so `tools/make_hsk0.py` seeds the course-essential words and fills the
-rest by frequency from HSK 1. It is always a strict subset of HSK 1, and its grammar rule is
-stricter: no 了 at all, and sentences under about eight characters. Existing messages re-render against the new list.
+combined 7–9 band, mid-conversation. HSK 0.5 is **the old HSK 1.0 syllabus** — the
+official 150-word level 1 from before HSK 3.0 — and its grammar rule is stricter than HSK 1's:
+no 了 at all, and sentences under about eight characters.
+
+A frequency-derived approximation of that list agreed with the real one only 55% of the time,
+which is a good measure of how far corpus frequency is from a teaching order: the official list
+is concrete and classroom-shaped (七 八 九 十, 医院 学校 商店, 桌子 椅子 杯子, 狗 猫, 不客气
+没关系), while frequency gives function words and abstractions (就 还 过 着 觉得 重要 非常).
+
+**The two standards genuinely disagree**, and 14 of the official 150 are not in HSK 3.0
+level 1: 出租车 饭馆 分钟 狗 猫 漂亮 喂 椅子 怎么样 are level 2, 后面 苹果 前面 are level 3,
+些 is level 4, and 火车站 is absent entirely. Left alone that would mean *losing* 猫 on moving
+from HSK 0.5 to HSK 1, so `tools/nest_levels.py` carries every level's words upward into all
+the levels above it. The lower level wins. This is the one deliberate deviation from the
+HSK 3.0 lists, and `test/validator.test.js` fails if the levels ever stop nesting. Existing messages re-render against the new list.
 
 **Conversation starters.** A scrollable row above the composer, in that level's own
 vocabulary. At HSK 1 the hard part is not saying a sentence, it is knowing which sentence
@@ -208,6 +218,13 @@ fixes.
   violation kind and its own repair line. Your English is the opposite case and is sent
   verbatim. The asymmetry lives at the call sites; `validate()` reports the kind and lets
   the caller decide.
+- **Echoing is a repair, not an answer.** A partner under tight vocabulary and length limits
+  can satisfy every rule by handing the learner's own question back — 你喜欢喝茶吗？ answered
+  with 你喜欢喝吗？ — which reads as not having understood a word of it. `echoesQuestion()`
+  compares content words: if the reply's closing question introduces nothing the learner did
+  not just say, it is an echo, and the loop asks once for a real answer. The rules were all
+  constraints and none of them asked for a *reply*, so the prompt now also says to answer
+  first, add something, then ask something new — with a worked example of doing so.
 - **Model scaffolding is stripped, not repaired.** A model can wrap its answer in subtitle
   timestamps (`[0.0:] 我喜欢听中文歌。`), markdown emphasis or headings. That is formatting,
   not a vocabulary mistake, so `stripScaffold()` removes it before validation rather than
@@ -365,11 +382,16 @@ Two problems the naive version gets wrong, both handled:
 
 - A violation span is a *run* of unmatchable characters, so it can fuse two words
   (因为苹果). Runs are split against the reference list before being stored.
-- A violation can equally be *part* of a word: 西 and 问 are in HSK 1, so typing 西瓜 or
-  问题 only flags 瓜 and 题. The span is grown against the reference list (题 → 问题), and
-  when the whole word is outside HSK 1–9 entirely (西瓜 is), the gloss lookup receives the
-  sentence and names the word the fragment belongs to — accepted only if that word occurs
-  in the sentence and contains the fragment.
+- A violation is cut where the *level's* lexicon happens to end, which is rarely where the
+  word ends. At HSK 0.5, 我喜欢跟狗一起走 flags 起走 — 一 is known, 起 and 走 are not — and
+  storing that fragment teaches the app a word that does not exist, then legalises it, so the
+  partner starts using 起走 back. `wordsAt()` reads the span off a *dictionary* segmentation
+  of the same sentence (我 喜欢 跟 狗 一起 走) and stores the words overlapping it: 一起 and 走.
+  It trusts that only when it finds a real multi-character word, because the dictionary also
+  holds most single characters and 托德 would otherwise be filed as 托 and 德.
+- When the whole word is outside HSK 1–9 entirely (西瓜 is), the gloss lookup receives the
+  sentence and names the word the fragment belongs to — accepted only if that word occurs in
+  the sentence and contains the fragment.
 
 The reply carrying a request is validated against a lexicon that *includes* that request's
 words. Without this the channel defeats itself: the wrapper is stripped before validation,

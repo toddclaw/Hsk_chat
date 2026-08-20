@@ -375,7 +375,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v20 — 2026-08-19";
+const VERSION   = "v23 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -426,6 +426,8 @@ const S = {
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
   pool:    [],                                // next level minus this one
   simpLex: null,                              // simplified lexicon, for converting prompt text
+  refList: [],                                // the reference dictionary, unindexed
+  refLex:  null,                              // and as a lexicon, for re-segmenting
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
   stats:   store.get(K.stats, {}),
@@ -501,6 +503,8 @@ async function loadDict() {
         S.dict.set(e.w, e);
         if (e.t) S.dict.set(e.t, { w: e.t, p: e.p, d: e.d, other: e.w });
       });
+      S.refList = list;
+      S.refLex = HSK.buildLexicon(inScript(list));
       S.simpLex = HSK.buildLexicon(list);
       if (S.script === "trad") { renderStarters(); renderAll(); }
     }
@@ -678,7 +682,9 @@ async function turn() {
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required) }]
     .concat(windowed());
-  let attempt = 0, last = null, missed = null;
+  // What the learner just said, for the echo check below.
+  const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
+  let attempt = 0, last = null, missed = null, echoed = null;
 
   while (attempt < S.attempts) {
     attempt++;
@@ -702,6 +708,20 @@ async function turn() {
       /* A reply that is otherwise legal but omits the required word is not a
        * vocabulary failure, so it is kept as the best answer so far and asked
        * about again rather than thrown away. */
+      /* A reply that hands the learner's own question back satisfies every
+       * rule and still reads as not having understood. Ask once for a real
+       * answer; keep this one in case the second attempt is no better. */
+      if (!required && HSK.echoesQuestion(ex.text, saidNow, lex)) {
+        echoed = echoed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
+        if (attempt < S.attempts) {
+          scratch.push({ role: "assistant", content: raw });
+          scratch.push({ role: "user", content:
+            "你把我刚才的问题又问了一次。请先回答我说的话，再说一点你自己的事，" +
+            "最后问一个新的问题。" });
+          console.log("[echo]", ex.text);
+          continue;
+        }
+      }
       if (required && HSKPace.spot(HSK.segment(ex.text, lex), [required]).length === 0) {
         missed = missed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
         if (attempt < S.attempts) {
@@ -718,9 +738,10 @@ async function turn() {
       }
     }
     if (!violations.length) {
-      // Attempts exhausted with the word still missing: show the good reply.
-      return Object.assign({}, missed, { offer: offer, required: required, softMiss: true,
-                                         truncated: callModel.lastFinish === "length" });
+      // Attempts exhausted: show the best legal reply rather than nothing.
+      return Object.assign({}, missed || echoed,
+        { offer: offer, required: required, softMiss: true,
+          truncated: callModel.lastFinish === "length" });
     }
 
     last = ex.text;
@@ -732,9 +753,11 @@ async function turn() {
 
   // Same shape as a successful turn: the caller settles pacing against every
   // result, and a give-up still put characters on the screen to be read.
-  // A reply that only ever lacked the required word still beats the fallback.
-  if (missed) {
-    return Object.assign({}, missed, { offer: offer, required: required, softMiss: true });
+  // A reply that only ever lacked the required word, or only echoed, still
+  // beats the fallback.
+  if (missed || echoed) {
+    return Object.assign({}, missed || echoed,
+      { offer: offer, required: required, softMiss: true });
   }
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
@@ -938,38 +961,15 @@ function renderAll() {
 
 /* ---------------------------------------------------------- growing vocab */
 
-/* A violation span is a run of consecutive unmatchable characters, so it can
- * hold more than one word (因为苹果). Split it against the HSK 7-9 reference list
- * before storing, or the vocabulary panel fills up with fused compounds. */
-function splitUnknown(run) {
-  const out = [];
-  let chunk = "", i = 0;
-  const flush = () => { if (chunk) { out.push(chunk); chunk = ""; } };
-  while (i < run.length) {
-    let hit = 0;
-    for (let len = Math.min(4, run.length - i); len > 1; len--) {
-      if (S.dict.has(run.slice(i, i + len))) { hit = len; break; }
-    }
-    if (hit) { flush(); out.push(run.slice(i, i + hit)); i += hit; continue; }
-    chunk += run[i++];
-    if (chunk.length >= 4) flush();   // never store a run longer than a plausible word
-  }
-  flush();
-  return out;
+/* Word boundaries are decided in validator.js, where they can be tested
+ * directly against real data: a level's own lexicon cuts in the wrong place,
+ * so the reference dictionary is consulted for what the learner actually met. */
+function wordsAt(text, start, end) {
+  return HSK.wordsAt(text, start, end, S.refLex);
 }
 
-/* A violation can be part of a word rather than the whole of it: 西 and 问 are
- * in HSK 1, so typing 西瓜 or 问题 only flags 瓜 and 题. Grow the span outwards
- * against the reference list so the learner gets the word, not the orphan. */
-function expandWord(text, start, end) {
-  let best = "";
-  for (let s = Math.max(0, end - 4); s <= start; s++) {
-    for (let e = Math.min(text.length, s + 4); e >= end; e--) {
-      const cand = text.slice(s, e);
-      if (cand.length > best.length && S.dict.has(cand)) best = cand;
-    }
-  }
-  return best || text.slice(start, end);
+function splitUnknown(run) {
+  return HSK.splitRun(run, S.refLex);
 }
 
 // Add entries, gloss them from the reference list, and return the ones still
@@ -997,11 +997,7 @@ function learnFromInput(text) {
   const runs = HSK.validate(text, S.lex)
     .filter(v => v.kind === "bad" && !HSK.isAscii(v.text));
   const words = [];
-  runs.forEach(v => {
-    const whole = expandWord(text, v.start, v.end);
-    if (whole.length > v.text.length) words.push(whole);
-    else splitUnknown(v.text).forEach(w => words.push(w));
-  });
+  runs.forEach(v => wordsAt(text, v.start, v.end).forEach(w => words.push(w)));
   return addWords(words, text);
 }
 
@@ -1303,11 +1299,12 @@ function autosize() {
 
 /* --------------------------------------------------------------- popover */
 
-// What the Add button will actually store, once the span is grown to a word.
+// What the Add button will actually store, once the span is resolved to words.
 function popTarget(el, w) {
   const bubble = el.closest(".bubble");
   if (!bubble || !bubble.dataset.src) return w;
-  return expandWord(bubble.dataset.src, Number(el.dataset.s), Number(el.dataset.s) + w.length);
+  const at = Number(el.dataset.s);
+  return wordsAt(bubble.dataset.src, at, at + w.length).join("、");
 }
 
 function showPopover(el) {
@@ -1333,8 +1330,8 @@ function showPopover(el) {
   const add = pop.querySelector("#popAdd");
   if (add) add.onclick = () => {
     const src = (el.closest(".bubble") || {}).dataset, at = Number(el.dataset.s);
-    const whole = src && src.src ? expandWord(src.src, at, at + w.length) : w;
-    const missing = addWords(whole.length > w.length ? [whole] : splitUnknown(w), src && src.src);
+    const words = (src && src.src) ? wordsAt(src.src, at, at + w.length) : splitUnknown(w);
+    const missing = addWords(words, src && src.src);
     pop.classList.remove("open");
     updateMirror(); renderAll();
     glossWords(missing, src && src.src);
