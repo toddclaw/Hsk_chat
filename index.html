@@ -79,6 +79,9 @@ header button{padding:8px 10px; flex:0 0 auto}
 .pinyin-extra .w.bad::before{display:block}
 .w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
 .w.extra>.t{border-bottom:2px solid var(--ok)}
+/* A word you added stays usable forever, but it is only highlighted the very
+   first time it turns up in the conversation -- after that it is ordinary
+   text, or the whole chat turns green as your vocabulary grows. */
 .w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
 .w.fresh>.t{background:#2a2f45; border-bottom:2px solid var(--accent); border-radius:4px; padding:0 2px}
 .newword{margin-top:8px; padding:10px 12px; background:var(--panel2);
@@ -392,7 +395,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v24 — 2026-08-20";
+const VERSION   = "v25 — 2026-08-20";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -810,7 +813,7 @@ function renderStats() {
 /* Latin letters are a violation in the model's output -- a reply in English or
  * pinyin would otherwise pass -- but never in the learner's own message, where
  * English is a deliberate escape hatch for asking how to say something. */
-function tokenSpan(tok, needs, flagLatin) {
+function tokenSpan(tok, needs, flagLatin, shownExtra) {
   const need = needs && needs.find(n => n.start === tok.start && n.w === tok.text);
   if (tok.kind === "punct") return escapeHtml(tok.text);
   const e = tok.entry || need || {};
@@ -818,8 +821,18 @@ function tokenSpan(tok, needs, flagLatin) {
   const ownAscii = flagLatin === false && HSK.isAscii(tok.text);
   if (!ownAscii && (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false))) cls.push("bad");
   if (need) cls.push("need");
-  else if (isExtra(tok.text)) cls.push("extra");
-  else {
+  else if (isExtra(tok.text)) {
+    /* Highlight only the first time this word appears in the whole visible
+     * history, tracked per render pass in `shownExtra`. Every render is a full
+     * renderAll() over S.history in order, so a fresh Set each time gives a
+     * stable answer with nothing to fall out of sync. */
+    if (shownExtra && shownExtra.has(tok.text)) {
+      // already shown once -- render as ordinary text
+    } else {
+      cls.push("extra");
+      if (shownExtra) shownExtra.add(tok.text);
+    }
+  } else {
     const l = learned(tok.text);
     if (l && HSKPace.isNew(l)) cls.push("fresh");
   }
@@ -890,7 +903,7 @@ function renderNotice(turnObj) {
   return el;
 }
 
-function renderMessage(turnObj, idx) {
+function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
   const el = document.createElement("div");
   el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
@@ -904,7 +917,7 @@ function renderMessage(turnObj, idx) {
   const lex = (turnObj.needs && turnObj.needs.length)
     ? HSK.buildLexicon(S.base, S.extra.concat(turnObj.needs)) : S.lex;
   const toks = HSK.segment(turnObj.text, lex);
-  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user")).join("");
+  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);
 
   const bits = [];
@@ -973,7 +986,8 @@ function renderAll() {
       ' list and rewritten until they fit.</div>';
     return;
   }
-  S.history.forEach(renderMessage);
+  const shownExtra = new Set();   // added words already highlighted once, this pass
+  S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
 }
 

@@ -154,7 +154,11 @@ you ask for a word you do not have.
 
 **Words you meet are learned.** Four routes, all landing in the 词 panel: typed by you
 (automatic, toggleable), tapped in a message, added by hand, or requested by the model.
-Added words join the allowlist, so the partner may use them too.
+Added words join the allowlist permanently, so the partner may use them too — but are
+highlighted green only the **first** time they appear anywhere in the visible history.
+After that they render as ordinary text; the point was to notice the word once, not to
+keep flagging it forever. That is computed fresh on every render (`renderAll()` always
+redraws the full history in order), so there is no counter to fall out of sync.
 
 **Copy and speak** on every message, and in the word popover. Speech uses the device's own
 Chinese voice through the Web Speech API — with none installed the browser either stays
