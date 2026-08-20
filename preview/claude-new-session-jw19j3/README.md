@@ -382,11 +382,16 @@ Two problems the naive version gets wrong, both handled:
 
 - A violation span is a *run* of unmatchable characters, so it can fuse two words
   (因为苹果). Runs are split against the reference list before being stored.
-- A violation can equally be *part* of a word: 西 and 问 are in HSK 1, so typing 西瓜 or
-  问题 only flags 瓜 and 题. The span is grown against the reference list (题 → 问题), and
-  when the whole word is outside HSK 1–9 entirely (西瓜 is), the gloss lookup receives the
-  sentence and names the word the fragment belongs to — accepted only if that word occurs
-  in the sentence and contains the fragment.
+- A violation is cut where the *level's* lexicon happens to end, which is rarely where the
+  word ends. At HSK 0.5, 我喜欢跟狗一起走 flags 起走 — 一 is known, 起 and 走 are not — and
+  storing that fragment teaches the app a word that does not exist, then legalises it, so the
+  partner starts using 起走 back. `wordsAt()` reads the span off a *dictionary* segmentation
+  of the same sentence (我 喜欢 跟 狗 一起 走) and stores the words overlapping it: 一起 and 走.
+  It trusts that only when it finds a real multi-character word, because the dictionary also
+  holds most single characters and 托德 would otherwise be filed as 托 and 德.
+- When the whole word is outside HSK 1–9 entirely (西瓜 is), the gloss lookup receives the
+  sentence and names the word the fragment belongs to — accepted only if that word occurs in
+  the sentence and contains the fragment.
 
 The reply carrying a request is validated against a lexicon that *includes* that request's
 words. Without this the channel defeats itself: the wrapper is stripped before validation,
