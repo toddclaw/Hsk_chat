@@ -135,37 +135,49 @@
     var style = styleFor(opts.level);
     var len = LENGTHS[opts.length] || LENGTHS.short;
     var convert = opts.convert || function (t) { return t; };
-    var lines = [
-      convert("你是一个中文聊天伙伴。用户是学中文的学生") + "（" + opts.label + "）。",
-      "",
-      convert("规则：") ,
-      /* When words are on offer, rule 1 has to say so. Left absolute it
-       * contradicts the offer outright -- "never use a word the student does
-       * not know" against "you may use one of these" -- and a model resolving
-       * that conflict obeys the rule stated first and stated without exception,
-       * so the offer is silently ignored every turn. */
-      "1. " + convert(style.vocab) +
-        ((opts.offer && opts.offer.length) ? convert("（第 11 条的新词除外。）") : ""),
-      "2. " + convert(len.rule),
-      "3. " + convert(style.grammar),
-      "4. " + convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，"),
-      "   " + convert("不要用英文，不要用拼音，不要用汉字注音。"),
-      /* Without this the rules are all constraints and nothing asks for a
-       * reply. Under a tight vocabulary the cheapest way to obey every other
-       * rule is to hand the student's own sentence back, which reads as not
-       * having understood. */
-      "5. " + convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"),
-      "6. " + convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"),
-      "7. " + convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
-              "|pīn yīn|english]]" + convert("，一句话最多一个。"),
-      "8. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
-              "|pīn yīn|english]] " + convert("回答，"),
-      "   " + convert("这样他可以看到拼音和意思。不要用英文解释。"),
-      "9. " + convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。")
-    ];
+
+    /* Each entry is one rule's finished text; numbering is assigned by
+     * position when the list is assembled below. Inserting, removing or
+     * reordering a rule can then never leave two rules sharing a number or
+     * the model reading them out of order -- both have happened by hand. */
+    var rules = [];
+
+    /* When words are on offer, this rule has to say so. Left absolute it
+     * contradicts the offer outright -- "never use a word the student does
+     * not know" against "you may use one of these" -- and a model resolving
+     * that conflict obeys the rule stated first and stated without
+     * exception, so the offer is silently ignored every turn. The exception
+     * is worded without a rule number, since the offer rule's own number
+     * shifts whenever a rule is added above it. */
+    rules.push(convert(style.vocab) +
+      ((opts.offer && opts.offer.length) ? convert("（后面提到的新词除外。）") : ""));
+    rules.push(convert(len.rule));
+    rules.push(convert(style.grammar));
+    rules.push(convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，") +
+               "\n   " + convert("不要用英文，不要用拼音，不要用汉字注音。"));
+    /* Without this the rules are all constraints and nothing asks for a
+     * reply. Under a tight vocabulary the cheapest way to obey every other
+     * rule is to hand the student's own sentence back, which reads as not
+     * having understood. */
+    rules.push(convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"));
+    rules.push(convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"));
+    /* Correcting is not the same failure mode as echoing: an echo hands back
+     * the student's own sentence unchanged, while a correction restates it
+     * fixed, in words the student already has, and then the conversation
+     * continues -- rule 5 above still applies to what comes after it. */
+    rules.push(convert("如果学生的话语法或者用词不对，先用正确、简单的说法说一次你觉得他想说的意思") +
+               "（" + convert("只能用学生已经会的词，需要的话可以更简单") + "），" +
+               convert("然后再继续说下去，回答他，别只纠正不回答。"));
+    rules.push(convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
+               "|pīn yīn|english]]" + convert("，一句话最多一个。"));
+    rules.push(convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
+               "|pīn yīn|english]] " + convert("回答，") + "\n   " +
+               convert("这样他可以看到拼音和意思。不要用英文解释。"));
+    rules.push(convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。"));
+
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
-      lines.push("10. " + convert("请用繁体字回答，不要用简体字。"));
+      rules.push(convert("请用繁体字回答，不要用简体字。"));
     }
     /* Gradual introduction. The offer is permission, not an instruction: a word
      * forced into a conversation it does not fit reads as a vocabulary drill,
@@ -173,19 +185,26 @@
     if (opts.offer && opts.offer.length) {
       if (opts.require) {
         // No longer a suggestion: the reply is rejected without it.
-        lines.push("11. " + convert("这次一定要用「") + opts.require +
+        rules.push(convert("这次一定要用「") + opts.require +
                    convert("」这个词，放在一句话里。这是必须的。"));
       } else {
-        lines.push("11. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
+        rules.push(convert("学生现在可以学一个新词。这次请用下面的一个：") +
                    opts.offer.map(function (e) { return e.w; }).join("、") +
                    convert("。只用一个，放在自然的句子里；" +
                            "只有在实在放不进去的时候，才一个都不用。"));
       }
     }
     if (opts.reuse && opts.reuse.length) {
-      lines.push("12. " + convert("学生最近学了这些词，请多用：") +
+      rules.push(convert("学生最近学了这些词，请多用：") +
                  opts.reuse.map(function (e) { return e.w; }).join("、") + convert("。"));
     }
+
+    var lines = [
+      convert("你是一个中文聊天伙伴。用户是学中文的学生") + "（" + opts.label + "）。",
+      "",
+      convert("规则：")
+    ].concat(rules.map(function (r, i) { return (i + 1) + ". " + r; }));
+
     lines.push(
       "",
       convert("例子："),

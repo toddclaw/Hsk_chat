@@ -185,6 +185,11 @@
       "raw": "[这是中文]",
       "clean": "[这是中文]",
       "why": "a bracket group containing Chinese is left alone"
+    },
+    {
+      "raw": "你说「我很好」。",
+      "clean": "你说「我很好」。",
+      "why": "corner quotation marks are CJK punctuation, not model scaffolding -- they must survive stripScaffold unchanged"
     }
   ],
   "echo": [

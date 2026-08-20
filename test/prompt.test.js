@@ -146,19 +146,43 @@ const plain1 = P.build({ level: 1, label: "HSK 1", length: "short" })
   .split("\n").find(l => l.startsWith("1. "));
 check(!/除外/.test(plain1), "and stays absolute when nothing is on offer", plain1);
 check(offered.includes("让、但"), "the offered words are named");
-check(/请用/.test(offered.split("\n").find(l => l.startsWith("11. "))),
+check(/请用/.test(offered.split("\n").find(l => l.includes("学生现在可以学一个新词"))),
   "the offer asks for a word rather than merely permitting one");
 
 /* 9. Forcing. When the offer has been declined too often the word becomes a
  *    condition rather than a suggestion, and the wording has to stop hedging. */
 const forced = P.build({ level: 1, label: "HSK 1", length: "short",
   offer: [{ w: "让" }, { w: "但" }], require: "让" });
-const rule10 = forced.split("\n").find(l => l.startsWith("11. "));
+// Found by content, not by number: the offer rule's position shifts
+// whenever a rule is inserted above it, which is exactly what happened here.
+const rule10 = forced.split("\n").find(l => l.includes("一定要用「"));
 check(/一定要用/.test(rule10) && rule10.includes("让"), "the required word is demanded", rule10);
 check(!/都不用/.test(rule10), "and the escape clause is gone", rule10);
 check(!rule10.includes("但"), "only the one word is named, so there is no ambiguity", rule10);
 check(/除外/.test(forced.split("\n").find(l => l.startsWith("1. "))),
   "rule 1 still grants the exception while forcing");
+
+/* Grammar correction. Restating a fixed version of what the student meant is
+ * a different failure mode from echoing (rule 6): an echo hands back the
+ * student's sentence unchanged, a correction restates it fixed and then the
+ * conversation continues. Both must survive together in the same prompt. */
+for (const n of levels) {
+  const p = P.build({ level: n, label: "HSK " + n, length: "short" });
+  check(/语法或者用词不对/.test(p), `L${n}: has a grammar-correction rule`);
+  check(/只能用学生已经会的词/.test(p), `L${n}: the correction must use only known words`);
+  check(/回答他，别只纠正不回答/.test(p), `L${n}: correcting must not replace answering`);
+}
+
+/* Rule numbering must never collide or run out of order -- inserting the
+ * correction rule above is exactly the kind of change that broke it before. */
+for (const n of levels) {
+  const nums = P.build({ level: n, label: "HSK " + n, length: "short", script: "trad",
+    offer: [{ w: "让" }], reuse: [{ w: "但" }] })
+    .split("\n").filter(l => /^\d+\./.test(l)).map(l => parseInt(l, 10));
+  check(nums.length >= 10, `L${n}: has all the fixed rules plus the conditional ones`);
+  check(nums.every((v, i) => v === i + 1), `L${n}: numbered 1..N with no gaps or repeats`,
+    nums.join(","));
+}
 
 /* 10. HSK 0.5 is a first-week level: it must be a strict subset of HSK 1 and
  *     its grammar rule must be stricter, or it is not a lower level at all. */
