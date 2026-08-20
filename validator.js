@@ -166,6 +166,36 @@
     return out;
   }
 
+  /* Words that carry no topic on their own. Their presence on both sides of an
+   * exchange says nothing, so they are ignored when comparing what was said. */
+  var FUNCTION_WORDS = ("你 我 他 她 它 您 我们 你们 他们 的 了 吗 呢 吧 啊 呀 是 不 " +
+    "没 没有 也 还 很 太 都 和 跟 在 有 会 能 要 想 就 才 一 个 这 那 呀 嗯").split(" ");
+
+  function contentWords(text, lex) {
+    var skip = new Set(FUNCTION_WORDS);
+    var out = [];
+    segment(text, lex).forEach(function (t) {
+      if (t.kind === "word" && !skip.has(t.text) && out.indexOf(t.text) === -1) out.push(t.text);
+    });
+    return out;
+  }
+
+  /* True when the reply's closing question is one the learner just asked.
+   *
+   * A partner under tight vocabulary and length limits can satisfy every rule
+   * by handing the question straight back -- 你喜欢喝茶吗？ answered with
+   * 你喜欢喝吗？ -- which reads as not having understood. Comparing content
+   * words catches it: if the question introduces nothing the learner did not
+   * already say, it is an echo rather than a reply. */
+  function echoesQuestion(reply, userText, lex) {
+    var m = String(reply || "").match(/([^。！？!?\n]+[？?])\s*$/);
+    if (!m) return false;
+    var asked = contentWords(m[1], lex);
+    if (!asked.length) return false;
+    var said = new Set(contentWords(userText || "", lex));
+    return asked.every(function (w) { return said.has(w); });
+  }
+
   function validate(text, lex) {
     return segment(text, lex).filter(function (t) {
       return t.kind === "bad" || t.kind === "latin";
@@ -196,6 +226,8 @@
     suggest: suggest,
     isPunct: isPunct,
     stripScaffold: stripScaffold,
+    contentWords: contentWords,
+    echoesQuestion: echoesQuestion,
     isAscii: function (t) { return /^[\x00-\x7F]*$/.test(t); }
   };
 

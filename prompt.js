@@ -145,22 +145,27 @@
        * that conflict obeys the rule stated first and stated without exception,
        * so the offer is silently ignored every turn. */
       "1. " + convert(style.vocab) +
-        ((opts.offer && opts.offer.length) ? convert("（第 10 条的新词除外。）") : ""),
+        ((opts.offer && opts.offer.length) ? convert("（第 11 条的新词除外。）") : ""),
       "2. " + convert(len.rule),
       "3. " + convert(style.grammar),
       "4. " + convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，"),
       "   " + convert("不要用英文，不要用拼音，不要用汉字注音。"),
-      "5. " + convert("每次说完，问学生一个问题。"),
-      "6. " + convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
+      /* Without this the rules are all constraints and nothing asks for a
+       * reply. Under a tight vocabulary the cheapest way to obey every other
+       * rule is to hand the student's own sentence back, which reads as not
+       * having understood. */
+      "5. " + convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"),
+      "6. " + convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"),
+      "7. " + convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
               "|pīn yīn|english]]" + convert("，一句话最多一个。"),
-      "7. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
+      "8. " + convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
               "|pīn yīn|english]] " + convert("回答，"),
       "   " + convert("这样他可以看到拼音和意思。不要用英文解释。"),
-      "8. " + convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。")
+      "9. " + convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。")
     ];
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
-      lines.push("9. " + convert("请用繁体字回答，不要用简体字。"));
+      lines.push("10. " + convert("请用繁体字回答，不要用简体字。"));
     }
     /* Gradual introduction. The offer is permission, not an instruction: a word
      * forced into a conversation it does not fit reads as a vocabulary drill,
@@ -168,17 +173,17 @@
     if (opts.offer && opts.offer.length) {
       if (opts.require) {
         // No longer a suggestion: the reply is rejected without it.
-        lines.push("10. " + convert("这次一定要用「") + opts.require +
+        lines.push("11. " + convert("这次一定要用「") + opts.require +
                    convert("」这个词，放在一句话里。这是必须的。"));
       } else {
-        lines.push("10. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
+        lines.push("11. " + convert("学生现在可以学一个新词。这次请用下面的一个：") +
                    opts.offer.map(function (e) { return e.w; }).join("、") +
                    convert("。只用一个，放在自然的句子里；" +
                            "只有在实在放不进去的时候，才一个都不用。"));
       }
     }
     if (opts.reuse && opts.reuse.length) {
-      lines.push("11. " + convert("学生最近学了这些词，请多用：") +
+      lines.push("12. " + convert("学生最近学了这些词，请多用：") +
                  opts.reuse.map(function (e) { return e.w; }).join("、") + convert("。"));
     }
     lines.push(
@@ -186,6 +191,9 @@
       convert("例子："),
       convert("学生：你好！"),
       convert("你：") + convert(style.sample),
+      // An exchange that answers, adds something, and asks something new.
+      convert("学生：你喜欢喝茶吗？"),
+      convert("你：我很喜欢。我天天喝茶。你喜欢吃什么？"),
       convert("学生：") + "怎么说 fried egg",
       convert("你：") + "[[NEED:" + convert("煎蛋") + "|jiān dàn|fried egg]]" +
         convert("。你喜欢吃吗？")

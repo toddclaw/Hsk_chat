@@ -208,6 +208,13 @@ fixes.
   violation kind and its own repair line. Your English is the opposite case and is sent
   verbatim. The asymmetry lives at the call sites; `validate()` reports the kind and lets
   the caller decide.
+- **Echoing is a repair, not an answer.** A partner under tight vocabulary and length limits
+  can satisfy every rule by handing the learner's own question back — 你喜欢喝茶吗？ answered
+  with 你喜欢喝吗？ — which reads as not having understood a word of it. `echoesQuestion()`
+  compares content words: if the reply's closing question introduces nothing the learner did
+  not just say, it is an echo, and the loop asks once for a real answer. The rules were all
+  constraints and none of them asked for a *reply*, so the prompt now also says to answer
+  first, add something, then ask something new — with a worked example of doing so.
 - **Model scaffolding is stripped, not repaired.** A model can wrap its answer in subtitle
   timestamps (`[0.0:] 我喜欢听中文歌。`), markdown emphasis or headings. That is formatting,
   not a vocabulary mistake, so `stripScaffold()` removes it before validation rather than

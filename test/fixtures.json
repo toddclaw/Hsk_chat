@@ -186,5 +186,43 @@
       "clean": "[这是中文]",
       "why": "a bracket group containing Chinese is left alone"
     }
+  ],
+  "echo": [
+    {
+      "said": "你喜欢喝茶吗？",
+      "reply": "我喝茶。茶好喝。你喜欢喝吗？",
+      "echo": true,
+      "why": "the learner's own question handed straight back"
+    },
+    {
+      "said": "我也喜欢喝茶。我还也喜欢喝水。",
+      "reply": "你喝水。水好喝。你喝水吗？",
+      "echo": true,
+      "why": "same template, using the noun the learner just introduced"
+    },
+    {
+      "said": "我也喜欢喝茶。我还也喜欢喝水。",
+      "reply": "我也是。我喜欢吃米饭。你喜欢吃什么？",
+      "echo": false,
+      "why": "answers, adds something, asks something new"
+    },
+    {
+      "said": "你喜欢喝茶吗？",
+      "reply": "我很喜欢。我天天喝。你家有茶吗？",
+      "echo": false,
+      "why": "a new question about a related thing"
+    },
+    {
+      "said": "你好！",
+      "reply": "你好！我很好。你叫什么名字？",
+      "echo": false,
+      "why": "an opening question the learner never asked"
+    },
+    {
+      "said": "我很好。",
+      "reply": "我也很好。",
+      "echo": false,
+      "why": "no question at all is a different problem"
+    }
   ]
 }

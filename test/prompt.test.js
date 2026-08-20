@@ -141,19 +141,19 @@ check(numbered.every((n, i) => i === 0 || n > numbered[i - 1]),
 const offered = P.build({ level: 1, label: "HSK 1", length: "short",
   offer: [{ w: "让" }, { w: "但" }] });
 const rule1 = offered.split("\n").find(l => l.startsWith("1. "));
-check(/第 10 条|除外/.test(rule1), "rule 1 carves out an exception when words are on offer", rule1);
+check(/第 11 条|除外/.test(rule1), "rule 1 carves out an exception when words are on offer", rule1);
 const plain1 = P.build({ level: 1, label: "HSK 1", length: "short" })
   .split("\n").find(l => l.startsWith("1. "));
 check(!/除外/.test(plain1), "and stays absolute when nothing is on offer", plain1);
 check(offered.includes("让、但"), "the offered words are named");
-check(/请用/.test(offered.split("\n").find(l => l.startsWith("10. "))),
+check(/请用/.test(offered.split("\n").find(l => l.startsWith("11. "))),
   "the offer asks for a word rather than merely permitting one");
 
 /* 9. Forcing. When the offer has been declined too often the word becomes a
  *    condition rather than a suggestion, and the wording has to stop hedging. */
 const forced = P.build({ level: 1, label: "HSK 1", length: "short",
   offer: [{ w: "让" }, { w: "但" }], require: "让" });
-const rule10 = forced.split("\n").find(l => l.startsWith("10. "));
+const rule10 = forced.split("\n").find(l => l.startsWith("11. "));
 check(/一定要用/.test(rule10) && rule10.includes("让"), "the required word is demanded", rule10);
 check(!/都不用/.test(rule10), "and the escape clause is gone", rule10);
 check(!rule10.includes("但"), "only the one word is named, so there is no ambiguity", rule10);
@@ -173,7 +173,18 @@ check(/不要用「了」/.test(P.LEVEL_STYLE[0].grammar),
   "HSK 0.5 bans 了, which HSK 1 allows", P.LEVEL_STYLE[0].grammar);
 check(P.LEVEL_STYLE[0].vocab !== P.LEVEL_STYLE[1].vocab, "and has its own vocabulary rule");
 
-// 11. An unknown level must not produce a prompt with no constraints at all.
+/* 11. Every prompt must ask for a reply, not just impose limits. With only
+ *     constraints, the cheapest way to obey them all is to echo the student. */
+for (const n of levels) {
+  const p = P.build({ level: n, label: "HSK " + n, length: "short" });
+  check(/先回答学生说的话/.test(p), `L${n}: asks the partner to answer what was said`);
+  check(/不要把学生的话重复一遍/.test(p), `L${n}: forbids repeating it back`);
+  check(/学生刚问过的问题，不要再问他/.test(p), `L${n}: forbids asking the question back`);
+}
+check(P.build({ level: 0, label: "HSK 0.5", length: "short" }).includes("我很喜欢。我天天喝茶。"),
+  "and shows a worked example of answering rather than echoing");
+
+// 12. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
 console.log(`\n${pass} passed, ${fail} failed`);

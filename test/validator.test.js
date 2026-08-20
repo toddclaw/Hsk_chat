@@ -68,6 +68,20 @@ check(HSK.validate(HSK.stripScaffold("[0.0:] 我很好。"), lex).length === 0,
   "and stripping them leaves a clean reply");
 check(HSK.isAscii("50%") && !HSK.isAscii("我"), "isAscii distinguishes the learner's own symbols");
 
+/* Echoing. A partner under tight vocabulary and length limits can satisfy
+ * every rule by handing the learner's question back -- 你喜欢喝茶吗？ answered
+ * with 你喜欢喝吗？ -- which reads as not having understood a word of it. */
+const l0lex = HSK.buildLexicon(
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk0.json"), "utf8")));
+for (const c of fx.echo) {
+  const got = HSK.echoesQuestion(c.reply, c.said, l0lex);
+  check(got === c.echo, `echo (${c.echo ? "yes" : "no"}): ${c.why}`,
+    `${c.reply} ← ${c.said}`);
+}
+check(HSK.contentWords("我也很喜欢喝茶。", l0lex).join() === ["喜欢", "喝", "茶"].join(),
+  "content words drop the function words that say nothing about topic",
+  HSK.contentWords("我也很喜欢喝茶。", l0lex).join());
+
 const sug = HSK.suggest("想要", lex, 4).map(e => e.w);
 check(sug.length > 0 && sug.every(w => /[想要]/.test(w)),
   "suggest: returns allowlist entries sharing a character", JSON.stringify(sug));

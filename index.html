@@ -375,7 +375,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v20 — 2026-08-19";
+const VERSION   = "v21 — 2026-08-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -678,7 +678,9 @@ async function turn() {
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required) }]
     .concat(windowed());
-  let attempt = 0, last = null, missed = null;
+  // What the learner just said, for the echo check below.
+  const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
+  let attempt = 0, last = null, missed = null, echoed = null;
 
   while (attempt < S.attempts) {
     attempt++;
@@ -702,6 +704,20 @@ async function turn() {
       /* A reply that is otherwise legal but omits the required word is not a
        * vocabulary failure, so it is kept as the best answer so far and asked
        * about again rather than thrown away. */
+      /* A reply that hands the learner's own question back satisfies every
+       * rule and still reads as not having understood. Ask once for a real
+       * answer; keep this one in case the second attempt is no better. */
+      if (!required && HSK.echoesQuestion(ex.text, saidNow, lex)) {
+        echoed = echoed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
+        if (attempt < S.attempts) {
+          scratch.push({ role: "assistant", content: raw });
+          scratch.push({ role: "user", content:
+            "你把我刚才的问题又问了一次。请先回答我说的话，再说一点你自己的事，" +
+            "最后问一个新的问题。" });
+          console.log("[echo]", ex.text);
+          continue;
+        }
+      }
       if (required && HSKPace.spot(HSK.segment(ex.text, lex), [required]).length === 0) {
         missed = missed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
         if (attempt < S.attempts) {
@@ -718,9 +734,10 @@ async function turn() {
       }
     }
     if (!violations.length) {
-      // Attempts exhausted with the word still missing: show the good reply.
-      return Object.assign({}, missed, { offer: offer, required: required, softMiss: true,
-                                         truncated: callModel.lastFinish === "length" });
+      // Attempts exhausted: show the best legal reply rather than nothing.
+      return Object.assign({}, missed || echoed,
+        { offer: offer, required: required, softMiss: true,
+          truncated: callModel.lastFinish === "length" });
     }
 
     last = ex.text;
@@ -732,9 +749,11 @@ async function turn() {
 
   // Same shape as a successful turn: the caller settles pacing against every
   // result, and a give-up still put characters on the screen to be read.
-  // A reply that only ever lacked the required word still beats the fallback.
-  if (missed) {
-    return Object.assign({}, missed, { offer: offer, required: required, softMiss: true });
+  // A reply that only ever lacked the required word, or only echoed, still
+  // beats the fallback.
+  if (missed || echoed) {
+    return Object.assign({}, missed || echoed,
+      { offer: offer, required: required, softMiss: true });
   }
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
