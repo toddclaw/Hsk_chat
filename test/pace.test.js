@@ -88,6 +88,14 @@ check(!P.shouldForce(0) && !P.shouldForce(1), "one decline is not enough");
 check(P.shouldForce(2) && P.shouldForce(5), "two or more forces the word");
 check(!P.shouldForce(undefined), "an absent counter is not a decline");
 
+/* The offer must skip words marked "already known ahead of time" exactly like
+ * it skips words already introduced -- slate() takes a single skip set, so the
+ * app is expected to concat S.learning and S.known before calling it. */
+const skipBoth = P.slate(pool, ["让", "但"], 5).map(e => e.w);
+check(!skipBoth.includes("让") && !skipBoth.includes("但"),
+  "slate() skips anything in the skip set, known-ahead words included",
+  skipBoth.join(" "));
+
 // --- promotion --------------------------------------------------------------
 check(P.isNew({ seen: 0 }) && P.isNew({ seen: 2 }) && !P.isNew({ seen: 3 }),
   `new until ${P.PROMOTE_AT} sightings`);

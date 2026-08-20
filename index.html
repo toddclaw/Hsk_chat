@@ -161,6 +161,13 @@ footer{
 .applink{display:inline-block; padding:6px 10px; min-height:36px; line-height:24px;
   border:1px solid var(--line); border-radius:10px; color:var(--accent); text-decoration:none}
 .stats{font-size:13px; color:var(--dim); background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px}
+.poolrow{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line)}
+.poolrow input[type=checkbox]{width:22px; height:22px; flex:0 0 auto; accent-color:var(--ok)}
+.poolrow .w2{font-size:20px; min-width:2.6em}
+.poolrow .g{flex:1; font-size:12.5px; color:var(--dim); min-width:0}
+#poolSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
+  background:var(--panel2); min-height:44px; margin-bottom:4px}
+#poolMore{width:100%; margin-top:8px}
 .stats td{padding:2px 10px 2px 0}
 
 #pop{
@@ -250,6 +257,7 @@ footer{
   <label for="paceRate" style="margin-top:4px">Pace</label>
   <select id="paceRate"></select>
   <div class="stats" id="paceNote"></div>
+  <button id="btnPool" type="button" style="margin-top:8px; width:100%">Words I already know at the next level</button>
   <div class="note">Graded readers introduce roughly one new word per 40–50 characters of
   text you already know. The partner is offered the three commonest words you have not met
   and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
@@ -327,6 +335,18 @@ footer{
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="poolSheet"><div class="card">
+  <h2 id="poolTitle">Next-level words</h2>
+  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning">
+  <div class="note">Tick any word you already know. It joins the allowlist immediately —
+  the partner may use it, and it will not be offered or flagged again — but it will not
+  appear in 词 or in flashcard exports: this list is for words you brought with you, not
+  ones the app taught you.</div>
+  <div id="poolList" style="margin-top:10px"></div>
+  <button id="poolMore" style="display:none"></button>
+  <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
+</div></div>
+
 <div class="sheet" id="vocabSheet"><div class="card">
   <h2>Added vocabulary</h2>
   <label class="toggle" for="autoAdd">
@@ -395,7 +415,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v26 — 2026-08-20";
+const VERSION   = "v27 — 2026-08-20";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -413,7 +433,8 @@ const K = {
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
-  pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning"
+  pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
+  known:"hsk1chat.knownAhead"
 };
 
 const store = {
@@ -446,6 +467,12 @@ const S = {
   budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
   pool:    [],                                // next level minus this one
+  /* Words at the next level the learner already knows, marked from the
+   * browser in Settings. Joins the allowlist like anything else, but is kept
+   * separate from S.extra: it did not come from a conversation and has no
+   * sentence context, so it stays out of the 词 panel and flashcard exports
+   * -- it is a suppression list, not vocabulary the app taught. */
+  known:   store.get(K.known, []),
   simpLex: null,                              // simplified lexicon, for converting prompt text
   refList: [],                                // the reference dictionary, unindexed
   refLex:  null,                              // and as a lexicon, for re-segmenting
@@ -472,8 +499,10 @@ function inScript(list) {
 
 function rebuildLexicon() {
   // A word once introduced stays usable, whether it is still "new" or promoted.
-  S.lex = HSK.buildLexicon(inScript(S.base), inScript(S.extra).concat(inScript(S.learning)));
+  S.lex = HSK.buildLexicon(inScript(S.base),
+    inScript(S.extra).concat(inScript(S.learning), inScript(S.known)));
 }
+const isKnownAhead = w => S.known.some(e => e.w === w);
 
 const learned = w => S.learning.find(e => e.w === w);
 function levelBudget() {
@@ -488,15 +517,23 @@ const isExtra = w => S.extra.some(e => e.w === w);
 async function loadPool() {
   S.pool = [];
   const next = LEVELS.find(l => l.id === S.level + 1);
-  if (!S.pace.on || !next) return;
+  // The pool backs both pacing and the "words I already know" browser, so it
+  // loads whenever there is a level above -- not only while pacing is on.
+  if (!next) return;
   try {
     const r = await fetch(next.file);
     /* Exclude everything already usable, not just the level list: the particles
-     * in EXTRA_ALLOWED and any word already added or introduced. Offering 啊,
-     * which is permitted at every level, would spend a credit on nothing. */
+     * in EXTRA_ALLOWED and any word already added, introduced, or marked known
+     * ahead of time. Offering 啊, which is permitted at every level, would
+     * spend a credit on nothing. */
     if (r.ok) {
-      const known = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
-      S.pool = HSKPace.buildPool(known, await r.json());
+      /* S.pool is every word not yet formally usable -- it deliberately still
+       * includes ones marked "known ahead", so the browser can list them
+       * pre-checked and let you change your mind. Pacing draws its own
+       * candidates from this at offer time, filtered by isKnownAhead there,
+       * so the two do not need two copies of the underlying data. */
+      const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
+      S.pool = HSKPace.buildPool(usable, await r.json());
     }
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
@@ -696,7 +733,8 @@ async function turn() {
    * should not cost the introduction. */
   const b = levelBudget();
   const offer = (S.pace.on && b.credits > 0)
-    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE) : [];
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
+    : [];
   const reuse = S.learning.filter(HSKPace.isNew).slice(-6);
   // After enough declined offers the top word becomes a condition of the reply.
   const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
@@ -1487,6 +1525,61 @@ function renderLearning() {
   });
 }
 
+/* How many matching rows are rendered at once. Some pools run to several
+ * thousand words (HSK 6 -> 7-9), and a phone rendering that many checkbox rows
+ * in one go is the wrong tradeoff for a list meant to be skimmed quickly;
+ * "show more" grows it in the same increments search narrows it by. */
+const POOL_PAGE = 150;
+let poolShown = POOL_PAGE;
+
+function poolMatches() {
+  const q = $("#poolSearch").value.trim().toLowerCase();
+  if (!q) return S.pool;
+  return S.pool.filter(e =>
+    e.w.includes(q) || (e.p || "").toLowerCase().includes(q) || (e.d || "").toLowerCase().includes(q));
+}
+
+function renderPool() {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  $("#poolTitle").textContent = next ? "Words at " + next.label : "No level above " + levelLabel();
+  const matches = poolMatches();
+  const box = $("#poolList");
+  box.innerHTML = "";
+  if (!S.pool.length) {
+    box.innerHTML = '<div class="note">' +
+      (next ? "Nothing left to review — every word at " + next.label + " is already usable."
+            : "There is no level above this one.") + "</div>";
+  }
+  matches.slice(0, poolShown).forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    row.innerHTML = '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + '>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+    row.querySelector("input").onchange = ev => {
+      if (ev.target.checked) {
+        if (!isKnownAhead(e.w)) S.known.push({ w: e.w, p: e.p, d: e.d });
+      } else {
+        S.known = S.known.filter(k => k.w !== e.w);
+      }
+      store.set(K.known, S.known);
+      rebuildLexicon(); updateMirror();
+      // S.pool membership does not change -- only isKnownAhead(w) does -- so a
+      // plain re-render (no re-fetch) is enough, and the row stays put either way.
+      renderPool();
+    };
+    box.appendChild(row);
+  });
+  const more = $("#poolMore");
+  const left = matches.length - poolShown;
+  if (left > 0) {
+    more.style.display = "";
+    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
+  } else {
+    more.style.display = "none";
+  }
+}
+
 function renderVocab() {
   const box = $("#vocabList");
   if (!S.extra.length) { box.innerHTML = '<div class="note">No added words yet.</div>'; return; }
@@ -1587,7 +1680,7 @@ function renderPaceNote() {
   const met = S.learning.filter(e => e.from === S.level + 1).length;
   const still = S.learning.filter(HSKPace.isNew).length;
   const offering = b.credits > 0
-    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE).map(e => e.w).join("、")
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE).map(e => e.w).join("、")
     : "";
   box.innerHTML = "<table>" +
     "<tr><td>from</td><td>" + escapeHtml(next.label) + " — " + met + " of " +
@@ -1635,6 +1728,15 @@ $("#btnPy").onclick = () => {
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
 };
+$("#btnPool").onclick = () => {
+  poolShown = POOL_PAGE; $("#poolSearch").value = "";
+  renderPool(); openSheet("#poolSheet");
+};
+$("#poolSearch").addEventListener("input", () => { poolShown = POOL_PAGE; renderPool(); });
+$("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
+$("#poolClose").onclick = () => closeSheet("#poolSheet");
+$("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
+
 $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
   renderVocab(); renderLearning(); openSheet("#vocabSheet");
