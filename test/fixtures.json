@@ -67,11 +67,11 @@
   ],
   "bad": [
     {
-      "t": "我想要一个苹果。",
+      "t": "我想要一个香蕉。",
       "expect": [
-        "苹果"
+        "香蕉"
       ],
-      "why": "苹果 is not in HSK3.0 level 1"
+      "why": "香蕉 is above HSK 1 (苹果 no longer is: the old HSK 1.0 list is nested in)"
     },
     {
       "t": "因为下雨，所以我不去。",
@@ -125,10 +125,10 @@
   ],
   "spans": [
     {
-      "t": "我想吃苹果",
+      "t": "我想吃香蕉",
       "violations": [
         {
-          "text": "苹果",
+          "text": "香蕉",
           "start": 3,
           "end": 5
         }
@@ -152,8 +152,8 @@
   ],
   "notes": [
     "Known limitation: the validator matches words, so an above-level compound built entirely from in-list characters (想要 = 想 + 要) passes. Constraining that would require a blocklist, which the grammar section of the system prompt handles instead.",
-    "苹果, 问题, 千 and 万 are absent from HSK 3.0 level 1 (506 words). Fixtures assert against the supplied list, not against intuition.",
-    "Brackets, asterisks and hashes are no longer in the always-allowed ASCII set: treating them as punctuation is how subtitle timestamps reached the screen unchallenged."
+    "Brackets, asterisks and hashes are no longer in the always-allowed ASCII set: treating them as punctuation is how subtitle timestamps reached the screen unchallenged.",
+    "HSK 0.5 is the old HSK 1.0 syllabus, and tools/nest_levels.py carries it upward, so 苹果, 猫, 狗, 怎么样 and 火车站 are legal from HSK 1 even though HSK 3.0 places them higher."
   ],
   "scaffold": [
     {

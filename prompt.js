@@ -77,9 +77,9 @@
    * level (see the test suite) -- a starter the app would then underline as
    * out of level would be worse than none. */
   var STARTERS = {
-    0: ["你好！你叫什么名字？", "你今天好吗？", "你喜欢吃什么？", "你会说中文吗？",
+    0: ["你好！你叫什么名字？", "你今天好吗？", "你喜欢吃什么？", "今天天气怎么样？",
         "你家有几个人？", "你喜欢喝茶吗？", "你是学生吗？", "现在几点？",
-        "你几岁？", "你的老师是谁？"],
+        "你几岁？", "你喜欢猫吗？"],
     1: ["你好！你叫什么名字？", "你是哪国人？", "你今天好吗？", "你喜欢吃什么？",
         "你会说中文吗？", "你家有几个人？", "今天热吗？", "你几点睡觉？",
         "你想喝茶还是喝水？", "你有中国朋友吗？", "你的家在哪儿？", "你想去哪儿？"],
@@ -193,7 +193,7 @@
       convert("你：") + convert(style.sample),
       // An exchange that answers, adds something, and asks something new.
       convert("学生：你喜欢喝茶吗？"),
-      convert("你：我很喜欢。我天天喝茶。你喜欢吃什么？"),
+      convert("你：我很喜欢。我喜欢喝水。你喜欢吃什么？"),
       convert("学生：") + "怎么说 fried egg",
       convert("你：") + "[[NEED:" + convert("煎蛋") + "|jiān dàn|fried egg]]" +
         convert("。你喜欢吃吗？")

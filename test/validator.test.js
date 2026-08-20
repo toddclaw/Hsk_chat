@@ -111,5 +111,22 @@ for (const file of levels) {
   check(miss === 0, `${file}: all ${entries.length} entries validate against their own list`, `${miss} failed`);
 }
 
+/* Levels must nest. HSK 1.0 and HSK 3.0 disagree about 14 words -- 猫, 苹果,
+ * 怎么样, 火车站 among them -- and without nesting a learner moving from HSK 0.5
+ * to HSK 1 would lose vocabulary they had been using. tools/nest_levels.py
+ * carries lower levels upward; this is what keeps it true. */
+const ordered = levels.slice().sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
+let below = null;
+for (const file of ordered) {
+  const words = new Set(JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../data", file), "utf8")).map(e => e.w));
+  if (below) {
+    const lost = [...below.words].filter(w => !words.has(w));
+    check(lost.length === 0, `${file} contains everything in ${below.file}`,
+      "would lose: " + lost.slice(0, 8).join(" "));
+  }
+  below = { file: file, words: words };
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

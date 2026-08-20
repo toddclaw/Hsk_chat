@@ -166,9 +166,11 @@ const l0 = JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk0.json"),
 const l1w = new Set(JSON.parse(
   fs.readFileSync(path.join(__dirname, "../data/hsk1.json"), "utf8")).map(e => e.w));
 check(l0.length === 150, `HSK 0.5 has 150 words (${l0.length})`);
+check(["猫", "狗", "苹果", "怎么样", "火车站"].every(w => l0.some(e => e.w === w)),
+  "it is the old HSK 1.0 syllabus, including the words HSK 3.0 moved up");
 check(l0.every(e => l1w.has(e.w)), "HSK 0.5 is a strict subset of HSK 1");
-check(["谢谢", "再见", "名字", "中文"].every(w => l0.some(e => e.w === w)),
-  "the words a first lesson teaches are present, whatever the corpus says");
+check(["谢谢", "再见", "名字", "不客气"].every(w => l0.some(e => e.w === w)),
+  "the words a first lesson teaches are present");
 check(/不要用「了」/.test(P.LEVEL_STYLE[0].grammar),
   "HSK 0.5 bans 了, which HSK 1 allows", P.LEVEL_STYLE[0].grammar);
 check(P.LEVEL_STYLE[0].vocab !== P.LEVEL_STYLE[1].vocab, "and has its own vocabulary rule");
@@ -181,7 +183,7 @@ for (const n of levels) {
   check(/不要把学生的话重复一遍/.test(p), `L${n}: forbids repeating it back`);
   check(/学生刚问过的问题，不要再问他/.test(p), `L${n}: forbids asking the question back`);
 }
-check(P.build({ level: 0, label: "HSK 0.5", length: "short" }).includes("我很喜欢。我天天喝茶。"),
+check(P.build({ level: 0, label: "HSK 0.5", length: "short" }).includes("我很喜欢。我喜欢喝水。"),
   "and shows a worked example of answering rather than echoing");
 
 // 12. An unknown level must not produce a prompt with no constraints at all.
