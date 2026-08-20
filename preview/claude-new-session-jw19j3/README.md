@@ -114,11 +114,21 @@ than reasoning ability.
 # What the app does
 
 **Levels.** The picker in the header switches the whole allowlist between **HSK 0.5** and the
-combined 7–9 band, mid-conversation. HSK 0.5 is a first-week level of 150 words: corpus
-frequency alone is the wrong ordering for it — 谢谢, 再见 and 名字 are rare in a corpus and
-taught in lesson one — so `tools/make_hsk0.py` seeds the course-essential words and fills the
-rest by frequency from HSK 1. It is always a strict subset of HSK 1, and its grammar rule is
-stricter: no 了 at all, and sentences under about eight characters. Existing messages re-render against the new list.
+combined 7–9 band, mid-conversation. HSK 0.5 is **the old HSK 1.0 syllabus** — the
+official 150-word level 1 from before HSK 3.0 — and its grammar rule is stricter than HSK 1's:
+no 了 at all, and sentences under about eight characters.
+
+A frequency-derived approximation of that list agreed with the real one only 55% of the time,
+which is a good measure of how far corpus frequency is from a teaching order: the official list
+is concrete and classroom-shaped (七 八 九 十, 医院 学校 商店, 桌子 椅子 杯子, 狗 猫, 不客气
+没关系), while frequency gives function words and abstractions (就 还 过 着 觉得 重要 非常).
+
+**The two standards genuinely disagree**, and 14 of the official 150 are not in HSK 3.0
+level 1: 出租车 饭馆 分钟 狗 猫 漂亮 喂 椅子 怎么样 are level 2, 后面 苹果 前面 are level 3,
+些 is level 4, and 火车站 is absent entirely. Left alone that would mean *losing* 猫 on moving
+from HSK 0.5 to HSK 1, so `tools/nest_levels.py` carries every level's words upward into all
+the levels above it. The lower level wins. This is the one deliberate deviation from the
+HSK 3.0 lists, and `test/validator.test.js` fails if the levels ever stop nesting. Existing messages re-render against the new list.
 
 **Conversation starters.** A scrollable row above the composer, in that level's own
 vocabulary. At HSK 1 the hard part is not saying a sentence, it is knowing which sentence
