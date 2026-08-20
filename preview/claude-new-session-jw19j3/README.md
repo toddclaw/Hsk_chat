@@ -42,7 +42,8 @@ works exactly as on iOS, with one exception noted under
 ## Running it for free
 
 Make an account at [openrouter.ai/keys](https://openrouter.ai/keys), create a key, **add no
-credit**, and tick **free models only** in Settings. Models priced at zero cost nothing to
+credit**. Settings has a **Try a known-good model** dropdown prefilled with the free Gemma
+model documented below, or tick **free models only** to filter the loaded catalogue. Models priced at zero cost nothing to
 call, and the picker shows what everything costs per million input tokens so the paid ones
 are one tap away when you want them.
 
@@ -80,6 +81,15 @@ page is readable by anyone who opens it and would be abused and revoked within a
 alternatives are worse: a shared proxy means running a server and paying for everyone's
 conversations, and running a model in the browser means a multi-gigabyte download that
 current phones cannot hold. A free account with your own key is the honest version of free.
+
+## API key setup
+
+Settings has **Paste** (reads the clipboard, with the iOS permission-denial path handled
+rather than silently failing) and a show/hide toggle next to the key field, and **Test
+connection**, which calls `GET https://openrouter.ai/api/v1/key` with the key as a bearer
+token — not a chat completion, so testing a key costs nothing. A working key reports
+`✓ Key works. You're ready to chat.` with its free-tier status and credit limit; a rejected
+one reports OpenRouter's own error text.
 
 ## What it costs
 
@@ -164,7 +174,7 @@ The failed reply or card is dropped first, so the history stays honest.
 | | |
 |---|---|
 | **API key** | OpenRouter key, stored on this device only |
-| **Model** | any OpenRouter id; load the live catalogue here |
+| **Model** | any OpenRouter id; load the live catalogue here, or pick a known-good example |
 | **Sort models** | by price (free first) or by name (A–Z) |
 | **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |

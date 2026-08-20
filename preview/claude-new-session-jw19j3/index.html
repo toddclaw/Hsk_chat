@@ -144,6 +144,9 @@ footer{
 .sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
   border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
   resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.keyrow{display:flex; gap:8px}
+.keyrow input{flex:1; min-width:0}
+.keyrow button{flex:0 0 auto; min-width:44px; padding:8px 10px}
 .sheet input[type=text],.sheet input[type=password],.sheet select{
   width:100%; padding:11px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); min-height:var(--tap);
 }
@@ -198,10 +201,19 @@ footer{
 <div class="sheet" id="setSheet"><div class="card">
   <h2>Settings</h2>
   <label for="key">OpenRouter API key</label>
-  <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+  <div class="keyrow">
+    <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+    <button id="keyPaste" type="button" title="Paste from clipboard">Paste</button>
+    <button id="keyShow" type="button" title="Show key">👁</button>
+  </div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="keyTest">Test connection</button>
+    <span class="note" id="keyTestNote" style="margin:0;align-self:center"></span>
+  </div>
   <div class="note"><b>Free setup:</b> make an account at
   <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
-  create a key, add no credit, then tick <b>free models only</b> below. Models priced at zero
+  create a key, add no credit, then pick the free example model below, or tick
+  <b>free models only</b>. Models priced at zero
   cost nothing to call. They are rate-limited and can be busy, so replies may be slower and
   retries more frequent; adding credit and picking a paid model fixes that.
   <br><br>A key is still required — there is no backend here to hold one for you, and a key
@@ -209,6 +221,11 @@ footer{
   stays in this browser's localStorage on this device, and is sent to openrouter.ai and
   nowhere else.</div>
 
+  <label for="modelExample">Try a known-good model</label>
+  <select id="modelExample">
+    <option value="google/gemma-4-26b-a4b:free">Google: Gemma 4 26B A4B (free) — a good free starting point</option>
+    <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
+  </select>
   <label for="modelId">Model id (any OpenRouter id)</label>
   <input id="modelId" type="text" placeholder="anthropic/claude-...">
   <label class="toggle" for="freeOnly">
@@ -375,10 +392,11 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v23 — 2026-08-19";
+const VERSION   = "v24 — 2026-08-20";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
+const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
@@ -1630,6 +1648,8 @@ $("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.prev
 $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
 $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
+  $("#key").type = "password"; $("#keyShow").textContent = "👁";
+  $("#keyTestNote").textContent = "";
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
   $("#paceOn").checked = S.pace.on;
@@ -1746,6 +1766,51 @@ $("#freeOnly").onchange = e => {
     $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
   }
 };
+// Picking an example fills the free-text field, which stays the one thing
+// actually read on save -- the dropdown is a shortcut into it, not a second
+// source of truth.
+$("#modelExample").onchange = e => { $("#modelId").value = e.target.value; };
+$("#keyPaste").onclick = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) { $("#key").value = text.trim(); $("#keyTestNote").textContent = ""; }
+  } catch (e) {
+    // iOS requires a user gesture and can still refuse; there is no silent
+    // workaround, so say so rather than leaving the button looking broken.
+    $("#keyTestNote").textContent = "Couldn't read the clipboard — paste manually.";
+  }
+};
+$("#keyShow").onclick = () => {
+  const key = $("#key");
+  const show = key.type === "password";
+  key.type = show ? "text" : "password";
+  $("#keyShow").textContent = show ? "🙈" : "👁";
+};
+
+/* GET /key with the bearer header, not a completion call: it validates the
+ * key and reports its limits for the price of zero tokens. */
+async function testKey() {
+  const btn = $("#keyTest"), note = $("#keyTestNote");
+  const key = $("#key").value.trim();
+  if (!key) { note.textContent = "Paste a key first."; return; }
+  btn.disabled = true; btn.textContent = "Testing…";
+  note.textContent = "";
+  try {
+    const r = await fetch(KEY_URL, { headers: { "Authorization": "Bearer " + key } });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
+    const d = body.data || {};
+    const limit = d.limit === null || d.limit === undefined ? "unlimited" : "$" + d.limit;
+    note.textContent = "✓ Key works. You're ready to chat. (" +
+      (d.is_free_tier ? "free tier, " : "") + "limit " + limit + ")";
+  } catch (e) {
+    note.textContent = "✗ " + (e.message || e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Test connection";
+  }
+}
+$("#keyTest").onclick = testKey;
+
 $("#refreshModels").onclick = refreshModels;
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
