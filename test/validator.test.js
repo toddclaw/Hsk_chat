@@ -128,5 +128,32 @@ for (const file of ordered) {
   below = { file: file, words: words };
 }
 
+/* Word boundaries for what the learner just met. The level's own lexicon cuts
+ * in the wrong place -- it only knows that level's words -- so the reference
+ * dictionary decides. Getting this wrong stores a fragment as a word AND
+ * legalises it, so the partner starts using it back. */
+const refLex = HSK.buildLexicon(
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk7.json"), "utf8")));
+for (const c of fx.boundaries) {
+  const lvl = HSK.buildLexicon(
+    JSON.parse(fs.readFileSync(path.join(__dirname, `../data/hsk${c.level}.json`), "utf8")));
+  const learned = [];
+  HSK.validate(c.t, lvl).filter(v => v.kind === "bad" && !HSK.isAscii(v.text))
+    .forEach(v => HSK.wordsAt(c.t, v.start, v.end, refLex).forEach(w => learned.push(w)));
+  const same = learned.length === c.learn.length &&
+    c.learn.every(w => learned.includes(w));
+  check(same, `boundaries at HSK ${c.level}: ${c.t}`,
+    `want [${c.learn}] got [${learned}] — ${c.why}`);
+}
+// 起走 is the span HSK 0.5 flags: 我0 喜1 欢2 跟3 狗4 一5 起6 走7
+check(HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join() === "一起,走",
+  "the reported case resolves to 一起 and 走, never the fragment 起走",
+  HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join());
+check(HSK.splitRun("托德", refLex).join() === "托德",
+  "an unknown run stays whole rather than becoming single characters");
+check(HSK.wordsAt("因为苹果", 0, 4, refLex).join() === "因为,苹果",
+  "a run holding two words is still split into both",
+  HSK.wordsAt("因为苹果", 0, 4, refLex).join());
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

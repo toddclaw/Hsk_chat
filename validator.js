@@ -196,6 +196,53 @@
     return asked.every(function (w) { return said.has(w); });
   }
 
+  /* Split a run of unmatchable characters using a reference lexicon, keeping
+   * anything it does not recognise together: a name is better stored whole than
+   * filed as separate characters. */
+  function splitRun(run, refLex) {
+    var out = [], chunk = "", i = 0;
+    var flush = function () { if (chunk) { out.push(chunk); chunk = ""; } };
+    while (i < run.length) {
+      var hit = 0;
+      if (refLex) {
+        for (var len = Math.min(refLex.maxLen, run.length - i); len > 1; len--) {
+          if (refLex.words.has(run.slice(i, i + len))) { hit = len; break; }
+        }
+      }
+      if (hit) { flush(); out.push(run.slice(i, i + hit)); i += hit; continue; }
+      chunk += run[i++];
+      if (chunk.length >= 4) flush();
+    }
+    flush();
+    return out;
+  }
+
+  /* The words a flagged span actually represents.
+   *
+   * A level's own lexicon cuts in the wrong place, because it knows only that
+   * level's words: at HSK 0.5 the sentence 我喜欢跟狗一起走 flags 起走, since 一
+   * is known and 起 and 走 are not. Storing that fragment would teach the app a
+   * word that does not exist.
+   *
+   * A reference lexicon knows the real boundaries, so the span is read off a
+   * dictionary segmentation of the same sentence -- 我 喜欢 跟 狗 一起 走 -- and
+   * the words overlapping it are what the learner met. That is trusted only
+   * when it yields a real multi-character word, because the dictionary also
+   * holds most single characters, and 托德 would otherwise become 托 and 德. */
+  function wordsAt(text, start, end, refLex) {
+    if (refLex) {
+      var overlap = segment(text, refLex).filter(function (t) {
+        return t.kind === "word" && t.start < end && t.end > start;
+      });
+      for (var i = 0; i < overlap.length; i++) {
+        if (overlap[i].text.length > 1) {
+          return overlap.map(function (t) { return t.text; });
+        }
+      }
+    }
+    return splitRun(text.slice(start, end), refLex);
+  }
+
   function validate(text, lex) {
     return segment(text, lex).filter(function (t) {
       return t.kind === "bad" || t.kind === "latin";
@@ -227,6 +274,8 @@
     isPunct: isPunct,
     stripScaffold: stripScaffold,
     contentWords: contentWords,
+    splitRun: splitRun,
+    wordsAt: wordsAt,
     echoesQuestion: echoesQuestion,
     isAscii: function (t) { return /^[\x00-\x7F]*$/.test(t); }
   };

@@ -224,5 +224,43 @@
       "echo": false,
       "why": "no question at all is a different problem"
     }
+  ],
+  "boundaries": [
+    {
+      "level": 0,
+      "t": "我喜欢跟狗一起走。",
+      "learn": [
+        "跟",
+        "一起",
+        "走"
+      ],
+      "why": "reported: HSK 0.5 knows 一 but not 起 or 走, so the span flags as 起走 and the fragment was being stored as a word"
+    },
+    {
+      "level": 1,
+      "t": "我叫托德，我喜欢吃西瓜。",
+      "learn": [
+        "托德",
+        "西瓜"
+      ],
+      "why": "a name the dictionary does not know must stay whole, not become 托 and 德"
+    },
+    {
+      "level": 1,
+      "t": "这个问题很复杂。",
+      "learn": [
+        "问题",
+        "复杂"
+      ],
+      "why": "问 and 复 are known, so the spans are 题 and 复杂; both resolve to whole words"
+    },
+    {
+      "level": 0,
+      "t": "我要坐出租车去火车站。",
+      "learn": [
+        "要"
+      ],
+      "why": "出租车 and 火车站 are in the old HSK 1.0 list; 要 is not"
+    }
   ]
 }
