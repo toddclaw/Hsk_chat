@@ -1,0 +1,17 @@
+{
+  "name": "HSK Chat",
+  "short_name": "HSK Chat",
+  "description": "A Chinese conversation partner that cannot reply above your level.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1317",
+  "theme_color": "#101418",
+  "lang": "zh-Hans",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
