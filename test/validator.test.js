@@ -155,5 +155,38 @@ check(HSK.wordsAt("因为苹果", 0, 4, refLex).join() === "因为,苹果",
   "a run holding two words is still split into both",
   HSK.wordsAt("因为苹果", 0, 4, refLex).join());
 
+/* Names. The app's own HSK 1 starter asks 你叫什么名字？, so a reply that gives
+ * no name is not really an answer -- but 明, 王 and 李 are all above HSK 1, and
+ * before this every name the model tried was rejected until the repair attempts
+ * ran out. Names are marked, not dropped: the repair loop skips them, while the
+ * learner's new-words list is built from the same violations and still shows
+ * them. */
+for (const t of ["我叫小明。", "我叫小王。", "我叫李老师。", "他姓张。", "我叫王小明。"]) {
+  const v = HSK.validate(t, lex);
+  check(v.length > 0 && v.every(x => x.name), `name: ${t} is marked, not repaired`,
+    JSON.stringify(v.map(x => ({ t: x.text, name: !!x.name }))));
+}
+
+// The mark is scoped to the name; a hard word elsewhere still forces a repair.
+const mixed = HSK.validate("我叫小明，我喜欢咖啡。", lex);
+check(mixed.some(v => !v.name), "a hard word alongside a name is still repaired",
+  JSON.stringify(mixed.map(x => ({ t: x.text, name: !!x.name }))));
+
+// 叫 is not always an introduction, and the real parse must survive untouched.
+check(HSK.validate("你叫什么名字？", lex).length === 0,
+  "你叫什么名字？ still parses as 什么 + 名字 rather than a bogus name");
+check(HSK.nameSpans("你叫什么名字？").length === 1,
+  "a span is proposed after 叫 even when the characters turn out to be real words");
+
+// English is a rule break rather than a name to read, so it is never marked.
+check(HSK.validate("我叫John。", lex).some(v => v.kind === "latin" && !v.name),
+  "a latin name is still an unmarked violation");
+
+// A span stops at punctuation and never runs past NAME_MAX characters.
+check(HSK.nameSpans("我叫小明。你好").every(([a, b]) => b - a <= 3),
+  "a name span never exceeds 3 characters");
+check(HSK.nameSpans("我叫。").length === 0,
+  "no span is opened when punctuation follows immediately");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
