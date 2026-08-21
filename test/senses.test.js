@@ -7,14 +7,19 @@ const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
   (fail++, bad.push(label + (detail ? "\n    " + detail : "")));
 
-// A tiny lexicon standing in for a real level's: 得 standalone, plus a couple
-// of compounds that fold 得 into a longer word so it never surfaces alone.
+// A tiny lexicon standing in for a real level's: 得/着/过 standalone, plus a
+// couple of compounds that fold each into a longer word so it never surfaces
+// alone.
 const lex = HSK.buildLexicon([
   { w: "我", p: "wǒ", d: "I" }, { w: "你", p: "nǐ", d: "you" },
   { w: "走", p: "zǒu", d: "to walk/leave" }, { w: "了", p: "le", d: "aspect particle" },
   { w: "跑", p: "pǎo", d: "to run" }, { w: "快", p: "kuài", d: "fast" },
   { w: "得", p: "de / dé / děi", d: "particle" },
-  { w: "觉得", p: "juéde", d: "to feel/think" }, { w: "得到", p: "dédào", d: "to obtain" }
+  { w: "觉得", p: "juéde", d: "to feel/think" }, { w: "得到", p: "dédào", d: "to obtain" },
+  { w: "着", p: "zhe / zháo", d: "particle" }, { w: "坐", p: "zuò", d: "to sit" },
+  { w: "找", p: "zhǎo", d: "to look for" }, { w: "跟着", p: "gēnzhe", d: "to follow" },
+  { w: "过", p: "guò / guo", d: "particle" }, { w: "去", p: "qù", d: "to go" },
+  { w: "吃", p: "chī", d: "to eat" }, { w: "不过", p: "búguò", d: "however" }
 ]);
 
 // --- registry shape ----------------------------------------------------------
@@ -56,6 +61,60 @@ const prompt = Senses.classifyPrompt("得", "我得走了。", 1);
 check(prompt.indexOf("得") !== -1 && prompt.indexOf("dei_modal") !== -1 &&
   prompt.indexOf("de_complement") !== -1, "classify prompt names the word and both senses");
 check(prompt.indexOf("de_lexical") === -1, "classify prompt never offers de_lexical as a choice");
+// The worked example in the prompt must be in the word's own sense names --
+// this is what makes classifyPrompt generic across every registry entry
+// rather than hardcoding 得's senses into every call.
+const zhePrompt = Senses.classifyPrompt("着", "他坐着看书。", 1);
+check(zhePrompt.indexOf("dei_modal") === -1 && zhePrompt.indexOf("zhe_durative") !== -1,
+  "classify prompt's worked example uses the word's own senses, not 得's", zhePrompt);
+
+// --- 着 and 过: same registry shape, different level tiers --------------------
+check(Senses.isRegistered("着") && Senses.isRegistered("过"), "着 and 过 are registered");
+check(JSON.stringify(Senses.REGISTRY["着"].senses) === JSON.stringify(Senses.REGISTRY["着"].standalone),
+  "着 has no compound-only sense -- both of its senses can occur standalone");
+check(JSON.stringify(Senses.REGISTRY["过"].senses) === JSON.stringify(Senses.REGISTRY["过"].standalone),
+  "过 likewise has no compound-only sense");
+
+// 着: durative (zhe) alone from HSK 2, resultative (zháo) joins at HSK 3 --
+// matching prompt.js's own existing grammar tiers (结果补语 unlocks at HSK 3).
+check(Senses.allowedSenses("着", 1).length === 0, "着 is unmet in any sense through HSK 1");
+check(JSON.stringify(Senses.allowedSenses("着", 2)) === JSON.stringify(["zhe_durative"]),
+  "HSK 2: durative 着 only, not yet the resultative complement reading");
+const zhe3 = Senses.allowedSenses("着", 3);
+check(zhe3.indexOf("zhe_durative") !== -1 && zhe3.indexOf("zhao_resultative") !== -1,
+  "HSK 3: resultative 着 joins durative, alongside 结果补语 generally", JSON.stringify(zhe3));
+
+// 过: experiential (guo) from HSK 2, verb/complement (guò) waits for HSK 4 --
+// matching prompt.js's own 方向补语 tier.
+check(Senses.allowedSenses("过", 1).length === 0, "过 is unmet in any sense through HSK 1");
+check(JSON.stringify(Senses.allowedSenses("过", 3)) === JSON.stringify(["guo_experiential"]),
+  "HSK 2-3: experiential 过 only");
+const guo4 = Senses.allowedSenses("过", 4);
+check(guo4.indexOf("guo_experiential") !== -1 && guo4.indexOf("guo_verb") !== -1,
+  "HSK 4: verb/complement 过 joins experiential, alongside 方向补语", JSON.stringify(guo4));
+
+// Standalone-vs-folded holds for both new entries too.
+check(Senses.wordsPresent(HSK.segment("我跟着他走。", lex)).length === 0,
+  "着 folded into 跟着 is not a standalone hit");
+check(Senses.wordsPresent(HSK.segment("我找着了。", lex)).indexOf("着") !== -1,
+  "a standalone 着 does trigger");
+check(Senses.wordsPresent(HSK.segment("这不过是个小事。", lex)).length === 0,
+  "过 folded into 不过 is not a standalone hit");
+check(Senses.wordsPresent(HSK.segment("我去过中国。", lex)).indexOf("过") !== -1,
+  "a standalone 过 does trigger");
+
+check(Senses.checkSenses("着", ["zhao_resultative"], 2).length === 1,
+  "zhao_resultative at HSK 2 is a violation (结果补语 not yet unlocked)");
+check(Senses.checkSenses("着", ["zhe_durative"], 2).length === 0,
+  "zhe_durative at HSK 2 is not a violation");
+check(Senses.checkSenses("过", ["guo_verb"], 3).length === 1,
+  "guo_verb at HSK 3 is a violation (方向补语 not yet unlocked)");
+check(Senses.checkSenses("过", ["guo_experiential"], 2).length === 0,
+  "guo_experiential at HSK 2 is not a violation");
+
+const zheRp = Senses.repairPrompt(Senses.checkSenses("着", ["zhao_resultative"], 2));
+check(zheRp.indexOf("着") !== -1 && zheRp.indexOf("zháo") !== -1,
+  "着's repair prompt names the word and the disallowed reading", zheRp);
 
 check(JSON.stringify(Senses.parseClassification('["dei_modal"]', 1)) === '["dei_modal"]',
   "parses a clean JSON array");
