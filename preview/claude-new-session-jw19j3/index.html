@@ -242,7 +242,14 @@ footer{
 
   <label for="modelExample">Try a known-good model</label>
   <select id="modelExample">
-    <option value="google/gemma-4-26b-a4b:free">Google: Gemma 4 26B A4B (free) — a good free starting point</option>
+    <!-- Individual free model ids are the most volatile thing OpenRouter serves:
+         the id this list used to name had been withdrawn outright, and both
+         Gemma free endpoints answered 429 "rate-limited upstream" on every try
+         while this was written. openrouter/free is a router OpenRouter maintains
+         rather than a single model, so it cannot go stale the same way -- at the
+         cost of picking a different free model each call, which is why the label
+         promises nothing about quality. -->
+    <option value="openrouter/free">OpenRouter: Free Models Router — no credit needed, but quality varies a lot</option>
     <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
   </select>
   <label for="modelId">Model id (any OpenRouter id)</label>
@@ -458,7 +465,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v32 — 2026-08-21";
+const VERSION   = "v33 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -879,7 +886,12 @@ async function turn() {
       ? HSK.buildLexicon(inScript(S.base),
           inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
       : S.lex;
-    const hardViolations = HSK.validate(ex.text, lex);
+    /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
+     * first one any list carries, at HSK 3 -- so asking for a different one just
+     * spends the attempts and lands on the fallback, which is what the app's own
+     * 你叫什么名字？ starter used to do every time. They stay in the violation
+     * list so the "new words" panel below still glosses them. */
+    const hardViolations = HSK.validate(ex.text, lex).filter(v => !v.name);
     /* The sense check is spent only once vocabulary already passes -- an
      * ambiguous word inside a reply that is already going to be repaired for
      * something else is not worth a second model call this attempt. */
