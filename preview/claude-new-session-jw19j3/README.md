@@ -581,6 +581,77 @@ exported list to the repo, that raw URL works by hand.
 
 ---
 
+# Cloud sync
+
+Off by default. Sign in in Settings to back up the conversation, added words, and settings
+to the cloud, and pick up where you left off on another device. The OpenRouter key never
+syncs — it stays on the device it was pasted into, same as always.
+
+**Sign-in is GitHub only**, via Supabase Auth's OAuth provider — no new account to create,
+and it sidesteps Supabase's default 2-emails/hour cap on magic-link email, which would make
+a plain email flow flaky in practice. Everything else is a static call straight from the
+browser to a Supabase project (Postgres + Auth + Row Level Security); there is still no
+backend for this app to run.
+
+**What syncs and what doesn't:**
+
+| Syncs | Stays local only |
+|---|---|
+| Conversation history, including translations and explain-chats | The OpenRouter API key |
+| Added words, introduced words, words marked known ahead of time | The cached OpenRouter model list (public data, cheap to refetch) |
+| Level, model, script, pinyin mode, reply length, pace settings, custom system prompt, Anki field names, and the rest of Settings | — |
+
+**How conflicts are handled**, since two devices can each have their own local copy: chat
+history and vocabulary sync as real rows (see `db/schema.sql` and `sync.js`), not one blob —
+a message is keyed by a client-generated id, so an edit (a translation added later) upserts
+the same row instead of duplicating it, and a delete removes it remotely too so it cannot
+quietly reappear from another device's next sync. Vocabulary merges by word, so two devices
+adding different words never collide, and a word's "seen" count on both sides takes the
+higher value, since seen only ever increases. Preferences are the one place last-write-wins
+applies — a single row per user, low-stakes if a rare simultaneous edit overwrites one, since
+re-opening Settings shows the current value either way.
+
+Sync pulls on sign-in and whenever "Sync now" is pressed, and pushes are debounced a couple
+of seconds after a local edit settles. A push or pull failure never blocks the chat itself —
+sync is additive on top of an app that already works fully offline, and it fails open: the
+status line says "Sync failed — will retry" and the app carries on exactly as if it were off.
+
+## Setting up your own Supabase project
+
+This is a one-time setup an app owner does, not something each user repeats:
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Paste all of `db/schema.sql` into the project's SQL editor and run it once. It creates
+   the tables above with Row Level Security scoped to `auth.uid()` — a signed-in user can
+   only ever see or write their own rows — plus a `_keepalive` table (see below) with RLS
+   enabled and no policies at all, so only a service-role/secret key can touch it.
+3. Create a GitHub OAuth App (GitHub → Settings → Developer settings → OAuth Apps). Its
+   callback URL is `https://<project-ref>.supabase.co/auth/v1/callback`. Paste the Client ID
+   and a generated secret into Supabase's Authentication → Providers → GitHub.
+4. In Supabase's Authentication → URL Configuration, set the Site URL to the production
+   page, and add `.../preview/**` and `http://localhost:<port>/**` as additional redirect
+   URLs — Supabase's redirect allowlist supports `**` path globbing, so one entry covers
+   every preview-branch URL this repo's deploy workflow creates, not one per branch.
+5. Put the project's URL and **publishable key** (Project Settings → API — safe to commit;
+   it ships in client-side code by design, same as the OpenRouter endpoints already hardcoded
+   in `index.html`, and RLS is the real access boundary) into the `SUPABASE_URL` /
+   `SUPABASE_ANON_KEY` constants near the top of `index.html`'s script.
+
+**Keeping the free project awake.** Supabase pauses a free-tier project after 7 days with no
+database *activity* (dashboard visits and cached reads don't count), which would otherwise
+leave sync silently stopped until someone clicks "resume" in the dashboard. `db/schema.sql`'s
+`_keepalive` table and `.github/workflows/keepalive.yml` handle this: a scheduled job, every
+3 days, writes a timestamp using a **secret key** (Project Settings → API — this is the
+powerful one, formerly called the "service_role key"; it bypasses RLS entirely and must
+never appear in the app itself). Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as
+repository secrets (Settings → Secrets and variables → Actions) for the workflow to use.
+
+Supabase's newer secret keys (`sb_secret_...`) must be sent only in the `apikey` header —
+unlike the legacy `service_role` JWT they replace, adding the same value to an
+`Authorization: Bearer` header gets it rejected as an invalid JWT rather than accepted.
+
+---
+
 # Development
 
 ```
