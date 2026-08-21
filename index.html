@@ -458,7 +458,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v31 — 2026-08-21";
+const VERSION   = "v32 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1358,13 +1358,20 @@ async function ensureSyncClient() {
    * when boot() itself re-runs and would reach the same session -- but a
    * provider that ever resolved sign-in without a redirect would only ever
    * surface here, so the pull belongs on this event, not folded into boot()
-   * or the sync toggle alone. */
+   * or the sync toggle alone.
+   *
+   * The pull is deferred with setTimeout(...,0) rather than called
+   * directly: supabase-js has a known issue where a Supabase query started
+   * from directly inside onAuthStateChange can deadlock, hanging that call
+   * and every later one on the same client, because auth-state handling
+   * and query execution share an internal lock. Returning from the
+   * callback first and running the pull immediately afterward avoids it. */
   HSKSync.onAuthChange((_event, session) => {
     const user = (session && session.user) || null;
     const isNewSignIn = user && (!syncUser || syncUser.id !== user.id);
     syncUser = user;
     renderSyncSection();
-    if (isNewSignIn) pullAndMerge();
+    if (isNewSignIn) setTimeout(() => pullAndMerge(), 0);
   });
 }
 
