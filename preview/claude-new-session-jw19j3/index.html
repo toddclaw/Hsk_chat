@@ -52,7 +52,7 @@ header button{padding:8px 10px; flex:0 0 auto}
 }
 .msg.user .bubble{background:#233246; border-bottom-right-radius:6px}
 .msg.bot .bubble{border-bottom-left-radius:6px}
-.meta{display:flex; gap:6px; align-items:center; margin-top:6px; font-size:12px; color:var(--dim)}
+.meta{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:12px; color:var(--dim)}
 .msg.user .meta{justify-content:flex-end}
 .badge{border:1px solid var(--line); border-radius:999px; padding:2px 8px}
 .badge.warn{color:#ffd479; border-color:#5a4a22}
@@ -88,6 +88,15 @@ header button{padding:8px 10px; flex:0 0 auto}
   border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:12px; font-size:14px}
 .newword b{font-size:22px; margin-right:8px}
 .newword .why{color:var(--dim); font-size:12.5px; margin-top:4px}
+/* The English gloss of a reply. It sits below the Chinese, not above it: the
+ * Chinese stays the primary reading target and the translation is a fallback
+ * to glance at, not the first thing the eye lands on. */
+.translation{margin-top:6px; padding:9px 12px; background:var(--panel2); border:1px solid var(--line);
+  border-radius:12px; font-size:14px; line-height:1.5; color:var(--dim)}
+.explainMsg{margin:0 0 10px; padding:10px 12px; border-radius:12px; font-size:14px;
+  line-height:1.6; background:var(--panel2); white-space:pre-wrap}
+.explainMsg.user{background:#233246; margin-left:16px}
+.explainMsg .who{font-size:11px; color:var(--dim); margin-bottom:4px}
 /* A failed call is not a reply. It gets its own card rather than a fake
    Chinese sentence, which would read as the partner refusing to answer. */
 .notice{
@@ -347,6 +356,19 @@ footer{
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="explainSheet"><div class="card">
+  <h2>English explanation</h2>
+  <div class="bubble" id="explainSource" style="margin-bottom:10px"></div>
+  <div id="explainLog"></div>
+  <div class="addrow" style="margin-top:4px">
+    <input id="explainInput" type="text" placeholder="ask a follow-up question…" autocomplete="off">
+    <button id="explainSend">Send</button>
+  </div>
+  <div class="note">This chat is not restricted to your word list in either direction — ask
+  anything, in Chinese or English, and answers may use any words needed to explain clearly.</div>
+  <div style="margin-top:16px"><button id="explainClose" class="primary">Done</button></div>
+</div></div>
+
 <div class="sheet" id="vocabSheet"><div class="card">
   <h2>Added vocabulary</h2>
   <label class="toggle" for="autoAdd">
@@ -415,7 +437,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v27 — 2026-08-20";
+const VERSION   = "v28 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -717,6 +739,30 @@ async function callModel(messages, maxTokens) {
   return txt.trim();
 }
 
+/* Translation and explanation both piggyback on callModel, but neither one
+ * goes through turn()'s validator: the point of both is to say things the
+ * learner's own word list cannot yet express. */
+async function translateText(text) {
+  const raw = await callModel([{ role: "user", content:
+    "Translate this Chinese into natural, idiomatic English. Reply with only the " +
+    "translation, no quotes, no other commentary:\n\n" + text }], 200);
+  return raw.trim();
+}
+
+// Recently introduced words go in the prompt so the explanation can point out
+// which ones the learner is still working on, not just recite the sentence.
+function explainSystemPrompt(text) {
+  const recent = S.learning.filter(HSKPace.isNew)
+    .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
+  return "You are a friendly Chinese teaching assistant helping a student who is reading " +
+    "Chinese at " + levelLabel() + ". Recently introduced words they are still practicing: " +
+    (recent || "none yet") + ".\n\n" +
+    "Explain the following Chinese sentence in plain English: the grammar structures used, " +
+    "why each word or particle is there, and call out anything above the student's level. " +
+    "You may reply in English and quote Chinese as needed -- you are not restricted to the " +
+    "student's vocabulary here. Keep it concise but complete.\n\nSentence: " + text;
+}
+
 function windowed() {
   // Notices are UI, not conversation: sending them would teach the model that
   // English error text belongs in the chat.
@@ -958,6 +1004,16 @@ function renderMessage(turnObj, shownExtra) {
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);
 
+  // Below the Chinese, not above it: hidden until asked for either way.
+  let transBox = null;
+  if (turnObj.role === "assistant") {
+    transBox = document.createElement("div");
+    transBox.className = "translation";
+    transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
+    transBox.textContent = turnObj.translation || "";
+    el.appendChild(transBox);
+  }
+
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
   if (turnObj.failed) bits.push('<span class="badge fail">gave up</span>');
@@ -981,6 +1037,18 @@ function renderMessage(turnObj, shownExtra) {
   copy.textContent = "copy";
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
   meta.append(say, copy);
+  if (turnObj.role === "assistant") {
+    const translate = document.createElement("button");
+    translate.className = "copy";
+    translate.textContent = (turnObj.translation && turnObj.showTranslation)
+      ? "Hide translation" : "English translation";
+    translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
+    const explain = document.createElement("button");
+    explain.className = "copy";
+    explain.textContent = "English explanation";
+    explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
+    meta.append(translate, explain);
+  }
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -1218,6 +1286,93 @@ async function copyText(text, btn) {
     try { document.execCommand("copy"); done(); } catch (e2) { console.warn("copy failed", e2); }
     ta.remove();
   }
+}
+
+/* ------------------------------------------------------ translate & explain */
+
+/* Fetched once per reply and cached on the turn itself; the button after that
+ * only toggles visibility, so re-opening a translation never spends a call. */
+async function toggleTranslation(turnObj, btn, box) {
+  if (turnObj.translation) {
+    turnObj.showTranslation = !turnObj.showTranslation;
+    persist();
+    box.style.display = turnObj.showTranslation ? "" : "none";
+    btn.textContent = turnObj.showTranslation ? "Hide translation" : "English translation";
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Translating…";
+  try {
+    const en = await translateText(turnObj.text);
+    turnObj.translation = en;
+    turnObj.showTranslation = true;
+    persist();
+    box.textContent = en;
+    box.style.display = "";
+    btn.textContent = "Hide translation";
+  } catch (e) {
+    // A native tooltip, not alert(): consistent with the rest of the app,
+    // which never interrupts with a modal for a failed background fetch.
+    btn.title = (e && e.message) || String(e);
+    btn.textContent = "English translation";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// The sheet always shows one turn's breakdown; this is which one.
+let explainTurnObj = null;
+
+function renderExplainLog() {
+  const box = $("#explainLog");
+  box.innerHTML = "";
+  (explainTurnObj.explainChat || []).forEach(m => {
+    const div = document.createElement("div");
+    div.className = "explainMsg" + (m.role === "user" ? " user" : "");
+    div.innerHTML = '<div class="who">' + (m.role === "user" ? "you" : "explanation") + "</div>" +
+      escapeHtml(m.text);
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+// question === null is the initial breakdown; otherwise a typed follow-up.
+// Neither goes through the validator -- this chat is deliberately unconstrained.
+async function explainAsk(turnObj, question) {
+  const box = $("#explainLog");
+  const pending = document.createElement("div");
+  pending.className = "explainMsg";
+  pending.textContent = "…";
+  box.appendChild(pending);
+  box.scrollTop = box.scrollHeight;
+  $("#explainSend").disabled = true;
+
+  const messages = [{ role: "system", content: explainSystemPrompt(turnObj.text) }];
+  turnObj.explainChat.forEach(m => messages.push({ role: m.role, content: m.text }));
+  if (question) messages.push({ role: "user", content: question });
+
+  try {
+    const reply = await callModel(messages, 600);
+    if (question) turnObj.explainChat.push({ role: "user", text: question });
+    turnObj.explainChat.push({ role: "assistant", text: reply });
+  } catch (e) {
+    if (question) turnObj.explainChat.push({ role: "user", text: question });
+    turnObj.explainChat.push({ role: "assistant",
+      text: "(couldn't reach the model: " + ((e && e.message) || e) + ")" });
+  } finally {
+    persist();
+    pending.remove();
+    $("#explainSend").disabled = false;
+    if (explainTurnObj === turnObj) renderExplainLog();
+  }
+}
+
+function openExplain(turnObj) {
+  explainTurnObj = turnObj;
+  $("#explainSource").textContent = turnObj.text;
+  if (!turnObj.explainChat) turnObj.explainChat = [];
+  renderExplainLog();
+  openSheet("#explainSheet");
+  if (!turnObj.explainChat.length) explainAsk(turnObj, null);
 }
 
 /* -------------------------------------------------------------- flashcards */
@@ -1737,6 +1892,16 @@ $("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
 
+function sendExplainQuestion() {
+  const text = $("#explainInput").value.trim();
+  if (!text || !explainTurnObj) return;
+  $("#explainInput").value = "";
+  explainAsk(explainTurnObj, text);
+}
+$("#explainSend").onclick = sendExplainQuestion;
+$("#explainInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendExplainQuestion(); } });
+$("#explainClose").onclick = () => closeSheet("#explainSheet");
+
 $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
   renderVocab(); renderLearning(); openSheet("#vocabSheet");
@@ -1934,7 +2099,7 @@ $("#clearHistory").onclick = () => {
   S.history = []; persist(); renderAll();
 };
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
-[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"]].forEach(([sheet]) => {
+[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
   $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
 });
 
