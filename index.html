@@ -26,6 +26,9 @@ button,select,input,textarea{font:inherit; color:inherit}
 button{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 12px; min-height:var(--tap)}
 button:active{background:#2a343e}
 button.primary{background:var(--accent); border-color:var(--accent); color:#08111d; font-weight:600}
+/* Outlined rather than filled: this sits next to ordinary buttons and should
+   read as irreversible without competing with .primary for attention. */
+button.danger{color:var(--bad); border-color:#5a2626}
 button:disabled{opacity:.45}
 
 header{
@@ -366,7 +369,18 @@ footer{
       <button id="syncSignOut" type="button">Sign out</button>
     </div>
     <div class="note" id="syncStatus"></div>
+    <!-- Only reachable while signed in: there is no cloud copy to delete
+         otherwise, and the user id the rows are keyed by comes from the session. -->
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button id="syncWipe" class="danger" type="button">Delete all cloud data</button>
+    </div>
+    <div class="note">Removes your conversation, added words and settings from the cloud,
+    clears the conversation on this device, and turns cloud sync off. Words you added stay
+    on this device. This cannot be undone.</div>
   </div>
+  <!-- Outside the block above, which renderSyncSection() hides the moment sync is
+       switched off -- the outcome of the deletion has to outlive that. -->
+  <div class="note" id="syncWipeNote"></div>
 
   <label>Data</label>
   <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -477,7 +491,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v34 — 2026-08-21";
+const VERSION   = "v35 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2502,6 +2516,39 @@ $("#clearHistory").onclick = () => {
   // nothing to upsert), so the remote copy needs its own explicit delete or
   // it would simply reappear on the next pull from another device.
   if (S.sync.on && syncUser) HSKSync.deleteAllMessages(syncUser.id).catch(e => console.warn("sync clear failed", e));
+};
+$("#syncWipe").onclick = async () => {
+  if (!syncUser) return;
+  if (!confirm("Delete your conversation, added words and settings from the cloud?\n\n" +
+      "The conversation on this device is cleared too, and cloud sync is turned off. " +
+      "Words you added stay on this device.\n\nThis cannot be undone.")) return;
+
+  const btn = $("#syncWipe"), note = $("#syncWipeNote");
+  const user = syncUser;
+  btn.disabled = true; btn.textContent = "Deleting…"; note.textContent = "";
+
+  /* Sync goes off before anything is deleted, never after. flushSync() checks
+   * S.sync.on, so clearing it first turns a push already sitting on the debounce
+   * timer into a no-op -- left until afterwards, that push would land between
+   * the delete and the toggle and put the rows straight back. */
+  S.sync = { on: false };
+  store.set(K.sync, S.sync);
+  $("#syncOn").checked = false;
+
+  try {
+    await HSKSync.deleteAllCloudData(user.id);
+    S.history = []; persist(); renderAll();
+    note.textContent = "Cloud data deleted. Cloud sync is off.";
+  } catch (e) {
+    /* Sync stays off and the conversation is left alone. Deletion runs one table
+     * at a time, so an error means some tables may already be empty and others
+     * not -- saying so beats claiming either a clean success or a clean failure. */
+    note.textContent = "Could not delete everything: " + ((e && e.message) || e) +
+      " — some data may remain. Sync has been left off; try again.";
+  } finally {
+    btn.disabled = false; btn.textContent = "Delete all cloud data";
+    renderSyncSection();
+  }
 };
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 [["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {

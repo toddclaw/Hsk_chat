@@ -254,6 +254,23 @@
     if (r.error) throw r.error;
   }
 
+  /* Every table holding this user's rows. Named once so "delete everything"
+   * cannot drift from the schema: a table added to db/schema.sql and forgotten
+   * here would leave data behind that the app promised to remove, so
+   * test/sync.test.js reads the schema and checks this list still matches it. */
+  var USER_TABLES = ["messages", "vocab_extra", "vocab_learning", "vocab_known", "prefs"];
+
+  /* Sequential rather than Promise.all: the point of this call is that the user
+   * is told the truth about what happened, and a partial failure buried inside a
+   * rejected batch cannot say which tables were already cleared. Whatever threw
+   * stops the run and reaches the caller, which reports it. */
+  async function deleteAllCloudData(userId) {
+    for (var i = 0; i < USER_TABLES.length; i++) {
+      var r = await client.from(USER_TABLES[i]).delete().eq("user_id", userId);
+      if (r.error) throw r.error;
+    }
+  }
+
   async function pushPrefs(userId, data) {
     var r = await client.from("prefs").upsert(
       { user_id: userId, data: data, updated_at: new Date().toISOString() });
@@ -278,6 +295,8 @@
     pullVocab: pullVocab,
     deleteVocab: deleteVocab,
     deleteAllMessages: deleteAllMessages,
+    USER_TABLES: USER_TABLES,
+    deleteAllCloudData: deleteAllCloudData,
     pushPrefs: pushPrefs,
     pullPrefs: pullPrefs
   });
