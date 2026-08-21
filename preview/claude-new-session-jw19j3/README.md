@@ -249,27 +249,56 @@ happen to share a character:
 Meeting 得 inside 觉得 does not mean the dei_modal "must" construction has been met, and the
 vocabulary matcher has no way to tell the two apart from the character alone. `senses.js` is a
 small registry that represents ambiguous words this way — by *usage*, not surface form — and a
-per-level policy says which senses are allowed where. The conservative default for 得:
+per-level policy says which senses are allowed where.
 
-| Level | Allowed |
-|---|---|
-| HSK 0.5–2 | none |
-| HSK 3–4 | de_complement only |
-| HSK 5–6 | + dei_modal |
-| HSK 7–9 | both |
+Two more words get the same treatment, tiered to match the grammar this app already unlocks by
+level in its own system prompt (`prompt.js`'s `LEVEL_STYLE` — resultative complements 结果补语
+open at HSK 3, directional complements 方向补语 at HSK 4 — rather than inventing new cutoffs):
 
-de_lexical is never gated: it only ever occurs inside a compound word, which the segmenter
-already folds into one token the moment that compound is itself in the active lexicon — if
-the compound is above level, ordinary vocabulary validation rejects it before this module is
-ever consulted. There is nothing left for a sense check to do with it, so it is documented but
-never offered as a classification choice.
+- **着** — **zhe_durative**, an ongoing state or action (zhe): 他坐着, 门开着, vs.
+  **zhao_resultative**, an achieved-result complement (zháo): 睡着了, 找着了, 够不着. Durative 着
+  is the one this app already introduces at HSK 2; resultative 着 is a 结果补语 like any other,
+  so it waits for HSK 3 alongside them.
+- **过** — **guo_experiential**, "have done before" (neutral tone guo): 去过, 吃过, vs.
+  **guo_verb**, the main verb "to pass/exceed" or a resultative/directional complement: 说不过,
+  走过去 (full tone guò). Experiential 过 is the sense this app's prompt already names as newly
+  allowed at HSK 2; guo_verb waits for HSK 4, once both complement categories are open.
+
+| Level | 得 | 着 | 过 |
+|---|---|---|---|
+| HSK 0.5–1 | none | none | none |
+| HSK 2 | none | zhe_durative | guo_experiential |
+| HSK 3 | de_complement | + zhao_resultative | guo_experiential |
+| HSK 4 | de_complement | both | + guo_verb |
+| HSK 5–6 | + dei_modal | both | both |
+| HSK 7–9 | both | both | both |
+
+de_lexical (and any word's compound-only sense generally) is never gated: it only ever occurs
+inside a compound word, which the segmenter already folds into one token the moment that
+compound is itself in the active lexicon — if the compound is above level, ordinary vocabulary
+validation rejects it before this module is ever consulted. There is nothing left for a sense
+check to do with it, so it is documented but never offered as a classification choice.
+
+**Words considered and left out.** 了 (完成体 le_perfective: 我吃了饭 vs. 语气助词 le_change,
+change-of-state/emphasis: 我不去了, 太好了) is the same shape and this app's prompt already
+tries to gate it below HSK 2 — but 了 is standalone in a large fraction of ordinary replies
+from HSK 2 up, and a classify call on most turns is real added latency and OpenRouter cost that
+the prompt-only rule avoids; left ungated by choice, not by oversight. 把 does not exist in this
+app's own HSK 1–2 word lists at all — `nest_levels.py`'s data only adds it at HSK 3, the same
+level the 把-construction is already unlocked — so there is no gap between what vocabulary
+already blocks and what a sense policy would add. 的, 一, 在, 要 are ruled out on frequency
+alone (的 alone appears in nearly every sentence); 就 and 才 have too many overlapping discourse
+senses to classify reliably into a short, discrete list. Directional/resultative complement
+words as a family (上/下/来/去/出/起/到/掉/住/完/懂/见…) are a real extension of this idea, but
+a larger one — a distinct project rather than a registry entry.
 
 **The check runs only when it has something to check.** Classifying a sense costs a model
 call, so `wordsPresent()` looks for a registered word occurring *standalone* — not folded into
 a longer allowlist word by the segmenter — and the app skips the call entirely when nothing
-standalone turns up (a reply full of 觉得 and 得到 never spends one). When it does turn up, one
-call classifies every standalone occurrence in the reply at once, and the pipeline extends the
-existing retry loop rather than replacing it:
+standalone turns up (a reply full of 觉得 and 不过 never spends one). When one does turn up, one
+call classifies every occurrence of that word in the reply at once (a second registered word
+in the same reply is a second call), and the pipeline extends the existing retry loop rather
+than replacing it:
 
 1. generate;
 2. JS hard validation (vocabulary, as always) — a reply that already fails here skips the
@@ -285,7 +314,8 @@ A classify call that cannot be reached **fails open**: the reply is allowed thro
 than rejecting an unrelated turn over a validator that itself couldn't be reached.
 
 Adding another ambiguous word is a registry entry in `senses.js` alone — the trigger, the
-policy lookup, and the repair prompt all read from it, so no other code changes.
+policy lookup, the classify prompt (built entirely from the entry's own sense names, no
+per-word code), and the repair prompt all read from it, so no other code changes.
 
 ## Non-obvious choices
 
