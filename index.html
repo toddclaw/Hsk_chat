@@ -403,6 +403,7 @@ footer{
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
 <script src="pace.js"></script>
+<script src="senses.js"></script>
 <script>
 "use strict";
 
@@ -437,7 +438,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v28 — 2026-08-21";
+const VERSION   = "v29 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -684,6 +685,7 @@ function extractNeeds(text) {
 function repairPrompt(violations, attempt) {
   const latin = violations.filter(v => v.kind === "latin");
   const words = violations.filter(v => v.kind === "bad");
+  const senses = violations.filter(v => v.kind === "sense");
   const parts = [];
   if (latin.length) parts.push("不要用英文，不要用拼音。只写汉字。");
   if (words.length) {
@@ -698,8 +700,35 @@ function repairPrompt(violations, attempt) {
       parts.push("只用最简单的词。");
     }
   }
+  // senses.js explains the disallowed grammatical function; it never adds
+  // its own closing line, so this one covers vocabulary and sense repairs alike.
+  if (senses.length) parts.push(HSKSenses.repairPrompt(senses));
   parts.push("请用别的说法，再说一次。只说中文，不要解释。");
   return parts.join("");
+}
+
+/* The LLM sense-validator. An allowed character does not mean every
+ * grammatical function of it is allowed at this level (see senses.js) --
+ * but classifying that needs a model call, so it is spent only when a
+ * registered ambiguous word actually turns up standalone in this reply,
+ * never on every turn. Failure here fails open: a classify call that
+ * cannot be reached should not turn an unrelated reply into a rejection. */
+async function checkSenseViolations(text, lex, level) {
+  const tokens = HSK.segment(text, lex);
+  const words = HSKSenses.wordsPresent(tokens);
+  if (!words.length) return [];
+  const out = [];
+  for (const w of words) {
+    const count = HSKSenses.standaloneHits(tokens, w).length;
+    try {
+      const raw = await callModel([{ role: "user", content: HSKSenses.classifyPrompt(w, text, count) }], 60);
+      const classified = HSKSenses.parseClassification(raw, count);
+      if (classified) out.push(...HSKSenses.checkSenses(w, classified, level));
+    } catch (e) {
+      console.warn("sense classify failed, allowing through:", w, e);
+    }
+  }
+  return out;
 }
 
 // Failures carry a kind, because the useful response differs: a missing key is
@@ -806,8 +835,14 @@ async function turn() {
       ? HSK.buildLexicon(inScript(S.base),
           inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
       : S.lex;
-    const violations = HSK.validate(ex.text, lex);
-    console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
+    const hardViolations = HSK.validate(ex.text, lex);
+    /* The sense check is spent only once vocabulary already passes -- an
+     * ambiguous word inside a reply that is already going to be repaired for
+     * something else is not worth a second model call this attempt. */
+    const senseViols = hardViolations.length ? [] : await checkSenseViolations(ex.text, lex, S.level);
+    const violations = hardViolations.concat(senseViols);
+    console.log("[attempt " + attempt + "]", raw,
+      violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
 
     if (!violations.length) {
       /* A reply that is otherwise legal but omits the required word is not a
