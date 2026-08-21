@@ -240,6 +240,19 @@
     if (r.error) throw r.error;
     return r.data || [];
   }
+  // Upserting the (now-shorter) local list is not enough to remove a word:
+  // the row from before the deletion is still on the server and would
+  // silently reappear on the next pull from another device. Word removal
+  // is explicit and rare (a tap on "Remove"), so this is a plain immediate
+  // call, not folded into the debounced push.
+  async function deleteVocab(table, userId, word) {
+    var r = await client.from(table).delete().eq("user_id", userId).eq("word", word);
+    if (r.error) throw r.error;
+  }
+  async function deleteAllMessages(userId) {
+    var r = await client.from("messages").delete().eq("user_id", userId);
+    if (r.error) throw r.error;
+  }
 
   async function pushPrefs(userId, data) {
     var r = await client.from("prefs").upsert(
@@ -263,6 +276,8 @@
     pullMessages: pullMessages,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
+    deleteVocab: deleteVocab,
+    deleteAllMessages: deleteAllMessages,
     pushPrefs: pushPrefs,
     pullPrefs: pullPrefs
   });
