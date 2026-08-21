@@ -42,14 +42,20 @@ works exactly as on iOS, with one exception noted under
 ## Running it for free
 
 Make an account at [openrouter.ai/keys](https://openrouter.ai/keys), create a key, **add no
-credit**. Settings has a **Try a known-good model** dropdown prefilled with the free Gemma
-model documented below, or tick **free models only** to filter the loaded catalogue. Models priced at zero cost nothing to
-call, and the picker shows what everything costs per million input tokens so the paid ones
-are one tap away when you want them.
+credit**. Settings has a **Try a known-good model** dropdown, or tick **free models only** to
+filter the loaded catalogue. Models priced at zero cost nothing to call, and the picker
+shows what everything costs per million input tokens so the paid ones are one tap away when
+you want them.
 
-**A free model that works: Google: Gemma 4 26B A4B (free).** Pick it by name in the
-picker — free endpoints come and go, so the live catalogue is the authority on ids, not this
-file.
+**The free option is `openrouter/free`**, a router OpenRouter maintains rather than a single
+model. It cannot go stale the way a specific id can — which is the whole reason it is the one
+named here. It picks a different free model per call, so quality varies a great deal.
+
+This file used to name a specific free Gemma endpoint. OpenRouter withdrew it, which left the
+one option aimed at someone with no credit as the one that failed outright; its closest live
+relative and the other Gemma free endpoint both answered `429 rate-limited upstream` on every
+attempt the same afternoon. **Free endpoints come and go, and the live catalogue is the
+authority on ids, not this file.**
 
 That recommendation matters because **most free models tried for this app returned nothing at
 all**. A free endpoint that is overloaded, withdrawn or gated answers with an empty
@@ -90,6 +96,13 @@ connection**, which calls `GET https://openrouter.ai/api/v1/key` with the key as
 token — not a chat completion, so testing a key costs nothing. A working key reports
 `✓ Key works. You're ready to chat.` with its free-tier status and credit limit; a rejected
 one reports OpenRouter's own error text.
+
+The **balance sits beside the key field** and fills in whenever Settings opens, from the same
+endpoint — `$19.56 left` for a key with a spending ceiling, or `$0.41 used` for one without,
+since "left" means nothing when there is no ceiling. It stays blank rather than showing
+`$0.00` when the lookup cannot be made: the app works offline, and a zero you cannot
+distinguish from an unanswered question is worse than no number at all. An account that
+really is empty still reads `$0.00 left`.
 
 ## What it costs
 
@@ -611,6 +624,14 @@ higher value, since seen only ever increases. Preferences are the one place last
 applies — a single row per user, low-stakes if a rare simultaneous edit overwrites one, since
 re-opening Settings shows the current value either way.
 
+**Delete all cloud data** sits below *Sync now* and *Sign out*. It removes every row this
+user has — conversation, all three vocabulary tables, preferences — clears the conversation
+on this device, and turns sync off. Words already added stay on this device: with sync off,
+local and cloud are free to differ, and wiping local vocabulary too would make it a factory
+reset rather than what the label says. Sync is switched off *before* the delete rather than
+after, so a push already sitting on the debounce timer cannot land in between and put the
+rows straight back.
+
 Sync pulls on sign-in and whenever "Sync now" is pressed, and pushes are debounced a couple
 of seconds after a local edit settles. A push or pull failure never blocks the chat itself —
 sync is additive on top of an app that already works fully offline, and it fails open: the
@@ -654,12 +675,17 @@ unlike the legacy `service_role` JWT they replace, adding the same value to an
 
 # Development
 
+**[DEVELOPING.md](DEVELOPING.md)** has the working notes: getting node without
+root, enabling the pre-commit hook, what the browser suite needs, and the
+accumulated gotchas around previews, OpenRouter model ids, RLS and the
+segmenter. This section covers the layout and the everyday commands.
+
 ```
 index.html        markup, CSS and app logic
 validator.js      the matcher, shared by the page and the tests
 prompt.js         per-level register profiles, starters, prompt assembly
 data/hsk1..7.json the allowlists: {"w":"你好","p":"nǐ hǎo","d":"hello"}
-test/             three suites and a runner
+test/             seven suites and a runner (one drives a real browser)
 tools/            one-shot scripts: wordlist conversion, icon generation
 sw.js  manifest.json  icon-*.png    the PWA shell
 ```
@@ -804,5 +830,10 @@ reference dictionary total a few megabytes and are cached on first use.
 
 # Not included, on purpose
 
-Streaming (a partial response cannot be validated), audio, spaced repetition, accounts,
-sync, traditional characters.
+Streaming (a partial response cannot be validated), spaced repetition, accounts.
+
+Sync and traditional characters were both on this list and were both since built --
+cloud sync through Supabase (GitHub sign-in, no accounts of this app's own) and a
+simplified/traditional switch in Settings. Audio arrived too, through the Web Speech
+API. They are noted here rather than quietly deleted because the reasoning that put
+them on the list is in the sections above, and it is worth knowing which way it went.
