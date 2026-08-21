@@ -243,9 +243,52 @@
     return splitRun(text.slice(start, end), refLex);
   }
 
+  /* Personal names are not vocabulary. The published lists carry almost no name
+   * characters -- 张 arrives at HSK 3 and 王 at HSK 4, and nothing usable exists
+   * below that -- so a model answering this app's own HSK 1 starter
+   * 你叫什么名字？ has no legal name to give: 小明, 小王 and 李老师 are all
+   * rejected, every repair attempt is spent renaming, and the learner's very
+   * first turn lands on a canned fallback. Characters introduced by 叫 or 姓 are
+   * read as a name rather than a violation.
+   *
+   * A post-filter on validate() rather than another option inside segment():
+   * the segmenter takes the shortest path, so a zero-cost name span would beat
+   * the real parse of 你叫什么名字 (什么 + 名字, two tokens) with a bogus
+   * one-token name. Forgiving only what the segmenter already gave up on leaves
+   * every legal parse exactly as it was. */
+  var NAME_INTRO = "叫姓";
+  var NAME_MAX = 3;            // 小明, 王小明 -- long enough for a full name
+
+  function nameSpans(text) {
+    var spans = [];
+    for (var i = 0; i < text.length; i++) {
+      if (NAME_INTRO.indexOf(text[i]) === -1) continue;
+      var end = i + 1;
+      while (end < text.length && end - i <= NAME_MAX &&
+             !isPunct(text[end]) && !isLatin(text[end])) end++;
+      if (end > i + 1) spans.push([i + 1, end]);
+    }
+    return spans;
+  }
+
   function validate(text, lex) {
+    var spans = nameSpans(text);
     return segment(text, lex).filter(function (t) {
       return t.kind === "bad" || t.kind === "latin";
+    }).map(function (t) {
+      /* Marked rather than dropped. These same violations are what the app
+       * turns into the learner's "new words" list, and a name that just went
+       * past on screen is worth glossing -- it is only the repair loop that
+       * should let it through. Overlap rather than containment because the
+       * segmenter merges adjacent unplaceable characters: in 他姓张 the run is
+       * 姓张, opening one character before the name does.
+       *
+       * Latin is never a name. The prompt bans English outright, so 我叫John is
+       * a rule break rather than something to read. */
+      if (t.kind === "bad" && spans.some(function (s) {
+        return t.start < s[1] && t.end > s[0];
+      })) t.name = true;
+      return t;
     });
   }
 
@@ -270,6 +313,7 @@
     buildLexicon: buildLexicon,
     segment: segment,
     validate: validate,
+    nameSpans: nameSpans,
     suggest: suggest,
     isPunct: isPunct,
     stripScaffold: stripScaffold,

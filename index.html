@@ -242,7 +242,14 @@ footer{
 
   <label for="modelExample">Try a known-good model</label>
   <select id="modelExample">
-    <option value="google/gemma-4-26b-a4b:free">Google: Gemma 4 26B A4B (free) — a good free starting point</option>
+    <!-- Individual free model ids are the most volatile thing OpenRouter serves:
+         the id this list used to name had been withdrawn outright, and both
+         Gemma free endpoints answered 429 "rate-limited upstream" on every try
+         while this was written. openrouter/free is a router OpenRouter maintains
+         rather than a single model, so it cannot go stale the same way -- at the
+         cost of picking a different free model each call, which is why the label
+         promises nothing about quality. -->
+    <option value="openrouter/free">OpenRouter: Free Models Router — no credit needed, but quality varies a lot</option>
     <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
   </select>
   <label for="modelId">Model id (any OpenRouter id)</label>
@@ -330,6 +337,25 @@ footer{
   <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
   <div class="stats" id="stats"></div>
 
+  <label class="toggle" for="syncOn">
+    <input type="checkbox" id="syncOn">
+    <span>Cloud sync</span>
+  </label>
+  <div class="note">Off by default. Sign in to back up your conversation, added words, and
+  settings, and pick up where you left off on another device. Your OpenRouter key never
+  syncs — it only ever stays on this device.</div>
+  <div id="syncSignedOut" style="display:none">
+    <button id="syncSignIn" type="button">Sign in with GitHub</button>
+  </div>
+  <div id="syncSignedIn" style="display:none">
+    <div class="note" id="syncWho" style="margin-top:8px"></div>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button id="syncNow" type="button">Sync now</button>
+      <button id="syncSignOut" type="button">Sign out</button>
+    </div>
+    <div class="note" id="syncStatus"></div>
+  </div>
+
   <label>Data</label>
   <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
     <button id="clearHistory">Clear conversation</button>
@@ -404,6 +430,7 @@ footer{
 <script src="prompt.js"></script>
 <script src="pace.js"></script>
 <script src="senses.js"></script>
+<script src="sync.js"></script>
 <script>
 "use strict";
 
@@ -438,7 +465,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v30 — 2026-08-21";
+const VERSION   = "v33 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -446,6 +473,17 @@ const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
+
+/* Cloud sync (optional, off by default -- see sync.js). The publishable key
+ * is not a secret: it is meant to ship in client-side code, same as these
+ * OpenRouter URLs above. Row Level Security in the Supabase project is what
+ * actually keeps one signed-in user's rows away from another's. */
+const SUPABASE_URL      = "https://arboqsjwvfnvcdcsaeoe.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_3OtYvOomt6j6ThvjazJPMA_FYZlboHM";
+// Pinned, not floating "@2": a silent breaking change in the SDK should
+// never be able to land on this app without a deliberate version bump here.
+const SUPABASE_JS_URL   = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js";
+const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
@@ -457,7 +495,7 @@ const K = {
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
-  known:"hsk1chat.knownAhead"
+  known:"hsk1chat.knownAhead", sync:"hsk1chat.syncOn"
 };
 
 const store = {
@@ -505,8 +543,21 @@ const S = {
   base:    [],        // the level's wordlist
   dict:    new Map(), // REF_LIST, for glossing words above the current level
   lex:     null,
-  busy:    false
+  busy:    false,
+  // Whether cloud sync is turned on. Off by default; this alone does not
+  // mean signed in -- see syncUser below, tracked separately since it is
+  // session state, not a setting to persist.
+  sync:    store.get(K.sync, { on: false })
 };
+
+/* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
+ * is re-derived from the live Supabase session on every launch, and the
+ * queue/timer are pure in-memory bookkeeping for the debounced push below. */
+let syncUser = null;             // the signed-in user, or null
+let syncBusy = false;            // a pull or push is in flight right now
+let syncLastError = "";
+const syncQueue = { messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
+let syncTimer = null;
 
 const $ = s => document.querySelector(s);
 const log = $("#log"), input = $("#input"), mirror = $("#mirror");
@@ -835,7 +886,12 @@ async function turn() {
       ? HSK.buildLexicon(inScript(S.base),
           inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
       : S.lex;
-    const hardViolations = HSK.validate(ex.text, lex);
+    /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
+     * first one any list carries, at HSK 3 -- so asking for a different one just
+     * spends the attempts and lands on the fallback, which is what the app's own
+     * 你叫什么名字？ starter used to do every time. They stay in the violation
+     * list so the "new words" panel below still glosses them. */
+    const hardViolations = HSK.validate(ex.text, lex).filter(v => !v.name);
     /* The sense check is spent only once vocabulary already passes -- an
      * ambiguous word inside a reply that is already going to be repaired for
      * something else is not worth a second model call this attempt. */
@@ -1161,6 +1217,7 @@ function addWords(words, sentence) {
   });
   if (!added.length) return [];
   store.set(K.extra, S.extra);
+  queueSync("vocab_extra");
   rebuildLexicon();
   return added.filter(e => !e.d);
 }
@@ -1209,6 +1266,7 @@ async function glossWords(entries, ctx) {
       hit.p = String(g.p); hit.d = String(g.d || "");
     });
     store.set(K.extra, S.extra);
+    queueSync("vocab_extra");
     rebuildLexicon();
     renderAll();
     if ($("#vocabSheet").classList.contains("open")) renderVocab();
@@ -1221,6 +1279,7 @@ function acceptWord(n, sentence) {
   if (!isExtra(n.w)) {
     S.extra.push({ w: n.w, p: n.p, d: n.d, s: (sentence || "").trim() });
     store.set(K.extra, S.extra);
+    queueSync("vocab_extra");
     rebuildLexicon();
   }
   n.state = "accepted";
@@ -1228,7 +1287,7 @@ function acceptWord(n, sentence) {
   renderAll();
 }
 
-function persist() { store.set(K.history, S.history); }
+function persist() { store.set(K.history, S.history); queueSync("messages"); }
 
 /* Settle the reply against the pacing budget: bank what was introduced, count
  * reuse toward promotion, then earn credit from the characters just read. */
@@ -1262,10 +1321,227 @@ function settlePace(res) {
   Object.assign(b, HSKPace.earn(b, res.text, S.pace.rate));
   store.set(K.learning, S.learning);
   store.set(K.paceState, S.budget);
+  queueSync("vocab_learning"); queueSync("prefs");   // budget lives in the prefs snapshot
   rebuildLexicon();
   renderPaceNote();
   return introduced;
 }
+
+/* ------------------------------------------------------------- cloud sync
+ *
+ * Optional, off by default. Mirrors S.history and the three vocabulary
+ * lists to a Supabase project (see sync.js for the schema/merge reasoning),
+ * plus preferences as one JSONB blob. The API key and the cached model list
+ * never sync -- see sync.js's PREFS_KEYS, which enumerates exactly what a
+ * prefs push contains rather than ever stringifying the whole S object.
+ *
+ * Every push/pull here is best-effort: a failure sets syncLastError and
+ * updates the status line, never throws into a caller or blocks the chat
+ * itself. Sync is additive on top of an app that already works fully
+ * offline -- it must never be a new way for the app to break.
+ */
+
+// supabase-js loads from a CDN only once sync is actually turned on, never
+// unconditionally at boot -- most launches never touch it, and this keeps
+// the offline-first shell exactly as small as it was before this feature.
+let supabaseLoad = null;
+function loadSupabaseJs() {
+  if (window.supabase) return Promise.resolve();
+  if (supabaseLoad) return supabaseLoad;
+  supabaseLoad = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = SUPABASE_JS_URL;
+    s.onload = () => resolve();
+    s.onerror = () => { supabaseLoad = null; reject(new Error("Could not load the sync library -- check your connection.")); };
+    document.head.appendChild(s);
+  });
+  return supabaseLoad;
+}
+
+function syncConfigured() { return !!HSKSync.getClient(); }
+
+async function ensureSyncClient() {
+  if (syncConfigured()) return;
+  await loadSupabaseJs();
+  HSKSync.configure(SUPABASE_URL, SUPABASE_ANON_KEY);
+  /* The one place a fresh sign-in is actually noticed. In the real GitHub
+   * redirect flow this fires on the page load supabase-js returns to (via
+   * its own detectSessionInUrl, not anything this app does), which is also
+   * when boot() itself re-runs and would reach the same session -- but a
+   * provider that ever resolved sign-in without a redirect would only ever
+   * surface here, so the pull belongs on this event, not folded into boot()
+   * or the sync toggle alone.
+   *
+   * The pull is deferred with setTimeout(...,0) rather than called
+   * directly: supabase-js has a known issue where a Supabase query started
+   * from directly inside onAuthStateChange can deadlock, hanging that call
+   * and every later one on the same client, because auth-state handling
+   * and query execution share an internal lock. Returning from the
+   * callback first and running the pull immediately afterward avoids it. */
+  HSKSync.onAuthChange((_event, session) => {
+    const user = (session && session.user) || null;
+    const isNewSignIn = user && (!syncUser || syncUser.id !== user.id);
+    syncUser = user;
+    renderSyncSection();
+    if (isNewSignIn) setTimeout(() => pullAndMerge(), 0);
+  });
+}
+
+// Debounced push: local edits settle for a moment before spending a call,
+// so a burst of typing or several words added in a row costs one round
+// trip, not one per keystroke-adjacent change.
+function queueSync(kind) {
+  if (!S.sync.on || !syncUser) return;
+  syncQueue[kind] = true;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(flushSync, SYNC_DEBOUNCE_MS);
+}
+
+async function flushSync() {
+  if (!S.sync.on || !syncUser || syncBusy) return;
+  const q = Object.assign({}, syncQueue);
+  if (!Object.values(q).some(Boolean)) return;
+  Object.keys(syncQueue).forEach(k => { syncQueue[k] = false; });
+  syncBusy = true; renderSyncStatus("Syncing…");
+  try {
+    if (q.messages) {
+      const rows = S.history.map(t => HSKSync.messageToRow(t, syncUser.id)).filter(Boolean);
+      await HSKSync.pushMessages(rows);
+    }
+    if (q.vocab_extra) await HSKSync.pushVocab("vocab_extra", HSKSync.vocabToRows(S.extra, syncUser.id));
+    if (q.vocab_learning) await HSKSync.pushVocab("vocab_learning", HSKSync.vocabToRows(S.learning, syncUser.id));
+    if (q.vocab_known) await HSKSync.pushVocab("vocab_known", HSKSync.vocabToRows(S.known, syncUser.id));
+    if (q.prefs) {
+      await HSKSync.pushPrefs(syncUser.id, HSKSync.prefsSnapshot(S));
+      S.prefsPushedAt = new Date().toISOString();
+    }
+    syncLastError = "";
+    renderSyncStatus("Synced just now");
+  } catch (e) {
+    console.warn("sync push failed", e);
+    syncLastError = (e && e.message) || String(e);
+    // Put back whatever this attempt was carrying, and try again shortly --
+    // a dropped connection should not silently lose an edit.
+    Object.keys(q).forEach(k => { if (q[k]) syncQueue[k] = true; });
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(flushSync, 15000);
+    renderSyncStatus("Sync failed — will retry");
+  } finally {
+    syncBusy = false;
+  }
+}
+
+// Removing a word locally must remove it remotely too, or it quietly comes
+// back the next time this device pulls from another one that still has it.
+async function deleteSyncedWord(table, word) {
+  if (!S.sync.on || !syncUser) return;
+  try { await HSKSync.deleteVocab(table, syncUser.id, word); }
+  catch (e) { console.warn("sync delete failed", table, word, e); }
+}
+
+/* Pull everything, merge with what is already local, and push back whatever
+ * the merge added locally that the server did not have (the first sign-in
+ * on a device that already has local history seeds the server; a second
+ * device signing in later pulls that history down instead). */
+async function pullAndMerge() {
+  // Also guards against a redundant concurrent call -- boot() checks for an
+  // existing session explicitly, and the onAuthChange listener below can
+  // fire for that same session at nearly the same moment.
+  if (!S.sync.on || !syncUser || syncBusy) return;
+  syncBusy = true; renderSyncStatus("Syncing…");
+  try {
+    const [msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+      HSKSync.pullMessages(syncUser.id),
+      HSKSync.pullVocab("vocab_extra", syncUser.id),
+      HSKSync.pullVocab("vocab_learning", syncUser.id),
+      HSKSync.pullVocab("vocab_known", syncUser.id),
+      HSKSync.pullPrefs(syncUser.id)
+    ]);
+    S.history = HSKSync.mergeMessages(S.history, msgRows);
+    S.extra = HSKSync.mergeWordList(S.extra, HSKSync.rowsToVocab(extraRows));
+    S.learning = HSKSync.mergeWordList(S.learning, HSKSync.rowsToVocab(learningRows), "seen");
+    S.known = HSKSync.mergeWordList(S.known, HSKSync.rowsToVocab(knownRows));
+
+    // Prefs are whole-blob last-write-wins: adopt the remote snapshot only
+    // if it is newer than the last one this device is known to have pushed.
+    if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
+      const oldLevel = S.level, oldScript = S.script;
+      HSKSync.applyPrefsSnapshot(S, prefsRow.data);
+      store.set(K.model, S.model); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
+      store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
+      store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
+      store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
+      store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
+      S.prefsPushedAt = prefsRow.updated_at;
+      applyFont(S.font);
+      if (S.level !== oldLevel) await loadLevel(S.level);
+      else if (S.script !== oldScript) rebuildLexicon();
+    }
+
+    store.set(K.history, S.history);
+    store.set(K.extra, S.extra); store.set(K.learning, S.learning); store.set(K.known, S.known);
+    rebuildLexicon(); updateMirror(); renderAll(); renderStarters(); renderPaceNote();
+    if ($("#vocabSheet").classList.contains("open")) { renderVocab(); renderLearning(); }
+    if ($("#setSheet").classList.contains("open")) fillSyncUI();
+
+    syncLastError = "";
+    renderSyncStatus("Synced just now");
+    // Whatever the merge added locally that the server did not have yet.
+    queueSync("messages"); queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
+  } catch (e) {
+    console.warn("sync pull failed", e);
+    syncLastError = (e && e.message) || String(e);
+    renderSyncStatus("Couldn't sync — " + syncLastError);
+  } finally {
+    syncBusy = false;
+  }
+}
+
+async function signInForSync() {
+  try {
+    await ensureSyncClient();
+    const redirectTo = location.origin + location.pathname;
+    await HSKSync.signInWithGitHub(redirectTo);
+    // The page navigates away to GitHub here; nothing after this line runs
+    // in this load. onAuthChange + boot()'s own session check pick it up
+    // on the way back.
+  } catch (e) {
+    syncLastError = (e && e.message) || String(e);
+    renderSyncStatus("Couldn't sign in — " + syncLastError);
+  }
+}
+
+async function signOutOfSync() {
+  try { await HSKSync.signOut(); } catch (e) { console.warn("sign-out failed", e); }
+  syncUser = null;
+  renderSyncSection();
+}
+
+function renderSyncStatus(text) {
+  const el = $("#syncStatus");
+  if (el) el.textContent = text;
+}
+
+// Shows the right one of "off" / "sign in" / "signed in" in Settings.
+function renderSyncSection() {
+  const signedOut = $("#syncSignedOut"), signedIn = $("#syncSignedIn");
+  if (!signedOut || !signedIn) return;
+  if (!S.sync.on) {
+    signedOut.style.display = "none"; signedIn.style.display = "none";
+    return;
+  }
+  if (syncUser) {
+    signedOut.style.display = "none"; signedIn.style.display = "";
+    $("#syncWho").textContent = "Signed in as " +
+      (syncUser.user_metadata && (syncUser.user_metadata.user_name || syncUser.user_metadata.preferred_username)
+        || syncUser.email || "GitHub");
+    renderSyncStatus(syncLastError ? "Couldn't sync — " + syncLastError : "");
+  } else {
+    signedOut.style.display = ""; signedIn.style.display = "none";
+  }
+}
+function fillSyncUI() { renderSyncSection(); }
 
 /* Speech was a non-goal in the original design; it is here because it was
  * asked for. The Web Speech API needs a Chinese voice installed on the device
@@ -1481,13 +1757,23 @@ function plecoUrl(word) {
 
 /* ------------------------------------------------------------------ sending */
 
+/* A stable id assigned once, client-side, the moment a message is created --
+ * never server-generated. It is what lets sync push an edit made after
+ * creation (a translation added later, an explain-chat follow-up appended)
+ * as an upsert against the same row instead of a duplicate. "notice" cards
+ * (error UI, not conversation) never get one and are never synced -- see
+ * sync.js's messageToRow(). */
+function newMessageId() {
+  return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+}
+
 async function send() {
   const text = input.value.trim();
   if (!text || S.busy) return;
   S.busy = true; $("#send").disabled = true;
   input.value = ""; updateMirror(); autosize();
 
-  S.history.push({ role: "user", text: text });
+  S.history.push({ role: "user", text: text, id: newMessageId(), created_at: new Date().toISOString() });
   // Learn before the turn, so the model's own reply may use these words too.
   const toGloss = S.autoAdd ? learnFromInput(text) : [];
   persist(); renderAll();
@@ -1519,7 +1805,8 @@ async function runTurn(toGloss, text) {
     const res = await turn();
     S.history.push({
       role: "assistant", text: res.text, needs: res.needs,
-      attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated
+      attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
+      id: newMessageId(), created_at: new Date().toISOString()
     });
     const introduced = settlePace(res);
     if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
@@ -1708,6 +1995,7 @@ function renderLearning() {
     del.onclick = () => {
       S.learning = S.learning.filter(x => x !== e);
       store.set(K.learning, S.learning);
+      deleteSyncedWord("vocab_learning", e.w);
       rebuildLexicon(); renderLearning(); renderPaceNote(); renderAll();
     };
     row.appendChild(del);
@@ -1748,9 +2036,10 @@ function renderPool() {
       '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
     row.querySelector("input").onchange = ev => {
       if (ev.target.checked) {
-        if (!isKnownAhead(e.w)) S.known.push({ w: e.w, p: e.p, d: e.d });
+        if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
       } else {
         S.known = S.known.filter(k => k.w !== e.w);
+        deleteSyncedWord("vocab_known", e.w);
       }
       store.set(K.known, S.known);
       rebuildLexicon(); updateMirror();
@@ -1788,6 +2077,7 @@ function renderVocab() {
     del.textContent = "Remove";
     del.onclick = () => {
       S.extra.splice(i, 1); store.set(K.extra, S.extra);
+      deleteSyncedWord("vocab_extra", e.w);
       rebuildLexicon(); renderVocab(); renderAll();
     };
     row.appendChild(del);
@@ -1907,13 +2197,15 @@ document.addEventListener("click", e => {
 
 $("#level").onchange = async e => {
   await loadLevel(Number(e.target.value));
+  queueSync("prefs");
   updateMirror(); renderAll(); renderStarters();
 };
-$("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; };
+$("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; queueSync("prefs"); };
 
 $("#btnPy").onclick = () => {
   S.pinyin = S.pinyin === "off" ? "extra" : S.pinyin === "extra" ? "all" : "off";
   store.set(K.pinyin, S.pinyin);
+  queueSync("prefs");
   $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
@@ -1941,7 +2233,7 @@ $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
   renderVocab(); renderLearning(); openSheet("#vocabSheet");
 };
-$("#autoAdd").onchange = e => { S.autoAdd = e.target.checked; store.set(K.autoAdd, S.autoAdd); };
+$("#autoAdd").onchange = e => { S.autoAdd = e.target.checked; store.set(K.autoAdd, S.autoAdd); queueSync("prefs"); };
 function addByHand() {
   const box = $("#addWord");
   const words = box.value.trim().split(/[\s,，、]+/).filter(Boolean);
@@ -1997,6 +2289,8 @@ $("#btnSet").onclick = () => {
   fillPrompt();
   renderStats();
   renderVersion();
+  $("#syncOn").checked = S.sync.on;
+  renderSyncSection();
   openSheet("#setSheet");
 };
 $("#setClose").onclick = () => {
@@ -2025,6 +2319,7 @@ $("#setClose").onclick = () => {
     S.prompt = typed;
     store.set(K.prompt, S.prompt);
   }
+  queueSync("prefs");
   closeSheet("#setSheet");
 };
 /* What the textarea was last filled with. Saving compares against this, not
@@ -2048,35 +2343,42 @@ $("#resetPrompt").onclick = () => {
 $("#showStarters").onchange = e => {
   S.starters = e.target.checked;
   store.set(K.starters, S.starters);
+  queueSync("prefs");
   renderStarters();
 };
 $("#speechRate").onchange = e => {
   S.speechRate = Number(e.target.value) || 0.8;
   store.set(K.speechRate, S.speechRate);
+  queueSync("prefs");
 };
 $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
   store.set(K.font, S.font);
+  queueSync("prefs");
 };
 $("#paceOn").onchange = async e => {
   S.pace = { on: e.target.checked, rate: S.pace.rate };
   store.set(K.pace, S.pace);
+  queueSync("prefs");
   await loadPool();
   renderPaceNote();
 };
 $("#paceRate").onchange = e => {
   S.pace = { on: S.pace.on, rate: Number(e.target.value) || HSKPace.DEFAULT_RATE };
   store.set(K.pace, S.pace);
+  queueSync("prefs");
   renderPaceNote();
 };
 $("#modelSort").onchange = e => {
   S.modelSort = e.target.value; store.set(K.modelSort, S.modelSort);
+  queueSync("prefs");
   fillModels();
 };
 $("#freeOnly").onchange = e => {
   S.freeOnly = e.target.checked;
   store.set(K.freeOnly, S.freeOnly);
+  queueSync("prefs");
   fillModels();
   if (S.freeOnly && !store.get(K.models, null)) {
     $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
@@ -2127,11 +2429,34 @@ async function testKey() {
 }
 $("#keyTest").onclick = testKey;
 
+$("#syncOn").onchange = async e => {
+  S.sync = { on: e.target.checked };
+  store.set(K.sync, S.sync);
+  if (!S.sync.on) { renderSyncSection(); return; }
+  try {
+    await ensureSyncClient();
+    const session = await HSKSync.getSession();
+    syncUser = (session && session.user) || null;
+    if (syncUser) await pullAndMerge();
+  } catch (err) {
+    syncLastError = (err && err.message) || String(err);
+    renderSyncStatus("Couldn't reach sync — " + syncLastError);
+  }
+  renderSyncSection();
+};
+$("#syncSignIn").onclick = signInForSync;
+$("#syncNow").onclick = () => pullAndMerge();
+$("#syncSignOut").onclick = signOutOfSync;
+
 $("#refreshModels").onclick = refreshModels;
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
   if (!confirm("Delete the whole conversation?")) return;
   S.history = []; persist(); renderAll();
+  // persist()'s queued push carries nothing for an empty array (there is
+  // nothing to upsert), so the remote copy needs its own explicit delete or
+  // it would simply reappear on the next pull from another device.
+  if (S.sync.on && syncUser) HSKSync.deleteAllMessages(syncUser.id).catch(e => console.warn("sync clear failed", e));
 };
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 [["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
@@ -2154,6 +2479,25 @@ $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); re
   loadDict();
   updateMirror(); autosize(); renderAll(); renderStats(); renderStarters();
   if (!store.get(K.key, "")) $("#btnSet").click();
+  /* Restore a signed-in sync session, or pick one up fresh after landing
+   * back from the GitHub OAuth redirect (supabase-js parses the token out
+   * of the URL on createClient() automatically). Not awaited: this is
+   * network-dependent and must never delay the offline-capable render
+   * above, same reasoning as loadDict() just above it. */
+  if (S.sync.on) {
+    (async () => {
+      try {
+        await ensureSyncClient();
+        const session = await HSKSync.getSession();
+        syncUser = (session && session.user) || null;
+        if (syncUser) await pullAndMerge();
+        renderSyncSection();
+      } catch (e) {
+        console.warn("sync init failed", e);
+        syncLastError = (e && e.message) || String(e);
+      }
+    })();
+  }
   if ("serviceWorker" in navigator) {
     /* A new worker calls skipWaiting and claims the page; reload once so the
      * running app is the one that was just deployed. Two guards: controllerchange
