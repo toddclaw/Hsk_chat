@@ -7,12 +7,13 @@
 # One-time setup (see README.md's "Cloud sync" section):
 #   1. Run db/schema.sql in the Supabase project -- it creates the
 #      `_keepalive` table this workflow writes to, with RLS enabled and no
-#      policies, so only the service_role key below can touch it.
+#      policies, so only the secret key below can touch it.
 #   2. Add two repository secrets (Settings -> Secrets and variables ->
 #      Actions): SUPABASE_URL (the project's URL) and
 #      SUPABASE_SERVICE_ROLE_KEY (Project Settings -> API -- the
-#      service_role key, NOT the anon key; this one bypasses RLS and must
-#      never appear in the app's client-side code).
+#      *secret* key (sb_secret_...; this was called the "service_role key"
+#      before Supabase's 2026 key rename), NOT the publishable key; this one
+#      bypasses RLS and must never appear in the app's client-side code).
 name: Keep Supabase awake
 
 on:
@@ -31,9 +32,14 @@ jobs:
             echo "See README.md's Cloud sync section to finish setup." >&2
             exit 1
           fi
+          # The new-format secret key (sb_secret_...) goes in the apikey
+          # header ONLY -- unlike the legacy JWT-based service_role key it
+          # replaces, Supabase's gateway now rejects a request that also
+          # carries it in Authorization: Bearer, since it tries (and fails)
+          # to parse it as a JWT. apikey alone is sufficient: the gateway
+          # resolves it to the secret key's elevated (RLS-bypassing) role.
           curl -sS -f -X POST "$SUPABASE_URL/rest/v1/_keepalive" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
             -H "Prefer: resolution=merge-duplicates,return=minimal" \
             -d "{\"id\": 1, \"pinged_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"

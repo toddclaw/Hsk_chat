@@ -6,9 +6,10 @@
 -- idempotent (create-if-not-exists / drop-then-create for policies).
 --
 -- Every user-data table is scoped to auth.uid() via Row Level Security: a
--- signed-in user can only ever see or write their own rows. The anon key
--- embedded in the app's client-side code is not a secret -- RLS is the
--- actual security boundary, same as Supabase's own recommended pattern.
+-- signed-in user can only ever see or write their own rows. The publishable
+-- key (formerly "anon key") embedded in the app's client-side code is not a
+-- secret -- RLS is the actual security boundary, same as Supabase's own
+-- recommended pattern.
 --
 -- messages.id is CLIENT-GENERATED (crypto.randomUUID(), assigned the moment
 -- a turn is created locally), not server-generated. A message can be edited
@@ -113,10 +114,10 @@ create policy "own rows" on public.prefs
 -- after 7 days with no database ACTIVITY (not just dashboard visits or
 -- cached reads), so the workflow writes to this table every few days to
 -- keep it alive. RLS is enabled with no policies at all -- default-deny for
--- both anon and authenticated -- so the anon key embedded in the app can
--- never read or write it; only the service_role key (used exclusively by
--- the GitHub Actions workflow, stored as a repo secret, never shipped to
--- the browser) can, since service_role bypasses RLS entirely.
+-- both anon and authenticated -- so the publishable key embedded in the app
+-- can never read or write it; only the secret key (formerly "service_role
+-- key" -- used exclusively by the GitHub Actions workflow, stored as a repo
+-- secret, never shipped to the browser) can, since it bypasses RLS entirely.
 
 create table if not exists public._keepalive (
   id int primary key default 1,

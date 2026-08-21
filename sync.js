@@ -196,6 +196,9 @@
    */
   var client = null;
 
+  // anonKey: the project's *publishable* key (Project Settings -> API in the
+  // Supabase dashboard -- called "anon key" before Supabase's 2026 rename).
+  // Safe to embed in client-side code; RLS is what actually gates access.
   function configure(url, anonKey) {
     if (typeof window === "undefined" || !window.supabase) return null;
     client = window.supabase.createClient(url, anonKey);
