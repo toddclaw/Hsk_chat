@@ -2,6 +2,8 @@
  * The Supabase glue half of sync.js (everything after "Supabase glue" in
  * the file) has no network calls to test here -- it is exercised by the
  * Playwright suite against a mocked Supabase endpoint instead. */
+const fs = require("fs");
+const path = require("path");
 const Sync = require("../sync.js");
 
 let pass = 0, fail = 0;
@@ -104,6 +106,23 @@ const S2 = { key: "should-stay", history: [], level: 1, script: "simp" };
 Sync.applyPrefsSnapshot(S2, { level: 5, script: "trad" });
 check(S2.level === 5 && S2.script === "trad", "applyPrefsSnapshot overwrites only the fields present in the snapshot");
 check(S2.key === "should-stay", "applyPrefsSnapshot never touches fields outside PREFS_KEYS, the API key included");
+
+// --- delete everything: the list of tables must not drift from the schema ---
+/* "Delete all cloud data" is only honest if it names every table holding this
+ * user's rows. A table added to db/schema.sql and forgotten in sync.js would
+ * leave behind data the app told the user it had removed, which is the one
+ * failure this feature must not have. */
+const schema = fs.readFileSync(path.join(__dirname, "../db/schema.sql"), "utf8");
+const declared = [...schema.matchAll(/create table if not exists public\.(\w+)/g)]
+  .map(m => m[1])
+  .filter(t => !t.startsWith("_"));   // _keepalive holds no user rows
+const listed = Sync.USER_TABLES;
+check(declared.length > 0, "the schema declares tables to check against");
+check(declared.every(t => listed.includes(t)) && listed.every(t => declared.includes(t)),
+  "USER_TABLES matches every user table in db/schema.sql",
+  `schema [${declared.slice().sort()}] vs sync.js [${listed.slice().sort()}]`);
+check(listed.includes("messages") && listed.includes("prefs"),
+  "USER_TABLES covers the conversation and the preferences row, not just vocabulary");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
