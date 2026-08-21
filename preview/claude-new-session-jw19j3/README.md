@@ -235,6 +235,58 @@ apart from an attempt-count badge, and `finish_reason: "length"` shows as **cut 
 truncation and a model choosing to stop look identical in the output and want opposite
 fixes.
 
+## Sense validation: an allowed word is not an allowed meaning
+
+The vocabulary matcher only ever sees surface form: once 得 sits in a level's allowlist, any
+use of 得 passes. That is not enough. 得 alone covers three unrelated pieces of grammar that
+happen to share a character:
+
+- **dei_modal** — "must, have to" (děi): 我得走了, 你得小心
+- **de_complement** — a structural particle linking a verb or adjective to a following
+  complement of result, degree or possibility (de): 跑得快, 高兴得很, 听得懂
+- **de_lexical** — fossilised inside an existing compound: 觉得, 得到, 值得, 记得…
+
+Meeting 得 inside 觉得 does not mean the dei_modal "must" construction has been met, and the
+vocabulary matcher has no way to tell the two apart from the character alone. `senses.js` is a
+small registry that represents ambiguous words this way — by *usage*, not surface form — and a
+per-level policy says which senses are allowed where. The conservative default for 得:
+
+| Level | Allowed |
+|---|---|
+| HSK 0.5–2 | none |
+| HSK 3–4 | de_complement only |
+| HSK 5–6 | + dei_modal |
+| HSK 7–9 | both |
+
+de_lexical is never gated: it only ever occurs inside a compound word, which the segmenter
+already folds into one token the moment that compound is itself in the active lexicon — if
+the compound is above level, ordinary vocabulary validation rejects it before this module is
+ever consulted. There is nothing left for a sense check to do with it, so it is documented but
+never offered as a classification choice.
+
+**The check runs only when it has something to check.** Classifying a sense costs a model
+call, so `wordsPresent()` looks for a registered word occurring *standalone* — not folded into
+a longer allowlist word by the segmenter — and the app skips the call entirely when nothing
+standalone turns up (a reply full of 觉得 and 得到 never spends one). When it does turn up, one
+call classifies every standalone occurrence in the reply at once, and the pipeline extends the
+existing retry loop rather than replacing it:
+
+1. generate;
+2. JS hard validation (vocabulary, as always) — a reply that already fails here skips the
+   sense check entirely, since it is getting repaired regardless;
+3. only once vocabulary passes, classify any standalone registered words and check the result
+   against the level's policy;
+4. on a disallowed sense, name it and suggest an alternative — `你用的「得」是必须、应该的意思
+   …这个用法在这个级别还不可以用，可以换成：要 / 必须` — and loop for another attempt, exactly
+   like a vocabulary repair;
+5. exhausted attempts still fall back to the sanctioned refusal, same as any other failure.
+
+A classify call that cannot be reached **fails open**: the reply is allowed through rather
+than rejecting an unrelated turn over a validator that itself couldn't be reached.
+
+Adding another ambiguous word is a registry entry in `senses.js` alone — the trigger, the
+policy lookup, and the repair prompt all read from it, so no other code changes.
+
 ## Non-obvious choices
 
 - **Roman letters are a violation coming back, never going out.** Treating all ASCII as
