@@ -179,15 +179,24 @@ silent or reads Chinese with an English voice, so Settings says which voice is i
 where to install one. Speaking speed defaults to 0.8×, since the default rate is quick for a
 learner. (Audio was a non-goal in the original design; it is here because it was asked for.)
 
-**English translation and English explanation**, on every reply. Translation is one cheap
-call, cached on the message and rendered below the Chinese — the button toggles it without
-refetching once it exists. Explanation opens a sheet and, the first time, asks the model to
-break the sentence down: the grammar, why each word or particle is there, and anything above
-your level. That prompt is told your current level and the words you have recently been
-introduced to, so it can point at what is actually new to you rather than re-explaining
-everything. Below the breakdown is an open follow-up chat — it is **not** run through the
-validator or held to Chinese, in either direction, so you can ask anything and get a real
-answer rather than a level-appropriate one.
+**English translation and English explanation**, on every message — the partner's and your
+own. Translation is one cheap call, cached on the message and rendered below the Chinese —
+the button toggles it without refetching once it exists. Explanation opens a sheet and, the
+first time, asks the model to break the sentence down: the grammar, why each word or particle
+is there, and anything above your level. That prompt is told your current level and the words
+you have recently been introduced to, so it can point at what is actually new to you rather
+than re-explaining everything. Below the breakdown is an open follow-up chat — it is **not**
+run through the validator or held to Chinese, in either direction, so you can ask anything
+and get a real answer rather than a level-appropriate one.
+
+On your own messages the second button reads **Check my grammar**, because what it is
+pointed at is different: your sentence may be wrong, and a prompt that assumes otherwise
+explains a mistake rather than catching it. So that one is told the line may well be wrong
+and asked for what it actually says, whether it is correct, a corrected version if not, and
+the rule behind the fix — while being told not to manufacture a fault when the sentence is
+simply fine. Translating your own line is deliberately literal for the same reason: it
+renders what you wrote rather than a quietly repaired version, since the gap between the two
+is the thing worth seeing.
 
 **Try again** on any turn that ended in the fallback, and on every error card. A turn can
 fail for reasons that have nothing to do with what you said — a busy free endpoint, a model

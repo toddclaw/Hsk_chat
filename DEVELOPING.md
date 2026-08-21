@@ -73,6 +73,12 @@ cannot publish red**.
 a supabase-js client — the Supabase glue. Everything above the "Supabase glue"
 line in `sync.js` is pure and covered directly by `test/sync.test.js` instead.
 
+It also asserts that a **user** message renders its translate and grammar-check
+buttons. That rides along on the conversation the wipe test already seeds, so it
+costs no extra browser boot, and it guards a regression a node suite cannot see:
+both buttons lived behind a `role === "assistant"` guard, and re-adding one would
+remove the feature from your own messages while leaving every prompt test green.
+
 It drives real Firefox over WebDriver, which is a plain HTTP/JSON protocol, so it
 needs **no npm packages** — node's built-in `fetch` and `http` are enough. It
 costs a browser on the machine instead of a dependency in the repo.
@@ -112,10 +118,13 @@ sign-in against the real project.
 
 ### Mutation-test anything load-bearing
 
-A test that has never failed has not been shown to work. Both guarantees in the
-browser suite were checked by deliberately breaking the code and confirming the
-suite caught it — reordering the sync-off past the delete, and dropping a table
-from `USER_TABLES`. Worth doing for any new assertion that matters.
+A test that has never failed has not been shown to work. Every guarantee in the
+browser suite was checked by deliberately breaking the code and confirming the
+suite caught it — reordering the sync-off past the delete, dropping a table from
+`USER_TABLES`, and putting the `role === "assistant"` guard back around the
+translate and explain buttons. The `own` branches of `HSKPrompt.explain` and
+`HSKPrompt.translate` were checked the same way, by collapsing each into its
+non-`own` shape. Worth doing for any new assertion that matters.
 
 ## Releasing and previews
 

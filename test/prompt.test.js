@@ -213,5 +213,55 @@ check(P.build({ level: 0, label: "HSK 0.5", length: "short" }).includes("我很�
 // 12. An unknown level must not produce a prompt with no constraints at all.
 check(P.styleFor(99) === P.LEVEL_STYLE[1], "unknown level falls back to the strictest profile");
 
+/* 13. Translation and explanation. The `own` shapes exist because the student's
+ *     own sentence may be wrong; a prompt that treats it as correct explains a
+ *     mistake instead of catching it, which is the one thing these must not do. */
+const SENT = "我昨天去公园了";
+const reply = { text: SENT, label: "HSK 2", recent: "" };
+const mine = { text: SENT, own: true, label: "HSK 2", recent: "" };
+
+for (const opts of [reply, mine]) {
+  const t = P.translate(opts), e = P.explain(opts);
+  const which = opts.own ? "own" : "reply";
+  check(t.includes(SENT) && e.includes(SENT), `${which}: both prompts carry the sentence`);
+  check(/only the translation/.test(t), `${which}: translate asks for the translation alone`);
+  check(/not restricted to the student's vocabulary/.test(e),
+    `${which}: explain is exempt from the word list`);
+}
+
+// The reply prompts must not have picked up the hedging the own ones need:
+// told a known-good sentence may be wrong, a model invents faults to report.
+check(!/may contain mistakes|may well be wrong/.test(P.translate(reply) + P.explain(reply)),
+  "a reply is not described as possibly wrong");
+check(/may contain mistakes/.test(P.translate(mine)), "own: translate says it may be wrong");
+check(/not a corrected version/.test(P.translate(mine)),
+  "own: translate renders what was written, not a repair of it");
+/* Found against a live model, not by reading the prompt: asked only to
+ * translate what was written and to let it read oddly, it stopped translating
+ * and started glossing, and rendered the correct 我昨天去公园了 as "I yesterday
+ * go park of". A sound sentence shown back as broken English invents a mistake
+ * the student did not make, which is worse than the repair this is avoiding. */
+check(/not a word-by-word gloss/.test(P.translate(mine)),
+  "own: translate is told it is still a translation, not a gloss");
+check(/if the Chinese is in fact correct/.test(P.translate(mine)),
+  "own: a correct sentence must come back as natural English");
+check(/may well be wrong/.test(P.explain(mine)), "own: explain says it may be wrong");
+check(/do not manufacture a problem/.test(P.explain(mine)),
+  "own: a correct sentence is allowed to be correct");
+check(/corrected version/.test(P.explain(mine)) && /Name the rule/.test(P.explain(mine)),
+  "own: explain asks for a correction and the rule behind it");
+check(/homophone/.test(P.explain(mine)),
+  "own: explain knows wrong characters come from pinyin input");
+
+// Level and recent words reach both explain shapes: the whole point of the
+// context block is that it can say which words are still new to this student.
+for (const own of [false, true]) {
+  const e = P.explain({ text: SENT, own: own, label: "HSK 3", recent: "公园（gōng yuán，park）" });
+  check(e.includes("HSK 3"), `own=${own}: explain is told the level`);
+  check(e.includes("公园（gōng yuán，park）"), `own=${own}: explain is told the recent words`);
+  check(P.explain({ text: SENT, own: own, label: "HSK 3", recent: "" }).includes("none yet"),
+    `own=${own}: an empty recent list reads as "none yet", not as blank`);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

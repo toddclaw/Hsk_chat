@@ -229,6 +229,22 @@ return true;
     check(seeded, "the seeded conversation renders before the wipe",
       await exec("return document.querySelector('#log').textContent.slice(0, 120);"));
 
+    /* The seeded turn is the student's own, so it is also the cheapest place to
+     * check that translate and explain reach a user message at all -- they were
+     * assistant-only, and the whole feature is one `role === "assistant"` guard
+     * away from silently disappearing again. Asserted by label rather than by
+     * count: "Check my grammar" is what routes explainSystemPrompt to the shape
+     * that knows the sentence may be wrong. Not clicked -- that would spend a
+     * real model call, and this suite has no key and no network. */
+    const ownBtns = await exec(`
+      var m = document.querySelector('#log .msg.user .meta');
+      return m ? Array.prototype.map.call(m.querySelectorAll('button'),
+        function (b) { return b.textContent; }) : null;`);
+    check(!!ownBtns && ownBtns.indexOf("English translation") !== -1,
+      "a user message offers a translation button", JSON.stringify(ownBtns));
+    check(!!ownBtns && ownBtns.indexOf("Check my grammar") !== -1,
+      "a user message offers the grammar-check button", JSON.stringify(ownBtns));
+
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
     await exec(`

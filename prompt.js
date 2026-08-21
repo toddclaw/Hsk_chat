@@ -221,8 +221,84 @@
     return lines.join("\n");
   }
 
+  /* ------------------------------------------- translation and explanation
+   *
+   * Both of these point at one message and neither goes through the validator,
+   * but the message can be one of two quite different things, and `own` is
+   * which. The partner's reply is known-good Chinese to be taken apart. The
+   * student's own line is a draft that may be wrong -- and explaining why a
+   * particle is there, when it should not be there at all, teaches the mistake
+   * instead of fixing it. So each has two shapes rather than one prompt hedged
+   * to cover both.
+   *
+   * opts: { text, own, label, recent }
+   */
+
+  function translate(opts) {
+    if (!opts.own) {
+      return "Translate this Chinese into natural, idiomatic English. Reply with only the " +
+        "translation, no quotes, no other commentary:\n\n" + opts.text;
+    }
+    /* Deliberately not a translation of the corrected sentence. The gap between
+     * what the student meant and what they actually wrote is the whole lesson,
+     * and a prompt that quietly repairs the line before translating it hides
+     * exactly the thing they pressed the button to see.
+     *
+     * The last two sentences are load-bearing, and were added after watching a
+     * live model without them: told only to translate what was written and to
+     * let it read oddly, it stops translating and starts glossing word by word.
+     * 我昨天去公园了 -- which is correct -- came back as "I yesterday go park
+     * of". Rendering a sound sentence as broken English is worse than repairing
+     * a broken one, since it invents a mistake the student did not make. */
+    return "A Chinese learner wrote the line below themselves, so it may contain mistakes. " +
+      "Translate the meaning it actually conveys, not a corrected version of it: where a wrong " +
+      "word, particle or word order changes the meaning, translate the changed meaning rather " +
+      "than the one you think was intended. Do not silently repair it.\n\n" +
+      "Write ordinary fluent English even so. This is a translation, not a word-by-word gloss: " +
+      "if the Chinese is in fact correct, the English must read as naturally as the Chinese " +
+      "does. Only where the line is too broken to carry any meaning at all, give the most " +
+      "likely intended reading.\n\n" +
+      "Reply with only the translation, no quotes, no other commentary:\n\n" + opts.text;
+  }
+
+  function explain(opts) {
+    // Recently introduced words go in so the explanation can point out which
+    // ones are still new, not just recite the sentence.
+    var head = "You are a friendly Chinese teaching assistant helping a student " +
+      (opts.own ? "who is writing" : "who is reading") + " Chinese at " + opts.label +
+      ". Recently introduced words they are still practicing: " + (opts.recent || "none yet") +
+      ".\n\n";
+    var tail = "You may reply in English and quote Chinese as needed -- you are not " +
+      "restricted to the student's vocabulary here. Keep it concise but complete.\n\n";
+
+    if (!opts.own) {
+      return head +
+        "Explain the following Chinese sentence in plain English: the grammar structures used, " +
+        "why each word or particle is there, and call out anything above the student's level. " +
+        tail + "Sentence: " + opts.text;
+    }
+    return head +
+      "The student wrote the sentence below THEMSELVES, so it may well be wrong. Do not assume " +
+      "it is correct, and do not silently answer as if it were. Cover, in this order:\n" +
+      "1. What it actually says in English, and what you think they were reaching for if " +
+      "those are different.\n" +
+      "2. Whether it is correct. If it is, say so plainly and do not manufacture a problem " +
+      "to have something to teach.\n" +
+      "3. If it is not, one natural corrected version, staying inside the student's level " +
+      "where that is possible.\n" +
+      "4. What went wrong and why -- word order, a missing or wrong particle, measure words, " +
+      "aspect, or a word used in a sense it does not carry. Name the rule, so it transfers to " +
+      "the next sentence rather than only fixing this one.\n\n" +
+      "Two failure modes are easy to misread. The student types pinyin and picks a character " +
+      "from a list, so a wrong character is often a homophone of the right one rather than a " +
+      "misunderstanding. And a sentence can be entirely grammatical yet blunt or unidiomatic; " +
+      "say which of the two you are looking at instead of calling both an error. Be " +
+      "encouraging and concrete.\n\n" + tail + "The student wrote: " + opts.text;
+  }
+
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
-              styleFor: styleFor, startersFor: startersFor, build: build };
+              styleFor: styleFor, startersFor: startersFor, build: build,
+              translate: translate, explain: explain };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

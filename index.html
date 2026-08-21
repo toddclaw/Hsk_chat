@@ -409,7 +409,7 @@ footer{
 </div></div>
 
 <div class="sheet" id="explainSheet"><div class="card">
-  <h2>English explanation</h2>
+  <h2 id="explainTitle">English explanation</h2>
   <div class="bubble" id="explainSource" style="margin-bottom:10px"></div>
   <div id="explainLog"></div>
   <div class="addrow" style="margin-top:4px">
@@ -491,7 +491,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v35 — 2026-08-21";
+const VERSION   = "v36 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -848,25 +848,18 @@ async function callModel(messages, maxTokens) {
 /* Translation and explanation both piggyback on callModel, but neither one
  * goes through turn()'s validator: the point of both is to say things the
  * learner's own word list cannot yet express. */
-async function translateText(text) {
-  const raw = await callModel([{ role: "user", content:
-    "Translate this Chinese into natural, idiomatic English. Reply with only the " +
-    "translation, no quotes, no other commentary:\n\n" + text }], 200);
+/* `own` marks the student's own message rather than the partner's reply: it may
+ * be wrong, which changes what both prompts should ask for. See prompt.js. */
+async function translateText(text, own) {
+  const raw = await callModel(
+    [{ role: "user", content: HSKPrompt.translate({ text: text, own: own }) }], 200);
   return raw.trim();
 }
 
-// Recently introduced words go in the prompt so the explanation can point out
-// which ones the learner is still working on, not just recite the sentence.
-function explainSystemPrompt(text) {
+function explainSystemPrompt(text, own) {
   const recent = S.learning.filter(HSKPace.isNew)
     .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
-  return "You are a friendly Chinese teaching assistant helping a student who is reading " +
-    "Chinese at " + levelLabel() + ". Recently introduced words they are still practicing: " +
-    (recent || "none yet") + ".\n\n" +
-    "Explain the following Chinese sentence in plain English: the grammar structures used, " +
-    "why each word or particle is there, and call out anything above the student's level. " +
-    "You may reply in English and quote Chinese as needed -- you are not restricted to the " +
-    "student's vocabulary here. Keep it concise but complete.\n\nSentence: " + text;
+  return HSKPrompt.explain({ text: text, own: own, label: levelLabel(), recent: recent });
 }
 
 function windowed() {
@@ -1122,14 +1115,11 @@ function renderMessage(turnObj, shownExtra) {
   el.appendChild(bubble);
 
   // Below the Chinese, not above it: hidden until asked for either way.
-  let transBox = null;
-  if (turnObj.role === "assistant") {
-    transBox = document.createElement("div");
-    transBox.className = "translation";
-    transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
-    transBox.textContent = turnObj.translation || "";
-    el.appendChild(transBox);
-  }
+  const transBox = document.createElement("div");
+  transBox.className = "translation";
+  transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
+  transBox.textContent = turnObj.translation || "";
+  el.appendChild(transBox);
 
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
@@ -1154,18 +1144,19 @@ function renderMessage(turnObj, shownExtra) {
   copy.textContent = "copy";
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
   meta.append(say, copy);
-  if (turnObj.role === "assistant") {
-    const translate = document.createElement("button");
-    translate.className = "copy";
-    translate.textContent = (turnObj.translation && turnObj.showTranslation)
-      ? "Hide translation" : "English translation";
-    translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
-    const explain = document.createElement("button");
-    explain.className = "copy";
-    explain.textContent = "English explanation";
-    explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
-    meta.append(translate, explain);
-  }
+  /* Both buttons are on your own messages too. The label changes because the
+   * question does: against a reply it is "what does this mean", against your
+   * own line it is "did I say what I meant". */
+  const translate = document.createElement("button");
+  translate.className = "copy";
+  translate.textContent = (turnObj.translation && turnObj.showTranslation)
+    ? "Hide translation" : "English translation";
+  translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
+  const explain = document.createElement("button");
+  explain.className = "copy";
+  explain.textContent = turnObj.role === "user" ? "Check my grammar" : "English explanation";
+  explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
+  meta.append(translate, explain);
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -1639,7 +1630,7 @@ async function toggleTranslation(turnObj, btn, box) {
   }
   btn.disabled = true; btn.textContent = "Translating…";
   try {
-    const en = await translateText(turnObj.text);
+    const en = await translateText(turnObj.text, turnObj.role === "user");
     turnObj.translation = en;
     turnObj.showTranslation = true;
     persist();
@@ -1683,12 +1674,18 @@ async function explainAsk(turnObj, question) {
   box.scrollTop = box.scrollHeight;
   $("#explainSend").disabled = true;
 
-  const messages = [{ role: "system", content: explainSystemPrompt(turnObj.text) }];
+  const messages = [{ role: "system",
+                      content: explainSystemPrompt(turnObj.text, turnObj.role === "user") }];
   turnObj.explainChat.forEach(m => messages.push({ role: m.role, content: m.text }));
   if (question) messages.push({ role: "user", content: question });
 
   try {
-    const reply = await callModel(messages, 600);
+    /* 600 was not enough: a mid-range model answering the four-part breakdown
+     * runs past it and the sheet shows an explanation that stops mid-sentence.
+     * There is no truncation badge here the way there is on a reply, so a cut
+     * off explanation just looks like the model trailing away. Cheap to fix --
+     * this is one call per message, not one per turn. */
+    const reply = await callModel(messages, 1000);
     if (question) turnObj.explainChat.push({ role: "user", text: question });
     turnObj.explainChat.push({ role: "assistant", text: reply });
   } catch (e) {
@@ -1705,6 +1702,9 @@ async function explainAsk(turnObj, question) {
 
 function openExplain(turnObj) {
   explainTurnObj = turnObj;
+  const own = turnObj.role === "user";
+  // The sheet is reused for both, so the heading has to say which one this is.
+  $("#explainTitle").textContent = own ? "Check my grammar" : "English explanation";
   $("#explainSource").textContent = turnObj.text;
   if (!turnObj.explainChat) turnObj.explainChat = [];
   renderExplainLog();
