@@ -52,7 +52,7 @@ header button{padding:8px 10px; flex:0 0 auto}
 }
 .msg.user .bubble{background:#233246; border-bottom-right-radius:6px}
 .msg.bot .bubble{border-bottom-left-radius:6px}
-.meta{display:flex; gap:6px; align-items:center; margin-top:6px; font-size:12px; color:var(--dim)}
+.meta{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:12px; color:var(--dim)}
 .msg.user .meta{justify-content:flex-end}
 .badge{border:1px solid var(--line); border-radius:999px; padding:2px 8px}
 .badge.warn{color:#ffd479; border-color:#5a4a22}
@@ -79,12 +79,24 @@ header button{padding:8px 10px; flex:0 0 auto}
 .pinyin-extra .w.bad::before{display:block}
 .w.bad>.t{color:var(--bad); text-decoration:underline wavy var(--bad); text-underline-offset:6px}
 .w.extra>.t{border-bottom:2px solid var(--ok)}
+/* A word you added stays usable forever, but it is only highlighted the very
+   first time it turns up in the conversation -- after that it is ordinary
+   text, or the whole chat turns green as your vocabulary grows. */
 .w.need>.t{background:#2c3a22; border-radius:4px; padding:0 2px}
 .w.fresh>.t{background:#2a2f45; border-bottom:2px solid var(--accent); border-radius:4px; padding:0 2px}
 .newword{margin-top:8px; padding:10px 12px; background:var(--panel2);
   border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:12px; font-size:14px}
 .newword b{font-size:22px; margin-right:8px}
 .newword .why{color:var(--dim); font-size:12.5px; margin-top:4px}
+/* The English gloss of a reply. It sits below the Chinese, not above it: the
+ * Chinese stays the primary reading target and the translation is a fallback
+ * to glance at, not the first thing the eye lands on. */
+.translation{margin-top:6px; padding:9px 12px; background:var(--panel2); border:1px solid var(--line);
+  border-radius:12px; font-size:14px; line-height:1.5; color:var(--dim)}
+.explainMsg{margin:0 0 10px; padding:10px 12px; border-radius:12px; font-size:14px;
+  line-height:1.6; background:var(--panel2); white-space:pre-wrap}
+.explainMsg.user{background:#233246; margin-left:16px}
+.explainMsg .who{font-size:11px; color:var(--dim); margin-bottom:4px}
 /* A failed call is not a reply. It gets its own card rather than a fake
    Chinese sentence, which would read as the partner refusing to answer. */
 .notice{
@@ -144,6 +156,9 @@ footer{
 .sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
   border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
   resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.keyrow{display:flex; gap:8px}
+.keyrow input{flex:1; min-width:0}
+.keyrow button{flex:0 0 auto; min-width:44px; padding:8px 10px}
 .sheet input[type=text],.sheet input[type=password],.sheet select{
   width:100%; padding:11px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); min-height:var(--tap);
 }
@@ -155,6 +170,13 @@ footer{
 .applink{display:inline-block; padding:6px 10px; min-height:36px; line-height:24px;
   border:1px solid var(--line); border-radius:10px; color:var(--accent); text-decoration:none}
 .stats{font-size:13px; color:var(--dim); background:var(--panel2); border-radius:10px; padding:10px; margin-top:8px}
+.poolrow{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line)}
+.poolrow input[type=checkbox]{width:22px; height:22px; flex:0 0 auto; accent-color:var(--ok)}
+.poolrow .w2{font-size:20px; min-width:2.6em}
+.poolrow .g{flex:1; font-size:12.5px; color:var(--dim); min-width:0}
+#poolSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
+  background:var(--panel2); min-height:44px; margin-bottom:4px}
+#poolMore{width:100%; margin-top:8px}
 .stats td{padding:2px 10px 2px 0}
 
 #pop{
@@ -198,10 +220,19 @@ footer{
 <div class="sheet" id="setSheet"><div class="card">
   <h2>Settings</h2>
   <label for="key">OpenRouter API key</label>
-  <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+  <div class="keyrow">
+    <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+    <button id="keyPaste" type="button" title="Paste from clipboard">Paste</button>
+    <button id="keyShow" type="button" title="Show key">👁</button>
+  </div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+    <button id="keyTest">Test connection</button>
+    <span class="note" id="keyTestNote" style="margin:0;align-self:center"></span>
+  </div>
   <div class="note"><b>Free setup:</b> make an account at
   <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
-  create a key, add no credit, then tick <b>free models only</b> below. Models priced at zero
+  create a key, add no credit, then pick the free example model below, or tick
+  <b>free models only</b>. Models priced at zero
   cost nothing to call. They are rate-limited and can be busy, so replies may be slower and
   retries more frequent; adding credit and picking a paid model fixes that.
   <br><br>A key is still required — there is no backend here to hold one for you, and a key
@@ -209,6 +240,11 @@ footer{
   stays in this browser's localStorage on this device, and is sent to openrouter.ai and
   nowhere else.</div>
 
+  <label for="modelExample">Try a known-good model</label>
+  <select id="modelExample">
+    <option value="google/gemma-4-26b-a4b:free">Google: Gemma 4 26B A4B (free) — a good free starting point</option>
+    <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
+  </select>
   <label for="modelId">Model id (any OpenRouter id)</label>
   <input id="modelId" type="text" placeholder="anthropic/claude-...">
   <label class="toggle" for="freeOnly">
@@ -230,6 +266,7 @@ footer{
   <label for="paceRate" style="margin-top:4px">Pace</label>
   <select id="paceRate"></select>
   <div class="stats" id="paceNote"></div>
+  <button id="btnPool" type="button" style="margin-top:8px; width:100%">Words I already know at the next level</button>
   <div class="note">Graded readers introduce roughly one new word per 40–50 characters of
   text you already know. The partner is offered the three commonest words you have not met
   and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
@@ -307,6 +344,31 @@ footer{
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="poolSheet"><div class="card">
+  <h2 id="poolTitle">Next-level words</h2>
+  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning">
+  <div class="note">Tick any word you already know. It joins the allowlist immediately —
+  the partner may use it, and it will not be offered or flagged again — but it will not
+  appear in 词 or in flashcard exports: this list is for words you brought with you, not
+  ones the app taught you.</div>
+  <div id="poolList" style="margin-top:10px"></div>
+  <button id="poolMore" style="display:none"></button>
+  <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="explainSheet"><div class="card">
+  <h2>English explanation</h2>
+  <div class="bubble" id="explainSource" style="margin-bottom:10px"></div>
+  <div id="explainLog"></div>
+  <div class="addrow" style="margin-top:4px">
+    <input id="explainInput" type="text" placeholder="ask a follow-up question…" autocomplete="off">
+    <button id="explainSend">Send</button>
+  </div>
+  <div class="note">This chat is not restricted to your word list in either direction — ask
+  anything, in Chinese or English, and answers may use any words needed to explain clearly.</div>
+  <div style="margin-top:16px"><button id="explainClose" class="primary">Done</button></div>
+</div></div>
+
 <div class="sheet" id="vocabSheet"><div class="card">
   <h2>Added vocabulary</h2>
   <label class="toggle" for="autoAdd">
@@ -341,6 +403,7 @@ footer{
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
 <script src="pace.js"></script>
+<script src="senses.js"></script>
 <script>
 "use strict";
 
@@ -375,10 +438,11 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v23 — 2026-08-19";
+const VERSION   = "v30 — 2026-08-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
+const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
@@ -392,7 +456,8 @@ const K = {
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
-  pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning"
+  pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
+  known:"hsk1chat.knownAhead"
 };
 
 const store = {
@@ -425,6 +490,12 @@ const S = {
   budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
   pool:    [],                                // next level minus this one
+  /* Words at the next level the learner already knows, marked from the
+   * browser in Settings. Joins the allowlist like anything else, but is kept
+   * separate from S.extra: it did not come from a conversation and has no
+   * sentence context, so it stays out of the 词 panel and flashcard exports
+   * -- it is a suppression list, not vocabulary the app taught. */
+  known:   store.get(K.known, []),
   simpLex: null,                              // simplified lexicon, for converting prompt text
   refList: [],                                // the reference dictionary, unindexed
   refLex:  null,                              // and as a lexicon, for re-segmenting
@@ -451,8 +522,10 @@ function inScript(list) {
 
 function rebuildLexicon() {
   // A word once introduced stays usable, whether it is still "new" or promoted.
-  S.lex = HSK.buildLexicon(inScript(S.base), inScript(S.extra).concat(inScript(S.learning)));
+  S.lex = HSK.buildLexicon(inScript(S.base),
+    inScript(S.extra).concat(inScript(S.learning), inScript(S.known)));
 }
+const isKnownAhead = w => S.known.some(e => e.w === w);
 
 const learned = w => S.learning.find(e => e.w === w);
 function levelBudget() {
@@ -467,15 +540,23 @@ const isExtra = w => S.extra.some(e => e.w === w);
 async function loadPool() {
   S.pool = [];
   const next = LEVELS.find(l => l.id === S.level + 1);
-  if (!S.pace.on || !next) return;
+  // The pool backs both pacing and the "words I already know" browser, so it
+  // loads whenever there is a level above -- not only while pacing is on.
+  if (!next) return;
   try {
     const r = await fetch(next.file);
     /* Exclude everything already usable, not just the level list: the particles
-     * in EXTRA_ALLOWED and any word already added or introduced. Offering 啊,
-     * which is permitted at every level, would spend a credit on nothing. */
+     * in EXTRA_ALLOWED and any word already added, introduced, or marked known
+     * ahead of time. Offering 啊, which is permitted at every level, would
+     * spend a credit on nothing. */
     if (r.ok) {
-      const known = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
-      S.pool = HSKPace.buildPool(known, await r.json());
+      /* S.pool is every word not yet formally usable -- it deliberately still
+       * includes ones marked "known ahead", so the browser can list them
+       * pre-checked and let you change your mind. Pacing draws its own
+       * candidates from this at offer time, filtered by isKnownAhead there,
+       * so the two do not need two copies of the underlying data. */
+      const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
+      S.pool = HSKPace.buildPool(usable, await r.json());
     }
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
@@ -604,6 +685,7 @@ function extractNeeds(text) {
 function repairPrompt(violations, attempt) {
   const latin = violations.filter(v => v.kind === "latin");
   const words = violations.filter(v => v.kind === "bad");
+  const senses = violations.filter(v => v.kind === "sense");
   const parts = [];
   if (latin.length) parts.push("不要用英文，不要用拼音。只写汉字。");
   if (words.length) {
@@ -618,8 +700,35 @@ function repairPrompt(violations, attempt) {
       parts.push("只用最简单的词。");
     }
   }
+  // senses.js explains the disallowed grammatical function; it never adds
+  // its own closing line, so this one covers vocabulary and sense repairs alike.
+  if (senses.length) parts.push(HSKSenses.repairPrompt(senses));
   parts.push("请用别的说法，再说一次。只说中文，不要解释。");
   return parts.join("");
+}
+
+/* The LLM sense-validator. An allowed character does not mean every
+ * grammatical function of it is allowed at this level (see senses.js) --
+ * but classifying that needs a model call, so it is spent only when a
+ * registered ambiguous word actually turns up standalone in this reply,
+ * never on every turn. Failure here fails open: a classify call that
+ * cannot be reached should not turn an unrelated reply into a rejection. */
+async function checkSenseViolations(text, lex, level) {
+  const tokens = HSK.segment(text, lex);
+  const words = HSKSenses.wordsPresent(tokens);
+  if (!words.length) return [];
+  const out = [];
+  for (const w of words) {
+    const count = HSKSenses.standaloneHits(tokens, w).length;
+    try {
+      const raw = await callModel([{ role: "user", content: HSKSenses.classifyPrompt(w, text, count) }], 60);
+      const classified = HSKSenses.parseClassification(raw, count);
+      if (classified) out.push(...HSKSenses.checkSenses(w, classified, level));
+    } catch (e) {
+      console.warn("sense classify failed, allowing through:", w, e);
+    }
+  }
+  return out;
 }
 
 // Failures carry a kind, because the useful response differs: a missing key is
@@ -659,6 +768,30 @@ async function callModel(messages, maxTokens) {
   return txt.trim();
 }
 
+/* Translation and explanation both piggyback on callModel, but neither one
+ * goes through turn()'s validator: the point of both is to say things the
+ * learner's own word list cannot yet express. */
+async function translateText(text) {
+  const raw = await callModel([{ role: "user", content:
+    "Translate this Chinese into natural, idiomatic English. Reply with only the " +
+    "translation, no quotes, no other commentary:\n\n" + text }], 200);
+  return raw.trim();
+}
+
+// Recently introduced words go in the prompt so the explanation can point out
+// which ones the learner is still working on, not just recite the sentence.
+function explainSystemPrompt(text) {
+  const recent = S.learning.filter(HSKPace.isNew)
+    .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
+  return "You are a friendly Chinese teaching assistant helping a student who is reading " +
+    "Chinese at " + levelLabel() + ". Recently introduced words they are still practicing: " +
+    (recent || "none yet") + ".\n\n" +
+    "Explain the following Chinese sentence in plain English: the grammar structures used, " +
+    "why each word or particle is there, and call out anything above the student's level. " +
+    "You may reply in English and quote Chinese as needed -- you are not restricted to the " +
+    "student's vocabulary here. Keep it concise but complete.\n\nSentence: " + text;
+}
+
 function windowed() {
   // Notices are UI, not conversation: sending them would teach the model that
   // English error text belongs in the chat.
@@ -675,7 +808,8 @@ async function turn() {
    * should not cost the introduction. */
   const b = levelBudget();
   const offer = (S.pace.on && b.credits > 0)
-    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE) : [];
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
+    : [];
   const reuse = S.learning.filter(HSKPace.isNew).slice(-6);
   // After enough declined offers the top word becomes a condition of the reply.
   const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
@@ -701,8 +835,14 @@ async function turn() {
       ? HSK.buildLexicon(inScript(S.base),
           inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
       : S.lex;
-    const violations = HSK.validate(ex.text, lex);
-    console.log("[attempt " + attempt + "]", raw, violations.map(v => v.kind + ":" + v.text));
+    const hardViolations = HSK.validate(ex.text, lex);
+    /* The sense check is spent only once vocabulary already passes -- an
+     * ambiguous word inside a reply that is already going to be repaired for
+     * something else is not worth a second model call this attempt. */
+    const senseViols = hardViolations.length ? [] : await checkSenseViolations(ex.text, lex, S.level);
+    const violations = hardViolations.concat(senseViols);
+    console.log("[attempt " + attempt + "]", raw,
+      violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
 
     if (!violations.length) {
       /* A reply that is otherwise legal but omits the required word is not a
@@ -792,7 +932,7 @@ function renderStats() {
 /* Latin letters are a violation in the model's output -- a reply in English or
  * pinyin would otherwise pass -- but never in the learner's own message, where
  * English is a deliberate escape hatch for asking how to say something. */
-function tokenSpan(tok, needs, flagLatin) {
+function tokenSpan(tok, needs, flagLatin, shownExtra) {
   const need = needs && needs.find(n => n.start === tok.start && n.w === tok.text);
   if (tok.kind === "punct") return escapeHtml(tok.text);
   const e = tok.entry || need || {};
@@ -800,8 +940,18 @@ function tokenSpan(tok, needs, flagLatin) {
   const ownAscii = flagLatin === false && HSK.isAscii(tok.text);
   if (!ownAscii && (tok.kind === "bad" || (tok.kind === "latin" && flagLatin !== false))) cls.push("bad");
   if (need) cls.push("need");
-  else if (isExtra(tok.text)) cls.push("extra");
-  else {
+  else if (isExtra(tok.text)) {
+    /* Highlight only the first time this word appears in the whole visible
+     * history, tracked per render pass in `shownExtra`. Every render is a full
+     * renderAll() over S.history in order, so a fresh Set each time gives a
+     * stable answer with nothing to fall out of sync. */
+    if (shownExtra && shownExtra.has(tok.text)) {
+      // already shown once -- render as ordinary text
+    } else {
+      cls.push("extra");
+      if (shownExtra) shownExtra.add(tok.text);
+    }
+  } else {
     const l = learned(tok.text);
     if (l && HSKPace.isNew(l)) cls.push("fresh");
   }
@@ -872,7 +1022,7 @@ function renderNotice(turnObj) {
   return el;
 }
 
-function renderMessage(turnObj, idx) {
+function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
   const el = document.createElement("div");
   el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
@@ -886,8 +1036,18 @@ function renderMessage(turnObj, idx) {
   const lex = (turnObj.needs && turnObj.needs.length)
     ? HSK.buildLexicon(S.base, S.extra.concat(turnObj.needs)) : S.lex;
   const toks = HSK.segment(turnObj.text, lex);
-  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user")).join("");
+  bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);
+
+  // Below the Chinese, not above it: hidden until asked for either way.
+  let transBox = null;
+  if (turnObj.role === "assistant") {
+    transBox = document.createElement("div");
+    transBox.className = "translation";
+    transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
+    transBox.textContent = turnObj.translation || "";
+    el.appendChild(transBox);
+  }
 
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
@@ -912,6 +1072,18 @@ function renderMessage(turnObj, idx) {
   copy.textContent = "copy";
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
   meta.append(say, copy);
+  if (turnObj.role === "assistant") {
+    const translate = document.createElement("button");
+    translate.className = "copy";
+    translate.textContent = (turnObj.translation && turnObj.showTranslation)
+      ? "Hide translation" : "English translation";
+    translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
+    const explain = document.createElement("button");
+    explain.className = "copy";
+    explain.textContent = "English explanation";
+    explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
+    meta.append(translate, explain);
+  }
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -955,7 +1127,8 @@ function renderAll() {
       ' list and rewritten until they fit.</div>';
     return;
   }
-  S.history.forEach(renderMessage);
+  const shownExtra = new Set();   // added words already highlighted once, this pass
+  S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
 }
 
@@ -1148,6 +1321,93 @@ async function copyText(text, btn) {
     try { document.execCommand("copy"); done(); } catch (e2) { console.warn("copy failed", e2); }
     ta.remove();
   }
+}
+
+/* ------------------------------------------------------ translate & explain */
+
+/* Fetched once per reply and cached on the turn itself; the button after that
+ * only toggles visibility, so re-opening a translation never spends a call. */
+async function toggleTranslation(turnObj, btn, box) {
+  if (turnObj.translation) {
+    turnObj.showTranslation = !turnObj.showTranslation;
+    persist();
+    box.style.display = turnObj.showTranslation ? "" : "none";
+    btn.textContent = turnObj.showTranslation ? "Hide translation" : "English translation";
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Translating…";
+  try {
+    const en = await translateText(turnObj.text);
+    turnObj.translation = en;
+    turnObj.showTranslation = true;
+    persist();
+    box.textContent = en;
+    box.style.display = "";
+    btn.textContent = "Hide translation";
+  } catch (e) {
+    // A native tooltip, not alert(): consistent with the rest of the app,
+    // which never interrupts with a modal for a failed background fetch.
+    btn.title = (e && e.message) || String(e);
+    btn.textContent = "English translation";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// The sheet always shows one turn's breakdown; this is which one.
+let explainTurnObj = null;
+
+function renderExplainLog() {
+  const box = $("#explainLog");
+  box.innerHTML = "";
+  (explainTurnObj.explainChat || []).forEach(m => {
+    const div = document.createElement("div");
+    div.className = "explainMsg" + (m.role === "user" ? " user" : "");
+    div.innerHTML = '<div class="who">' + (m.role === "user" ? "you" : "explanation") + "</div>" +
+      escapeHtml(m.text);
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+// question === null is the initial breakdown; otherwise a typed follow-up.
+// Neither goes through the validator -- this chat is deliberately unconstrained.
+async function explainAsk(turnObj, question) {
+  const box = $("#explainLog");
+  const pending = document.createElement("div");
+  pending.className = "explainMsg";
+  pending.textContent = "…";
+  box.appendChild(pending);
+  box.scrollTop = box.scrollHeight;
+  $("#explainSend").disabled = true;
+
+  const messages = [{ role: "system", content: explainSystemPrompt(turnObj.text) }];
+  turnObj.explainChat.forEach(m => messages.push({ role: m.role, content: m.text }));
+  if (question) messages.push({ role: "user", content: question });
+
+  try {
+    const reply = await callModel(messages, 600);
+    if (question) turnObj.explainChat.push({ role: "user", text: question });
+    turnObj.explainChat.push({ role: "assistant", text: reply });
+  } catch (e) {
+    if (question) turnObj.explainChat.push({ role: "user", text: question });
+    turnObj.explainChat.push({ role: "assistant",
+      text: "(couldn't reach the model: " + ((e && e.message) || e) + ")" });
+  } finally {
+    persist();
+    pending.remove();
+    $("#explainSend").disabled = false;
+    if (explainTurnObj === turnObj) renderExplainLog();
+  }
+}
+
+function openExplain(turnObj) {
+  explainTurnObj = turnObj;
+  $("#explainSource").textContent = turnObj.text;
+  if (!turnObj.explainChat) turnObj.explainChat = [];
+  renderExplainLog();
+  openSheet("#explainSheet");
+  if (!turnObj.explainChat.length) explainAsk(turnObj, null);
 }
 
 /* -------------------------------------------------------------- flashcards */
@@ -1455,6 +1715,61 @@ function renderLearning() {
   });
 }
 
+/* How many matching rows are rendered at once. Some pools run to several
+ * thousand words (HSK 6 -> 7-9), and a phone rendering that many checkbox rows
+ * in one go is the wrong tradeoff for a list meant to be skimmed quickly;
+ * "show more" grows it in the same increments search narrows it by. */
+const POOL_PAGE = 150;
+let poolShown = POOL_PAGE;
+
+function poolMatches() {
+  const q = $("#poolSearch").value.trim().toLowerCase();
+  if (!q) return S.pool;
+  return S.pool.filter(e =>
+    e.w.includes(q) || (e.p || "").toLowerCase().includes(q) || (e.d || "").toLowerCase().includes(q));
+}
+
+function renderPool() {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  $("#poolTitle").textContent = next ? "Words at " + next.label : "No level above " + levelLabel();
+  const matches = poolMatches();
+  const box = $("#poolList");
+  box.innerHTML = "";
+  if (!S.pool.length) {
+    box.innerHTML = '<div class="note">' +
+      (next ? "Nothing left to review — every word at " + next.label + " is already usable."
+            : "There is no level above this one.") + "</div>";
+  }
+  matches.slice(0, poolShown).forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    row.innerHTML = '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + '>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+    row.querySelector("input").onchange = ev => {
+      if (ev.target.checked) {
+        if (!isKnownAhead(e.w)) S.known.push({ w: e.w, p: e.p, d: e.d });
+      } else {
+        S.known = S.known.filter(k => k.w !== e.w);
+      }
+      store.set(K.known, S.known);
+      rebuildLexicon(); updateMirror();
+      // S.pool membership does not change -- only isKnownAhead(w) does -- so a
+      // plain re-render (no re-fetch) is enough, and the row stays put either way.
+      renderPool();
+    };
+    box.appendChild(row);
+  });
+  const more = $("#poolMore");
+  const left = matches.length - poolShown;
+  if (left > 0) {
+    more.style.display = "";
+    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
+  } else {
+    more.style.display = "none";
+  }
+}
+
 function renderVocab() {
   const box = $("#vocabList");
   if (!S.extra.length) { box.innerHTML = '<div class="note">No added words yet.</div>'; return; }
@@ -1555,7 +1870,7 @@ function renderPaceNote() {
   const met = S.learning.filter(e => e.from === S.level + 1).length;
   const still = S.learning.filter(HSKPace.isNew).length;
   const offering = b.credits > 0
-    ? HSKPace.slate(S.pool, S.learning.map(e => e.w), HSKPace.SLATE).map(e => e.w).join("、")
+    ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE).map(e => e.w).join("、")
     : "";
   box.innerHTML = "<table>" +
     "<tr><td>from</td><td>" + escapeHtml(next.label) + " — " + met + " of " +
@@ -1603,6 +1918,25 @@ $("#btnPy").onclick = () => {
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
 };
+$("#btnPool").onclick = () => {
+  poolShown = POOL_PAGE; $("#poolSearch").value = "";
+  renderPool(); openSheet("#poolSheet");
+};
+$("#poolSearch").addEventListener("input", () => { poolShown = POOL_PAGE; renderPool(); });
+$("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
+$("#poolClose").onclick = () => closeSheet("#poolSheet");
+$("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
+
+function sendExplainQuestion() {
+  const text = $("#explainInput").value.trim();
+  if (!text || !explainTurnObj) return;
+  $("#explainInput").value = "";
+  explainAsk(explainTurnObj, text);
+}
+$("#explainSend").onclick = sendExplainQuestion;
+$("#explainInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendExplainQuestion(); } });
+$("#explainClose").onclick = () => closeSheet("#explainSheet");
+
 $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
   renderVocab(); renderLearning(); openSheet("#vocabSheet");
@@ -1630,6 +1964,8 @@ $("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.prev
 $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
 $("#btnSet").onclick = () => {
   $("#key").value = store.get(K.key, "");
+  $("#key").type = "password"; $("#keyShow").textContent = "👁";
+  $("#keyTestNote").textContent = "";
   $("#modelId").value = S.model;
   $("#promptMode").value = S.mode;
   $("#paceOn").checked = S.pace.on;
@@ -1746,6 +2082,51 @@ $("#freeOnly").onchange = e => {
     $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
   }
 };
+// Picking an example fills the free-text field, which stays the one thing
+// actually read on save -- the dropdown is a shortcut into it, not a second
+// source of truth.
+$("#modelExample").onchange = e => { $("#modelId").value = e.target.value; };
+$("#keyPaste").onclick = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) { $("#key").value = text.trim(); $("#keyTestNote").textContent = ""; }
+  } catch (e) {
+    // iOS requires a user gesture and can still refuse; there is no silent
+    // workaround, so say so rather than leaving the button looking broken.
+    $("#keyTestNote").textContent = "Couldn't read the clipboard — paste manually.";
+  }
+};
+$("#keyShow").onclick = () => {
+  const key = $("#key");
+  const show = key.type === "password";
+  key.type = show ? "text" : "password";
+  $("#keyShow").textContent = show ? "🙈" : "👁";
+};
+
+/* GET /key with the bearer header, not a completion call: it validates the
+ * key and reports its limits for the price of zero tokens. */
+async function testKey() {
+  const btn = $("#keyTest"), note = $("#keyTestNote");
+  const key = $("#key").value.trim();
+  if (!key) { note.textContent = "Paste a key first."; return; }
+  btn.disabled = true; btn.textContent = "Testing…";
+  note.textContent = "";
+  try {
+    const r = await fetch(KEY_URL, { headers: { "Authorization": "Bearer " + key } });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((body.error && body.error.message) || ("OpenRouter " + r.status));
+    const d = body.data || {};
+    const limit = d.limit === null || d.limit === undefined ? "unlimited" : "$" + d.limit;
+    note.textContent = "✓ Key works. You're ready to chat. (" +
+      (d.is_free_tier ? "free tier, " : "") + "limit " + limit + ")";
+  } catch (e) {
+    note.textContent = "✗ " + (e.message || e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Test connection";
+  }
+}
+$("#keyTest").onclick = testKey;
+
 $("#refreshModels").onclick = refreshModels;
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
@@ -1753,7 +2134,7 @@ $("#clearHistory").onclick = () => {
   S.history = []; persist(); renderAll();
 };
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
-[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"]].forEach(([sheet]) => {
+[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
   $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
 });
 
