@@ -206,6 +206,26 @@ conversation can stay cheap while what you are told about your own sentences is 
 trusting; these calls only happen when you press a button, not every turn. Set it to **Same as
 the chat model** if you would rather it not.
 
+The four prompts behind those buttons are editable in **Advanced → Teaching prompts** —
+translation and grammar-check for your own messages, translation and explanation for the
+partner's. `{text}` is the sentence, `{level}` your level, `{recent}` the words you have just
+been introduced to. Left alone, each keeps tracking the app's own version rather than freezing
+today's wording, the same bargain the system prompt makes.
+
+## Time chatting
+
+**Conversation → Time chatting** keeps a today and an all-time total, and today's shows on the
+collapsed section row. The clock advances only while the app is visible *and* you have typed or
+tapped in the last couple of minutes, so a tab left open overnight adds nothing; reading a long
+reply still counts, which is right, since reading the Chinese is the activity.
+
+It is counted **per device and summed**, not as one number. Preferences sync last-write-wins,
+which is correct for a setting and wrong for a counter — ten minutes on a phone and five on a
+laptop would resolve to whichever synced last and throw the other away, silently. Each device
+only ever writes its own entry and only ever increases it, so merging is a `max()` per field:
+no coordination, no ordering, and two devices offline for a week still converge. See
+`time.js`.
+
 On your own messages the second button reads **Check my grammar**, because what it is
 pointed at is different: your sentence may be wrong, and a prompt that assumes otherwise
 explains a mistake rather than catching it. So that one is told the line may well be wrong
@@ -225,7 +245,7 @@ The failed reply or card is dropped first, so the history stays honest.
 ## Settings
 
 Grouped into nine collapsible sections, ordered required-setup first and anything
-destructive last: **Connection, Models, Learning, Reading & audio, Conversation, Flashcards,
+destructive last: **Connection, Models, Conversation, Learning, Reading & audio, Flashcards,
 Advanced, Sync & backup, About & data**. Collapsed, the whole menu fits one phone screen, and
 several rows show their value without being opened — whether a key is stored, which model,
 whether sync is on. A first run opens **Connection** on its own, since a missing key is why
@@ -238,6 +258,7 @@ key you had just pasted.)
 
 | | |
 |---|---|
+| **Time chatting** | today and all-time, summed across every device you sync |
 | **API key** | OpenRouter key, stored on this device only |
 | **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
@@ -247,6 +268,7 @@ key you had just pasted.)
 | **Text size** | 16–34px, with a live preview |
 | **Reply length** | short (1–2 sentences) / medium (3–4) / longer (5–6) |
 | **System prompt** | edit the assembled prompt, or leave it tracking the pickers |
+| **Teaching prompts** | the four behind translate / explain / grammar-check, individually editable |
 | **Anki cards** | deck, note type and field names for the one-tap links |
 | **Tries before giving up** | 1–6; each is another API call |
 | **Prompt mode (A/B)** | with or without the wordlist in the prompt, and the counters |

@@ -212,6 +212,8 @@ footer{
    the summary's padding and leave the section looking detached from its title. */
 .sec>*:not(summary):first-of-type{margin-top:4px}
 .sheet label{display:block; margin:14px 0 6px; font-size:13px; color:var(--dim)}
+.sheet textarea.small{min-height:130px; font-size:13px}
+.teachRow{margin-bottom:14px}
 .sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
   border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
   resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -356,11 +358,11 @@ footer{
 
     <label for="teachModel">Model for translation and grammar checks</label>
     <select id="teachModel"></select>
-    <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
-    much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
-    两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
-    separate so the conversation can stay cheap while what you are told about your own sentences
-    is worth trusting. These calls happen only when you press a button, not every turn.</div>
+    <!-- The evidence for keeping these two apart is in README.md; what belongs
+         here is the bit that changes what you would pick. -->
+    <div class="note">Only runs when you press <b>English translation</b> or <b>Check my
+    grammar</b>, so it can be better than the chat model without costing much. Cheap models
+    will tell you a wrong sentence is correct.</div>
 
     <label class="toggle" for="freeOnly">
       <input type="checkbox" id="freeOnly">
@@ -379,6 +381,36 @@ footer{
     <input id="modelId" type="text" placeholder="anthropic/claude-...">
     <div class="row" style="margin-top:8px"><button id="modelReload" class="quiet">Reload list</button></div>
     <div class="note" id="modelNote"></div>
+  </details>
+
+  <details class="sec">
+    <summary>Conversation<span class="secnote" id="secConversationNote"></span></summary>
+    <label>Time chatting</label>
+      <div class="stats" id="chatTime"></div>
+      <div class="note">Counted while the app is open and you are using it, and paused
+      after a couple of minutes of quiet. With cloud sync on, every device you use adds
+      to the same total.</div>
+
+    <label for="replyLength">Reply length</label>
+      <select id="replyLength"></select>
+      <div class="note">Longer replies give more to read, and more chances to reach for a word
+      above your level — watch the retry counters below.</div>
+
+    <label class="toggle" for="showStarters">
+        <input type="checkbox" id="showStarters">
+        <span>Show conversation starters</span>
+      </label>
+
+    <label for="attempts">Tries before giving up</label>
+      <select id="attempts"></select>
+      <div class="note">Each try is another API call. One means no repairs at all: a reply that
+      breaks the level goes straight to 我不知道。</div>
+
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button id="clearHistory" class="danger">Clear conversation</button>
+      </div>
+      <div class="note">Wipes the messages on this device. Added words and counters are kept.
+      With cloud sync on, this device pushes the empty conversation to the others.</div>
   </details>
 
   <details class="sec">
@@ -416,23 +448,6 @@ footer{
       <select id="speechRate"></select>
       <div class="note" id="voiceNote"></div>
 
-    <label class="toggle" for="showStarters">
-        <input type="checkbox" id="showStarters">
-        <span>Show conversation starters</span>
-      </label>
-  </details>
-
-  <details class="sec">
-    <summary>Conversation</summary>
-    <label for="replyLength">Reply length</label>
-      <select id="replyLength"></select>
-      <div class="note">Longer replies give more to read, and more chances to reach for a word
-      above your level — watch the retry counters below.</div>
-
-    <label for="attempts">Tries before giving up</label>
-      <select id="attempts"></select>
-      <div class="note">Each try is another API call. One means no repairs at all: a reply that
-      breaks the level goes straight to 我不知道。</div>
   </details>
 
   <details class="sec">
@@ -458,6 +473,16 @@ footer{
       substituted. The validator does not care what is in here — an instruction to use hard
       words just costs retries.</div>
 
+    <label>Teaching prompts</label>
+      <!-- Built by renderTeachPrompts(): four near-identical blocks are better
+           generated from the one list that also names them at the call sites. -->
+      <div id="teachPrompts"></div>
+      <div class="note">The prompts behind <b>English translation</b>, <b>English explanation</b>
+      and <b>Check my grammar</b>. <code>{text}</code> is the sentence,
+      <code>{level}</code> your level, <code>{recent}</code> the words you have just been
+      introduced to. Untouched, each keeps tracking the app's own version rather than freezing
+      today's wording. These run on the teaching model, not the chat model.</div>
+
     <label for="promptMode">Prompt mode (A/B)</label>
       <select id="promptMode">
         <option value="without-list">without-list — rules only</option>
@@ -465,6 +490,9 @@ footer{
       </select>
       <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
       <div class="stats" id="stats"></div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="resetStats">Reset A/B counters</button>
+      </div>
   </details>
 
   <details class="sec" id="secSync">
@@ -508,11 +536,6 @@ footer{
         <button id="checkUpdate">Check for update</button>
       </div>
 
-    <label>Data</label>
-      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="clearHistory">Clear conversation</button>
-        <button id="resetStats">Reset A/B counters</button>
-      </div>
   </details>
 
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
@@ -577,6 +600,7 @@ footer{
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
 <script src="md.js"></script>
+<script src="time.js"></script>
 <script src="pace.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
@@ -639,7 +663,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v41 — 2026-08-22";
+const VERSION   = "v42 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -663,6 +687,8 @@ const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
+  chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId",
+  teachPrompts:"hsk1chat.teachPrompts",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
@@ -683,6 +709,12 @@ const S = {
   level:   store.get(K.level, 1),
   model:   store.get(K.model, MODELS[0].id),
   teachModel: store.get(K.teachModel, TEACH_MODEL),
+  /* Per-device chat time, summed for display. See time.js for why it is not
+   * one number: a counter under last-write-wins loses whichever device synced
+   * first, without saying so. */
+  chatTime: store.get(K.chatTime, {}),
+  // Per-prompt overrides, keyed by TEACH_PROMPTS[].key. Absent = use the default.
+  teachPrompts: store.get(K.teachPrompts, {}),
   mode:    store.get(K.mode, "without-list"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
@@ -1002,19 +1034,59 @@ async function callModel(messages, maxTokens, model) {
  * ever withdrawn. */
 function teachingModel() { return S.teachModel || S.model; }
 
+/* The four prompts behind the two buttons. Four rather than two because `own`
+ * changes what each one should ask for: the partner's reply is known-good
+ * Chinese, your own line is a draft that may be wrong. Named here once so the
+ * editor, the defaults and the call sites cannot drift apart. */
+const TEACH_PROMPTS = [
+  { key: "transMine",    kind: "translate", own: true,
+    label: "Translation — my own message" },
+  { key: "explainMine",  kind: "explain",   own: true,
+    label: "Check my grammar" },
+  { key: "transReply",   kind: "translate", own: false,
+    label: "Translation — the partner's reply" },
+  { key: "explainReply", kind: "explain",   own: false,
+    label: "English explanation" }
+];
+
+// Recently introduced words, so an explanation can say which are still new.
+function recentWords() {
+  return S.learning.filter(HSKPace.isNew)
+    .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
+}
+
+function defaultTeachPrompt(spec, vars) {
+  return spec.kind === "translate"
+    ? HSKPrompt.translate({ text: vars.text, own: spec.own })
+    : HSKPrompt.explain({ text: vars.text, own: spec.own,
+                          label: vars.level, recent: vars.recent });
+}
+
+/* An untouched prompt keeps calling prompt.js rather than storing a copy of
+ * today's wording, so improvements there still reach it -- the same bargain the
+ * system prompt makes. An edited one is sent as written, with the placeholders
+ * filled in. */
+function teachPromptFor(key, vars) {
+  const spec = TEACH_PROMPTS.find(p => p.key === key);
+  const custom = (S.teachPrompts || {})[key];
+  if (!custom) return defaultTeachPrompt(spec, vars);
+  return custom.replace(/\{text\}/g, vars.text)
+               .replace(/\{level\}/g, vars.level)
+               .replace(/\{recent\}/g, vars.recent || "none yet");
+}
+
 /* `own` marks the student's own message rather than the partner's reply: it may
  * be wrong, which changes what both prompts should ask for. See prompt.js. */
 async function translateText(text, own) {
-  const raw = await callModel(
-    [{ role: "user", content: HSKPrompt.translate({ text: text, own: own }) }],
-    200, teachingModel());
+  const content = teachPromptFor(own ? "transMine" : "transReply",
+    { text: text, level: levelLabel(), recent: recentWords() });
+  const raw = await callModel([{ role: "user", content: content }], 200, teachingModel());
   return raw.trim();
 }
 
 function explainSystemPrompt(text, own) {
-  const recent = S.learning.filter(HSKPace.isNew)
-    .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
-  return HSKPrompt.explain({ text: text, own: own, label: levelLabel(), recent: recent });
+  return teachPromptFor(own ? "explainMine" : "explainReply",
+    { text: text, level: levelLabel(), recent: recentWords() });
 }
 
 function windowed() {
@@ -1636,6 +1708,14 @@ async function pullAndMerge() {
 
     // Prefs are whole-blob last-write-wins: adopt the remote snapshot only
     // if it is newer than the last one this device is known to have pushed.
+    /* Merged, not adopted, and outside the newer-than check below: max() is
+     * idempotent, so applying an older remote is harmless, while skipping it
+     * would drop time another device recorded before this one last pushed. */
+    if (prefsRow && prefsRow.data && prefsRow.data.chatTime) {
+      S.chatTime = HSKTime.merge(S.chatTime, prefsRow.data.chatTime);
+      store.set(K.chatTime, S.chatTime);
+      renderChatTime();
+    }
     if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
@@ -1644,6 +1724,7 @@ async function pullAndMerge() {
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
+      store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       S.prefsPushedAt = prefsRow.updated_at;
       applyFont(S.font);
@@ -1941,6 +2022,67 @@ function plecoUrl(word) {
          "&x-source=" + encodeURIComponent("HSK Chat") +
          "&x-success=" + encodeURIComponent(location.href);
 }
+
+/* -------------------------------------------------------------- chat clock
+ *
+ * Active time, not open-tab time. The clock advances only while the page is
+ * visible AND something has been typed or tapped recently, so a tab left open
+ * over lunch adds nothing and neither does a phone in a pocket. Reading a long
+ * reply still counts -- IDLE is generous enough to cover it -- which is right,
+ * since reading the Chinese is the activity.
+ *
+ * Accrued in whole ticks: at TICK seconds each, the worst case is losing the
+ * part-tick in progress when you close the tab, which is not worth the
+ * bookkeeping to recover.
+ */
+const TICK = 15000;          // how often the clock advances
+const IDLE = 120000;         // silence after which it stops advancing
+let lastActivity = Date.now();
+let sinceTimeSync = 0;
+
+function deviceId() {
+  let id = store.get(K.deviceId, "");
+  if (!id) {
+    id = newMessageId();
+    store.set(K.deviceId, id);
+  }
+  return id;
+}
+
+function noteActivity() { lastActivity = Date.now(); }
+
+function chatClockTick() {
+  if (document.visibilityState !== "visible") return;
+  if (Date.now() - lastActivity > IDLE) return;
+  HSKTime.add(S.chatTime, deviceId(), TICK / 1000);
+  HSKTime.prune(S.chatTime);
+  store.set(K.chatTime, S.chatTime);
+  renderChatTime();
+  /* Pushed every few minutes rather than every tick: the number is not urgent,
+   * and a sync per fifteen seconds would be a lot of writes for a counter
+   * nobody is watching in real time. Also pushed on the way out below. */
+  sinceTimeSync += TICK;
+  if (sinceTimeSync >= 300000) { sinceTimeSync = 0; queueSync("prefs"); }
+}
+
+function renderChatTime() {
+  const t = HSKTime.totals(S.chatTime);
+  const el = $("#chatTime");
+  if (el) {
+    el.innerHTML = "<div><b>" + escapeHtml(HSKTime.format(t.today)) + "</b> today</div>" +
+                   "<div><b>" + escapeHtml(HSKTime.format(t.total)) + "</b> all time</div>";
+  }
+  const row = $("#secConversationNote");
+  if (row) row.textContent = t.today ? HSKTime.format(t.today) + " today" : "";
+}
+
+["pointerdown", "keydown", "input", "touchstart"].forEach(ev =>
+  document.addEventListener(ev, noteActivity, { passive: true }));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") noteActivity();
+  else queueSync("prefs");         // leaving is exactly when the total is final
+});
+setInterval(chatClockTick, TICK);
 
 /* ------------------------------------------------------------------ sending */
 
@@ -2515,6 +2657,7 @@ function renderSectionNotes() {
 
 $("#btnSet").onclick = () => {
   renderSectionNotes();
+  renderChatTime();
   /* A first run opens Settings precisely because there is no key, so the one
    * section that run needs is the one that should already be open. Otherwise
    * every section starts collapsed -- the whole point is the short list. */
@@ -2554,6 +2697,7 @@ $("#btnSet").onclick = () => {
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
   fillPrompt();
+  renderTeachPrompts();
   renderStats();
   renderVersion();
   $("#syncOn").checked = S.sync.on;
@@ -2593,6 +2737,7 @@ function commitSettings() {
     S.prompt = typed;
     store.set(K.prompt, S.prompt);
   }
+  commitTeachPrompts();
   queueSync("prefs");
   closeSheet("#setSheet");
 }
@@ -2615,6 +2760,69 @@ $("#resetPrompt").onclick = () => {
   S.replyLength = $("#replyLength").value;
   fillPrompt();
 };
+
+/* What each teaching prompt looked like when the sheet opened, so an untouched
+ * box can be told from an edited one on close -- exactly how #sysPrompt does it.
+ * The default is shown with its placeholders still in it rather than filled in
+ * against some sample sentence, since the placeholders are the part you edit. */
+let teachShown = {};
+
+function renderTeachPrompts() {
+  const box = $("#teachPrompts");
+  box.innerHTML = "";
+  teachShown = {};
+  TEACH_PROMPTS.forEach(spec => {
+    const custom = (S.teachPrompts || {})[spec.key] || "";
+    const shown = custom || defaultTeachPrompt(spec,
+      { text: "{text}", level: "{level}", recent: "{recent}" });
+    teachShown[spec.key] = shown;
+
+    const wrap = document.createElement("div");
+    wrap.className = "teachRow";
+    const lab = document.createElement("label");
+    lab.setAttribute("for", "tp_" + spec.key);
+    lab.textContent = spec.label;
+    const ta = document.createElement("textarea");
+    ta.id = "tp_" + spec.key;
+    ta.className = "small";
+    ta.spellcheck = false;
+    ta.value = shown;
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:6px";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.textContent = "Reset to default";
+    reset.onclick = () => {
+      delete S.teachPrompts[spec.key];
+      store.set(K.teachPrompts, S.teachPrompts);
+      queueSync("prefs");
+      renderTeachPrompts();
+    };
+    const state = document.createElement("span");
+    state.className = "note";
+    state.style.cssText = "margin:0;align-self:center";
+    state.textContent = custom ? "custom" : "tracking the app's version";
+    row.append(reset, state);
+    wrap.append(lab, ta, row);
+    box.appendChild(wrap);
+  });
+}
+
+// Same rule as the system prompt: only an actual edit makes it custom.
+function commitTeachPrompts() {
+  TEACH_PROMPTS.forEach(spec => {
+    const el = $("#tp_" + spec.key);
+    if (!el) return;
+    const typed = el.value.trim();
+    if (typed && typed !== (teachShown[spec.key] || "").trim()) {
+      S.teachPrompts[spec.key] = typed;
+    } else if (!typed) {
+      delete S.teachPrompts[spec.key];         // emptied means "go back to default"
+    }
+  });
+  store.set(K.teachPrompts, S.teachPrompts);
+}
 // Live, so the preview line under the slider shows the real size as it moves.
 $("#showStarters").onchange = e => {
   S.starters = e.target.checked;
