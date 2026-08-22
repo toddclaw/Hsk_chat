@@ -335,6 +335,58 @@ return true;
     check(String(secs[0]).indexOf("Connection") === 0 && String(secs[0]).endsWith("=open"),
       "and it is Connection, the one a first run needs", JSON.stringify(secs));
 
+    /* ------------------------------------------------- the Models two-step
+     *
+     * Loading the catalogue is setup; picking a model is what you come back for.
+     * With no catalogue cached the setup block leads and the reload button is
+     * not there; once one exists they swap. Getting this backwards would put a
+     * once-ever button above the control used every time.
+     */
+    await exec(`document.querySelectorAll('#setSheet .sec')[1].open = true; return true;`);
+    const before = await exec(`
+      return { setup: getComputedStyle(document.querySelector('#modelSetup')).display,
+               reload: getComputedStyle(document.querySelector('#modelReload')).display };`);
+    check(before.setup !== "none", "with no catalogue, the setup block is shown", JSON.stringify(before));
+    check(before.reload === "none", "and the quiet reload button is not", JSON.stringify(before));
+
+    // Fake a cached catalogue rather than calling OpenRouter: this suite has no key.
+    await exec(`
+      localStorage.setItem("hsk1chat.modelCache", JSON.stringify([
+        { id: "cheap/one", label: "Cheap One", free: true,  inM: 0,    outM: 0 },
+        { id: "big/one",   label: "Big One",   free: false, inM: 0.09, outM: 0.55 }
+      ]));
+      return true;`);
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await exec(`document.querySelectorAll('#setSheet .sec')[1].open = true; return true;`);
+    const after = await exec(`
+      return { setup: getComputedStyle(document.querySelector('#modelSetup')).display,
+               reload: getComputedStyle(document.querySelector('#modelReload')).display,
+               note: document.querySelector('#modelNote').textContent,
+               chat: document.querySelector('#modelChat').options.length,
+               teach: document.querySelector('#teachModel').options.length };`);
+    check(after.setup === "none", "once a catalogue is cached the setup block goes away", JSON.stringify(after));
+    check(after.reload !== "none", "and the quiet reload button appears", JSON.stringify(after));
+    check(/2 models cached, 1 of them free/.test(after.note), "the note counts the catalogue", after.note);
+    check(after.chat >= 2, "the Settings chat picker is populated from it", JSON.stringify(after));
+    // Teaching picker: the same list plus "Same as the chat model", never free-filtered.
+    check(after.teach === after.chat + 1,
+      "the teaching picker adds the same-as-chat option", JSON.stringify(after));
+
+    /* One setting, three controls. Leaving any of them stale would show you a
+     * model you are not actually talking to. */
+    await exec(`
+      var sel = document.querySelector('#modelChat');
+      sel.value = "big/one";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    const synced = await exec(`
+      return { header: document.querySelector('#model').value,
+               box: document.querySelector('#modelId').value,
+               stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
+    check(synced.header === "big/one", "choosing in Settings moves the header picker", JSON.stringify(synced));
+    check(synced.box === "big/one", "and the paste-an-id box", JSON.stringify(synced));
+    check(synced.stored === "big/one", "and is persisted", JSON.stringify(synced));
+
     /* Settings has no Cancel: the fields are read out of the DOM when it closes,
      * so ✕ must commit exactly what Done commits. Asserted through a field in a
      * section that is still COLLAPSED, which is the part the accordion could
