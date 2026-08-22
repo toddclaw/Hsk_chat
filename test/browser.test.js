@@ -319,8 +319,63 @@ return true;
       window.fetch = window.__realFetch; window.__calls = []; return true;`),
       "fetch is restored for the rest of the suite");
 
+    /* ---------------------------------------------- the Settings accordion
+     *
+     * Boot opened Settings already, because the seed deliberately stores no key.
+     */
+    check(await exec(`return document.querySelector('#setSheet').classList.contains('open');`),
+      "a first run with no key opens Settings");
+    const secs = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#setSheet .sec'),
+        function (d) { return d.querySelector('summary').textContent.trim() + "=" +
+                              (d.open ? "open" : "closed"); });`);
+    check(secs.length >= 8, "Settings is broken into sections", JSON.stringify(secs));
+    check(secs.filter(s => s.endsWith("=open")).length === 1,
+      "exactly one section starts open", JSON.stringify(secs));
+    check(String(secs[0]).indexOf("Connection") === 0 && String(secs[0]).endsWith("=open"),
+      "and it is Connection, the one a first run needs", JSON.stringify(secs));
+
+    /* Settings has no Cancel: the fields are read out of the DOM when it closes,
+     * so ✕ must commit exactly what Done commits. Asserted through a field in a
+     * section that is still COLLAPSED, which is the part the accordion could
+     * plausibly have broken -- a collapsed <details> renders nothing, and a
+     * commit that skipped those inputs would lose every setting not opened. */
+    await exec(`
+      document.querySelector('#key').value = "sk-or-committed-by-the-x";
+      var sel = document.querySelector('#replyLength');
+      sel.value = "long";
+      return true;`);
+    check(await exec(`
+      return !document.querySelector('#replyLength').closest('details').open;`),
+      "reply length is inside a section that is still collapsed");
+    await exec(`document.querySelector('#setX').click(); return true;`);
+    check(!(await exec(`return document.querySelector('#setSheet').classList.contains('open');`)),
+      "the ✕ closes Settings");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.apiKey"));`)
+            === "sk-or-committed-by-the-x",
+      "the ✕ commits the API key rather than discarding it");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.replyLength"));`) === "long",
+      "and commits a field from a section that was never opened");
+
+    // Reopen for the sync checks below; also exercises the summary values.
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')", "Settings again");
+    check(!(await exec(`return document.querySelector('#secConnection').open;`)),
+      "reopening with a key saved leaves Connection collapsed");
+    check(/key saved/.test(await exec(`
+      return document.querySelector('#secConnectionNote').textContent;`)),
+      "the collapsed Connection row reports that a key is stored");
+
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
+    /* Settings is a set of collapsed <details> now, and everything below lives
+     * inside the sync one. A collapsed section renders nothing but its summary,
+     * so the visibility checks at the end would fail for a reason that has
+     * nothing to do with what they test. Opening it is also what a user doing
+     * this would have done. */
+    await exec(`
+      document.querySelector("#secSync").open = true;
+      return document.querySelector("#secSync").open;`);
     await exec(`
       var box = document.querySelector("#syncOn");
       box.checked = true;

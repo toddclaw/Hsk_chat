@@ -219,6 +219,18 @@ The failed reply or card is dropped first, so the history stays honest.
 
 ## Settings
 
+Grouped into nine collapsible sections, ordered required-setup first and anything
+destructive last: **Connection, Models, Learning, Reading & audio, Conversation, Flashcards,
+Advanced, Sync & backup, About & data**. Collapsed, the whole menu fits one phone screen, and
+several rows show their value without being opened — whether a key is stored, which model,
+whether sync is on. A first run opens **Connection** on its own, since a missing key is why
+Settings opened at all.
+
+Closing commits. There is no Cancel: the fields are read out of the page when the sheet
+closes, so the ✕ in the sticky header, the **Done** button and a tap outside the sheet all do
+the same thing. (The backdrop tap used to close *without* saving, which quietly discarded a
+key you had just pasted.)
+
 | | |
 |---|---|
 | **API key** | OpenRouter key, stored on this device only |

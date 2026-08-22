@@ -165,6 +165,47 @@ footer{
   border-radius:18px 18px 0 0; padding:16px 16px calc(env(safe-area-inset-bottom) + 16px);
 }
 .sheet h2{margin:0 0 12px; font-size:17px}
+
+/* Sticky close row. The card is the scroll container, so `top:0` here pins the
+   header against the card rather than the viewport, and the negative margins
+   plus matching padding let the background run to the card's edges while the
+   content below keeps its inset. */
+.sheethead{
+  position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin:-16px -16px 4px; padding:14px 16px 10px;
+  background:var(--panel); border-bottom:1px solid var(--line);
+}
+.sheethead h2{margin:0}
+/* 40px square: comfortably past the 44px tap target once padding counts, and
+   large enough to hit with a thumb without looking like a primary action. */
+.sheetx{
+  flex:0 0 auto; width:40px; height:40px; min-height:0; padding:0; border-radius:50%;
+  background:none; border:1px solid var(--line); color:var(--dim); font-size:15px; line-height:1;
+}
+.sheetx:active{background:var(--panel2); color:var(--ink)}
+
+/* Collapsible sections. <details> rather than scripted panels: it is native,
+   keyboard- and screen-reader-navigable, survives having no JS at all, and
+   costs nothing to maintain. Nine rows of summary replace what used to be one
+   continuous scroll of every setting the app has. */
+.sec{border-bottom:1px solid var(--line)}
+.sec>summary{
+  list-style:none; cursor:pointer; padding:13px 2px; font-size:15px;
+  display:flex; align-items:center; gap:8px;
+}
+.sec>summary::-webkit-details-marker{display:none}   /* Safari's own triangle */
+/* The disclosure caret, drawn rather than inherited so it can rotate. */
+.sec>summary::before{
+  content:"›"; flex:0 0 auto; width:14px; color:var(--dim); font-size:17px;
+  transition:transform .15s ease;
+}
+.sec[open]>summary::before{transform:rotate(90deg)}
+.sec[open]>summary{color:var(--ink)}
+/* Pushed to the right: a value you can read without opening the section. */
+.secnote{margin-left:auto; font-size:12px; color:var(--dim); text-align:right}
+/* The first label inside a section would otherwise add its own 14px on top of
+   the summary's padding and leave the section looking detached from its title. */
+.sec>*:not(summary):first-of-type{margin-top:4px}
 .sheet label{display:block; margin:14px 0 6px; font-size:13px; color:var(--dim)}
 .sheet textarea{width:100%; min-height:220px; padding:11px; border-radius:10px;
   border:1px solid var(--line); background:var(--panel2); font-size:14px; line-height:1.5;
@@ -236,180 +277,216 @@ footer{
 </footer>
 
 <div class="sheet" id="setSheet"><div class="card">
-  <h2>Settings</h2>
-  <div class="labelrow">
-    <label for="key">OpenRouter API key</label>
-    <!-- Filled in when Settings opens, and again after a successful test. Stays
-         empty when there is no key yet, or when the lookup cannot be made --
-         this app is usable offline, so a balance that could not be fetched must
-         read as absent rather than as zero. -->
-    <span class="note balance" id="keyBalance"></span>
+  <!-- Sticky, so the way out is always one tap away rather than a scroll to the
+       bottom of a long sheet. It is the same action as Done, not a cancel: the
+       Done handler is what commits the key, the model id and half a dozen other
+       fields, so a close button that skipped it would silently discard them. -->
+  <div class="sheethead">
+    <h2>Settings</h2>
+    <button id="setX" class="sheetx" type="button" aria-label="Close settings" title="Close">✕</button>
   </div>
-  <div class="keyrow">
-    <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
-    <button id="keyPaste" type="button" title="Paste from clipboard">Paste</button>
-    <button id="keyShow" type="button" title="Show key">👁</button>
-  </div>
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-    <button id="keyTest">Test connection</button>
-    <span class="note" id="keyTestNote" style="margin:0;align-self:center"></span>
-  </div>
-  <div class="note"><b>Free setup:</b> make an account at
-  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
-  create a key, add no credit, then pick the free example model below, or tick
-  <b>free models only</b>. Models priced at zero
-  cost nothing to call. They are rate-limited and can be busy, so replies may be slower and
-  retries more frequent; adding credit and picking a paid model fixes that.
-  <br><br>A key is still required — there is no backend here to hold one for you, and a key
-  shipped inside a page like this would be abused and revoked within a day. The key you paste
-  stays in this browser's localStorage on this device, and is sent to openrouter.ai and
-  nowhere else.</div>
 
-  <label for="modelExample">Try a known-good model</label>
-  <select id="modelExample">
-    <!-- Individual free model ids are the most volatile thing OpenRouter serves:
-         the id this list used to name had been withdrawn outright, and both
-         Gemma free endpoints answered 429 "rate-limited upstream" on every try
-         while this was written. openrouter/free is a router OpenRouter maintains
-         rather than a single model, so it cannot go stale the same way -- at the
-         cost of picking a different free model each call, which is why the label
-         promises nothing about quality. -->
-    <option value="openrouter/free">OpenRouter: Free Models Router — no credit needed, but quality varies a lot</option>
-    <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
-  </select>
-  <label for="modelId">Model id (any OpenRouter id)</label>
-  <input id="modelId" type="text" placeholder="anthropic/claude-...">
-  <label class="toggle" for="freeOnly">
-    <input type="checkbox" id="freeOnly">
-    <span>Free models only</span>
-  </label>
-  <label for="modelSort">Sort models</label>
-  <select id="modelSort">
-    <option value="price">by price — free first</option>
-    <option value="name">by name — A to Z</option>
-  </select>
-  <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
-  <div class="note" id="modelNote"></div>
+  <details class="sec" id="secConnection">
+    <summary>Connection<span class="secnote" id="secConnectionNote"></span></summary>
+    <div class="labelrow">
+        <label for="key">OpenRouter API key</label>
+        <!-- Filled in when Settings opens, and again after a successful test. Stays
+             empty when there is no key yet, or when the lookup cannot be made --
+             this app is usable offline, so a balance that could not be fetched must
+             read as absent rather than as zero. -->
+        <span class="note balance" id="keyBalance"></span>
+      </div>
+      <div class="keyrow">
+        <input id="key" type="password" placeholder="sk-or-..." autocomplete="off">
+        <button id="keyPaste" type="button" title="Paste from clipboard">Paste</button>
+        <button id="keyShow" type="button" title="Show key">👁</button>
+      </div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="keyTest">Test connection</button>
+        <span class="note" id="keyTestNote" style="margin:0;align-self:center"></span>
+      </div>
+      <div class="note"><b>Free setup:</b> make an account at
+      <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
+      create a key, add no credit, then pick the free example model below, or tick
+      <b>free models only</b>. Models priced at zero
+      cost nothing to call. They are rate-limited and can be busy, so replies may be slower and
+      retries more frequent; adding credit and picking a paid model fixes that.
+      <br><br>A key is still required — there is no backend here to hold one for you, and a key
+      shipped inside a page like this would be abused and revoked within a day. The key you paste
+      stays in this browser's localStorage on this device, and is sent to openrouter.ai and
+      nowhere else.</div>
+  </details>
 
-  <label for="teachModel">Model for translation and grammar checks</label>
-  <select id="teachModel"></select>
-  <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
-  much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
-  两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
-  separate so the conversation can stay cheap while what you are told about your own sentences
-  is worth trusting. These calls happen only when you press a button, not every turn.</div>
+  <details class="sec">
+    <summary>Models<span class="secnote" id="secModelsNote"></span></summary>
+    <label for="modelExample">Try a known-good model</label>
+      <select id="modelExample">
+        <!-- Individual free model ids are the most volatile thing OpenRouter serves:
+             the id this list used to name had been withdrawn outright, and both
+             Gemma free endpoints answered 429 "rate-limited upstream" on every try
+             while this was written. openrouter/free is a router OpenRouter maintains
+             rather than a single model, so it cannot go stale the same way -- at the
+             cost of picking a different free model each call, which is why the label
+             promises nothing about quality. -->
+        <option value="openrouter/free">OpenRouter: Free Models Router — no credit needed, but quality varies a lot</option>
+        <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
+      </select>
+      <label for="modelId">Model id (any OpenRouter id)</label>
+      <input id="modelId" type="text" placeholder="anthropic/claude-...">
+      <label class="toggle" for="freeOnly">
+        <input type="checkbox" id="freeOnly">
+        <span>Free models only</span>
+      </label>
+      <label for="modelSort">Sort models</label>
+      <select id="modelSort">
+        <option value="price">by price — free first</option>
+        <option value="name">by name — A to Z</option>
+      </select>
+      <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
+      <div class="note" id="modelNote"></div>
 
-  <label class="toggle" for="paceOn">
-    <input type="checkbox" id="paceOn">
-    <span>Introduce words from the next level</span>
-  </label>
-  <label for="paceRate" style="margin-top:4px">Pace</label>
-  <select id="paceRate"></select>
-  <div class="stats" id="paceNote"></div>
-  <button id="btnPool" type="button" style="margin-top:8px; width:100%">Words I already know at the next level</button>
-  <div class="note">Graded readers introduce roughly one new word per 40–50 characters of
-  text you already know. The partner is offered the three commonest words you have not met
-  and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
-  word stays highlighted and gets reused until you have seen it three times.</div>
+    <label for="teachModel">Model for translation and grammar checks</label>
+      <select id="teachModel"></select>
+      <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
+      much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
+      两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
+      separate so the conversation can stay cheap while what you are told about your own sentences
+      is worth trusting. These calls happen only when you press a button, not every turn.</div>
+  </details>
 
-  <label for="script">Characters</label>
-  <select id="script">
-    <option value="simp">简体 — simplified</option>
-    <option value="trad">繁體 — traditional</option>
-  </select>
-  <div class="note">Switches the allowlist, the starters and the prompt. Words you added
-  keep the form you added them in. About 3% of entries list several traditional variants
-  (岸/㟁, 幫/幇/幚); the one belonging to the word's main reading is used.</div>
+  <details class="sec">
+    <summary>Learning</summary>
+    <label class="toggle" for="paceOn">
+        <input type="checkbox" id="paceOn">
+        <span>Introduce words from the next level</span>
+      </label>
+      <label for="paceRate" style="margin-top:4px">Pace</label>
+      <select id="paceRate"></select>
+      <div class="stats" id="paceNote"></div>
+      <button id="btnPool" type="button" style="margin-top:8px; width:100%">Words I already know at the next level</button>
+      <div class="note">Graded readers introduce roughly one new word per 40–50 characters of
+      text you already know. The partner is offered the three commonest words you have not met
+      and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
+      word stays highlighted and gets reused until you have seen it three times.</div>
 
-  <label class="toggle" for="showStarters">
-    <input type="checkbox" id="showStarters">
-    <span>Show conversation starters</span>
-  </label>
+    <label for="script">Characters</label>
+      <select id="script">
+        <option value="simp">简体 — simplified</option>
+        <option value="trad">繁體 — traditional</option>
+      </select>
+      <div class="note">Switches the allowlist, the starters and the prompt. Words you added
+      keep the form you added them in. About 3% of entries list several traditional variants
+      (岸/㟁, 幫/幇/幚); the one belonging to the word's main reading is used.</div>
+  </details>
 
-  <label for="speechRate">Speaking speed</label>
-  <select id="speechRate"></select>
-  <div class="note" id="voiceNote"></div>
+  <details class="sec">
+    <summary>Reading &amp; audio</summary>
+    <label for="fontSize">Text size</label>
+      <input id="fontSize" type="range" min="16" max="34" step="1" style="width:100%">
+      <div class="bubble" id="fontPreview" style="margin-top:8px">你好！这是现在的大小。</div>
 
-  <label for="fontSize">Text size</label>
-  <input id="fontSize" type="range" min="16" max="34" step="1" style="width:100%">
-  <div class="bubble" id="fontPreview" style="margin-top:8px">你好！这是现在的大小。</div>
+    <label for="speechRate">Speaking speed</label>
+      <select id="speechRate"></select>
+      <div class="note" id="voiceNote"></div>
 
-  <label for="replyLength">Reply length</label>
-  <select id="replyLength"></select>
-  <div class="note">Longer replies give more to read, and more chances to reach for a word
-  above your level — watch the retry counters below.</div>
+    <label class="toggle" for="showStarters">
+        <input type="checkbox" id="showStarters">
+        <span>Show conversation starters</span>
+      </label>
+  </details>
 
-  <label for="sysPrompt">System prompt</label>
-  <textarea id="sysPrompt" spellcheck="false"></textarea>
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-    <button id="resetPrompt">Reset to default</button>
-    <span class="note" id="promptState" style="margin:0;align-self:center"></span>
-  </div>
-  <div class="note">Edit and it is sent as written; leave it alone and it keeps tracking the
-  level and reply-length settings. <code>{level}</code> and <code>{words}</code> are
-  substituted. The validator does not care what is in here — an instruction to use hard
-  words just costs retries.</div>
+  <details class="sec">
+    <summary>Conversation</summary>
+    <label for="replyLength">Reply length</label>
+      <select id="replyLength"></select>
+      <div class="note">Longer replies give more to read, and more chances to reach for a word
+      above your level — watch the retry counters below.</div>
 
-  <label>Anki cards</label>
-  <div class="addrow"><input id="ankiDeck" type="text" placeholder="deck (Default)"><input id="ankiType" type="text" placeholder="note type (Basic)"></div>
-  <div class="addrow"><input id="ankiFront" type="text" placeholder="front field (Front)"><input id="ankiBack" type="text" placeholder="back field (Back)"></div>
-  <div class="note">Used by the per-word <b>Anki</b> links in the 词 panel, which hand the
-  card to AnkiMobile. The deck, note type and field names must match your collection
-  exactly, or AnkiMobile rejects the card. Nested decks use <code>::</code>.</div>
+    <label for="attempts">Tries before giving up</label>
+      <select id="attempts"></select>
+      <div class="note">Each try is another API call. One means no repairs at all: a reply that
+      breaks the level goes straight to 我不知道。</div>
+  </details>
 
-  <label for="attempts">Tries before giving up</label>
-  <select id="attempts"></select>
-  <div class="note">Each try is another API call. One means no repairs at all: a reply that
-  breaks the level goes straight to 我不知道。</div>
+  <details class="sec">
+    <summary>Flashcards</summary>
+    <label>Anki cards</label>
+      <div class="addrow"><input id="ankiDeck" type="text" placeholder="deck (Default)"><input id="ankiType" type="text" placeholder="note type (Basic)"></div>
+      <div class="addrow"><input id="ankiFront" type="text" placeholder="front field (Front)"><input id="ankiBack" type="text" placeholder="back field (Back)"></div>
+      <div class="note">Used by the per-word <b>Anki</b> links in the 词 panel, which hand the
+      card to AnkiMobile. The deck, note type and field names must match your collection
+      exactly, or AnkiMobile rejects the card. Nested decks use <code>::</code>.</div>
+  </details>
 
-  <label for="promptMode">Prompt mode (A/B)</label>
-  <select id="promptMode">
-    <option value="without-list">without-list — rules only</option>
-    <option value="with-list">with-list — full allowlist in the prompt</option>
-  </select>
-  <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
-  <div class="stats" id="stats"></div>
+  <details class="sec">
+    <summary>Advanced</summary>
+    <label for="sysPrompt">System prompt</label>
+      <textarea id="sysPrompt" spellcheck="false"></textarea>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="resetPrompt">Reset to default</button>
+        <span class="note" id="promptState" style="margin:0;align-self:center"></span>
+      </div>
+      <div class="note">Edit and it is sent as written; leave it alone and it keeps tracking the
+      level and reply-length settings. <code>{level}</code> and <code>{words}</code> are
+      substituted. The validator does not care what is in here — an instruction to use hard
+      words just costs retries.</div>
 
-  <label class="toggle" for="syncOn">
-    <input type="checkbox" id="syncOn">
-    <span>Cloud sync</span>
-  </label>
-  <div class="note">Off by default. Sign in to back up your conversation, added words, and
-  settings, and pick up where you left off on another device. Your OpenRouter key never
-  syncs — it only ever stays on this device.</div>
-  <div id="syncSignedOut" style="display:none">
-    <button id="syncSignIn" type="button">Sign in with GitHub</button>
-  </div>
-  <div id="syncSignedIn" style="display:none">
-    <div class="note" id="syncWho" style="margin-top:8px"></div>
-    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button id="syncNow" type="button">Sync now</button>
-      <button id="syncSignOut" type="button">Sign out</button>
-    </div>
-    <div class="note" id="syncStatus"></div>
-    <!-- Only reachable while signed in: there is no cloud copy to delete
-         otherwise, and the user id the rows are keyed by comes from the session. -->
-    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-      <button id="syncWipe" class="danger" type="button">Delete all cloud data</button>
-    </div>
-    <div class="note">Removes your conversation, added words and settings from the cloud,
-    clears the conversation on this device, and turns cloud sync off. Words you added stay
-    on this device. This cannot be undone.</div>
-  </div>
-  <!-- Outside the block above, which renderSyncSection() hides the moment sync is
-       switched off -- the outcome of the deletion has to outlive that. -->
-  <div class="note" id="syncWipeNote"></div>
+    <label for="promptMode">Prompt mode (A/B)</label>
+      <select id="promptMode">
+        <option value="without-list">without-list — rules only</option>
+        <option value="with-list">with-list — full allowlist in the prompt</option>
+      </select>
+      <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
+      <div class="stats" id="stats"></div>
+  </details>
 
-  <label>Data</label>
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
-    <button id="clearHistory">Clear conversation</button>
-    <button id="resetStats">Reset A/B counters</button>
-  </div>
-  <label>Version</label>
-  <div class="stats" id="version">…</div>
-  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-    <button id="checkUpdate">Check for update</button>
-  </div>
+  <details class="sec" id="secSync">
+    <summary>Sync &amp; backup<span class="secnote" id="secSyncNote"></span></summary>
+    <label class="toggle" for="syncOn">
+        <input type="checkbox" id="syncOn">
+        <span>Cloud sync</span>
+      </label>
+      <div class="note">Off by default. Sign in to back up your conversation, added words, and
+      settings, and pick up where you left off on another device. Your OpenRouter key never
+      syncs — it only ever stays on this device.</div>
+      <div id="syncSignedOut" style="display:none">
+        <button id="syncSignIn" type="button">Sign in with GitHub</button>
+      </div>
+      <div id="syncSignedIn" style="display:none">
+        <div class="note" id="syncWho" style="margin-top:8px"></div>
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button id="syncNow" type="button">Sync now</button>
+          <button id="syncSignOut" type="button">Sign out</button>
+        </div>
+        <div class="note" id="syncStatus"></div>
+        <!-- Only reachable while signed in: there is no cloud copy to delete
+             otherwise, and the user id the rows are keyed by comes from the session. -->
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button id="syncWipe" class="danger" type="button">Delete all cloud data</button>
+        </div>
+        <div class="note">Removes your conversation, added words and settings from the cloud,
+        clears the conversation on this device, and turns cloud sync off. Words you added stay
+        on this device. This cannot be undone.</div>
+      </div>
+      <!-- Outside the block above, which renderSyncSection() hides the moment sync is
+           switched off -- the outcome of the deletion has to outlive that. -->
+      <div class="note" id="syncWipeNote"></div>
+  </details>
+
+  <details class="sec">
+    <summary>About &amp; data<span class="secnote" id="secVersionNote"></span></summary>
+    <label>Version</label>
+      <div class="stats" id="version">…</div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="checkUpdate">Check for update</button>
+      </div>
+
+    <label>Data</label>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="clearHistory">Clear conversation</button>
+        <button id="resetStats">Reset A/B counters</button>
+      </div>
+  </details>
 
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
 </div></div>
@@ -528,7 +605,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v38 — 2026-08-22";
+const VERSION   = "v39 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1588,6 +1665,8 @@ function renderSyncStatus(text) {
 function renderSyncSection() {
   const signedOut = $("#syncSignedOut"), signedIn = $("#syncSignedIn");
   if (!signedOut || !signedIn) return;
+  // The collapsed row reports sync state, so it has to move with it.
+  if ($("#secSyncNote")) renderSectionNotes();
   if (!S.sync.on) {
     signedOut.style.display = "none"; signedIn.style.display = "none";
     return;
@@ -2345,7 +2424,27 @@ $("#expAnki").onclick = () => exportCards("anki");
 $("#expPleco").onclick = () => exportCards("pleco");
 $("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addByHand(); } });
 $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
+/* What each collapsed row says on its right-hand side. Only where there is a
+ * real answer worth reading without opening the section -- a row captioned with
+ * something obvious is worse than a bare one, since it costs a line and teaches
+ * you to stop reading them. */
+function renderSectionNotes() {
+  const hasKey = !!store.get(K.key, "");
+  $("#secConnectionNote").textContent = hasKey ? "key saved" : "no key yet";
+  /* The chat model, not both: the teaching model is usually the default and
+   * naming two ids here would not fit a phone. */
+  const m = S.model || "";
+  $("#secModelsNote").textContent = m.length > 24 ? m.slice(m.indexOf("/") + 1) : m;
+  $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
+  $("#secVersionNote").textContent = VERSION.split(" ")[0];
+}
+
 $("#btnSet").onclick = () => {
+  renderSectionNotes();
+  /* A first run opens Settings precisely because there is no key, so the one
+   * section that run needs is the one that should already be open. Otherwise
+   * every section starts collapsed -- the whole point is the short list. */
+  $("#secConnection").open = !store.get(K.key, "");
   $("#key").value = store.get(K.key, "");
   $("#key").type = "password"; $("#keyShow").textContent = "👁";
   $("#keyTestNote").textContent = "";
@@ -2387,7 +2486,13 @@ $("#btnSet").onclick = () => {
   renderSyncSection();
   openSheet("#setSheet");
 };
-$("#setClose").onclick = () => {
+/* Every way out of Settings commits, because Settings has no Cancel: the fields
+ * are read out of the DOM here rather than written to S as you type, so closing
+ * without running this discards the key, the model id, the script, the reply
+ * length, the tries, the Anki fields and the system prompt. That was already
+ * true of the backdrop tap before there was a ✕ to get wrong as well, so all
+ * three now route through one function. */
+function commitSettings() {
   store.set(K.key, $("#key").value.trim());
   const id = $("#modelId").value.trim();
   if (id) { S.model = id; store.set(K.model, id); fillModels(); }
@@ -2415,7 +2520,9 @@ $("#setClose").onclick = () => {
   }
   queueSync("prefs");
   closeSheet("#setSheet");
-};
+}
+$("#setClose").onclick = commitSettings;
+$("#setX").onclick = commitSettings;
 /* What the textarea was last filled with. Saving compares against this, not
  * against a freshly generated default: changing the level or reply length while
  * the panel is open moves the default out from under the text, and comparing
@@ -2617,8 +2724,13 @@ $("#syncWipe").onclick = async () => {
   }
 };
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
-[["#setSheet", "#setClose"], ["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
+/* Tapping the dimmed area outside a sheet closes it. For Settings that has to
+ * be the committing close, not a bare closeSheet -- see commitSettings(). */
+[["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
   $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
+});
+$("#setSheet").addEventListener("click", e => {
+  if (e.target === $("#setSheet")) commitSettings();
 });
 
 /* -------------------------------------------------------------------- boot */
