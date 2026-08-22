@@ -100,6 +100,16 @@ header button{padding:8px 10px; flex:0 0 auto}
   line-height:1.6; background:var(--panel2); white-space:pre-wrap}
 .explainMsg.user{background:#233246; margin-left:16px}
 .explainMsg .who{font-size:11px; color:var(--dim); margin-bottom:4px}
+/* What md.js emits. A model answers the breakdown in Markdown whether or not
+   it is asked to, so this is styling what actually arrives rather than a
+   general-purpose Markdown stylesheet. `b` is a rendered heading and gets the
+   spacing of one; `strong` is inline bold and must not, or every bold phrase
+   mid-sentence would break the line. */
+.explainMsg b{display:block; margin:10px 0 2px; color:var(--ink)}
+.explainMsg b:first-child{margin-top:0}
+.explainMsg strong{font-weight:600; color:var(--ink)}
+.explainMsg code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em;
+  background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:0 4px}
 /* A failed call is not a reply. It gets its own card rather than a fake
    Chinese sentence, which would read as the partner refusing to answer. */
 .notice{
@@ -281,6 +291,14 @@ footer{
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
+  <label for="teachModel">Model for translation and grammar checks</label>
+  <select id="teachModel"></select>
+  <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
+  much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
+  两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
+  separate so the conversation can stay cheap while what you are told about your own sentences
+  is worth trusting. These calls happen only when you press a button, not every turn.</div>
+
   <label class="toggle" for="paceOn">
     <input type="checkbox" id="paceOn">
     <span>Introduce words from the next level</span>
@@ -409,7 +427,7 @@ footer{
 </div></div>
 
 <div class="sheet" id="explainSheet"><div class="card">
-  <h2>English explanation</h2>
+  <h2 id="explainTitle">English explanation</h2>
   <div class="bubble" id="explainSource" style="margin-bottom:10px"></div>
   <div id="explainLog"></div>
   <div class="addrow" style="margin-top:4px">
@@ -454,6 +472,7 @@ footer{
 
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
+<script src="md.js"></script>
 <script src="pace.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
@@ -471,6 +490,24 @@ const MODELS = [
   { id: "google/gemini-2.5-flash",     label: "Gemini" },
   { id: "openai/gpt-4o",               label: "GPT" }
 ];
+
+/* The teaching calls -- translation and the explain sheet -- do not have to run
+ * on the model you are chatting with, and should not default to the cheapest
+ * one that can hold a conversation. Holding a simple conversation inside a
+ * fixed word list and diagnosing a grammar mistake are different jobs, and a
+ * small model is much better at the first than the second.
+ *
+ * Measured, not assumed. qwen3-30b-a3b called 二个人去了 ("perfect!") and
+ * 他跑的很快 ("a strong example of proper HSK 3 grammar") correct -- 二 for 两
+ * before a measure word, and 的 for 得, two of the commonest learner errors
+ * there are. On the identical prompt this model caught both, and still declined
+ * to invent faults in correct sentences across repeated trials. The failure
+ * being avoided is the worst one available here: praising a wrong sentence.
+ *
+ * Empty means "use the chat model", which is also the fallback if this id is
+ * ever withdrawn and you would rather not pick a new one.
+ */
+const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
 
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
@@ -491,7 +528,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v35 — 2026-08-21";
+const VERSION   = "v38 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -512,7 +549,7 @@ const SUPABASE_JS_URL   = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
 const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
-  key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
+  key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
@@ -534,6 +571,7 @@ const store = {
 const S = {
   level:   store.get(K.level, 1),
   model:   store.get(K.model, MODELS[0].id),
+  teachModel: store.get(K.teachModel, TEACH_MODEL),
   mode:    store.get(K.mode, "without-list"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
@@ -816,14 +854,14 @@ function callError(kind, message) {
   return e;
 }
 
-async function callModel(messages, maxTokens) {
+async function callModel(messages, maxTokens, model) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: S.model, messages: messages,
+      model: model || S.model, messages: messages,
       max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7
     })
   });
@@ -848,25 +886,24 @@ async function callModel(messages, maxTokens) {
 /* Translation and explanation both piggyback on callModel, but neither one
  * goes through turn()'s validator: the point of both is to say things the
  * learner's own word list cannot yet express. */
-async function translateText(text) {
-  const raw = await callModel([{ role: "user", content:
-    "Translate this Chinese into natural, idiomatic English. Reply with only the " +
-    "translation, no quotes, no other commentary:\n\n" + text }], 200);
+/* Which model answers a teaching call. Empty means "whatever I am chatting
+ * with", which is both the escape hatch and what happens if the default id is
+ * ever withdrawn. */
+function teachingModel() { return S.teachModel || S.model; }
+
+/* `own` marks the student's own message rather than the partner's reply: it may
+ * be wrong, which changes what both prompts should ask for. See prompt.js. */
+async function translateText(text, own) {
+  const raw = await callModel(
+    [{ role: "user", content: HSKPrompt.translate({ text: text, own: own }) }],
+    200, teachingModel());
   return raw.trim();
 }
 
-// Recently introduced words go in the prompt so the explanation can point out
-// which ones the learner is still working on, not just recite the sentence.
-function explainSystemPrompt(text) {
+function explainSystemPrompt(text, own) {
   const recent = S.learning.filter(HSKPace.isNew)
     .map(e => e.w + "（" + e.p + "，" + e.d + "）").join("、");
-  return "You are a friendly Chinese teaching assistant helping a student who is reading " +
-    "Chinese at " + levelLabel() + ". Recently introduced words they are still practicing: " +
-    (recent || "none yet") + ".\n\n" +
-    "Explain the following Chinese sentence in plain English: the grammar structures used, " +
-    "why each word or particle is there, and call out anything above the student's level. " +
-    "You may reply in English and quote Chinese as needed -- you are not restricted to the " +
-    "student's vocabulary here. Keep it concise but complete.\n\nSentence: " + text;
+  return HSKPrompt.explain({ text: text, own: own, label: levelLabel(), recent: recent });
 }
 
 function windowed() {
@@ -1122,14 +1159,11 @@ function renderMessage(turnObj, shownExtra) {
   el.appendChild(bubble);
 
   // Below the Chinese, not above it: hidden until asked for either way.
-  let transBox = null;
-  if (turnObj.role === "assistant") {
-    transBox = document.createElement("div");
-    transBox.className = "translation";
-    transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
-    transBox.textContent = turnObj.translation || "";
-    el.appendChild(transBox);
-  }
+  const transBox = document.createElement("div");
+  transBox.className = "translation";
+  transBox.style.display = (turnObj.showTranslation && turnObj.translation) ? "" : "none";
+  transBox.textContent = turnObj.translation || "";
+  el.appendChild(transBox);
 
   const bits = [];
   if (turnObj.attempts > 1) bits.push('<span class="badge warn">' + turnObj.attempts + " tries</span>");
@@ -1154,18 +1188,19 @@ function renderMessage(turnObj, shownExtra) {
   copy.textContent = "copy";
   copy.onclick = e => { e.stopPropagation(); copyText(turnObj.text, copy); };
   meta.append(say, copy);
-  if (turnObj.role === "assistant") {
-    const translate = document.createElement("button");
-    translate.className = "copy";
-    translate.textContent = (turnObj.translation && turnObj.showTranslation)
-      ? "Hide translation" : "English translation";
-    translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
-    const explain = document.createElement("button");
-    explain.className = "copy";
-    explain.textContent = "English explanation";
-    explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
-    meta.append(translate, explain);
-  }
+  /* Both buttons are on your own messages too. The label changes because the
+   * question does: against a reply it is "what does this mean", against your
+   * own line it is "did I say what I meant". */
+  const translate = document.createElement("button");
+  translate.className = "copy";
+  translate.textContent = (turnObj.translation && turnObj.showTranslation)
+    ? "Hide translation" : "English translation";
+  translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
+  const explain = document.createElement("button");
+  explain.className = "copy";
+  explain.textContent = turnObj.role === "user" ? "Check my grammar" : "English explanation";
+  explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
+  meta.append(translate, explain);
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -1493,7 +1528,7 @@ async function pullAndMerge() {
     if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
-      store.set(K.model, S.model); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.model, S.model); store.set(K.teachModel, S.teachModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
@@ -1639,7 +1674,7 @@ async function toggleTranslation(turnObj, btn, box) {
   }
   btn.disabled = true; btn.textContent = "Translating…";
   try {
-    const en = await translateText(turnObj.text);
+    const en = await translateText(turnObj.text, turnObj.role === "user");
     turnObj.translation = en;
     turnObj.showTranslation = true;
     persist();
@@ -1665,8 +1700,12 @@ function renderExplainLog() {
   (explainTurnObj.explainChat || []).forEach(m => {
     const div = document.createElement("div");
     div.className = "explainMsg" + (m.role === "user" ? " user" : "");
+    /* Only the model's side is rendered as Markdown. Your own follow-up is
+     * shown exactly as typed -- asterisks in a question about asterisks should
+     * stay visible, and there is no reason to reinterpret your text at all.
+     * HSKMd.render escapes before it formats; see md.js. */
     div.innerHTML = '<div class="who">' + (m.role === "user" ? "you" : "explanation") + "</div>" +
-      escapeHtml(m.text);
+      (m.role === "user" ? escapeHtml(m.text) : HSKMd.render(m.text));
     box.appendChild(div);
   });
   box.scrollTop = box.scrollHeight;
@@ -1683,12 +1722,18 @@ async function explainAsk(turnObj, question) {
   box.scrollTop = box.scrollHeight;
   $("#explainSend").disabled = true;
 
-  const messages = [{ role: "system", content: explainSystemPrompt(turnObj.text) }];
+  const messages = [{ role: "system",
+                      content: explainSystemPrompt(turnObj.text, turnObj.role === "user") }];
   turnObj.explainChat.forEach(m => messages.push({ role: m.role, content: m.text }));
   if (question) messages.push({ role: "user", content: question });
 
   try {
-    const reply = await callModel(messages, 600);
+    /* 600 was not enough: a mid-range model answering the four-part breakdown
+     * runs past it and the sheet shows an explanation that stops mid-sentence.
+     * There is no truncation badge here the way there is on a reply, so a cut
+     * off explanation just looks like the model trailing away. Cheap to fix --
+     * this is one call per message, not one per turn. */
+    const reply = await callModel(messages, 1000, teachingModel());
     if (question) turnObj.explainChat.push({ role: "user", text: question });
     turnObj.explainChat.push({ role: "assistant", text: reply });
   } catch (e) {
@@ -1705,6 +1750,9 @@ async function explainAsk(turnObj, question) {
 
 function openExplain(turnObj) {
   explainTurnObj = turnObj;
+  const own = turnObj.role === "user";
+  // The sheet is reused for both, so the heading has to say which one this is.
+  $("#explainTitle").textContent = own ? "Check my grammar" : "English explanation";
   $("#explainSource").textContent = turnObj.text;
   if (!turnObj.explainChat) turnObj.explainChat = [];
   renderExplainLog();
@@ -1959,6 +2007,20 @@ function fillModels() {
   $("#model").innerHTML = list.map(m =>
     '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
     escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+
+  /* The teaching picker draws on the same catalogue but is never filtered by
+   * "free models only": the free tier is exactly where the accuracy problem
+   * this setting exists to solve lives, so hiding paid models here would hide
+   * the fix. Its own id is carried in for the same reason the chat one is. */
+  let tList = all;
+  if (S.teachModel && !tList.some(m => m.id === S.teachModel)) {
+    tList = [{ id: S.teachModel, label: S.teachModel }].concat(tList);
+  }
+  $("#teachModel").innerHTML =
+    '<option value=""' + (S.teachModel ? "" : " selected") + ">Same as the chat model</option>" +
+    tList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
+      (m.id === S.teachModel ? " selected" : "") + ">" +
+      escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
   if (!cached) {
     $("#modelNote").textContent = "Built-in ids are unverified starting points — load the live list to see what is free and what each costs.";
   }
@@ -2227,6 +2289,9 @@ $("#level").onchange = async e => {
   updateMirror(); renderAll(); renderStarters();
 };
 $("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; queueSync("prefs"); };
+$("#teachModel").onchange = e => {
+  S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
+};
 
 $("#btnPy").onclick = () => {
   S.pinyin = S.pinyin === "off" ? "extra" : S.pinyin === "extra" ? "all" : "off";
@@ -2287,6 +2352,7 @@ $("#btnSet").onclick = () => {
   // Not awaited: Settings must open at once, and the balance fills in behind it.
   refreshBalance();
   $("#modelId").value = S.model;
+  fillModels();
   $("#promptMode").value = S.mode;
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
