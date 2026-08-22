@@ -191,6 +191,16 @@ and get a real answer rather than a level-appropriate one. Answers arrive in Mar
 or not the model is asked for it, so the sheet renders a small subset of it — bold, headings,
 bullets, code — instead of showing you the asterisks.
 
+**These two calls have their own model setting**, separate from the one you chat with, because
+holding a simple conversation and diagnosing a grammar mistake are different jobs and small
+models are much better at the first. A cheap model that chats perfectly well called both
+二个人去了 and 他跑的很快 correct — 二 for 两 before a measure word, and 的 for 得 — and
+praised them, which is the worst way for a grammar check to be wrong. A larger one caught both
+on the identical prompt, and still declined to invent faults in sentences that were fine. The
+conversation can stay cheap while what you are told about your own sentences is worth
+trusting; these calls only happen when you press a button, not every turn. Set it to **Same as
+the chat model** if you would rather it not.
+
 On your own messages the second button reads **Check my grammar**, because what it is
 pointed at is different: your sentence may be wrong, and a prompt that assumes otherwise
 explains a mistake rather than catching it. So that one is told the line may well be wrong

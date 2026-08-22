@@ -291,6 +291,14 @@ footer{
   <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
   <div class="note" id="modelNote"></div>
 
+  <label for="teachModel">Model for translation and grammar checks</label>
+  <select id="teachModel"></select>
+  <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
+  much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
+  两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
+  separate so the conversation can stay cheap while what you are told about your own sentences
+  is worth trusting. These calls happen only when you press a button, not every turn.</div>
+
   <label class="toggle" for="paceOn">
     <input type="checkbox" id="paceOn">
     <span>Introduce words from the next level</span>
@@ -483,6 +491,24 @@ const MODELS = [
   { id: "openai/gpt-4o",               label: "GPT" }
 ];
 
+/* The teaching calls -- translation and the explain sheet -- do not have to run
+ * on the model you are chatting with, and should not default to the cheapest
+ * one that can hold a conversation. Holding a simple conversation inside a
+ * fixed word list and diagnosing a grammar mistake are different jobs, and a
+ * small model is much better at the first than the second.
+ *
+ * Measured, not assumed. qwen3-30b-a3b called 二个人去了 ("perfect!") and
+ * 他跑的很快 ("a strong example of proper HSK 3 grammar") correct -- 二 for 两
+ * before a measure word, and 的 for 得, two of the commonest learner errors
+ * there are. On the identical prompt this model caught both, and still declined
+ * to invent faults in correct sentences across repeated trials. The failure
+ * being avoided is the worst one available here: praising a wrong sentence.
+ *
+ * Empty means "use the chat model", which is also the fallback if this id is
+ * ever withdrawn and you would rather not pick a new one.
+ */
+const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
+
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
@@ -502,7 +528,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v37 — 2026-08-22";
+const VERSION   = "v38 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -523,7 +549,7 @@ const SUPABASE_JS_URL   = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
 const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
-  key:"hsk1chat.apiKey", model:"hsk1chat.model", extra:"hsk1chat.extraVocab",
+  key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
@@ -545,6 +571,7 @@ const store = {
 const S = {
   level:   store.get(K.level, 1),
   model:   store.get(K.model, MODELS[0].id),
+  teachModel: store.get(K.teachModel, TEACH_MODEL),
   mode:    store.get(K.mode, "without-list"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
@@ -827,14 +854,14 @@ function callError(kind, message) {
   return e;
 }
 
-async function callModel(messages, maxTokens) {
+async function callModel(messages, maxTokens, model) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: S.model, messages: messages,
+      model: model || S.model, messages: messages,
       max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7
     })
   });
@@ -859,11 +886,17 @@ async function callModel(messages, maxTokens) {
 /* Translation and explanation both piggyback on callModel, but neither one
  * goes through turn()'s validator: the point of both is to say things the
  * learner's own word list cannot yet express. */
+/* Which model answers a teaching call. Empty means "whatever I am chatting
+ * with", which is both the escape hatch and what happens if the default id is
+ * ever withdrawn. */
+function teachingModel() { return S.teachModel || S.model; }
+
 /* `own` marks the student's own message rather than the partner's reply: it may
  * be wrong, which changes what both prompts should ask for. See prompt.js. */
 async function translateText(text, own) {
   const raw = await callModel(
-    [{ role: "user", content: HSKPrompt.translate({ text: text, own: own }) }], 200);
+    [{ role: "user", content: HSKPrompt.translate({ text: text, own: own }) }],
+    200, teachingModel());
   return raw.trim();
 }
 
@@ -1495,7 +1528,7 @@ async function pullAndMerge() {
     if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
-      store.set(K.model, S.model); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.model, S.model); store.set(K.teachModel, S.teachModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
@@ -1700,7 +1733,7 @@ async function explainAsk(turnObj, question) {
      * There is no truncation badge here the way there is on a reply, so a cut
      * off explanation just looks like the model trailing away. Cheap to fix --
      * this is one call per message, not one per turn. */
-    const reply = await callModel(messages, 1000);
+    const reply = await callModel(messages, 1000, teachingModel());
     if (question) turnObj.explainChat.push({ role: "user", text: question });
     turnObj.explainChat.push({ role: "assistant", text: reply });
   } catch (e) {
@@ -1974,6 +2007,20 @@ function fillModels() {
   $("#model").innerHTML = list.map(m =>
     '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
     escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+
+  /* The teaching picker draws on the same catalogue but is never filtered by
+   * "free models only": the free tier is exactly where the accuracy problem
+   * this setting exists to solve lives, so hiding paid models here would hide
+   * the fix. Its own id is carried in for the same reason the chat one is. */
+  let tList = all;
+  if (S.teachModel && !tList.some(m => m.id === S.teachModel)) {
+    tList = [{ id: S.teachModel, label: S.teachModel }].concat(tList);
+  }
+  $("#teachModel").innerHTML =
+    '<option value=""' + (S.teachModel ? "" : " selected") + ">Same as the chat model</option>" +
+    tList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
+      (m.id === S.teachModel ? " selected" : "") + ">" +
+      escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
   if (!cached) {
     $("#modelNote").textContent = "Built-in ids are unverified starting points — load the live list to see what is free and what each costs.";
   }
@@ -2242,6 +2289,9 @@ $("#level").onchange = async e => {
   updateMirror(); renderAll(); renderStarters();
 };
 $("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; queueSync("prefs"); };
+$("#teachModel").onchange = e => {
+  S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
+};
 
 $("#btnPy").onclick = () => {
   S.pinyin = S.pinyin === "off" ? "extra" : S.pinyin === "extra" ? "all" : "off";
@@ -2302,6 +2352,7 @@ $("#btnSet").onclick = () => {
   // Not awaited: Settings must open at once, and the balance fills in behind it.
   refreshBalance();
   $("#modelId").value = S.model;
+  fillModels();
   $("#promptMode").value = S.mode;
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
