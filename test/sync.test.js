@@ -108,6 +108,24 @@ check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history"
 check(snap.teachModel === "big/model" && snap.model === "x/y",
   "prefsSnapshot carries the teaching model alongside the chat model");
 check(Sync.PREFS_KEYS.indexOf("teachModel") !== -1, "PREFS_KEYS names teachModel");
+check(Sync.PREFS_KEYS.indexOf("teachPrompts") !== -1, "PREFS_KEYS names teachPrompts");
+
+/* chatTime must NOT be in PREFS_KEYS: that list means "replace with whatever is
+ * newer", which for a counter throws away whichever device synced first. It
+ * still has to travel, so it rides in the snapshot and is merged on the way in
+ * by time.js. */
+check(Sync.PREFS_KEYS.indexOf("chatTime") === -1,
+  "chatTime is NOT a last-write-wins pref -- it is a counter, not a setting");
+const withTime = Sync.prefsSnapshot(Object.assign({}, S,
+  { chatTime: { "dev-a": { total: 60, days: { "2026-08-22": 60 } } } }));
+check(withTime.chatTime && withTime.chatTime["dev-a"].total === 60,
+  "but a prefs push still carries it");
+check(!("chatTime" in Sync.prefsSnapshot({ level: 1 })),
+  "and a device with no recorded time does not push an empty one");
+const before = { chatTime: { "dev-a": { total: 999, days: {} } } };
+Sync.applyPrefsSnapshot(before, { chatTime: { "dev-a": { total: 1, days: {} } } });
+check(before.chatTime["dev-a"].total === 999,
+  "applyPrefsSnapshot leaves chatTime alone rather than overwriting it with an older copy");
 const S3 = { model: "a/b", teachModel: "c/d" };
 Sync.applyPrefsSnapshot(S3, { model: "e/f", teachModel: "" });
 check(S3.teachModel === "",

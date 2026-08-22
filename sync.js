@@ -157,12 +157,21 @@
   var PREFS_KEYS = [
     "level", "model", "teachModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "pace", "budget"
+    "freeOnly", "modelSort", "pace", "budget", "teachPrompts"
   ];
+
+  /* chatTime rides in the same prefs blob but is deliberately NOT in the list
+   * above, because the list means "replace with whatever is newer" and that is
+   * exactly wrong for a counter -- ten minutes on a phone and five on a laptop
+   * would resolve to whichever synced last. It is merged instead, per device,
+   * by time.js. Kept out of PREFS_KEYS rather than special-cased inside
+   * applyPrefsSnapshot so that the list keeps meaning one thing. */
+  var MERGED_KEYS = ["chatTime"];
 
   function prefsSnapshot(S) {
     var data = {};
     PREFS_KEYS.forEach(function (k) { data[k] = S[k]; });
+    MERGED_KEYS.forEach(function (k) { if (S[k]) data[k] = S[k]; });
     return data;
   }
 

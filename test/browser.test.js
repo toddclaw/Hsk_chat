@@ -27,6 +27,10 @@ const { spawn, spawnSync } = require("child_process");
 const net = require("net");
 
 const ROOT = path.join(__dirname, "..");
+/* Local date in YYYY-MM-DD, matching HSKTime.dayKey(). Computed per run rather
+ * than written into the file: a date literal here passes on the day it is
+ * written and fails silently every day after. */
+const TODAY = new Date().toLocaleDateString("en-CA");
 let pass = 0, fail = 0;
 const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
@@ -224,6 +228,17 @@ return true;
        * assert on an element inside that sheet, so seeding a key here hides it
        * and breaks a test that has nothing to do with models. */
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      /* Two devices' worth of recorded time, so the display has something to
+       * sum. Seeded before boot because S reads it once at startup. */
+      /* One prompt override, so a real request can be checked against it. Seeded
+       * before boot because S reads it once at startup. */
+      localStorage.setItem("hsk1chat.teachPrompts", JSON.stringify({
+        transMine: "CUSTOM TRANSLATE PROMPT for {text} at {level}"
+      }));
+      localStorage.setItem("hsk1chat.chatTime", JSON.stringify({
+        "dev-a": { total: 5880, days: { "${TODAY}": 1440 } },
+        "dev-b": { total: 120,  days: { "${TODAY}": 60 } }
+      }));
       return true;`);
     await go(base);
     await waitFor("window.HSKSync && document.querySelector('#syncOn')", "sync.js and the toggle");
@@ -316,6 +331,16 @@ return true;
     check(sent && sent.model === "teaching/model",
       "a translation is sent to the teaching model, not the chat model",
       "model was: " + (sent && sent.model));
+    /* And that the override is actually SENT, not merely stored. Checking
+     * localStorage only proves the editor saves; this proves the call path
+     * consults it, which is the half that can silently stop working. */
+    const body = sent && sent.messages && sent.messages[0] && sent.messages[0].content;
+    check(/^CUSTOM TRANSLATE PROMPT for /.test(body || ""),
+      "a customised teaching prompt is what gets sent", JSON.stringify(body));
+    check(/for 你好 at /.test(body || ""),
+      "with {text} replaced by the actual sentence", JSON.stringify(body));
+    check(!/\{level\}/.test(body || ""),
+      "and {level} substituted rather than left as a placeholder", JSON.stringify(body));
     check(await exec(`
       window.fetch = window.__realFetch; window.__calls = []; return true;`),
       "fetch is restored for the rest of the suite");
@@ -445,6 +470,101 @@ return true;
       "the ✕ commits the API key rather than discarding it");
     check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.replyLength"));`) === "long",
       "and commits a field from a section that was never opened");
+
+    /* ------------------------------------------------ time and the prompts */
+
+    /* The clock itself is covered in test/time.test.js. What only a browser can
+     * show is that the numbers reach the page, and that the summary row carries
+     * today's total the way Connection carries "key saved". */
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')", "Settings");
+    const clock = await exec(`
+      return { body: document.querySelector('#chatTime').textContent,
+               row: document.querySelector('#secConversationNote').textContent };`);
+    /* Seeded: 1440 + 60 = 25 min today, 5880 + 120 = 1 h 40 min all time. Asserted
+     * as a range rather than a string, because the real clock is running while
+     * this suite drives the page and may legitimately add a tick or two -- an
+     * exact match here would fail on a slow machine and pass on a fast one.
+     * Exact formatting is pinned in test/time.test.js instead. */
+    const mins = (txt, which) => {
+      const seg = txt.split(which)[0];
+      const m = seg.match(/(?:(\d+) h)?\s*(?:(\d+) min)?\s*$/) || [];
+      return (Number(m[1] || 0) * 60) + Number(m[2] || 0);
+    };
+    const today = mins(clock.body, "today"), all = mins(clock.body, "all time");
+    check(today >= 25 && today <= 27, "today's time sums every device (25 min seeded)",
+      today + " min from " + JSON.stringify(clock.body));
+    check(all >= 100 && all <= 102, "and so does the all-time total (1 h 40 min seeded)",
+      all + " min from " + JSON.stringify(clock.body));
+    check(/^2[567] min today$/.test(clock.row),
+      "the collapsed Conversation row shows today's time", JSON.stringify(clock.row));
+
+    // Section order: Conversation sits directly under Models.
+    const order = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#setSheet .sec > summary'),
+        function (s) { return s.childNodes[0].textContent.trim(); });`);
+    check(order[1] === "Models" && order[2] === "Conversation",
+      "Conversation sits directly under Models", JSON.stringify(order));
+    check(order.indexOf("Reading & audio") > order.indexOf("Conversation"),
+      "and above the display settings", JSON.stringify(order));
+
+    // Starters and Clear conversation moved into Conversation.
+    check(await exec(`
+      return !!document.querySelector('#showStarters').closest('details')
+               .querySelector('summary').textContent.match(/Conversation/);`),
+      "conversation starters moved to the Conversation section");
+    check(await exec(`
+      return !!document.querySelector('#clearHistory').closest('details')
+               .querySelector('summary').textContent.match(/Conversation/);`),
+      "and so did Clear conversation");
+
+    /* The four teaching prompts, editable like the system prompt. The default is
+     * shown with its placeholders intact rather than filled against a sample
+     * sentence -- the placeholders are the part worth editing. */
+    await exec(`document.querySelectorAll('#setSheet .sec')[6].open = true; return true;`);
+    const tp = await exec(`
+      var boxes = document.querySelectorAll('#teachPrompts textarea');
+      return { n: boxes.length,
+               ids: Array.prototype.map.call(boxes, function (b) { return b.id; }),
+               hasText: /\\{text\\}/.test(boxes[0].value),
+               states: Array.prototype.map.call(
+                 document.querySelectorAll('#teachPrompts .note'),
+                 function (s) { return s.textContent; }) };`);
+    check(tp.n === 4, "all four teaching prompts are exposed", JSON.stringify(tp.ids));
+    check(tp.hasText, "shown with {text} left in rather than filled in", JSON.stringify(tp));
+    check(/custom/.test(tp.states[0]),
+      "the seeded override reads as custom", JSON.stringify(tp.states));
+    check(tp.states.slice(1).every(x => /tracking/.test(x)),
+      "and the untouched ones still track the app's version", JSON.stringify(tp.states));
+
+    // Editing one and closing makes it custom; the others stay on the default.
+    await exec(`
+      var b = document.querySelector('#tp_explainMine');
+      b.value = "MY OWN GRAMMAR PROMPT for {text}";
+      document.querySelector('#setX').click();
+      return true;`);
+    const saved = await exec(`return JSON.parse(localStorage.getItem("hsk1chat.teachPrompts"));`);
+    check(saved && saved.explainMine === "MY OWN GRAMMAR PROMPT for {text}",
+      "an edited teaching prompt is saved", JSON.stringify(saved));
+    check(saved && !saved.transReply && !saved.explainReply,
+      "and untouched ones are not frozen into storage", JSON.stringify(saved));
+
+    // Reset puts it back to tracking.
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')", "Settings");
+    await exec(`
+      document.querySelectorAll('#setSheet .sec')[6].open = true;
+      var rows = document.querySelectorAll('#teachPrompts .teachRow');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].querySelector('textarea').id === "tp_explainMine") {
+          rows[i].querySelector('button').click(); break;
+        }
+      }
+      return true;`);
+    check(await exec(`
+      var s = JSON.parse(localStorage.getItem("hsk1chat.teachPrompts"));
+      return !s || !s.explainMine;`),
+      "Reset to default clears the override");
 
     // Reopen for the sync checks below; also exercises the summary values.
     await exec(`document.querySelector('#btnSet').click(); return true;`);
