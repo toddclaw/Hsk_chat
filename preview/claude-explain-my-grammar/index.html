@@ -100,6 +100,16 @@ header button{padding:8px 10px; flex:0 0 auto}
   line-height:1.6; background:var(--panel2); white-space:pre-wrap}
 .explainMsg.user{background:#233246; margin-left:16px}
 .explainMsg .who{font-size:11px; color:var(--dim); margin-bottom:4px}
+/* What md.js emits. A model answers the breakdown in Markdown whether or not
+   it is asked to, so this is styling what actually arrives rather than a
+   general-purpose Markdown stylesheet. `b` is a rendered heading and gets the
+   spacing of one; `strong` is inline bold and must not, or every bold phrase
+   mid-sentence would break the line. */
+.explainMsg b{display:block; margin:10px 0 2px; color:var(--ink)}
+.explainMsg b:first-child{margin-top:0}
+.explainMsg strong{font-weight:600; color:var(--ink)}
+.explainMsg code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em;
+  background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:0 4px}
 /* A failed call is not a reply. It gets its own card rather than a fake
    Chinese sentence, which would read as the partner refusing to answer. */
 .notice{
@@ -454,6 +464,7 @@ footer{
 
 <script src="validator.js"></script>
 <script src="prompt.js"></script>
+<script src="md.js"></script>
 <script src="pace.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
@@ -491,7 +502,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v36 — 2026-08-21";
+const VERSION   = "v37 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1656,8 +1667,12 @@ function renderExplainLog() {
   (explainTurnObj.explainChat || []).forEach(m => {
     const div = document.createElement("div");
     div.className = "explainMsg" + (m.role === "user" ? " user" : "");
+    /* Only the model's side is rendered as Markdown. Your own follow-up is
+     * shown exactly as typed -- asterisks in a question about asterisks should
+     * stay visible, and there is no reason to reinterpret your text at all.
+     * HSKMd.render escapes before it formats; see md.js. */
     div.innerHTML = '<div class="who">' + (m.role === "user" ? "you" : "explanation") + "</div>" +
-      escapeHtml(m.text);
+      (m.role === "user" ? escapeHtml(m.text) : HSKMd.render(m.text));
     box.appendChild(div);
   });
   box.scrollTop = box.scrollHeight;
