@@ -187,7 +187,9 @@ is there, and anything above your level. That prompt is told your current level 
 you have recently been introduced to, so it can point at what is actually new to you rather
 than re-explaining everything. Below the breakdown is an open follow-up chat — it is **not**
 run through the validator or held to Chinese, in either direction, so you can ask anything
-and get a real answer rather than a level-appropriate one.
+and get a real answer rather than a level-appropriate one. Answers arrive in Markdown whether
+or not the model is asked for it, so the sheet renders a small subset of it — bold, headings,
+bullets, code — instead of showing you the asterisks.
 
 On your own messages the second button reads **Check my grammar**, because what it is
 pointed at is different: your sentence may be wrong, and a prompt that assumes otherwise

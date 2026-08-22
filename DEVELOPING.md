@@ -121,10 +121,28 @@ sign-in against the real project.
 A test that has never failed has not been shown to work. Every guarantee in the
 browser suite was checked by deliberately breaking the code and confirming the
 suite caught it — reordering the sync-off past the delete, dropping a table from
-`USER_TABLES`, and putting the `role === "assistant"` guard back around the
-translate and explain buttons. The `own` branches of `HSKPrompt.explain` and
+`USER_TABLES`, putting the `role === "assistant"` guard back around the
+translate and explain buttons, and reverting the explain sheet to escaping
+instead of rendering. The `own` branches of `HSKPrompt.explain` and
 `HSKPrompt.translate` were checked the same way, by collapsing each into its
-non-`own` shape. Worth doing for any new assertion that matters.
+non-`own` shape, and `md.js` by moving its `escape()` from before the formatting
+passes to after. Worth doing for any new assertion that matters.
+
+### md.js
+
+Models answer the explain prompt in Markdown whether or not they are asked to,
+so the sheet renders a small subset of it rather than fighting the habit with an
+instruction that has to win on every call. Two things to keep straight when
+editing it:
+
+- **`escape()` runs first, over the whole string, and every pass after it emits
+  only tags `md.js` itself wrote.** Reversing that order still passes any test
+  that only checks formatting, which is why `test/md.test.js` asserts on tags
+  being inert as well. The input is untrusted twice over: it is model output,
+  and model output quotes the student's own words back.
+- **Bold has to be consumed before italic, and `***triple***` before both**, or
+  the tags come out interleaved rather than nested (`<strong><em>x</strong></em>`)
+  and the DOM quietly rewrites them into something else.
 
 ## Releasing and previews
 
