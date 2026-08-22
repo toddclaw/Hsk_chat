@@ -108,6 +108,14 @@ Things that will bite you when editing it:
   `ps -o etimes` — yours will be seconds old and theirs will not.
 - **`waitFor` the content, not the element.** `boot()` fills `#log` only after
   `loadLevel()` resolves, so waiting for `#log` to *exist* races the render.
+- **Do not seed an API key into `localStorage` before boot.** `boot()` opens
+  Settings when no key is stored, and several assertions reach elements that
+  live inside that sheet — `.sheet` is `display:none` until `.open`, so they
+  become invisible and fail for a reason unrelated to what is being tested. Set
+  the key immediately before the call that needs one instead; `callModel` reads
+  it every time. This cost an afternoon once already.
+- **A backtick inside a comment inside an `exec()` template literal ends the
+  template.** The syntax error points at the `exec` call, not the comment.
 
 Supabase is mocked in-page. `index.html` loads supabase-js lazily and
 `loadSupabaseJs()` returns early when `window.supabase` already exists, so

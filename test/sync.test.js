@@ -87,7 +87,7 @@ check(Sync.mergeWordList(localKnown, remoteKnown)[0].p === "píngguǒ",
 
 // --- prefs: exactly the enumerated keys, never the API key or model cache --
 const S = {
-  level: 3, model: "x/y", mode: "without-list", pinyin: "extra", autoAdd: true,
+  level: 3, model: "x/y", teachModel: "big/model", mode: "without-list", pinyin: "extra", autoAdd: true,
   replyLength: "short", prompt: "", attempts: 3, anki: { deck: "Default" }, font: 26,
   starters: true, script: "simp", speechRate: 0.8, freeOnly: false, modelSort: "price",
   pace: { on: false, rate: 45 }, budget: {},
@@ -101,6 +101,17 @@ check(snap.level === 3 && snap.script === "simp" && JSON.stringify(snap.anki) ==
   "prefsSnapshot carries every enumerated preference field");
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "PREFS_KEYS itself never names the key or history -- not just an accident of this snapshot");
+
+/* The teaching model is a separate preference from the chat model, and both
+ * have to travel: a device that synced only one would silently start doing its
+ * grammar checks on whatever it happened to be chatting with. */
+check(snap.teachModel === "big/model" && snap.model === "x/y",
+  "prefsSnapshot carries the teaching model alongside the chat model");
+check(Sync.PREFS_KEYS.indexOf("teachModel") !== -1, "PREFS_KEYS names teachModel");
+const S3 = { model: "a/b", teachModel: "c/d" };
+Sync.applyPrefsSnapshot(S3, { model: "e/f", teachModel: "" });
+check(S3.teachModel === "",
+  "an empty teaching model survives the round trip -- it means \"same as chat\", not \"unset\"");
 
 const S2 = { key: "should-stay", history: [], level: 1, script: "simp" };
 Sync.applyPrefsSnapshot(S2, { level: 5, script: "trad" });

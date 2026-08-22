@@ -215,6 +215,14 @@ return true;
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] }
       ]));
+      /* Two distinguishable ids, so a call can be attributed to one or the
+       * other. Both are read into S at boot, so they have to be here rather
+       * than set later. The API key deliberately is NOT: boot opens the
+       * Settings sheet when no key is stored, and the wipe checks further down
+       * assert on an element inside that sheet, so seeding a key here hides it
+       * and breaks a test that has nothing to do with models. */
+      localStorage.setItem("hsk1chat.model", JSON.stringify("chat/model"));
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
     await waitFor("window.HSKSync && document.querySelector('#syncOn')", "sync.js and the toggle");
@@ -277,6 +285,39 @@ return true;
       document.querySelector('#explainClose').click();
       return !document.querySelector('#explainSheet').classList.contains('open');`),
       "the sheet closes again");
+
+    /* Which model a teaching call goes to. This is the whole point of the
+     * setting and it is invisible everywhere else: routing it back to the chat
+     * model would look identical in the UI and simply give worse answers, which
+     * is exactly the failure that motivated splitting them. fetch is stubbed, so
+     * no key and no network are involved -- the assertion is on the request body
+     * the app builds. */
+    await exec(`
+      // Set at call time, not at boot -- see the seed above. callModel reads the
+      // key on every call, so this is enough to get past its "no key" guard.
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      window.__calls = [];
+      window.__realFetch = window.fetch;
+      window.fetch = function (url, opts) {
+        window.__calls.push(JSON.parse((opts && opts.body) || "{}"));
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          return Promise.resolve({ choices: [{ message: { content: "I am fine." },
+                                              finish_reason: "stop" }] });
+        } });
+      };
+      var btns = document.querySelectorAll('#log .msg.user .meta button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "English translation") { btns[i].click(); break; }
+      }
+      return true;`);
+    await waitFor("window.__calls && window.__calls.length > 0", "the translation request");
+    const sent = await exec("return window.__calls[0];");
+    check(sent && sent.model === "teaching/model",
+      "a translation is sent to the teaching model, not the chat model",
+      "model was: " + (sent && sent.model));
+    check(await exec(`
+      window.fetch = window.__realFetch; window.__calls = []; return true;`),
+      "fetch is restored for the rest of the suite");
 
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
