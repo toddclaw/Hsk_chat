@@ -29,6 +29,11 @@ button.primary{background:var(--accent); border-color:var(--accent); color:#0811
 /* Outlined rather than filled: this sits next to ordinary buttons and should
    read as irreversible without competing with .primary for attention. */
 button.danger{color:var(--bad); border-color:#5a2626}
+/* Maintenance actions: present, reachable, and not competing with the control
+   they sit under. Used by "Reload list", which is the same action as the setup
+   button above it but no longer the point of the section. */
+button.quiet{background:none; border-color:var(--line); color:var(--dim); font-size:13px;
+  min-height:36px; padding:6px 11px}
 button:disabled{opacity:.45}
 
 header{
@@ -319,7 +324,20 @@ footer{
 
   <details class="sec">
     <summary>Models<span class="secnote" id="secModelsNote"></span></summary>
-    <label for="modelExample">Try a known-good model</label>
+    <!-- Two states, because loading the catalogue is a once-ever setup step and
+         picking a model is the recurring one. Ordering them in a single fixed
+         list forces the first-run task to outrank the forever task, or the
+         reverse. #modelSetup leads while there is no catalogue and disappears
+         once there is; #modelReload is the quiet way back to it afterwards.
+         fillModels() owns which is showing. -->
+    <div id="modelSetup">
+      <div class="note">Built-in ids are unverified starting points. The live list shows what is
+      free and what each model costs, and is cached on this device once loaded.</div>
+      <div class="row" style="margin-top:8px"><button id="refreshModels" class="primary">Load model list from OpenRouter</button></div>
+      <!-- A first-run crutch, and only that: three hardcoded ids and no prices
+           is a bad place to choose from, but once the live list is in it is
+           strictly worse than the real picker and goes away. -->
+      <label for="modelExample">Try a known-good model</label>
       <select id="modelExample">
         <!-- Individual free model ids are the most volatile thing OpenRouter serves:
              the id this list used to name had been withdrawn outright, and both
@@ -331,27 +349,36 @@ footer{
         <option value="openrouter/free">OpenRouter: Free Models Router — no credit needed, but quality varies a lot</option>
         <option value="qwen/qwen3-30b-a3b-instruct-2507">Qwen: Qwen3 30B A3B Instruct 2507 — cheap and effective</option>
       </select>
-      <label for="modelId">Model id (any OpenRouter id)</label>
-      <input id="modelId" type="text" placeholder="anthropic/claude-...">
-      <label class="toggle" for="freeOnly">
-        <input type="checkbox" id="freeOnly">
-        <span>Free models only</span>
-      </label>
-      <label for="modelSort">Sort models</label>
-      <select id="modelSort">
-        <option value="price">by price — free first</option>
-        <option value="name">by name — A to Z</option>
-      </select>
-      <div class="row" style="margin-top:8px"><button id="refreshModels">Load model list from OpenRouter</button></div>
-      <div class="note" id="modelNote"></div>
+    </div>
+
+    <label for="modelChat">Chat model</label>
+    <select id="modelChat"></select>
 
     <label for="teachModel">Model for translation and grammar checks</label>
-      <select id="teachModel"></select>
-      <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
-      much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
-      两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
-      separate so the conversation can stay cheap while what you are told about your own sentences
-      is worth trusting. These calls happen only when you press a button, not every turn.</div>
+    <select id="teachModel"></select>
+    <div class="note">Chatting and diagnosing a mistake are different jobs, and a small model is
+    much better at the first. A cheap one called both 二个人去了 and 他跑的很快 correct — 二 for
+    两, and 的 for 得 — and praised them, which is the worst way for this to be wrong. Kept
+    separate so the conversation can stay cheap while what you are told about your own sentences
+    is worth trusting. These calls happen only when you press a button, not every turn.</div>
+
+    <label class="toggle" for="freeOnly">
+      <input type="checkbox" id="freeOnly">
+      <span>Free models only</span>
+    </label>
+    <label for="modelSort">Sort models</label>
+    <select id="modelSort">
+      <option value="price">by price — free first</option>
+      <option value="name">by name — A to Z</option>
+    </select>
+
+    <!-- The escape hatch, last. The catalogue goes stale between reloads and the
+         free-only filter hides paid ids, so there has to be some way to name a
+         model the pickers are not showing. -->
+    <label for="modelId">Or paste any model id</label>
+    <input id="modelId" type="text" placeholder="anthropic/claude-...">
+    <div class="row" style="margin-top:8px"><button id="modelReload" class="quiet">Reload list</button></div>
+    <div class="note" id="modelNote"></div>
   </details>
 
   <details class="sec">
@@ -605,7 +632,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v39 — 2026-08-22";
+const VERSION   = "v40 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2083,9 +2110,15 @@ function fillModels() {
     const known = all.find(m => m.id === S.model);
     list = [known || { id: S.model, label: S.model }].concat(list);
   }
-  $("#model").innerHTML = list.map(m =>
+  /* The same options drive the header picker and the one in Settings. Two
+   * controls for one setting is worth it: choosing a teaching model is a
+   * comparison against the chat model, and sending you to the header to see
+   * what you are comparing against would be silly. */
+  const opts = list.map(m =>
     '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
     escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+  $("#model").innerHTML = opts;
+  $("#modelChat").innerHTML = opts;
 
   /* The teaching picker draws on the same catalogue but is never filtered by
    * "free models only": the free tier is exactly where the accuracy problem
@@ -2100,13 +2133,23 @@ function fillModels() {
     tList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
       (m.id === S.teachModel ? " selected" : "") + ">" +
       escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
-  if (!cached) {
-    $("#modelNote").textContent = "Built-in ids are unverified starting points — load the live list to see what is free and what each costs.";
+  /* Which of the two states the section is in. Loading the catalogue is setup;
+   * once it is done the button that did it has no business outranking the
+   * pickers, and the known-good list it sat with is strictly worse than the
+   * real one. */
+  $("#modelSetup").style.display = cached ? "none" : "";
+  $("#modelReload").style.display = cached ? "" : "none";
+  if (cached) {
+    const free = cached.filter(m => m.free).length;
+    $("#modelNote").textContent = cached.length + " models cached, " + free + " of them free.";
   }
 }
 
-async function refreshModels() {
-  const btn = $("#refreshModels");
+// Reachable from either the setup button or the quiet reload one; whichever was
+// pressed is the one that shows the progress.
+async function refreshModels(btn) {
+  btn = (btn && btn.tagName === "BUTTON") ? btn : $("#refreshModels");
+  const was = btn.textContent;
   btn.disabled = true; btn.textContent = "Loading…";
   try {
     const r = await fetch(MODELS_URL);
@@ -2133,7 +2176,7 @@ async function refreshModels() {
   } catch (e) {
     $("#modelNote").textContent = "Could not load the list: " + (e.message || e) + ". Paste an id manually.";
   } finally {
-    btn.disabled = false; btn.textContent = "Load model list from OpenRouter";
+    btn.disabled = false; btn.textContent = was;
   }
 }
 
@@ -2367,7 +2410,21 @@ $("#level").onchange = async e => {
   queueSync("prefs");
   updateMirror(); renderAll(); renderStarters();
 };
-$("#model").onchange = e => { S.model = e.target.value; store.set(K.model, S.model); $("#modelId").value = S.model; queueSync("prefs"); };
+/* One setting, three controls that show it: the header picker, the Settings
+ * picker and the paste-an-id box. Whichever one moves, the other two follow --
+ * they cannot be left disagreeing about what you are talking to. */
+function setChatModel(id) {
+  if (!id) return;
+  S.model = id;
+  store.set(K.model, id);
+  $("#modelId").value = id;
+  if ($("#model").value !== id) $("#model").value = id;
+  if ($("#modelChat").value !== id) $("#modelChat").value = id;
+  renderSectionNotes();
+  queueSync("prefs");
+}
+$("#model").onchange = e => setChatModel(e.target.value);
+$("#modelChat").onchange = e => setChatModel(e.target.value);
 $("#teachModel").onchange = e => {
   S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
 };
@@ -2588,7 +2645,10 @@ $("#freeOnly").onchange = e => {
 // Picking an example fills the free-text field, which stays the one thing
 // actually read on save -- the dropdown is a shortcut into it, not a second
 // source of truth.
-$("#modelExample").onchange = e => { $("#modelId").value = e.target.value; };
+/* The first-run crutch applies immediately rather than only filling the id box:
+ * it is shown when there is no catalogue, which is exactly when someone needs
+ * a working model now, not a string to remember to commit later. */
+$("#modelExample").onchange = e => setChatModel(e.target.value);
 $("#keyPaste").onclick = async () => {
   try {
     const text = await navigator.clipboard.readText();
@@ -2680,7 +2740,8 @@ $("#syncSignIn").onclick = signInForSync;
 $("#syncNow").onclick = () => pullAndMerge();
 $("#syncSignOut").onclick = signOutOfSync;
 
-$("#refreshModels").onclick = refreshModels;
+$("#refreshModels").onclick = e => refreshModels(e.currentTarget);
+$("#modelReload").onclick = e => refreshModels(e.currentTarget);
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
   if (!confirm("Delete the whole conversation?")) return;
