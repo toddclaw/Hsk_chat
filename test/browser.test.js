@@ -215,13 +215,14 @@ return true;
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] }
       ]));
-      /* Two distinguishable ids, so a call can be attributed to one or the
-       * other. Both are read into S at boot, so they have to be here rather
+      /* Only the teaching model is seeded. The chat model is left alone so the
+       * shipped default is what runs, which is the thing worth asserting -- and
+       * it still differs from the teaching id, so a call can be attributed to
+       * one or the other. Read into S at boot, so it has to be here rather
        * than set later. The API key deliberately is NOT: boot opens the
        * Settings sheet when no key is stored, and the wipe checks further down
        * assert on an element inside that sheet, so seeding a key here hides it
        * and breaks a test that has nothing to do with models. */
-      localStorage.setItem("hsk1chat.model", JSON.stringify("chat/model"));
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
@@ -319,8 +320,151 @@ return true;
       window.fetch = window.__realFetch; window.__calls = []; return true;`),
       "fetch is restored for the rest of the suite");
 
+    /* ---------------------------------------------- the Settings accordion
+     *
+     * Boot opened Settings already, because the seed deliberately stores no key.
+     */
+    check(await exec(`return document.querySelector('#setSheet').classList.contains('open');`),
+      "a first run with no key opens Settings");
+    const secs = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#setSheet .sec'),
+        function (d) { return d.querySelector('summary').textContent.trim() + "=" +
+                              (d.open ? "open" : "closed"); });`);
+    check(secs.length >= 8, "Settings is broken into sections", JSON.stringify(secs));
+    check(secs.filter(s => s.endsWith("=open")).length === 1,
+      "exactly one section starts open", JSON.stringify(secs));
+    check(String(secs[0]).indexOf("Connection") === 0 && String(secs[0]).endsWith("=open"),
+      "and it is Connection, the one a first run needs", JSON.stringify(secs));
+
+    /* The default a new install runs on. Nothing seeded hsk1chat.model, so this
+     * is MODELS[0] reaching the header picker unaided -- the cheap model the
+     * app was tuned against, not whichever frontier name happens to be first in
+     * the list. */
+    check(await exec(`return document.querySelector('#model').value;`)
+            === "qwen/qwen3-30b-a3b-instruct-2507",
+      "a fresh install defaults to the cheap Qwen model",
+      await exec(`return document.querySelector('#model').value;`));
+
+    /* ------------------------------------------------- the Models two-step
+     *
+     * Loading the catalogue is setup; picking a model is what you come back for.
+     * With no catalogue cached the setup block leads and the reload button is
+     * not there; once one exists they swap. Getting this backwards would put a
+     * once-ever button above the control used every time.
+     */
+    await exec(`document.querySelectorAll('#setSheet .sec')[1].open = true; return true;`);
+    const before = await exec(`
+      return { setup: getComputedStyle(document.querySelector('#modelSetup')).display,
+               reload: getComputedStyle(document.querySelector('#modelReload')).display };`);
+    check(before.setup !== "none", "with no catalogue, the setup block is shown", JSON.stringify(before));
+    check(before.reload === "none", "and the quiet reload button is not", JSON.stringify(before));
+
+    // Fake a cached catalogue rather than calling OpenRouter: this suite has no key.
+    await exec(`
+      localStorage.setItem("hsk1chat.modelCache", JSON.stringify([
+        { id: "cheap/one", label: "Cheap One", free: true,  inM: 0,    outM: 0 },
+        { id: "big/one",   label: "Big One",   free: false, inM: 0.09, outM: 0.55 }
+      ]));
+      return true;`);
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await exec(`document.querySelectorAll('#setSheet .sec')[1].open = true; return true;`);
+    const after = await exec(`
+      return { setup: getComputedStyle(document.querySelector('#modelSetup')).display,
+               reload: getComputedStyle(document.querySelector('#modelReload')).display,
+               note: document.querySelector('#modelNote').textContent,
+               chat: document.querySelector('#modelChat').options.length,
+               teach: document.querySelector('#teachModel').options.length };`);
+    check(after.setup === "none", "once a catalogue is cached the setup block goes away", JSON.stringify(after));
+    check(after.reload !== "none", "and the quiet reload button appears", JSON.stringify(after));
+    check(/2 models cached, 1 of them free/.test(after.note), "the note counts the catalogue", after.note);
+    check(after.chat >= 2, "the Settings chat picker is populated from it", JSON.stringify(after));
+    // Teaching picker: the same list plus "Same as the chat model", never free-filtered.
+    check(after.teach === after.chat + 1,
+      "the teaching picker adds the same-as-chat option", JSON.stringify(after));
+
+    /* One setting, three controls. Leaving any of them stale would show you a
+     * model you are not actually talking to. */
+    await exec(`
+      var sel = document.querySelector('#modelChat');
+      sel.value = "big/one";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    const synced = await exec(`
+      return { header: document.querySelector('#model').value,
+               box: document.querySelector('#modelId').value,
+               stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
+    check(synced.header === "big/one", "choosing in Settings moves the header picker", JSON.stringify(synced));
+    check(synced.box === "big/one", "and the paste-an-id box", JSON.stringify(synced));
+    check(synced.stored === "big/one", "and is persisted", JSON.stringify(synced));
+
+    /* The other direction, which used not to work: the box was write-only, so a
+     * pasted id changed nothing until Settings was closed and reopened. The id
+     * here is deliberately absent from the catalogue -- that is the case the
+     * box exists for, and assigning it to a <select> that has no such option
+     * selects nothing at all rather than failing, so the pickers have to be
+     * rebuilt around it. */
+    await exec(`
+      var box = document.querySelector('#modelId');
+      box.value = "someone/not-in-the-catalogue";
+      box.dispatchEvent(new Event("change"));
+      return true;`);
+    const pasted = await exec(`
+      return { header: document.querySelector('#model').value,
+               chat: document.querySelector('#modelChat').value,
+               stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
+    check(pasted.header === "someone/not-in-the-catalogue",
+      "pasting an id updates the header picker at once", JSON.stringify(pasted));
+    check(pasted.chat === "someone/not-in-the-catalogue",
+      "and the Settings picker, without closing and reopening", JSON.stringify(pasted));
+    check(pasted.stored === "someone/not-in-the-catalogue",
+      "and is persisted", JSON.stringify(pasted));
+
+    // Put a real id back so the commit checks below are not asserting on junk.
+    await exec(`
+      var b = document.querySelector('#modelId');
+      b.value = "big/one"; b.dispatchEvent(new Event("change")); return true;`);
+
+    /* Settings has no Cancel: the fields are read out of the DOM when it closes,
+     * so ✕ must commit exactly what Done commits. Asserted through a field in a
+     * section that is still COLLAPSED, which is the part the accordion could
+     * plausibly have broken -- a collapsed <details> renders nothing, and a
+     * commit that skipped those inputs would lose every setting not opened. */
+    await exec(`
+      document.querySelector('#key').value = "sk-or-committed-by-the-x";
+      var sel = document.querySelector('#replyLength');
+      sel.value = "long";
+      return true;`);
+    check(await exec(`
+      return !document.querySelector('#replyLength').closest('details').open;`),
+      "reply length is inside a section that is still collapsed");
+    await exec(`document.querySelector('#setX').click(); return true;`);
+    check(!(await exec(`return document.querySelector('#setSheet').classList.contains('open');`)),
+      "the ✕ closes Settings");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.apiKey"));`)
+            === "sk-or-committed-by-the-x",
+      "the ✕ commits the API key rather than discarding it");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.replyLength"));`) === "long",
+      "and commits a field from a section that was never opened");
+
+    // Reopen for the sync checks below; also exercises the summary values.
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')", "Settings again");
+    check(!(await exec(`return document.querySelector('#secConnection').open;`)),
+      "reopening with a key saved leaves Connection collapsed");
+    check(/key saved/.test(await exec(`
+      return document.querySelector('#secConnectionNote').textContent;`)),
+      "the collapsed Connection row reports that a key is stored");
+
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
+    /* Settings is a set of collapsed <details> now, and everything below lives
+     * inside the sync one. A collapsed section renders nothing but its summary,
+     * so the visibility checks at the end would fail for a reason that has
+     * nothing to do with what they test. Opening it is also what a user doing
+     * this would have done. */
+    await exec(`
+      document.querySelector("#secSync").open = true;
+      return document.querySelector("#secSync").open;`);
     await exec(`
       var box = document.querySelector("#syncOn");
       box.checked = true;
