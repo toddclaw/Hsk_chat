@@ -42,10 +42,10 @@ works exactly as on iOS, with one exception noted under
 ## Running it for free
 
 Make an account at [openrouter.ai/keys](https://openrouter.ai/keys), create a key, **add no
-credit**. Settings has a **Try a known-good model** dropdown, or tick **free models only** to
-filter the loaded catalogue. Models priced at zero cost nothing to call, and the picker
-shows what everything costs per million input tokens so the paid ones are one tap away when
-you want them.
+credit**. Before the catalogue is loaded Settings offers a **Try a known-good model**
+dropdown; after it is, tick **display free models only** to filter the real list. Models
+priced at zero cost nothing to call, and the picker shows what everything costs per million
+input tokens so the paid ones are one tap away when you want them.
 
 **The free option is `openrouter/free`**, a router OpenRouter maintains rather than a single
 model. It cannot go stale the way a specific id can — which is the whole reason it is the one
@@ -111,14 +111,19 @@ rates it is a fraction of a cent; a retry costs another round. **Optimise for re
 model that averages two retries costs more, and feels slower, than a better one that gets
 it right first time. The A/B counters in Settings measure exactly that.
 
-The first thing to do in Settings is **Load model list from OpenRouter**: the three ids
-compiled into the page are unverified starting points, and model ids change often.
+The first thing to do in Settings is **Load model list from OpenRouter** — it is the first
+thing the Models section offers until you have. The handful of ids compiled into the page are
+unverified starting points with no prices attached, and model ids change often. Once the
+catalogue is cached that button steps aside for the pickers and becomes a quiet **Reload
+list** at the bottom of the section.
 
 ## A model that works well
 
 **Qwen: Qwen3 30B A3B Instruct 2507** (`qwen/qwen3-30b-a3b-instruct-2507`) — very cheap, and
-it generally gets there after a few retries. Pick it from the loaded catalogue rather than
-typing the id, since ids change.
+it generally gets there after a few retries. It is **the default a new install starts on**,
+for the reasons below; the frontier ids beside it in the built-in list are recognisable names
+to reach for, not recommendations, and at HSK levels they cost a great deal more to do the
+same job.
 
 The "after a few retries" part is the point, and it is worth setting up for:
 
@@ -234,7 +239,8 @@ key you had just pasted.)
 | | |
 |---|---|
 | **API key** | OpenRouter key, stored on this device only |
-| **Model** | any OpenRouter id; load the live catalogue here, or pick a known-good example |
+| **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
+| **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
 | **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |
