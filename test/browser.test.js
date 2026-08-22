@@ -208,8 +208,21 @@ return true;
       localStorage.setItem("hsk1chat.history", JSON.stringify([
         { id: "11111111-1111-4111-8111-111111111111", role: "user",
           text: "你好", needs: [], attempts: 1,
-          created_at: "2026-01-01T00:00:00.000Z" }
+          created_at: "2026-01-01T00:00:00.000Z",
+          /* A stored explain-chat, so opening the sheet renders it instead of
+           * calling the model -- this suite has no key and no network. The text
+           * is the shape a real answer arrives in: Markdown nobody asked for. */
+          explainChat: [{ role: "assistant",
+            text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] }
       ]));
+      /* Two distinguishable ids, so a call can be attributed to one or the
+       * other. Both are read into S at boot, so they have to be here rather
+       * than set later. The API key deliberately is NOT: boot opens the
+       * Settings sheet when no key is stored, and the wipe checks further down
+       * assert on an element inside that sheet, so seeding a key here hides it
+       * and breaks a test that has nothing to do with models. */
+      localStorage.setItem("hsk1chat.model", JSON.stringify("chat/model"));
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
     await waitFor("window.HSKSync && document.querySelector('#syncOn')", "sync.js and the toggle");
@@ -228,6 +241,83 @@ return true;
     } catch (e) { seeded = false; }
     check(seeded, "the seeded conversation renders before the wipe",
       await exec("return document.querySelector('#log').textContent.slice(0, 120);"));
+
+    /* The seeded turn is the student's own, so it is also the cheapest place to
+     * check that translate and explain reach a user message at all -- they were
+     * assistant-only, and the whole feature is one `role === "assistant"` guard
+     * away from silently disappearing again. Asserted by label rather than by
+     * count: "Check my grammar" is what routes explainSystemPrompt to the shape
+     * that knows the sentence may be wrong. Not clicked -- that would spend a
+     * real model call, and this suite has no key and no network. */
+    const ownBtns = await exec(`
+      var m = document.querySelector('#log .msg.user .meta');
+      return m ? Array.prototype.map.call(m.querySelectorAll('button'),
+        function (b) { return b.textContent; }) : null;`);
+    check(!!ownBtns && ownBtns.indexOf("English translation") !== -1,
+      "a user message offers a translation button", JSON.stringify(ownBtns));
+    check(!!ownBtns && ownBtns.indexOf("Check my grammar") !== -1,
+      "a user message offers the grammar-check button", JSON.stringify(ownBtns));
+
+    /* Opening that sheet exercises md.js against the DOM for real: node can
+     * check the string it returns, but only a browser shows whether the result
+     * reaches the page as formatting or as text. The seeded explain-chat means
+     * no model call happens. */
+    await exec(`
+      var btns = document.querySelectorAll('#log .msg.user .meta button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "Check my grammar") { btns[i].click(); break; }
+      }
+      return true;`);
+    await waitFor("document.querySelector('#explainSheet').classList.contains('open')",
+      "the explain sheet");
+    const md = await exec(`
+      var box = document.querySelector('#explainLog');
+      return { html: box.innerHTML, text: box.textContent,
+               strong: box.querySelectorAll('strong').length,
+               heading: box.querySelectorAll('b').length };`);
+    check(md.strong > 0, "the sheet renders **bold** as a real <strong>", md.html.slice(0, 160));
+    check(md.heading > 0, "and a ### heading as a heading", md.html.slice(0, 160));
+    // The actual complaint: markup showing through as characters on the page.
+    check(md.text.indexOf("**") === -1 && md.text.indexOf("###") === -1,
+      "no Markdown punctuation is left visible to the reader", JSON.stringify(md.text));
+    check(md.text.indexOf("•") !== -1, "list items render as bullets", JSON.stringify(md.text));
+    check(await exec(`
+      document.querySelector('#explainClose').click();
+      return !document.querySelector('#explainSheet').classList.contains('open');`),
+      "the sheet closes again");
+
+    /* Which model a teaching call goes to. This is the whole point of the
+     * setting and it is invisible everywhere else: routing it back to the chat
+     * model would look identical in the UI and simply give worse answers, which
+     * is exactly the failure that motivated splitting them. fetch is stubbed, so
+     * no key and no network are involved -- the assertion is on the request body
+     * the app builds. */
+    await exec(`
+      // Set at call time, not at boot -- see the seed above. callModel reads the
+      // key on every call, so this is enough to get past its "no key" guard.
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      window.__calls = [];
+      window.__realFetch = window.fetch;
+      window.fetch = function (url, opts) {
+        window.__calls.push(JSON.parse((opts && opts.body) || "{}"));
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          return Promise.resolve({ choices: [{ message: { content: "I am fine." },
+                                              finish_reason: "stop" }] });
+        } });
+      };
+      var btns = document.querySelectorAll('#log .msg.user .meta button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "English translation") { btns[i].click(); break; }
+      }
+      return true;`);
+    await waitFor("window.__calls && window.__calls.length > 0", "the translation request");
+    const sent = await exec("return window.__calls[0];");
+    check(sent && sent.model === "teaching/model",
+      "a translation is sent to the teaching model, not the chat model",
+      "model was: " + (sent && sent.model));
+    check(await exec(`
+      window.fetch = window.__realFetch; window.__calls = []; return true;`),
+      "fetch is restored for the rest of the suite");
 
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);

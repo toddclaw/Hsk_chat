@@ -73,6 +73,12 @@ cannot publish red**.
 a supabase-js client — the Supabase glue. Everything above the "Supabase glue"
 line in `sync.js` is pure and covered directly by `test/sync.test.js` instead.
 
+It also asserts that a **user** message renders its translate and grammar-check
+buttons. That rides along on the conversation the wipe test already seeds, so it
+costs no extra browser boot, and it guards a regression a node suite cannot see:
+both buttons lived behind a `role === "assistant"` guard, and re-adding one would
+remove the feature from your own messages while leaving every prompt test green.
+
 It drives real Firefox over WebDriver, which is a plain HTTP/JSON protocol, so it
 needs **no npm packages** — node's built-in `fetch` and `http` are enough. It
 costs a browser on the machine instead of a dependency in the repo.
@@ -102,6 +108,14 @@ Things that will bite you when editing it:
   `ps -o etimes` — yours will be seconds old and theirs will not.
 - **`waitFor` the content, not the element.** `boot()` fills `#log` only after
   `loadLevel()` resolves, so waiting for `#log` to *exist* races the render.
+- **Do not seed an API key into `localStorage` before boot.** `boot()` opens
+  Settings when no key is stored, and several assertions reach elements that
+  live inside that sheet — `.sheet` is `display:none` until `.open`, so they
+  become invisible and fail for a reason unrelated to what is being tested. Set
+  the key immediately before the call that needs one instead; `callModel` reads
+  it every time. This cost an afternoon once already.
+- **A backtick inside a comment inside an `exec()` template literal ends the
+  template.** The syntax error points at the `exec` call, not the comment.
 
 Supabase is mocked in-page. `index.html` loads supabase-js lazily and
 `loadSupabaseJs()` returns early when `window.supabase` already exists, so
@@ -112,10 +126,31 @@ sign-in against the real project.
 
 ### Mutation-test anything load-bearing
 
-A test that has never failed has not been shown to work. Both guarantees in the
-browser suite were checked by deliberately breaking the code and confirming the
-suite caught it — reordering the sync-off past the delete, and dropping a table
-from `USER_TABLES`. Worth doing for any new assertion that matters.
+A test that has never failed has not been shown to work. Every guarantee in the
+browser suite was checked by deliberately breaking the code and confirming the
+suite caught it — reordering the sync-off past the delete, dropping a table from
+`USER_TABLES`, putting the `role === "assistant"` guard back around the
+translate and explain buttons, and reverting the explain sheet to escaping
+instead of rendering. The `own` branches of `HSKPrompt.explain` and
+`HSKPrompt.translate` were checked the same way, by collapsing each into its
+non-`own` shape, and `md.js` by moving its `escape()` from before the formatting
+passes to after. Worth doing for any new assertion that matters.
+
+### md.js
+
+Models answer the explain prompt in Markdown whether or not they are asked to,
+so the sheet renders a small subset of it rather than fighting the habit with an
+instruction that has to win on every call. Two things to keep straight when
+editing it:
+
+- **`escape()` runs first, over the whole string, and every pass after it emits
+  only tags `md.js` itself wrote.** Reversing that order still passes any test
+  that only checks formatting, which is why `test/md.test.js` asserts on tags
+  being inert as well. The input is untrusted twice over: it is model output,
+  and model output quotes the student's own words back.
+- **Bold has to be consumed before italic, and `***triple***` before both**, or
+  the tags come out interleaved rather than nested (`<strong><em>x</strong></em>`)
+  and the DOM quietly rewrites them into something else.
 
 ## Releasing and previews
 
