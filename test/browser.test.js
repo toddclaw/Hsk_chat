@@ -215,13 +215,14 @@ return true;
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] }
       ]));
-      /* Two distinguishable ids, so a call can be attributed to one or the
-       * other. Both are read into S at boot, so they have to be here rather
+      /* Only the teaching model is seeded. The chat model is left alone so the
+       * shipped default is what runs, which is the thing worth asserting -- and
+       * it still differs from the teaching id, so a call can be attributed to
+       * one or the other. Read into S at boot, so it has to be here rather
        * than set later. The API key deliberately is NOT: boot opens the
        * Settings sheet when no key is stored, and the wipe checks further down
        * assert on an element inside that sheet, so seeding a key here hides it
        * and breaks a test that has nothing to do with models. */
-      localStorage.setItem("hsk1chat.model", JSON.stringify("chat/model"));
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
@@ -335,6 +336,15 @@ return true;
     check(String(secs[0]).indexOf("Connection") === 0 && String(secs[0]).endsWith("=open"),
       "and it is Connection, the one a first run needs", JSON.stringify(secs));
 
+    /* The default a new install runs on. Nothing seeded hsk1chat.model, so this
+     * is MODELS[0] reaching the header picker unaided -- the cheap model the
+     * app was tuned against, not whichever frontier name happens to be first in
+     * the list. */
+    check(await exec(`return document.querySelector('#model').value;`)
+            === "qwen/qwen3-30b-a3b-instruct-2507",
+      "a fresh install defaults to the cheap Qwen model",
+      await exec(`return document.querySelector('#model').value;`));
+
     /* ------------------------------------------------- the Models two-step
      *
      * Loading the catalogue is setup; picking a model is what you come back for.
@@ -386,6 +396,33 @@ return true;
     check(synced.header === "big/one", "choosing in Settings moves the header picker", JSON.stringify(synced));
     check(synced.box === "big/one", "and the paste-an-id box", JSON.stringify(synced));
     check(synced.stored === "big/one", "and is persisted", JSON.stringify(synced));
+
+    /* The other direction, which used not to work: the box was write-only, so a
+     * pasted id changed nothing until Settings was closed and reopened. The id
+     * here is deliberately absent from the catalogue -- that is the case the
+     * box exists for, and assigning it to a <select> that has no such option
+     * selects nothing at all rather than failing, so the pickers have to be
+     * rebuilt around it. */
+    await exec(`
+      var box = document.querySelector('#modelId');
+      box.value = "someone/not-in-the-catalogue";
+      box.dispatchEvent(new Event("change"));
+      return true;`);
+    const pasted = await exec(`
+      return { header: document.querySelector('#model').value,
+               chat: document.querySelector('#modelChat').value,
+               stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
+    check(pasted.header === "someone/not-in-the-catalogue",
+      "pasting an id updates the header picker at once", JSON.stringify(pasted));
+    check(pasted.chat === "someone/not-in-the-catalogue",
+      "and the Settings picker, without closing and reopening", JSON.stringify(pasted));
+    check(pasted.stored === "someone/not-in-the-catalogue",
+      "and is persisted", JSON.stringify(pasted));
+
+    // Put a real id back so the commit checks below are not asserting on junk.
+    await exec(`
+      var b = document.querySelector('#modelId');
+      b.value = "big/one"; b.dispatchEvent(new Event("change")); return true;`);
 
     /* Settings has no Cancel: the fields are read out of the DOM when it closes,
      * so ✕ must commit exactly what Done commits. Asserted through a field in a

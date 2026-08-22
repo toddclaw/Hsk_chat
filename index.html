@@ -364,7 +364,7 @@ footer{
 
     <label class="toggle" for="freeOnly">
       <input type="checkbox" id="freeOnly">
-      <span>Free models only</span>
+      <span>Display free models only</span>
     </label>
     <label for="modelSort">Sort models</label>
     <select id="modelSort">
@@ -589,7 +589,14 @@ footer{
  * the live catalogue from https://openrouter.ai/api/v1/models (no key needed)
  * and caches it; these seeds are only a starting point and any id can be typed
  * into Settings. Verify against https://openrouter.ai/models. */
+/* The built-in starting points, shown until the live catalogue is loaded. First
+ * entry is the default for a new install, so it leads: cheap enough to leave
+ * running, good enough to hold a conversation inside a word list, and the one
+ * this app was actually tuned against. The frontier models below it are there
+ * as recognisable names to reach for, not as a recommendation -- at HSK levels
+ * they cost a great deal more to do the same job. */
 const MODELS = [
+  { id: "qwen/qwen3-30b-a3b-instruct-2507", label: "Qwen3 30B A3B" },
   { id: "anthropic/claude-sonnet-4.5", label: "Claude" },
   { id: "google/gemini-2.5-flash",     label: "Gemini" },
   { id: "openai/gpt-4o",               label: "GPT" }
@@ -632,7 +639,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v40 — 2026-08-22";
+const VERSION   = "v41 — 2026-08-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2414,17 +2421,27 @@ $("#level").onchange = async e => {
  * picker and the paste-an-id box. Whichever one moves, the other two follow --
  * they cannot be left disagreeing about what you are talking to. */
 function setChatModel(id) {
+  id = String(id == null ? "" : id).trim();
   if (!id) return;
   S.model = id;
   store.set(K.model, id);
   $("#modelId").value = id;
-  if ($("#model").value !== id) $("#model").value = id;
-  if ($("#modelChat").value !== id) $("#modelChat").value = id;
+  /* An id typed by hand need not be in the catalogue at all, and assigning a
+   * value a <select> does not have selects nothing at all rather than failing
+   * loudly. fillModels() carries the current model into both lists precisely
+   * for this, so rebuild instead of assigning. */
+  if ($("#model").value !== id || $("#modelChat").value !== id) fillModels();
   renderSectionNotes();
   queueSync("prefs");
 }
 $("#model").onchange = e => setChatModel(e.target.value);
 $("#modelChat").onchange = e => setChatModel(e.target.value);
+/* The box was write-only: picking a model filled it in, but typing into it
+ * changed nothing until Settings was closed and reopened, because it was read
+ * only by commitSettings(). "change" rather than "input" on purpose -- on every
+ * keystroke each half-typed prefix would briefly become the selected model and
+ * get carried into both pickers. */
+$("#modelId").onchange = e => setChatModel(e.target.value);
 $("#teachModel").onchange = e => {
   S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
 };
@@ -2551,8 +2568,9 @@ $("#btnSet").onclick = () => {
  * three now route through one function. */
 function commitSettings() {
   store.set(K.key, $("#key").value.trim());
-  const id = $("#modelId").value.trim();
-  if (id) { S.model = id; store.set(K.model, id); fillModels(); }
+  /* Belt and braces: the box now applies on change, but closing Settings while
+   * it still has focus commits before that fires. Same path either way. */
+  setChatModel($("#modelId").value);
   S.mode = $("#promptMode").value; store.set(K.mode, S.mode);
   const script = $("#script").value;
   if (script !== S.script) {
