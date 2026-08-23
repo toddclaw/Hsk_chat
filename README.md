@@ -317,6 +317,39 @@ apart from an attempt-count badge, and `finish_reason: "length"` shows as **cut 
 truncation and a model choosing to stop look identical in the output and want opposite
 fixes.
 
+## What the validator does not promise
+
+The guarantee is **vocabulary**, and only vocabulary. Every word in a reply is on your list.
+Whether those words add up to a sentence is a different question, and nothing here checks it.
+
+A real exchange at HSK 2:
+
+```
+Partner:  你吃肉。很好。我吃鸡蛋。你喜欢鸡蛋吗？
+Student:  我喜欢吃鸡蛋。我的朋友有鸡鸟。
+Partner:  你朋友有鸡鸟。鸡鸟先生鸡蛋。我吃鸡蛋。你吃鸡蛋吗？
+```
+
+`鸡鸟` is not a word. The student appears to have meant 鸡, chickens. The partner then repeated
+it back and went on to write `鸡鸟先生鸡蛋` — apparently reaching for 生, "produce", and landing
+on 先生, "Mr.".
+
+**The validator found nothing wrong with any of it.** At HSK 2, 鸡 and 鸟 are each legal words,
+so `鸡鸟` segments as 鸡 | 鸟 — two allowed words in a row, indistinguishable from any other two
+allowed words in a row. 先生 is an ordinary HSK 1 word. Zero violations, no retry, no badge.
+
+So on this class of failure the model is unassisted, and model quality is doing all the work.
+Measured on that exact exchange, the cheap default repeated `鸡鸟` back in roughly one reply in
+six; a larger model did not do it at all in six tries, and when it *did* overreach — it tried
+鸭, duck — the validator caught that immediately, because a single out-of-level word is exactly
+what it is built to see.
+
+Two things follow. **A wrong sentence made of right words will reach you**, and the retry
+counter cannot warn you about it. And the teaching buttons are the backstop rather than the
+validator: **Check my grammar** flagged `鸡鸟` correctly, and so did **English explanation** on
+the partner's reply. If conversations start reading strangely, the cheapest first move is a
+better chat model, not a stricter level.
+
 ## Sense validation: an allowed word is not an allowed meaning
 
 The vocabulary matcher only ever sees surface form: once 得 sits in a level's allowlist, any
