@@ -253,6 +253,32 @@ check(/corrected version/.test(P.explain(mine)) && /Name the rule/.test(P.explai
 check(/homophone/.test(P.explain(mine)),
   "own: explain knows wrong characters come from pinyin input");
 
+/* The turns leading up to the sentence. A learner line is often only judgeable
+ * against what it answers -- 我也是 is fine after a statement and odd after a
+ * question -- but the thing being checked is still the one sentence. */
+const CTX = [{ role: "assistant", text: "你喜欢吃中国菜吗？" },
+             { role: "user", text: "我是美国人。" }];
+const withCtx = P.explain({ text: SENT, own: true, label: "HSK 2", recent: "", context: CTX });
+check(/The conversation so far:/.test(withCtx), "own: context is labelled as context");
+check(/Partner: 你喜欢吃中国菜吗？/.test(withCtx), "own: the partner's turn is attributed");
+check(/Student: 我是美国人。/.test(withCtx), "own: and so is the student's");
+check(withCtx.indexOf("The conversation so far:") < withCtx.indexOf("The student wrote:"),
+  "own: context comes before the sentence it explains");
+/* Last, not up with the level and recent words: it is background for reading
+ * the sentence, not more material to comment on. */
+check(withCtx.indexOf("The conversation so far:") > withCtx.indexOf("Recently introduced"),
+  "own: but after the standing instructions, so it reads as background");
+// No context is the first message of a conversation, and must not leave a stub.
+check(!/The conversation so far/.test(P.explain(mine)),
+  "own: no context means no empty context block");
+check(!/The conversation so far/.test(
+        P.explain({ text: SENT, own: true, label: "HSK 2", recent: "", context: [] })),
+  "own: an empty context array is the same as none");
+// The partner's own reply is known-good; it does not need the transcript.
+check(!/The conversation so far/.test(
+        P.explain({ text: SENT, own: false, label: "HSK 2", recent: "", context: CTX })),
+  "reply: context is not added to the explain-the-partner prompt");
+
 // Level and recent words reach both explain shapes: the whole point of the
 // context block is that it can say which words are still new to this student.
 for (const own of [false, true]) {

@@ -217,7 +217,15 @@ return true;
            * calling the model -- this suite has no key and no network. The text
            * is the shape a real answer arrives in: Markdown nobody asked for. */
           explainChat: [{ role: "assistant",
-            text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] }
+            text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] },
+        { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:01:00.000Z" },
+        /* No explainChat, so opening this one's sheet actually builds a prompt
+         * -- which is the only way to see whether the turn above reached it. */
+        { id: "33333333-3333-4333-8333-333333333333", role: "user",
+          text: "我也是", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:02:00.000Z" }
       ]));
       /* Only the teaching model is seeded. The chat model is left alone so the
        * shipped default is what runs, which is the thing worth asserting -- and
@@ -341,6 +349,31 @@ return true;
       "with {text} replaced by the actual sentence", JSON.stringify(body));
     check(!/\{level\}/.test(body || ""),
       "and {level} substituted rather than left as a placeholder", JSON.stringify(body));
+    /* The grammar check should see what the student was replying to. 我也是 is
+     * the case that makes it matter: fine after a statement, odd after a
+     * question, and unjudgeable with neither. */
+    await exec(`
+      window.__calls = [];
+      var msgs = document.querySelectorAll('#log .msg.user');
+      var last = msgs[msgs.length - 1];
+      var btns = last.querySelectorAll('.meta button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "Check my grammar") { btns[i].click(); break; }
+      }
+      return true;`);
+    await waitFor("window.__calls && window.__calls.length > 0", "the grammar-check request");
+    const gc = await exec("return window.__calls[0].messages[0].content;");
+    check(/The conversation so far:/.test(gc || ""),
+      "the grammar check is given the conversation", JSON.stringify((gc || "").slice(-260)));
+    check(/Partner: 你喜欢吃中国菜吗？/.test(gc || ""),
+      "including the turn it was replying to", JSON.stringify((gc || "").slice(-260)));
+    check(/The student wrote: 我也是/.test(gc || ""),
+      "and the sentence under review is still the last thing said",
+      JSON.stringify((gc || "").slice(-260)));
+    check((gc || "").indexOf("The conversation so far:") < (gc || "").indexOf("The student wrote:"),
+      "with the context before it, not after");
+    await exec(`document.querySelector('#explainClose').click(); return true;`);
+
     check(await exec(`
       window.fetch = window.__realFetch; window.__calls = []; return true;`),
       "fetch is restored for the rest of the suite");

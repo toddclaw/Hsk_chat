@@ -136,6 +136,39 @@ instead of rendering. The `own` branches of `HSKPrompt.explain` and
 non-`own` shape, and `md.js` by moving its `escape()` from before the formatting
 passes to after. Worth doing for any new assertion that matters.
 
+### Test a prompt change against a real model before shipping it
+
+Prompt edits read as obviously-correct and are not. The suite can only check that
+the words you wrote are in the string; whether they *work* is a question about a
+model, and the answer is sometimes the opposite of what you expect.
+
+Worked example, kept because it was so plausible. A learner wrote `鸡鸟`, which is
+not a word, and the partner repeated it back instead of correcting it — despite a
+standing rule to restate mistakes correctly. The obvious fix was to sharpen that
+rule by naming the failure mode, with `鸡鸟` as the example.
+
+Measured on the real model, eight replies each:
+
+| rule | repeated `鸡鸟` |
+| --- | --- |
+| as shipped | 0/8 |
+| "sharpened" | **3/8** |
+
+Naming the non-word in the prompt primed the model to *discuss* it —
+`鸡鸟不是词，是鸡` — which repeats the thing you were trying to suppress, in
+meta-commentary the partner is not supposed to produce at all. One run spent a
+`[[NEED:]]` on it. The change would have shipped as an improvement.
+
+Rules of thumb this leaves:
+
+- **Never put an example of the bad output in the prompt.** It is an instruction
+  to produce something adjacent to it.
+- **Count, do not read.** Both versions produce plausible-looking Chinese; the
+  difference only appears over repeated runs. Six to eight per arm is enough to
+  see a rate of this size.
+- Temperature is not zero in normal use, so a single sample proves nothing in
+  either direction.
+
 ### md.js
 
 Models answer the explain prompt in Markdown whether or not they are asked to,
@@ -236,6 +269,15 @@ Project setup lives in README.md. What is easy to get wrong:
   zero-cost option is not free: a name span offered as one token would beat the
   correct parse of `你叫什么名字` (`什么` + `名字`, two tokens) because it uses
   fewer. Prefer post-filtering what the segmenter already gave up on.
+- **Two legal words in a row are indistinguishable from a compound.** At HSK 2 both
+  鸡 and 鸟 are on the list, so the invented `鸡鸟` segments as 鸡 | 鸟 and validates
+  clean — and 先生 written where 生 was meant is an ordinary allowed word. The
+  guarantee is vocabulary, not sense, and no amount of tightening the level changes
+  that: a sentence made of right words that means nothing will pass. `data/hsk7.json`
+  does know better (10,970 words, and `鸡鸟` is not among them), so a check along the
+  lines of "the partner repeated a multi-character span the student just invented"
+  is *possible* — but it would fire on real compounds the reference list has never
+  heard of, so it is not obviously worth the false positives.
 - **The published HSK lists contain almost no name characters.** `张` first
   appears at HSK 3 and `王` at HSK 4; below that there is no legal name at all.
   Any feature that asks the model to name something needs to account for that —
