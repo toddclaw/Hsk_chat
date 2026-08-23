@@ -206,10 +206,18 @@ conversation can stay cheap while what you are told about your own sentences is 
 trusting; these calls only happen when you press a button, not every turn. Set it to **Same as
 the chat model** if you would rather it not.
 
+**Check my grammar** is also given the last few turns of the conversation, because a learner
+sentence is often only judgeable against what it answers: 我也是 is fine after a statement and
+odd after a question, and unreadable with neither. Four turns rather than the whole
+conversation — measured against the real model, more context never made it invent faults and
+never cost it the grammar rule, but the transcript is background, and an unbounded one grows
+with every turn for no measured gain. Explaining the *partner's* reply gets no transcript: that
+sentence is known-good and self-contained.
+
 The four prompts behind those buttons are editable in **Advanced → Teaching prompts** —
 translation and grammar-check for your own messages, translation and explanation for the
 partner's. `{text}` is the sentence, `{level}` your level, `{recent}` the words you have just
-been introduced to. Left alone, each keeps tracking the app's own version rather than freezing
+been introduced to, `{context}` the turns leading up to it. Left alone, each keeps tracking the app's own version rather than freezing
 today's wording, the same bargain the system prompt makes.
 
 ## Time chatting
@@ -308,6 +316,39 @@ exchanges live in a scratch array and never enter stored history. Retries are in
 apart from an attempt-count badge, and `finish_reason: "length"` shows as **cut off** —
 truncation and a model choosing to stop look identical in the output and want opposite
 fixes.
+
+## What the validator does not promise
+
+The guarantee is **vocabulary**, and only vocabulary. Every word in a reply is on your list.
+Whether those words add up to a sentence is a different question, and nothing here checks it.
+
+A real exchange at HSK 2:
+
+```
+Partner:  你吃肉。很好。我吃鸡蛋。你喜欢鸡蛋吗？
+Student:  我喜欢吃鸡蛋。我的朋友有鸡鸟。
+Partner:  你朋友有鸡鸟。鸡鸟先生鸡蛋。我吃鸡蛋。你吃鸡蛋吗？
+```
+
+`鸡鸟` is not a word. The student appears to have meant 鸡, chickens. The partner then repeated
+it back and went on to write `鸡鸟先生鸡蛋` — apparently reaching for 生, "produce", and landing
+on 先生, "Mr.".
+
+**The validator found nothing wrong with any of it.** At HSK 2, 鸡 and 鸟 are each legal words,
+so `鸡鸟` segments as 鸡 | 鸟 — two allowed words in a row, indistinguishable from any other two
+allowed words in a row. 先生 is an ordinary HSK 1 word. Zero violations, no retry, no badge.
+
+So on this class of failure the model is unassisted, and model quality is doing all the work.
+Measured on that exact exchange, the cheap default repeated `鸡鸟` back in roughly one reply in
+six; a larger model did not do it at all in six tries, and when it *did* overreach — it tried
+鸭, duck — the validator caught that immediately, because a single out-of-level word is exactly
+what it is built to see.
+
+Two things follow. **A wrong sentence made of right words will reach you**, and the retry
+counter cannot warn you about it. And the teaching buttons are the backstop rather than the
+validator: **Check my grammar** flagged `鸡鸟` correctly, and so did **English explanation** on
+the partner's reply. If conversations start reading strangely, the cheapest first move is a
+better chat model, not a stricter level.
 
 ## Sense validation: an allowed word is not an allowed meaning
 

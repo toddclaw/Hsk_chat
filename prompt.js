@@ -261,6 +261,18 @@
       "Reply with only the translation, no quotes, no other commentary:\n\n" + opts.text;
   }
 
+  /* The turns leading up to the sentence, as the teacher would read them.
+   * Roles are spelled out rather than left as "user"/"assistant": the model is
+   * being asked to take the student's side, and "Student:" says whose sentence
+   * is under the microscope far more plainly than "user:" does. */
+  function contextBlock(turns) {
+    if (!turns || !turns.length) return "";
+    var lines = turns.map(function (t) {
+      return (t.role === "user" ? "Student: " : "Partner: ") + t.text;
+    });
+    return "The conversation so far:\n" + lines.join("\n") + "\n\n";
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -293,7 +305,14 @@
       "from a list, so a wrong character is often a homophone of the right one rather than a " +
       "misunderstanding. And a sentence can be entirely grammatical yet blunt or unidiomatic; " +
       "say which of the two you are looking at instead of calling both an error. Be " +
-      "encouraging and concrete.\n\n" + tail + "The student wrote: " + opts.text;
+      "encouraging and concrete.\n\n" + tail +
+      /* Context goes immediately before the sentence, not up with the level and
+       * the recent words. A learner sentence is often only judgeable against
+       * what it answers -- 我也是 and 很好 are correct or nonsense depending on
+       * the question -- but the thing being checked is still the one line, and
+       * putting the transcript last keeps it read as background rather than as
+       * more material to comment on. */
+      contextBlock(opts.context) + "The student wrote: " + opts.text;
   }
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
