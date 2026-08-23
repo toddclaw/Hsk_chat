@@ -206,10 +206,18 @@ conversation can stay cheap while what you are told about your own sentences is 
 trusting; these calls only happen when you press a button, not every turn. Set it to **Same as
 the chat model** if you would rather it not.
 
+**Check my grammar** is also given the last few turns of the conversation, because a learner
+sentence is often only judgeable against what it answers: 我也是 is fine after a statement and
+odd after a question, and unreadable with neither. Four turns rather than the whole
+conversation — measured against the real model, more context never made it invent faults and
+never cost it the grammar rule, but the transcript is background, and an unbounded one grows
+with every turn for no measured gain. Explaining the *partner's* reply gets no transcript: that
+sentence is known-good and self-contained.
+
 The four prompts behind those buttons are editable in **Advanced → Teaching prompts** —
 translation and grammar-check for your own messages, translation and explanation for the
 partner's. `{text}` is the sentence, `{level}` your level, `{recent}` the words you have just
-been introduced to. Left alone, each keeps tracking the app's own version rather than freezing
+been introduced to, `{context}` the turns leading up to it. Left alone, each keeps tracking the app's own version rather than freezing
 today's wording, the same bargain the system prompt makes.
 
 ## Time chatting
