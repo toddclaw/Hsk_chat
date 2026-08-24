@@ -646,7 +646,7 @@ asked:
 
 ```
 Progress to the next level
-  ████████████████░░░░  87% of HSK 2 — estimated       95% is comfortable reading
+  ████████████████░░░░  87% of HSK 2 you can read — estimated     41% you can use
   to 95%       147 more words, commonest first
   met          34 of 741 new at HSK 2
   used by you  12 written in your own messages
@@ -658,12 +658,21 @@ coverage for adequate comprehension, **98%** for comfortable independent reading
 that is roughly 147 of the 741 new HSK 2 words to reach 95% — not 741 — and pacing already
 offers them commonest-first, so it is working through them in the cheapest possible order.
 
-Three numbers rather than one score, because they mean different things and the gaps between
-them are informative. **Met** is what pacing has taught you. **Used by you** is production,
+Separate figures rather than one blended score, because they mean different things and the
+gaps between them are the informative part. The outer bar is what you can **read**; the inner
+one is what you can **use**, measured the same way over the words you have actually written.
+**Met** is what pacing has taught you. **Used by you** is that same production as a count,
 segmented out of your own messages — it needs no new storage, since every message is already
-saved, and it will always lag the other two: recognition runs ahead of production and the
-gap widens with proficiency. Words you have written yourself count double toward the
-estimate, since using a word is harder than recognising it.
+saved, and it will always lag: recognition runs ahead of production and the gap widens with
+proficiency.
+
+An earlier version instead gave words you had written double weight inside a single score.
+It cannot work, and the way it fails is worth knowing. Weight goes as `1/rank`, so the
+commonest words carry enormous shares — `的` is rank 1 and weighs a full point — and having
+typed the **ten** commonest words was enough to push the sum past the total and pin the bar
+at 100%. Worse, it put the headline on a different scale from the words-to-threshold row
+below it, so the panel could report "100%" and "57 more words to 95%" in the same breath.
+One scale, two honest readings of it.
 
 The percentage is an **estimate** and is labelled as one. `f` is a rank, not a token count,
 so weighting by `1/f` is an assumption about the corpus rather than a measurement of it —

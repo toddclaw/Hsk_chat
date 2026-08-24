@@ -86,6 +86,9 @@ header button{padding:8px 10px; flex:0 0 auto}
 .bar{position:relative; height:10px; border-radius:999px; background:var(--panel2);
      border:1px solid var(--line); overflow:hidden; margin:2px 0 6px}
 .bar>i{display:block; height:100%; background:var(--accent); border-radius:999px}
+/* Production, drawn over the reading fill on the same axis. Green against the
+   accent blue, so the gap between "can read" and "can use" is one glance. */
+.bar>b{position:absolute; left:0; top:0; bottom:0; background:var(--ok); border-radius:999px}
 .bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
 .barnote b{color:var(--ink); font-weight:600}
@@ -741,7 +744,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v47 — 2026-08-24";
+const VERSION   = "v48 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2842,9 +2845,11 @@ function readiness() {
   const baseSet = new Set(S.base.map(e => e.w));
   return {
     next: next,
-    // Reading coverage, and the same estimate with production counted double.
+    /* Two readings of the same scale, never one blended score. Production is
+     * the harder half and always lower; the gap between the bars is the
+     * receptive/productive one and is the informative part. */
     read: HSKPace.coverage(S.nextList, usable),
-    score: HSKPace.coverage(S.nextList, usable, mine),
+    produce: HSKPace.coverage(S.nextList, mine),
     toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
     total: S.nextList.length,
     newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
@@ -2862,14 +2867,20 @@ function renderProgress() {
     if ($("#moveUp")) $("#moveUp").style.display = "none";
     return;
   }
-  const pct = Math.round(r.score * 100);
-  const ready = r.score >= HSKPace.READY_AT;
+  const pct = Math.round(r.read * 100);
+  const use = Math.round(r.produce * 100);
+  const ready = r.read >= HSKPace.READY_AT;
   const mark = Math.round(HSKPace.READY_AT * 100);
+  /* The fill is reading coverage and the tick is the threshold, so the two
+   * agree with the "to 95%" row below by construction -- they are the same
+   * number read two ways. The inner fill is production, on the same axis so
+   * the gap is readable at a glance rather than needing arithmetic. */
   box.innerHTML =
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
+    '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
     '<div class="barnote"><b>' + pct + "%</b> of " + escapeHtml(r.next.label) +
-      " — estimated" + '<span>' + mark + "% is comfortable reading</span></div>" +
+      " you can read — estimated" + '<span>' + use + "% you can use</span></div>" +
     "<table><tr><td>to " + mark + "%</td><td>" +
       (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
         ", commonest first" : "there already") + "</td></tr>" +
@@ -3100,7 +3111,7 @@ function renderSectionNotes() {
    * to -- a row captioned with a meaningless figure is worse than a bare one. */
   const r = readiness();
   $("#secLearningNote").textContent =
-    r ? Math.round(r.score * 100) + "% to " + r.next.label : "";
+    r ? Math.round(r.read * 100) + "% to " + r.next.label : "";
   $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
   $("#secVersionNote").textContent = VERSION.split(" ")[0];
 }
