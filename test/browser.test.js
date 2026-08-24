@@ -218,6 +218,15 @@ return true;
            * is the shape a real answer arrives in: Markdown nobody asked for. */
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] },
+        /* A real learner's worth of typing, not two short turns. The progress
+         * panel measures production by segmenting these, and a two-word
+         * history cannot reach the states where the reading and production
+         * figures could disagree -- which is exactly the bug the coherence
+         * check downstream exists to catch. Common, high-frequency words on
+         * purpose: those carry nearly all the weight. */
+        { id: "44444444-4444-4444-8444-444444444444", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z" },
         { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
           text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
           created_at: "2026-01-01T00:01:00.000Z" },
@@ -235,6 +244,14 @@ return true;
        * Settings sheet when no key is stored, and the wipe checks further down
        * assert on an element inside that sheet, so seeding a key here hides it
        * and breaks a test that has nothing to do with models. */
+      /* Two HSK 2 words introduced by pacing, of which the typed history above
+       * uses exactly one. That makes the never-used row's subtraction
+       * non-empty on both sides -- without it the row is simply absent and any
+       * assertion about it passes without testing anything. */
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "可以", p: "kě yǐ", d: "can; may", seen: 2, from: 2 },
+        { w: "已经", p: "yǐ jīng", d: "already",  seen: 1, from: 2 }
+      ]));
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       /* Two devices' worth of recorded time, so the display has something to
        * sum. Seeded before boot because S reads it once at startup. */
@@ -489,6 +506,114 @@ return true;
     check(after.teach === after.chat + 1,
       "the teaching picker adds the same-as-chat option", JSON.stringify(after));
 
+    /* --------------------------------------------- the model browser
+     *
+     * A few hundred catalogue entries do not fit a <select> on a phone, so
+     * picking and starring happen in a sheet. The thing that can silently
+     * break is the sheet growing its own idea of what is on offer: it must
+     * read the same filters and sort as the dropdowns, not copies. */
+    /* Pin the chat model to something in the seeded catalogue first. The
+     * default id is not in it, and a starred model the catalogue has never
+     * heard of cannot narrow a list built from the catalogue -- the filter
+     * would fall back to unfiltered and the assertions below would be
+     * measuring the fallback rather than the filter. */
+    await exec(`
+      var b = document.querySelector('#modelId');
+      b.value = "big/one"; b.dispatchEvent(new Event("change")); return true;`);
+    await exec(`document.querySelector('#browseChatModel').click(); return true;`);
+    await waitFor("document.querySelector('#modelSheet').classList.contains('open')",
+      "the model browser");
+    await waitFor("document.querySelectorAll('#modelPickList .modelrow').length > 0",
+      "model rows");
+    check(await exec(`
+      return document.querySelectorAll('#modelPickList .modelrow').length;`) >= 2,
+      "the browser lists the cached catalogue");
+
+    // Starring is its own tap target -- it must not change the chat model.
+    const chatBefore = await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`);
+    /* Star the model already in use. fillModels() always carries the current
+     * model into the pickers so a filter can never silently switch what you
+     * are talking to -- so starring any *other* model leaves two entries and
+     * the narrowing below would prove nothing. */
+    await exec(`
+      document.querySelector('#modelPickList .modelrow.on .starbtn').click(); return true;`);
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.favModels")) || []).length;`) === 1,
+      "tapping ★ stars the model");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) === chatBefore,
+      "and does not change which model you are talking to");
+    /* The star sits inside a row that is itself a tap target, so it has to stop
+     * the event. Without that, starring also selects and closes -- which the
+     * model check above cannot see when the starred row is the one already in
+     * use, since selecting it changes nothing. Starring is a batch job; it
+     * stays open on purpose. */
+    check(await exec(`
+      return document.querySelector('#modelSheet').classList.contains('open');`),
+      "and leaves the sheet open, since starring is a batch job");
+    check(await exec(`
+      return document.querySelector('#modelPickList .modelrow.on .starbtn')
+               .classList.contains('on');`),
+      "the star shows as set without reopening the sheet");
+
+    /* Favorites-only has to reach the dropdowns, not just the sheet -- two
+     * lists disagreeing about what is available is the whole failure mode. */
+    const teachBefore = await exec(`
+      return document.querySelector('#teachModel').options.length;`);
+    await exec(`
+      var b = document.querySelector('#favOnly');
+      b.checked = true; b.dispatchEvent(new Event("change")); return true;`);
+    check(await exec(`return document.querySelector('#modelChat').options.length;`) === 1,
+      "Favorites-only narrows the Settings dropdown, not only the sheet",
+      await exec(`return document.querySelector('#modelChat').options.length + " options";`));
+    /* And the teaching picker, which it did not reach at first: the browse
+     * sheet honored favorites for both pickers while this dropdown honored it
+     * for neither, so the two disagreed about what was on offer. "Free models
+     * only" is the one filter that deliberately stops here -- it would hide the
+     * paid models this setting exists to reach. */
+    /* Compared, not counted to a constant: the picker always carries the
+     * teaching model in use and the same-as-chat option on top of whatever
+     * survives the filter, so the absolute number says little. That it went
+     * down is the whole claim. */
+    check(await exec(`
+      return document.querySelector('#teachModel').options.length;`) < teachBefore,
+      "and narrows the teaching picker too, which it did not at first",
+      await exec(`
+        return Array.prototype.map.call(document.querySelector('#teachModel').options,
+          function (o) { return o.textContent; }).join(" | ");`));
+    check(await exec(`
+      return document.querySelectorAll('#modelPickList .modelrow').length;`) === 1,
+      "and the sheet agrees with it");
+
+    /* An empty picker is worse than an unfiltered one. With favorites on and
+     * none set, the filter has to yield rather than leave nothing to choose.
+     * Unstarred through the UI, not by writing localStorage -- S is read once
+     * at boot, so poking storage directly leaves the running app believing the
+     * old value and tests the fallback against a state that never happens. */
+    await exec(`
+      document.querySelector('#modelPickList .modelrow.on .starbtn').click(); return true;`);
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.favModels")) || []).length;`) === 0,
+      "tapping ★ again unstars it");
+    check(await exec(`return document.querySelector('#modelChat').options.length;`) >= 2,
+      "Favorites-only with no favorites falls back rather than emptying the picker",
+      await exec(`return document.querySelector('#modelChat').options.length + " options";`));
+
+    // Choosing closes; this is a picker first and an editor second.
+    await exec(`
+      var b = document.querySelector('#favOnly');
+      b.checked = false; b.dispatchEvent(new Event("change"));
+      var rows = document.querySelectorAll('#modelPickList .modelrow');
+      // Whichever row is not the one already in use, so "it changed" is real.
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) { rows[i].click(); break; }
+      }
+      return true;`);
+    check(!(await exec(`
+      return document.querySelector('#modelSheet').classList.contains('open');`)),
+      "choosing a model closes the sheet");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) !== chatBefore,
+      "and actually changes the chat model");
+
     /* One setting, three controls. Leaving any of them stale would show you a
      * model you are not actually talking to. */
     await exec(`
@@ -674,15 +799,22 @@ return true;
     check(sizes.small >= 13,
       "and never drops below the readable floor", JSON.stringify(sizes));
 
-    /* Copy conversation. The clipboard is not readable from a headless browser,
-     * so capture what copyText hands to it. */
+    /* Copy conversation, now per-conversation in the 💬 sheet rather than one
+     * button in Settings -- there is more than one conversation to copy. The
+     * clipboard is not readable from a headless browser, so capture what
+     * copyText hands to it. */
     const copied = await exec(`
       var got = null;
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: { writeText: function (t) { got = t; return Promise.resolve(); } }
       });
-      document.querySelector('#copyChat').click();
+      document.querySelector('#btnChats').click();
+      var btns = document.querySelectorAll('#chatList .chatrow .cacts button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "Copy") { btns[i].click(); break; }
+      }
+      document.querySelector('#chatX').click();
       return got;`);
     check(/^Partner: 你喜欢吃什么？/m.test(copied || "") || /Partner: /.test(copied || ""),
       "copy produces labelled turns", JSON.stringify(copied));
@@ -766,6 +898,242 @@ return true;
       return document.querySelector('#secConnectionNote').textContent;`)),
       "the collapsed Connection row reports that a key is stored");
 
+    /* ------------------------------------------------ level progress */
+
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the progress panel");
+
+    /* The number that makes the whole feature worth having. A learner at HSK 1
+     * has ticked off 41% of the HSK 2 *list* but can already read about 85% of
+     * HSK 2 *text*, because the lists are frequency-ordered and language is
+     * Zipfian. Asserted as a band, not a constant: the exact figure moves with
+     * ZIPF_EXP and with anything the earlier tests added to the word lists, but
+     * a panel reporting the list share instead would land near 41% and a broken
+     * one would land at 0 or 100. */
+    const prog = await exec(`
+      return document.querySelector('#progress').textContent;`);
+    const pctMatch = /(\d+)% you can read/.exec(prog || "");
+    check(!!pctMatch, "the progress panel reports a percentage of the next level",
+      JSON.stringify((prog || "").slice(0, 160)));
+    /* Both figures are named in words, so the bar's two colors do not have to
+     * be decoded from a key that is not on screen. */
+    const useMatch = /(\d+)% you can use/.exec(prog || "");
+    check(!!useMatch && Number(useMatch[1]) < Number(pctMatch ? pctMatch[1] : 0),
+      "and production is labelled and sits below reading",
+      JSON.stringify((prog || "").slice(0, 160)));
+    const pct = pctMatch ? Number(pctMatch[1]) : -1;
+    check(pct > 70 && pct < 100,
+      `and it is text coverage (~85%), not list share (~41%) -- got ${pct}%`,
+      JSON.stringify((prog || "").slice(0, 160)));
+
+    /* The actionable half: how many words to the threshold. 741 would mean the
+     * whole remaining list; the frequency-weighted answer is a few hundred at
+     * most, and that difference is the point of the feature. */
+    const toGo = /(\d+) more words?, commonest first/.exec(prog || "");
+    check(!!toGo && Number(toGo[1]) > 0 && Number(toGo[1]) < 500,
+      "and names a reachable number of words to the threshold, not the whole list",
+      JSON.stringify((prog || "").slice(0, 200)));
+    check(/used by you/.test(prog || ""),
+      "production is reported separately from exposure",
+      JSON.stringify((prog || "").slice(0, 200)));
+
+    /* Production has no threshold to hit -- the receptive/productive gap widens
+     * with proficiency and not every word becomes productive, so a fixed target
+     * would be wrong at every level. What is actionable is the list, not a
+     * number: words the app taught you that you have never written. Named, not
+     * just counted, because three characters you can put in your next message
+     * is a prompt and "5 unused" is a statistic. The seed has introduced words
+     * and a typed history, so both sides of the subtraction are non-empty. */
+    check(/never used/.test(prog || ""),
+      "the panel names what to do next, not only what has happened",
+      JSON.stringify((prog || "").slice(0, 260)));
+    check(/1 of the 2 you have met/.test(prog || ""),
+      "counting only introduced words the learner has never written",
+      JSON.stringify((prog || "").slice(0, 260)));
+    /* 已经 is the seeded word the history never uses; 可以 is the one it does.
+     * Naming the used one would make the row busywork. */
+    check(/never used[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
+          !/never used[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
+      "and naming the unused word rather than one already written",
+      JSON.stringify((prog || "").slice(0, 260)));
+
+    /* The bug this replaced: the headline was weighted for production and
+     * clamped while the words-to-threshold row was not, so the panel showed
+     * "100%" and "57 more words to 95%" together. They are the same number
+     * read two ways and must never contradict -- checked here rather than only
+     * in pace.test.js because what went wrong was the panel wiring the two
+     * rows to different functions, which the node suite cannot see. */
+    const headline = pct, stillToGo = toGo ? Number(toGo[1]) : -1;
+    check((headline >= 95) === (stillToGo === 0),
+      "the headline and the words-to-threshold row agree with each other",
+      `headline ${headline}%, ${stillToGo} words to go`);
+    check(/you can read/.test(prog || "") && /you can use/.test(prog || ""),
+      "reading and production are shown as two figures on one scale",
+      JSON.stringify((prog || "").slice(0, 200)));
+
+    /* Below the threshold there must be no Move up button: it is a
+     * recommendation, and offering it early would make it meaningless. */
+    check(await exec(`
+      var b = document.querySelector('#moveUp');
+      return b.style.display === "none" || b.offsetParent === null;`),
+      "Move up is hidden until the threshold is reached");
+
+    check(/% to HSK 2/.test(await exec(`
+      return document.querySelector('#secLearningNote').textContent;`)),
+      "the collapsed Learning row carries the number without opening it",
+      await exec(`return document.querySelector('#secLearningNote').textContent;`));
+
+    /* ------------------------------------------------- the level browser */
+
+    /* The first-level problem: the browser was hardcoded to level+1, so there
+     * was no way to see or tick the list you are actually on without dropping
+     * a level to look at it from below. */
+    await exec(`document.querySelector('#btnLevels').click(); return true;`);
+    await waitFor("document.querySelector('#poolSheet').classList.contains('open')",
+      "the level browser");
+    await waitFor("document.querySelectorAll('#poolList .poolrow').length > 0",
+      "the level browser's rows");
+    check(await exec(`
+      return document.querySelector('#poolLevel').options.length;`) === 8,
+      "every level is reachable from the picker");
+    check(await exec(`
+      return Number(document.querySelector('#poolLevel').value);`) === 1,
+      "Browse opens on your own level, which used to be unreachable");
+    /* Grouped rather than one flat scroll, and each heading carries its count.
+     * Browsing your own level, everything is already usable, so the group that
+     * exists is "Already at your level" -- and its rows must have no tick box,
+     * since ticking a word you already have would do nothing. */
+    const groups = await exec(`
+      return Array.prototype.map.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return d.querySelector('summary').textContent.trim(); });`);
+    check(groups.length > 0 && groups.some(g => /Already at your level/.test(g)),
+      "the list is grouped by what you have done with each word",
+      JSON.stringify(groups));
+    check(groups.some(g => /\d/.test(g)),
+      "and every heading carries its own count", JSON.stringify(groups));
+    check(await exec(`
+      return document.querySelectorAll('#poolList details')[0].open;`),
+      "the first non-empty group opens, so the sheet never lands on closed headings");
+    check(await exec(`
+      var d = document.querySelector('#poolList details');
+      return d.querySelectorAll('.poolrow').length > 0 &&
+             d.querySelectorAll('.poolrow input').length === 0;`),
+      "words already at your level have no tick box to ignore");
+    /* Commonest first -- the order they are worth learning in, and the order
+     * pacing already offers them in. 的 outranks everything in the corpus, so
+     * an unsorted or reverse-sorted list cannot start with it. */
+    check(await exec(`
+      var r = document.querySelectorAll('#poolList .poolrow');
+      return r.length ? r[0].querySelector('.w2').textContent : "";`) === "\u7684",
+      "and lists the commonest word first",
+      await exec(`
+        var r = document.querySelectorAll('#poolList .poolrow');
+        return Array.prototype.slice.call(r, 0, 5).map(function (x) {
+          return x.querySelector('.w2').textContent; }).join(" ");`));
+
+    // Switching levels re-fetches and re-renders, including upward.
+    await exec(`
+      var sel = document.querySelector('#poolLevel');
+      sel.value = "3"; sel.dispatchEvent(new Event("change")); return true;`);
+    await waitFor(`document.querySelector('#poolTitle').textContent.indexOf('HSK 3') !== -1`,
+      "the browser switching to HSK 3");
+    check(await exec(`
+      return document.querySelectorAll('#poolList .poolrow').length > 0;`),
+      "a level above the next one can be browsed too");
+    check(await exec(`
+      document.querySelector('#poolX').click();
+      return !document.querySelector('#poolSheet').classList.contains('open');`),
+      "the level browser closes with the sheet ✕");
+
+    /* ------------------------------------------- conversation history */
+
+    /* The seeded history predates conversations entirely -- no conversation_id
+     * anywhere -- so this also checks the migration: it must arrive as one
+     * chat rather than vanishing behind an empty one. */
+    await exec(`document.querySelector('#btnChats').click(); return true;`);
+    await waitFor("document.querySelector('#chatSheet').classList.contains('open')",
+      "the conversations sheet");
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 1,
+      "a legacy history migrates into exactly one conversation",
+      await exec(`return document.querySelector('#chatList').textContent.slice(0, 120);`));
+    check((await exec(`
+      return document.querySelector('#chatList .chatrow .ctitle').textContent;`))
+        .indexOf("\u4f60\u597d") === 0,
+      "titled from the first thing the learner said");
+    check(await exec(`
+      return JSON.parse(localStorage.getItem("hsk1chat.chatId"));`)
+        === "00000000-0000-4000-8000-000000000001",
+      "under the fixed legacy id, not one invented on this device");
+
+    // New chat: empty log, old one still listed and still holding its messages.
+    await exec(`document.querySelector('#newChat').click(); return true;`);
+    check(await exec(`
+      return document.querySelector('#log').querySelector('.hint') !== null;`),
+      "a new chat starts empty");
+    await exec(`document.querySelector('#btnChats').click(); return true;`);
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 2,
+      "and the old one is still in the list");
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow.on').length;`) === 1,
+      "exactly one conversation is marked current");
+
+    // Switching back has to restore the messages, not just the title.
+    await exec(`
+      var rows = document.querySelectorAll('#chatList .chatrow');
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) { rows[i].querySelector('.ctitle').click(); break; }
+      }
+      return true;`);
+    await waitFor("document.querySelector('#log').textContent.indexOf('\u4f60\u597d') !== -1",
+      "the old conversation reopening with its messages");
+    check(true, "switching back restores the conversation's messages");
+
+    /* Deleting leaves a tombstone rather than merely dropping the rows. Without
+     * one, a device that was offline re-pushes its copy and the chat returns. */
+    await exec(`
+      // INSTALL_MOCK does this too, but that runs later, in the sync section.
+      window.confirm = function () { return true; };
+      document.querySelector('#btnChats').click();
+      var rows = document.querySelectorAll('#chatList .chatrow');
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) {
+          var b = rows[i].querySelectorAll('.cacts button');
+          for (var j = 0; j < b.length; j++) if (b[j].textContent === "Delete") { b[j].click(); break; }
+          break;
+        }
+      }
+      return true;`);
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 1,
+      "a deleted conversation leaves the list");
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.chats")) || [])
+        .filter(function (c) { return c.deleted; }).length;`) === 1,
+      "but is kept as a tombstone, so the delete can reach other devices");
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.chats")) || [])
+        .filter(function (c) { return c.deleted; })[0].deleted_at != null;`),
+      "and the tombstone is stamped");
+
+    // Rename is why the title column ships; it must survive a derived retitle.
+    await exec(`
+      window.prompt = function () { return "Ordering food"; };
+      var b = document.querySelectorAll('#chatList .chatrow .cacts button');
+      for (var i = 0; i < b.length; i++) if (b[i].textContent === "Rename") { b[i].click(); break; }
+      return true;`);
+    check(await exec(`
+      return document.querySelector('#chatList .chatrow .ctitle').textContent;`)
+        === "Ordering food",
+      "renaming a conversation sticks");
+    check(await exec(`
+      document.querySelector('#chatX').click();
+      return !document.querySelector('#chatSheet').classList.contains('open');`),
+      "the conversations sheet closes with ✕");
+
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
     /* Settings is a set of collapsed <details> now, and everything below lives
@@ -798,6 +1166,23 @@ return true;
       JSON.stringify(await exec(`
         return document.querySelector('#syncStatus').textContent;`)));
 
+    /* prefsPushedAt has to reach disk, not just memory. In memory it is
+     * undefined on every load, so every load takes the "I have never pushed"
+     * branch and adopts whatever the cloud holds -- overwriting local settings
+     * whenever the cloud is behind, which is exactly the case when you change a
+     * setting and reload before the 2s debounce can push it. Reloading to pick
+     * up a new version is that case.
+     *
+     * Driven by changing a real preference and waiting for the push, rather
+     * than asserting on a key that a passing test might never have caused to be
+     * written. */
+    await exec(`
+      var b = document.querySelector('#showStarters');
+      b.checked = !b.checked; b.dispatchEvent(new Event("change")); return true;`);
+    await waitFor(`localStorage.getItem("hsk1chat.prefsPushedAt") !== null`,
+      "the prefs push being recorded on disk");
+    check(true, "the last prefs push is recorded on disk, so a reload cannot re-adopt a stale cloud copy");
+
     // The feature under test.
     await exec(`window.__t.calls = []; document.querySelector("#syncWipe").click(); return true;`);
     await waitFor("(document.querySelector('#syncWipeNote').textContent || '').length > 0",
@@ -806,7 +1191,8 @@ return true;
     const calls = await exec("return window.__t.calls;");
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
-    const want = ["messages", "prefs", "vocab_extra", "vocab_known", "vocab_learning"];
+    const want = ["conversations", "messages", "prefs",
+                  "vocab_extra", "vocab_known", "vocab_learning"];
 
     check(want.every(t => tables.includes(t)),
       "every user table is deleted", "deleted: [" + tables + "]");
@@ -846,7 +1232,7 @@ return true;
      * a silent one: the box clears, the list does not change, and the Add
      * button looks broken. 你 is HSK 1, so it is covered at every level the app
      * offers. Asserted on the note, not on the list, because "nothing was
-     * added" is the correct behaviour -- the bug was never saying so. */
+     * added" is the correct behavior -- the bug was never saying so. */
     await exec(`
       document.querySelector('#addWord').value = "你";
       document.querySelector('#addWordBtn').click();

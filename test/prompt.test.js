@@ -248,8 +248,37 @@ check(/if the Chinese is in fact correct/.test(P.translate(mine)),
 check(/may well be wrong/.test(P.explain(mine)), "own: explain says it may be wrong");
 check(/do not manufacture a problem/.test(P.explain(mine)),
   "own: a correct sentence is allowed to be correct");
-check(/corrected version/.test(P.explain(mine)) && /Name the rule/.test(P.explain(mine)),
+check(/corrected sentence/.test(P.explain(mine)) && /Name the\s+rule/.test(P.explain(mine)),
   "own: explain asks for a correction and the rule behind it");
+/* Verdict first, and permission to stop there. The old shape asked for four
+ * numbered paragraphs whatever the answer, so a correct sentence still got
+ * four -- which reads as though something must be wrong with it -- and the
+ * first of them re-translated the sentence, duplicating the button sitting
+ * next to this one. */
+/* The three verdicts are given as literal lines to emit, not described. When
+ * they were described ("say which of three it is: natural at their level...")
+ * the model echoed the description back verbatim, third person and all, so the
+ * learner was told "natural Chinese at their level" -- a note about them,
+ * addressed to somebody else. */
+for (const verdict of ["Natural.", "Understandable, but not how a native speaker would say it.",
+                       "Not correct."]) {
+  check(P.explain(mine).includes(verdict),
+    `own: the verdict "${verdict}" is quoted, not described`);
+}
+check(!/at their level; /.test(P.explain(mine)),
+  "own: no third-person verdict wording for the model to echo back");
+check(/Start with exactly one of these three lines/.test(P.explain(mine)),
+  "own: the verdict comes first, not after a translation");
+check(/stop immediately/.test(P.explain(mine)),
+  "own: a correct sentence is allowed a one-line answer");
+check(/Judge idiom, not only grammar/.test(P.explain(mine)),
+  "own: the middle verdict is about idiom, or it never fires");
+check(!/What it actually says in English/.test(P.explain(mine)),
+  "own: the grammar check does not re-translate -- that is the other button");
+check(!/numbered 1 to 4/.test(P.explain(mine)),
+  "own: no fixed four-part shape to pad out");
+check(/numbered 1 to 4/.test(P.explain(reply)),
+  "reply: the explanation keeps its four-part shape");
 check(/homophone/.test(P.explain(mine)),
   "own: explain knows wrong characters come from pinyin input");
 
@@ -260,7 +289,7 @@ check(/homophone/.test(P.explain(mine)),
 for (const p of [P.explain(mine), P.explain(reply)]) {
   check(/No headings, no bullet lists, no bold, no emoji/.test(p),
     "explain names the decoration it does not want");
-  check(/Stop when the fourth is done/.test(p),
+  check(/Stop when the fourth is done|stop immediately/.test(p),
     "and tells it when to stop rather than only to be brief");
 }
 

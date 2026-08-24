@@ -37,6 +37,41 @@ create table if not exists public.messages (
 );
 create index if not exists messages_user_created_idx on public.messages (user_id, created_at);
 
+-- Conversations. One row per chat; messages point at it via
+-- messages.conversation_id.
+--
+-- deleted_at is a TOMBSTONE and is the reason this table exists at all rather
+-- than the grouping living on messages alone. Deleting a chat has to be
+-- expressible to a device that was offline when it happened: hard-deleting the
+-- message rows says nothing, so that device re-pushes its local copy on the
+-- next sync and the chat comes back. A tombstone syncs, and every device
+-- honours it. Deletion is monotonic in the merge -- once set it never unsets,
+-- whatever timestamps the other side carries.
+--
+-- title is nullable and derived from the first message when a chat is created.
+-- It is here from the start deliberately: adding a column later means whoever
+-- runs this project applying SQL by hand again, which is the expensive kind of
+-- change. UI-only additions are not.
+
+create table if not exists public.conversations (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create index if not exists conversations_user_updated_idx
+  on public.conversations (user_id, updated_at desc);
+
+-- Nullable on purpose: rows written before conversation history existed have
+-- no conversation, and the app maps NULL to one fixed legacy conversation id
+-- rather than inventing one per device -- two devices generating their own
+-- would split a single old history into two chats.
+alter table public.messages add column if not exists conversation_id uuid;
+create index if not exists messages_conversation_idx
+  on public.messages (user_id, conversation_id, created_at);
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.
@@ -83,11 +118,16 @@ create table if not exists public.prefs (
   updated_at timestamptz not null default now()
 );
 
+alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.vocab_extra enable row level security;
 alter table public.vocab_learning enable row level security;
 alter table public.vocab_known enable row level security;
 alter table public.prefs enable row level security;
+
+drop policy if exists "own rows" on public.conversations;
+create policy "own rows" on public.conversations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "own rows" on public.messages;
 create policy "own rows" on public.messages

@@ -4,6 +4,12 @@ Notes for working on this app: how to run it, and the things that have already
 cost someone an afternoon. README.md covers what the app *is* and how to set up
 your own Supabase project — this file is about working on the code.
 
+**RESEARCH.md** covers *why the pedagogical constants are what they are* — the
+coverage thresholds, the sighting count, the frequency weighting — with
+citations, the measurements behind them, and an explicit list of where the
+evidence is thin. Change a number in `pace.js` and that is the file to update,
+and the one to check first for whether the number was arbitrary or argued.
+
 Not published to the site (`.github/publish-files` is an allowlist, and this
 file is deliberately not on it).
 
@@ -169,6 +175,33 @@ Rules of thumb this leaves:
 - Temperature is not zero in normal use, so a single sample proves nothing in
   either direction.
 
+### Worked example: raising PROMOTE_AT from 3 to 6
+
+The change that turns "seen three times" into "seen six times" looks like a display constant
+and is not. `HSKPace.isNew()` also picks the `reuse` list that goes into the system prompt
+(`请多用：…`), so the threshold is how long the partner keeps working a word back into the
+conversation. Pressing harder on reuse is exactly the kind of prompt edit the section above
+says reads as obviously-correct and sometimes measures backwards.
+
+Measured on `qwen3-30b-a3b`, 60 replies per arm, HSK 1, ten introduced words with sightings
+spread 1–5 (the spread is the experiment: at 3 the 3s/4s/5s have dropped out of the reuse
+list, at 6 they have not):
+
+| | out-of-level | chars/reply | reuse words used per reply |
+| --- | --- | --- | --- |
+| `PROMOTE_AT = 3` | 14/60 | 16 | 0.05 |
+| `PROMOTE_AT = 6` | 16/60 | 17 | **0.29** |
+
+About six times the reuse for no measurable cost. The out-of-level difference is two replies
+in sixty — not significant, and not something sixty samples could resolve either way if it
+were real.
+
+**The first run of this measured something else entirely.** The seed sentences included
+`我叫王明`, and `王明` was the most common violation in *both* arms — the HSK lists contain
+almost no name characters, and `王` is HSK 4 (see [The validator](#the-validator)). It added
+noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
+must be namefree, or the thing being measured is the name.
+
 ### A cheaper model is not a cheaper conversation
 
 Per-token price is the least important of the three things that set what a reply
@@ -208,6 +241,68 @@ editing it:
 - **Bold has to be consumed before italic, and `***triple***` before both**, or
   the tags come out interleaved rather than nested (`<strong><em>x</strong></em>`)
   and the DOM quietly rewrites them into something else.
+
+## Level readiness
+
+- **List share and text share are very different numbers, and only one of them is the
+  answer.** The wordlists are cumulative and frequency-ordered, so at HSK 1 you have 41% of
+  the HSK 2 *list* and about 85% of HSK 2 *text*. Anything that reports progress as a word
+  count will read as "you know almost nothing" to someone who can already follow most of the
+  level. `HSKPace.coverage()` weights by `1/f` for this reason; `test/pace.test.js` asserts
+  the two numbers stay far apart, so a regression to counting words fails rather than just
+  looking pessimistic.
+- **Never put a thumb on a weighted score, and never let two rows of the same panel run on
+  different scales.** The headline once weighted words the learner had written by 2 and
+  clamped the result, while `toTarget()` below it did not. Because weight goes as `1/rank`,
+  typing the *ten* commonest words was enough to saturate the bar — it read "100%" next to
+  "57 more words to 95%". Reading and production are now the same `coverage()` over two
+  different word sets. `test/pace.test.js` sweeps learner states asserting the headline and
+  the countdown never disagree, and the browser suite checks the same thing through the
+  panel, since what actually broke was the panel wiring two rows to two functions.
+- **The browser suite's seeded history has to survive to reach the progress checks.** The
+  sync-wipe test clears the conversation, and production is measured by segmenting it — so
+  progress assertions placed after the wipe run against an empty history, cannot reach the
+  states where the figures could disagree, and pass against the very bug they were written
+  for. They sit before the wipe for that reason, and the seed carries a full sentence of
+  common words rather than two short turns.
+- **The reasoning behind these numbers is in RESEARCH.md, not here.** This section is the
+  operational half — what breaks and how. Why 95% rather than 90%, why six sightings rather
+  than three or ten, and how much of that rests on a single regression with 66 participants,
+  all live there.
+- **Do not invent a threshold for production.** Reading has 95%/98% because unknown-word
+  density and comprehension have a testable relationship. Production has no equivalent: the
+  gap from reading widens with proficiency and not every word becomes productive, so a fixed
+  target is wrong at every level. The actionable form is the list of introduced words never
+  written (`S.learning` minus `producedWords()`), not a gauge — and moving up is not gated
+  on it.
+- **`S.learning` rows carry no `f`.** `settlePace()` stores `w/p/d/seen/from` only, so
+  sorting them by `e.f` compiles, runs, and silently does nothing because every value is
+  `undefined`. Look frequency up through `S.nextList` instead.
+- **Seed the state an assertion needs, or it passes without testing anything.** The
+  never-used row only renders when there are introduced words *and* a typed history; with
+  the old two-turn seed both sides of the subtraction were empty, the row never appeared,
+  and a both-or-neither check passed vacuously. Same failure as the progress checks sitting
+  after the sync wipe — twice now, in the same file.
+- **`f` is a rank, not a token count.** Weighting by `1/f` is a Zipf assumption about the
+  corpus, not a measurement of it. `ZIPF_EXP` in `pace.js` is the calibration knob and the
+  percentage is labelled "estimated" in the UI. The word counts shown underneath it are
+  exact — that is half of why both are on screen.
+- **`toTarget()` has to stop when the weight stops rising.** Words the corpus never saw carry
+  `f = 999999` and weigh zero, so a target that cannot be reached would otherwise walk to the
+  end of the list and hand back a count of words that buy no coverage at all.
+- **`S.pool` is not the level.** `buildPool()` strips out everything already usable, which is
+  exactly what readiness needs in its *denominator*. `S.nextList` keeps the unfiltered list
+  for that; using `S.pool` for coverage silently computes a fraction of the wrong total.
+- **Do not put `S.base.some()` inside a filter over a wordlist.** At HSK 6 → 7–9 that is
+  5364 × 10970 comparisons and the sheet visibly stalls opening. Build a `Set` first.
+- **The level browser reaches every level, and that is the point.** It was hardcoded to
+  `S.level + 1`, which left no way to review the list you are on without dropping a level to
+  see it from below. `levelCache` holds each fetched list, since the picker would otherwise
+  re-fetch several thousand entries on every change.
+- **`renderLearning()` filters by `e.from > S.level` rather than deleting.** Once you move
+  up, words introduced from the level you moved into are simply part of your level; leaving
+  them listed as "from HSK 2" turns a working set into an archive that grows on every
+  advance. Filtering keeps the sighting counts and makes dropping back down restore the rows.
 
 ## Releasing and previews
 
@@ -296,6 +391,44 @@ Project setup lives in README.md. What is easy to get wrong:
   length, the tries, the Anki fields and the system prompt. `signInForSync()`
   commits first for that reason. The key is additionally stored on every
   keystroke, because it is the one field that cannot be retyped from memory.
+- **Deleting anything synced needs a tombstone, not a delete.** The offline device still
+  holds its copy and re-pushes it. `conversations.deleted_at` is that tombstone, and
+  `mergeConversations()` treats deletion as monotonic — a tombstone wins from either side
+  regardless of `updated_at`, because the offline device is exactly the one likely to carry a
+  *later* one. (`clearHistory` has always had a mild version of this bug and still does; with
+  one conversation it is rare enough to have gone unnoticed.)
+- **`S.history` is the array inside `S.chatMsgs[S.chatId]`, not a copy.** Mutations need no
+  bookkeeping; reassignments do, and `persist()` re-points the map for all three of them. If
+  you add a fourth, call `persist()`.
+- **Migrate on content, never on a "have I run yet" flag.** Boot creates an empty placeholder
+  chat for a first run, which writes `chatMsgs` — so a flag or an existence check declares
+  the migration done before the legacy history has been looked at, and it disappears behind
+  an empty conversation. `migrateChats()` asks whether any conversation holds a message.
+- **The Supabase project may not have had the migration run.** Whoever deployed it is not
+  necessarily whoever is using it, so a missing table or column degrades rather than throws:
+  `conversation_id` is stripped and messages still push. Detection matches error *codes*
+  (`PGRST205`, `42P01`, `PGRST204`, `42703`) — the messages are localized and change.
+- **`prefsPushedAt` must persist, or every reload adopts the cloud's settings.** It gates
+  `applyPrefsSnapshot` with "is the remote newer than my last push". Held in memory only it
+  was `undefined` on every load, so every load took the never-pushed branch and overwrote
+  local settings — invisible while the cloud is current, and destructive exactly when it is
+  behind, which is when you changed a setting and reloaded before the 2s debounce pushed it.
+  Reloading to pick up a new version is that case. This shipped broken and was reported as
+  "the upgrade lost my model, reply length and tries".
+- **`store.set` reports failure now; it used to swallow it.** A full quota meant every write
+  after the overflowing one vanished with no error, the app looking fine until the next
+  reload. Anything relying on a `try` around `store.set` was dead code — the `catch` was
+  inside.
+- **Do not store the conversation twice.** `persist()` wrote `K.history` *and*
+  `K.chatMsgs[S.chatId]`, the same turns in both, doubling the quota needed by the one
+  feature here that grows without bound. `K.history` is now read once, by `migrateChats()`,
+  and never written.
+- **A private window is a different device, and it reads as data loss.** Sync state and the
+  Supabase session both live in `localStorage`, which is partitioned per browsing context —
+  so the same browser in a normal window has sync off and no session, shows an empty app,
+  and looks like it lost everything. Safari additionally keeps private-mode `localStorage`
+  in memory and discards it when the session ends, so a private window is not a safe only
+  copy. Nothing to fix in code; the Sync section says so.
 - **Free-tier projects pause after 7 days without database *activity*.** Dashboard
   visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
   real row every 3 days; it needs the `SUPABASE_URL` and

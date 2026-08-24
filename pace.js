@@ -12,7 +12,15 @@
   var DEFAULT_RATE = 45;   // characters of known text per new word
   var CREDIT_CAP = 3;      // so a long gap cannot dump six new words at once
   var SLATE = 3;           // candidates offered per turn
-  var PROMOTE_AT = 3;      // sightings before a word stops being new
+  /* Sightings before a word stops being new. Not only a label: isNew() also
+   * picks the `reuse` list that goes into the system prompt, so this is how
+   * long the partner keeps working a word back into the conversation.
+   *
+   * 6, not 3. Incidental acquisition needs roughly 8-10 encounters to be
+   * reliable, and most semantic gain lands between 3 and 7 -- at 3 the app was
+   * calling a word learned at the bottom of the range. Measured against a real
+   * model before shipping; the numbers are in DEVELOPING.md. */
+  var PROMOTE_AT = 6;
   var FORCE_AFTER = 2;     // declined offers before the word is required
 
   /* Asking politely stops working with some models: they read "use one if it
@@ -81,10 +89,87 @@
 
   function isNew(entry) { return (entry.seen || 0) < PROMOTE_AT; }
 
+  /* ------------------------------------------------------ level readiness
+   *
+   * "How far am I from the next level" has two answers and they are very far
+   * apart. HSK 1 is 520 words and HSK 2 is 1261, so a learner at HSK 1 has met
+   * 41% of the HSK 2 *list* -- but because the lists are frequency-ordered and
+   * language is Zipfian, those 520 words already account for about 85% of the
+   * *text* at HSK 2. Counting words answers a question nobody is asking;
+   * counting reading is what tells you whether to move up.
+   *
+   * A word's share of running text goes as 1/rank, so weight is 1/f rather
+   * than 1. The published thresholds this is measured against: 95% coverage
+   * for adequate comprehension, 98% for comfortable independent reading.
+   */
+
+  /* The calibration knob, and it needs one: `f` is a rank, not a token count,
+   * so the curve is an assumption about the corpus rather than a measurement
+   * of it. 1 is plain Zipf. Raise it to weight the commonest words more
+   * heavily, lower it to flatten the curve toward counting words equally. */
+  var ZIPF_EXP = 1;
+  var UNRANKED = 999999;   // the wordlists' "corpus never saw this" sentinel
+
+  function weightOf(entry) {
+    var f = (entry && entry.f) || UNRANKED;
+    return f >= UNRANKED ? 0 : 1 / Math.pow(f, ZIPF_EXP);
+  }
+
+  var asSet = function (v) { return v instanceof Set ? v : new Set(v || []); };
+
+  /* Share of a level's running text a given set of words covers, 0..1.
+   *
+   * One scale, no bonuses. An earlier version doubled the weight of words the
+   * learner had written themselves, to make production count for more -- it
+   * cannot work, and the failure is instructive. Weight goes as 1/rank, so the
+   * commonest words carry enormous shares (的 is rank 1 and weighs 1.0); after
+   * doubling, having typed the ten commonest words was enough to push the sum
+   * past the total and pin the bar at 100%. It also put the headline on a
+   * different scale from toTarget() below, so the panel could report 100% and
+   * "57 more words to 95%" at the same time.
+   *
+   * Production is measured by passing the produced words as `known` instead --
+   * same function, same scale, a second honest number rather than a thumb on
+   * the first one. */
+  function coverage(entries, known) {
+    var have = asSet(known);
+    var total = 0, got = 0;
+    (entries || []).forEach(function (e) {
+      var w = weightOf(e);
+      total += w;
+      if (have.has(e.w)) got += w;
+    });
+    return total ? got / total : 0;
+  }
+
+  /* How many more words, commonest first, to reach `target` coverage. This is
+   * the actionable number: at HSK 1 it is 147 of the 741 new HSK 2 words to
+   * reach 95%, not 741. Returns 0 when already there. */
+  function toTarget(entries, known, target) {
+    var have = asSet(known);
+    var total = 0, got = 0, missing = [];
+    (entries || []).forEach(function (e) {
+      var w = weightOf(e);
+      total += w;
+      if (have.has(e.w)) got += w; else missing.push({ w: w, f: (e.f || UNRANKED) });
+    });
+    if (!total) return 0;
+    missing.sort(function (a, b) { return a.f - b.f; });
+    var need = (target || 0.95) * total, n = 0;
+    /* Unranked words weigh nothing, so once they are all that is left the sum
+     * cannot rise and this would spin to the end of the list handing back a
+     * count that buys no coverage at all. Stop when progress stops. */
+    while (got < need && n < missing.length && missing[n].w > 0) { got += missing[n].w; n++; }
+    return n;
+  }
+
   var api = {
     DEFAULT_RATE: DEFAULT_RATE, CREDIT_CAP: CREDIT_CAP, SLATE: SLATE, PROMOTE_AT: PROMOTE_AT,
     FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
-    buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew
+    buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
+    ZIPF_EXP: ZIPF_EXP,
+    READY_AT: 0.95,      // the published "adequate comprehension" threshold
+    coverage: coverage, toTarget: toTarget
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPace = api;

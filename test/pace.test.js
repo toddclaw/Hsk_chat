@@ -97,8 +97,94 @@ check(!skipBoth.includes("让") && !skipBoth.includes("但"),
   skipBoth.join(" "));
 
 // --- promotion --------------------------------------------------------------
-check(P.isNew({ seen: 0 }) && P.isNew({ seen: 2 }) && !P.isNew({ seen: 3 }),
+check(P.isNew({ seen: 0 }) && P.isNew({ seen: P.PROMOTE_AT - 1 }) && !P.isNew({ seen: P.PROMOTE_AT }),
   `new until ${P.PROMOTE_AT} sightings`);
+
+
+/* ------------------------------------------------------- level readiness */
+
+/* The whole point of weighting by 1/f: the list share and the text share are
+ * very different numbers, and only the second one answers "am I ready". Built
+ * from the real wordlists rather than a fixture, because the gap between them
+ * is a property of the shipped data -- a fixture could show the arithmetic
+ * working while the data it runs on had quietly changed shape. */
+const h1 = load(1), h2 = load(2);
+const h1w = h1.map(e => e.w);
+
+const cov = P.coverage(h2, h1w);
+check(cov > 0.80 && cov < 0.90,
+  `HSK 1 covers ~85% of HSK 2 text (got ${(cov * 100).toFixed(1)}%)`);
+check(h1.length / h2.length < 0.45,
+  "while covering under 45% of the HSK 2 list -- the two are not the same question");
+check(cov > h1.length / h2.length + 0.3,
+  "and text coverage runs far ahead of list coverage");
+
+check(P.coverage(h2, h2.map(e => e.w)) === 1, "knowing every word is full coverage");
+check(P.coverage(h2, []) === 0, "knowing none is zero");
+check(P.coverage([], ["x"]) === 0, "an empty level does not divide by zero");
+
+const need = P.toTarget(h2, h1w, 0.95);
+check(need > 100 && need < 220,
+  `~147 words to 95%, not 741 (got ${need})`);
+check(P.toTarget(h2, h1w, 0.98) > need, "98% costs more words than 95%");
+check(P.toTarget(h2, h2.map(e => e.w), 0.95) === 0, "already past target needs nothing");
+
+/* Unranked words carry no weight, so a target that cannot be reached must stop
+ * rather than hand back the whole remaining list as if it would help. */
+const unranked = [{ w: "a", f: 1 }, { w: "b", f: 999999 }, { w: "c" }];
+check(P.toTarget(unranked, ["a"], 0.99) === 0,
+  "words the corpus never saw are never counted toward a target");
+
+/* Production is a second reading of the same scale, not a bonus on the first.
+ * Words you have written are a subset of words you can read, so it can only be
+ * lower -- that gap is the receptive/productive one, and showing it is the
+ * point. */
+const readCov = P.coverage(h2, h1w);
+const useCov = P.coverage(h2, h1w.slice(0, 50));
+check(useCov < readCov, "production coverage sits below reading coverage");
+check(useCov >= 0 && readCov <= 1, "both stay on the same 0..1 scale");
+
+/* The bug this replaced: the headline was weighted and clamped while
+ * toTarget() was not, so the panel could show 100% and "57 more words to 95%"
+ * in the same breath. They have to agree at the threshold, whatever the
+ * learner knows. Checked across a sweep rather than one state, since the
+ * disagreement only showed up once enough common words were produced. */
+let incoherent = 0;
+for (let n = 0; n <= 400; n += 40) {
+  const known = h1w.concat(P.buildPool(h1, h2).slice(0, n).map(e => e.w));
+  const atOrPast = P.coverage(h2, known) >= P.READY_AT;
+  const nothingToGo = P.toTarget(h2, known, P.READY_AT) === 0;
+  if (atOrPast !== nothingToGo) incoherent++;
+}
+check(incoherent === 0,
+  "the headline and the words-to-threshold count never contradict each other",
+  `${incoherent} states disagreed`);
+
+check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
+
+/* ------------------------------------------------ documented figures ------
+ *
+ * README.md and RESEARCH.md both reason in concrete numbers -- 520 words at
+ * HSK 1, 741 new at HSK 2, ~85% coverage, ~147 words to the threshold -- and
+ * RESEARCH.md is published for people to check the argument against. Prose
+ * drifts from data silently: the README's counts were already stale by a dozen
+ * words before anyone noticed. Pin them.
+ */
+const SIZES = [520, 1261, 2211, 3182, 4241, 5364, 10970];
+SIZES.forEach((n, i) => {
+  check(load(i + 1).length === n,
+    `HSK ${i + 1} ships ${n} entries, as the docs say`,
+    `actually ${load(i + 1).length}`);
+});
+check(h2.length - h1.length === 741,
+  "741 new words between HSK 1 and HSK 2, as RESEARCH.md states",
+  `actually ${h2.length - h1.length}`);
+check(Math.round(P.coverage(h2, h1w) * 100) === 85,
+  "HSK 1 covers 85% of HSK 2 text, the figure RESEARCH.md argues from",
+  `actually ${Math.round(P.coverage(h2, h1w) * 100)}%`);
+check(P.toTarget(h2, h1w, 0.95) === 147,
+  "and 147 words reach the 95% mark, the number the panel shows a beginner",
+  `actually ${P.toTarget(h2, h1w, 0.95)}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
