@@ -163,5 +163,73 @@ check(declared.every(t => listed.includes(t)) && listed.every(t => declared.incl
 check(listed.includes("messages") && listed.includes("prefs"),
   "USER_TABLES covers the conversation and the preferences row, not just vocabulary");
 
+/* ---------------------------------------------------------- conversations */
+
+const A = { id: "a", title: "chat A", created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z", deleted: false };
+
+check(Sync.conversationToRow(A, "u1").user_id === "u1" &&
+      Sync.conversationToRow(A, "u1").deleted_at === null,
+  "a live conversation carries no tombstone");
+check(Sync.conversationToRow({ ...A, deleted: true }, "u1").deleted_at !== null,
+  "a deleted one does");
+check(Sync.conversationToRow(null, "u1") === null, "a conversation needs an id");
+
+// Recency decides ordinary fields.
+const renamed = Sync.mergeConversations([A], [{
+  id: "a", title: "renamed", created_at: A.created_at,
+  updated_at: "2026-01-02T00:00:00Z", deleted_at: null, user_id: "u1"
+}]);
+check(renamed.length === 1 && renamed[0].title === "renamed",
+  "a newer remote rename wins");
+
+/* Deletion is monotonic, and this is the case the tombstone exists for: the
+ * other device was offline when the chat was deleted, kept chatting in it, and
+ * therefore carries a LATER updated_at. Resolving by recency alone would
+ * resurrect it -- on every device, every sync, with no way to make a delete
+ * stick. */
+const undead = Sync.mergeConversations(
+  [{ ...A, updated_at: "2026-06-01T00:00:00Z" }],                       // local, newer, alive
+  [{ id: "a", title: "chat A", created_at: A.created_at,
+     updated_at: "2026-01-02T00:00:00Z", deleted_at: "2026-01-02T00:00:00Z" }]);
+check(undead[0].deleted === true,
+  "a remote tombstone survives a newer local copy -- a delete cannot be undone by chatting");
+const undead2 = Sync.mergeConversations(
+  [{ ...A, deleted: true, deleted_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "a", title: "chat A", created_at: A.created_at,
+     updated_at: "2026-06-01T00:00:00Z", deleted_at: null }]);
+check(undead2[0].deleted === true, "and the same the other way round");
+
+// Merging must not write through to the caller's own objects.
+const mine = { ...A };
+Sync.mergeConversations([mine], [{ id: "a", title: "x", created_at: A.created_at,
+  updated_at: "2026-09-09T00:00:00Z", deleted_at: "2026-09-09T00:00:00Z" }]);
+check(mine.deleted === false && mine.title === "chat A",
+  "mergeConversations copies rather than mutating what it was given");
+
+check(Sync.mergeConversations([], [])
+  .concat(Sync.mergeConversations(null, null)).length === 0,
+  "empty in, empty out");
+const order = Sync.mergeConversations([
+  { id: "old", updated_at: "2026-01-01T00:00:00Z" },
+  { id: "new", updated_at: "2026-05-01T00:00:00Z" }], []);
+check(order[0].id === "new", "newest first, which is the order the list shows");
+check(Sync.visibleConversations([{ id: "a" }, { id: "b", deleted: true }]).length === 1,
+  "tombstones are hidden from the list but kept in the data");
+
+/* Messages carry their conversation, and anything written before this feature
+ * existed maps to one fixed id -- not one invented per device, which would
+ * split a single old history into a chat per device. */
+const convTurn = { id: "m1", role: "user", text: "\u4f60\u597d", created_at: "2026-01-01T00:00:00Z" };
+check(Sync.messageToRow(convTurn, "u1", "c9").conversation_id === "c9",
+  "a message row carries its conversation");
+check(Sync.messageToRow(convTurn, "u1").conversation_id === Sync.LEGACY_ID,
+  "and falls back to the fixed legacy id, never to a fresh one");
+check(Sync.rowToMessage({ id: "m1", role: "user", text: "x", created_at: "t" }).cid
+        === Sync.LEGACY_ID,
+  "a row with no conversation_id reads back as the legacy conversation");
+check(/^[0-9a-f-]{36}$/.test(Sync.LEGACY_ID),
+  "the legacy id is a real uuid, since the column is typed");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

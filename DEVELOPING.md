@@ -391,6 +391,23 @@ Project setup lives in README.md. What is easy to get wrong:
   length, the tries, the Anki fields and the system prompt. `signInForSync()`
   commits first for that reason. The key is additionally stored on every
   keystroke, because it is the one field that cannot be retyped from memory.
+- **Deleting anything synced needs a tombstone, not a delete.** The offline device still
+  holds its copy and re-pushes it. `conversations.deleted_at` is that tombstone, and
+  `mergeConversations()` treats deletion as monotonic — a tombstone wins from either side
+  regardless of `updated_at`, because the offline device is exactly the one likely to carry a
+  *later* one. (`clearHistory` has always had a mild version of this bug and still does; with
+  one conversation it is rare enough to have gone unnoticed.)
+- **`S.history` is the array inside `S.chatMsgs[S.chatId]`, not a copy.** Mutations need no
+  bookkeeping; reassignments do, and `persist()` re-points the map for all three of them. If
+  you add a fourth, call `persist()`.
+- **Migrate on content, never on a "have I run yet" flag.** Boot creates an empty placeholder
+  chat for a first run, which writes `chatMsgs` — so a flag or an existence check declares
+  the migration done before the legacy history has been looked at, and it disappears behind
+  an empty conversation. `migrateChats()` asks whether any conversation holds a message.
+- **The Supabase project may not have had the migration run.** Whoever deployed it is not
+  necessarily whoever is using it, so a missing table or column degrades rather than throws:
+  `conversation_id` is stripped and messages still push. Detection matches error *codes*
+  (`PGRST205`, `42P01`, `PGRST204`, `42703`) — the messages are localised and change.
 - **A private window is a different device, and it reads as data loss.** Sync state and the
   Supabase session both live in `localStorage`, which is partitioned per browsing context —
   so the same browser in a normal window has sync off and no session, shows an empty app,

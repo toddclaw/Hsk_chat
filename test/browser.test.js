@@ -782,15 +782,22 @@ return true;
     check(sizes.small >= 13,
       "and never drops below the readable floor", JSON.stringify(sizes));
 
-    /* Copy conversation. The clipboard is not readable from a headless browser,
-     * so capture what copyText hands to it. */
+    /* Copy conversation, now per-conversation in the 💬 sheet rather than one
+     * button in Settings -- there is more than one conversation to copy. The
+     * clipboard is not readable from a headless browser, so capture what
+     * copyText hands to it. */
     const copied = await exec(`
       var got = null;
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: { writeText: function (t) { got = t; return Promise.resolve(); } }
       });
-      document.querySelector('#copyChat').click();
+      document.querySelector('#btnChats').click();
+      var btns = document.querySelectorAll('#chatList .chatrow .cacts button');
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].textContent === "Copy") { btns[i].click(); break; }
+      }
+      document.querySelector('#chatX').click();
       return got;`);
     check(/^Partner: 你喜欢吃什么？/m.test(copied || "") || /Partner: /.test(copied || ""),
       "copy produces labelled turns", JSON.stringify(copied));
@@ -1023,6 +1030,93 @@ return true;
       return !document.querySelector('#poolSheet').classList.contains('open');`),
       "the level browser closes with the sheet ✕");
 
+    /* ------------------------------------------- conversation history */
+
+    /* The seeded history predates conversations entirely -- no conversation_id
+     * anywhere -- so this also checks the migration: it must arrive as one
+     * chat rather than vanishing behind an empty one. */
+    await exec(`document.querySelector('#btnChats').click(); return true;`);
+    await waitFor("document.querySelector('#chatSheet').classList.contains('open')",
+      "the conversations sheet");
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 1,
+      "a legacy history migrates into exactly one conversation",
+      await exec(`return document.querySelector('#chatList').textContent.slice(0, 120);`));
+    check((await exec(`
+      return document.querySelector('#chatList .chatrow .ctitle').textContent;`))
+        .indexOf("\u4f60\u597d") === 0,
+      "titled from the first thing the learner said");
+    check(await exec(`
+      return JSON.parse(localStorage.getItem("hsk1chat.chatId"));`)
+        === "00000000-0000-4000-8000-000000000001",
+      "under the fixed legacy id, not one invented on this device");
+
+    // New chat: empty log, old one still listed and still holding its messages.
+    await exec(`document.querySelector('#newChat').click(); return true;`);
+    check(await exec(`
+      return document.querySelector('#log').querySelector('.hint') !== null;`),
+      "a new chat starts empty");
+    await exec(`document.querySelector('#btnChats').click(); return true;`);
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 2,
+      "and the old one is still in the list");
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow.on').length;`) === 1,
+      "exactly one conversation is marked current");
+
+    // Switching back has to restore the messages, not just the title.
+    await exec(`
+      var rows = document.querySelectorAll('#chatList .chatrow');
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) { rows[i].querySelector('.ctitle').click(); break; }
+      }
+      return true;`);
+    await waitFor("document.querySelector('#log').textContent.indexOf('\u4f60\u597d') !== -1",
+      "the old conversation reopening with its messages");
+    check(true, "switching back restores the conversation's messages");
+
+    /* Deleting leaves a tombstone rather than merely dropping the rows. Without
+     * one, a device that was offline re-pushes its copy and the chat returns. */
+    await exec(`
+      // INSTALL_MOCK does this too, but that runs later, in the sync section.
+      window.confirm = function () { return true; };
+      document.querySelector('#btnChats').click();
+      var rows = document.querySelectorAll('#chatList .chatrow');
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) {
+          var b = rows[i].querySelectorAll('.cacts button');
+          for (var j = 0; j < b.length; j++) if (b[j].textContent === "Delete") { b[j].click(); break; }
+          break;
+        }
+      }
+      return true;`);
+    check(await exec(`
+      return document.querySelectorAll('#chatList .chatrow').length;`) === 1,
+      "a deleted conversation leaves the list");
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.chats")) || [])
+        .filter(function (c) { return c.deleted; }).length;`) === 1,
+      "but is kept as a tombstone, so the delete can reach other devices");
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.chats")) || [])
+        .filter(function (c) { return c.deleted; })[0].deleted_at != null;`),
+      "and the tombstone is stamped");
+
+    // Rename is why the title column ships; it must survive a derived retitle.
+    await exec(`
+      window.prompt = function () { return "Ordering food"; };
+      var b = document.querySelectorAll('#chatList .chatrow .cacts button');
+      for (var i = 0; i < b.length; i++) if (b[i].textContent === "Rename") { b[i].click(); break; }
+      return true;`);
+    check(await exec(`
+      return document.querySelector('#chatList .chatrow .ctitle').textContent;`)
+        === "Ordering food",
+      "renaming a conversation sticks");
+    check(await exec(`
+      document.querySelector('#chatX').click();
+      return !document.querySelector('#chatSheet').classList.contains('open');`),
+      "the conversations sheet closes with ✕");
+
     // Sign in against the mock by switching sync on, exactly as a user would.
     await exec(INSTALL_MOCK);
     /* Settings is a set of collapsed <details> now, and everything below lives
@@ -1063,7 +1157,8 @@ return true;
     const calls = await exec("return window.__t.calls;");
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
-    const want = ["messages", "prefs", "vocab_extra", "vocab_known", "vocab_learning"];
+    const want = ["conversations", "messages", "prefs",
+                  "vocab_extra", "vocab_known", "vocab_learning"];
 
     check(want.every(t => tables.includes(t)),
       "every user table is deleted", "deleted: [" + tables + "]");

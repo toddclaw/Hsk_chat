@@ -83,6 +83,14 @@ header button{padding:8px 10px; flex:0 0 auto}
 
 /* Model browser rows. A row is a tap target for choosing; the star inside it is
    its own, so starring never changes what you are talking to by accident. */
+/* Conversation rows: a tap target for opening, with its own actions beneath so
+   Delete can never be hit while reaching for the chat. */
+.chatrow{padding:10px 4px; border-bottom:1px solid var(--line)}
+.chatrow .ctitle{display:block; font-size:15px; cursor:pointer}
+.chatrow.on .ctitle{color:var(--accent); font-weight:600}
+.chatrow .cmeta{display:block; color:var(--dim); font-size:11px; margin-top:2px}
+.chatrow .cacts{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+
 .modelrow{display:flex; align-items:center; gap:10px; padding:9px 4px;
           border-bottom:1px solid var(--line); cursor:pointer}
 .modelrow.on{background:var(--panel2)}
@@ -305,6 +313,7 @@ footer{
   <select id="level" title="Vocabulary level"></select>
   <select id="model" title="Model"></select>
   <button id="btnPy" title="Pinyin">拼</button>
+  <button id="btnChats" title="Conversations">💬</button>
   <button id="btnVocab" title="Vocabulary">词</button>
   <button id="btnSet" title="Settings">⚙</button>
 </header>
@@ -444,12 +453,6 @@ footer{
       after a couple of minutes of quiet. With cloud sync on, every device you use adds
       to the same total.</div>
 
-      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-        <button id="copyChat" type="button">Copy conversation</button>
-      </div>
-      <div class="note">Puts the whole conversation on the clipboard as plain text, labelled
-      Partner and You.</div>
-
     <label for="replyLength">Reply length</label>
       <select id="replyLength"></select>
       <div class="note">Longer replies give more to read, and more chances to reach for a word
@@ -468,8 +471,9 @@ footer{
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
       </div>
-      <div class="note">Wipes the messages on this device. Added words and counters are kept.
-      With cloud sync on, this device pushes the empty conversation to the others.</div>
+      <div class="note">Empties the conversation you are in, keeping it in the list. Added
+      words and counters are kept. To remove a whole conversation, use <b>Delete</b> in the
+      💬 menu. With cloud sync on, this device pushes the empty conversation to the others.</div>
   </details>
 
   <details class="sec">
@@ -653,6 +657,17 @@ footer{
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="chatSheet"><div class="card">
+  <div class="sheethead">
+    <h2>Conversations</h2>
+    <button id="chatX" class="sheetx" type="button" aria-label="Close conversations" title="Close">✕</button>
+  </div>
+  <button id="newChat" class="primary" type="button" style="width:100%">New chat</button>
+  <div class="note" id="chatWarn"></div>
+  <div id="chatList" style="margin-top:10px"></div>
+  <div style="margin-top:16px"><button id="chatClose" class="primary">Done</button></div>
+</div></div>
+
 <div class="sheet" id="modelSheet"><div class="card">
   <div class="sheethead">
     <h2 id="modelPickTitle">Choose a model</h2>
@@ -791,7 +806,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v51 — 2026-08-24";
+const VERSION   = "v52 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -823,6 +838,7 @@ const K = {
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly",
+  chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
   known:"hsk1chat.knownAhead", sync:"hsk1chat.syncOn"
 };
@@ -879,6 +895,14 @@ const S = {
   refLex:  null,                              // and as a lexicon, for re-segmenting
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
+  /* Conversation history. S.history keeps meaning exactly what it always
+   * meant -- the turns of the chat you are looking at -- so nothing that reads
+   * it had to change. It IS S.chatMsgs[S.chatId], the same array object, so
+   * ordinary pushes need no bookkeeping; the three places that *reassign* it
+   * are covered by persist() re-pointing the map on the way through. */
+  chats:    store.get(K.chats, []),
+  chatMsgs: store.get(K.chatMsgs, null),
+  chatId:   store.get(K.chatId, ""),
   stats:   store.get(K.stats, {}),
   base:    [],        // the level's wordlist
   dict:    new Map(), // REF_LIST, for glossing words above the current level
@@ -908,7 +932,7 @@ let syncLastError = "";
  * far more often than anything that has news -- without this it repaints the
  * line from scratch and blanks whatever the last pull reported. */
 let syncStatus = "";
-const syncQueue = { messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
+const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
 let syncTimer = null;
 
 const $ = s => document.querySelector(s);
@@ -1747,7 +1771,137 @@ function acceptWord(n, sentence) {
   renderAll();
 }
 
-function persist() { store.set(K.history, S.history); queueSync("messages"); }
+/* ------------------------------------------------------ conversations */
+
+const LEGACY_CID = "00000000-0000-4000-8000-000000000001";
+
+function newId() {
+  return (crypto.randomUUID && crypto.randomUUID()) ||
+    ("cid-" + Date.now() + "-" + Math.random().toString(16).slice(2));
+}
+
+// First thing the learner said, which is what a chat is actually about.
+function titleFrom(turns) {
+  const first = (turns || []).find(t => t.role === "user" && t.text);
+  if (!first) return "New chat";
+  const t = first.text.trim().replace(/\s+/g, " ");
+  return t.length > 28 ? t.slice(0, 28) + "…" : t;
+}
+
+const chatById = id => S.chats.find(c => c.id === id);
+
+/* One-time move from a single flat history to a list of conversations. The
+ * legacy id is fixed rather than generated: two devices each inventing one for
+ * the same old history would split it into two chats that then both sync. */
+function migrateChats() {
+  if (!S.chatMsgs) S.chatMsgs = {};
+  /* Content-based, not a "have I run yet" flag. Keying off S.chatMsgs merely
+   * existing was wrong: boot creates an empty chat for a first run, which
+   * writes the map, so a legacy history arriving after that point would never
+   * be adopted and would simply vanish behind an empty conversation. The real
+   * question is whether there is anything to adopt and anywhere it already
+   * lives. */
+  const haveMessages = Object.keys(S.chatMsgs).some(k => (S.chatMsgs[k] || []).length);
+  if (!S.history.length || haveMessages) return;
+  /* Any chat sitting here now is empty -- the check above returned if even one
+   * held a message -- so it is the placeholder boot makes for a first run, not
+   * anything anyone wrote. Adopting the legacy history beside it would leave
+   * two conversations where there was one. */
+  S.chats = S.chats.filter(c => (S.chatMsgs[c.id] || []).length);
+  S.chatMsgs = {};
+  S.chatMsgs[LEGACY_CID] = S.history;
+  if (!chatById(LEGACY_CID)) {
+    S.chats.unshift({ id: LEGACY_CID, title: titleFrom(S.history),
+                      created_at: S.history[0].created_at || new Date().toISOString(),
+                      updated_at: new Date().toISOString(), deleted: false });
+  }
+  S.chatId = LEGACY_CID;
+  saveChats();
+}
+
+/* Storage is finite and this feature is the first thing here that grows without
+ * bound. A quota failure is silent otherwise -- the write throws, the app
+ * carries on, and the next reload has lost whatever did not fit. */
+let storageFull = false;
+function saveChats() {
+  try {
+    store.set(K.chats, S.chats);
+    store.set(K.chatMsgs, S.chatMsgs);
+    store.set(K.chatId, S.chatId);
+    storageFull = false;
+  } catch (e) {
+    storageFull = true;
+    console.warn("chat storage full", e);
+    renderChatWarning();
+  }
+}
+
+function currentChat() {
+  if (!S.chatId || !chatById(S.chatId)) return null;
+  return chatById(S.chatId);
+}
+
+// Called whenever the open chat changes, so the list order and title follow it.
+function touchChat() {
+  const c = currentChat();
+  if (!c) return;
+  c.updated_at = new Date().toISOString();
+  if (!c.renamed) c.title = titleFrom(S.history);
+  queueSync("conversations");
+}
+
+function newChat() {
+  const c = { id: newId(), title: "New chat", created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(), deleted: false };
+  S.chats.unshift(c);
+  S.chatId = c.id;
+  S.chatMsgs[c.id] = [];
+  S.history = S.chatMsgs[c.id];
+  saveChats();
+  queueSync("conversations");
+  renderAll(); renderStarters(); updateMirror();
+  return c;
+}
+
+function openChat(id) {
+  if (!S.chatMsgs[id]) S.chatMsgs[id] = [];
+  S.chatId = id;
+  S.history = S.chatMsgs[id];
+  saveChats();
+  renderAll(); renderStarters(); updateMirror();
+}
+
+/* Tombstoned locally and remotely, never merely removed. A device that was
+ * offline still holds this chat; without a tombstone to pull, its next push
+ * puts the whole thing back. */
+function deleteChat(id) {
+  const c = chatById(id);
+  if (!c) return;
+  c.deleted = true;
+  c.deleted_at = new Date().toISOString();
+  c.updated_at = c.deleted_at;
+  delete S.chatMsgs[id];
+  if (S.chatId === id) {
+    const next = HSKSync.visibleConversations(S.chats)[0];
+    if (next) openChat(next.id); else newChat();
+  }
+  saveChats();
+  queueSync("conversations");
+  if (S.sync.on && syncUser) {
+    HSKSync.deleteConversationMessages(syncUser.id, id)
+      .catch(e => console.warn("conversation delete failed", e));
+  }
+  renderChats();
+}
+
+function persist() {
+  // Covers every reassignment of S.history -- each one calls through here.
+  if (S.chatId) S.chatMsgs[S.chatId] = S.history;
+  touchChat();
+  store.set(K.history, S.history);
+  saveChats();
+  queueSync("messages");
+}
 
 /* Settle the reply against the pacing budget: bank what was introduced, count
  * reuse toward promotion, then earn credit from the characters just read. */
@@ -1871,8 +2025,22 @@ async function flushSync() {
   Object.keys(syncQueue).forEach(k => { syncQueue[k] = false; });
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
+    if (q.conversations) {
+      await HSKSync.pushConversations(
+        S.chats.map(c => HSKSync.conversationToRow(c, syncUser.id)).filter(Boolean));
+    }
     if (q.messages) {
-      const rows = S.history.map(t => HSKSync.messageToRow(t, syncUser.id)).filter(Boolean);
+      /* Every conversation, not only the open one. A message edited in an old
+       * chat -- a translation added, an explain follow-up -- has to reach the
+       * server too, and upserts are idempotent so re-sending settled rows costs
+       * a request rather than correctness. */
+      const rows = [];
+      Object.keys(S.chatMsgs).forEach(cid => {
+        (S.chatMsgs[cid] || []).forEach(t => {
+          const row = HSKSync.messageToRow(t, syncUser.id, cid);
+          if (row) rows.push(row);
+        });
+      });
       await HSKSync.pushMessages(rows);
     }
     if (q.vocab_extra) await HSKSync.pushVocab("vocab_extra", HSKSync.vocabToRows(S.extra, syncUser.id));
@@ -1917,14 +2085,45 @@ async function pullAndMerge() {
   if (!S.sync.on || !syncUser || syncBusy) return;
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
-    const [msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+    const [convRows, msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+      HSKSync.pullConversations(syncUser.id),
       HSKSync.pullMessages(syncUser.id),
       HSKSync.pullVocab("vocab_extra", syncUser.id),
       HSKSync.pullVocab("vocab_learning", syncUser.id),
       HSKSync.pullVocab("vocab_known", syncUser.id),
       HSKSync.pullPrefs(syncUser.id)
     ]);
-    S.history = HSKSync.mergeMessages(S.history, msgRows);
+    /* Conversations first: the tombstones decide which incoming messages are
+     * worth merging at all, and a deleted chat's rows may still be on the way
+     * down from a device that had not pulled yet. */
+    S.chats = HSKSync.mergeConversations(S.chats, convRows);
+    const dead = new Set(S.chats.filter(c => c.deleted).map(c => c.id));
+    dead.forEach(id => { delete S.chatMsgs[id]; });
+
+    const byChat = {};
+    (msgRows || []).forEach(row => {
+      const cid = row.conversation_id || LEGACY_CID;
+      if (dead.has(cid)) return;
+      (byChat[cid] || (byChat[cid] = [])).push(row);
+    });
+    Object.keys(byChat).forEach(cid => {
+      S.chatMsgs[cid] = HSKSync.mergeMessages(S.chatMsgs[cid] || [], byChat[cid]);
+      /* A conversation the server has messages for but no row of its own --
+       * an unmigrated database, or a device that pushed messages before its
+       * conversations write landed. Better a chat with a derived title than
+       * messages with nowhere to live. */
+      if (!chatById(cid)) {
+        S.chats.push({ id: cid, title: titleFrom(S.chatMsgs[cid]),
+                       created_at: (S.chatMsgs[cid][0] || {}).created_at || new Date().toISOString(),
+                       updated_at: new Date().toISOString(), deleted: false });
+      }
+    });
+    if (!S.chatId || dead.has(S.chatId) || !chatById(S.chatId)) {
+      const first = HSKSync.visibleConversations(S.chats)[0];
+      S.chatId = first ? first.id : S.chatId;
+    }
+    if (S.chatId && !S.chatMsgs[S.chatId]) S.chatMsgs[S.chatId] = [];
+    S.history = S.chatId ? S.chatMsgs[S.chatId] : S.history;
     S.extra = HSKSync.mergeWordList(S.extra, HSKSync.rowsToVocab(extraRows));
     S.learning = HSKSync.mergeWordList(S.learning, HSKSync.rowsToVocab(learningRows), "seen");
     S.known = HSKSync.mergeWordList(S.known, HSKSync.rowsToVocab(knownRows));
@@ -1961,6 +2160,8 @@ async function pullAndMerge() {
     }
 
     store.set(K.history, S.history);
+    saveChats();
+    renderChats();
     store.set(K.extra, S.extra); store.set(K.learning, S.learning); store.set(K.known, S.known);
     rebuildLexicon(); updateMirror(); renderAll(); renderStarters(); renderPaceNote();
     if ($("#vocabSheet").classList.contains("open")) { renderVocab(); renderLearning(); }
@@ -1969,7 +2170,8 @@ async function pullAndMerge() {
     syncLastError = "";
     renderSyncStatus("Synced just now");
     // Whatever the merge added locally that the server did not have yet.
-    queueSync("messages"); queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
+    queueSync("conversations"); queueSync("messages");
+    queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
   } catch (e) {
     console.warn("sync pull failed", e);
     syncLastError = (e && e.message) || String(e);
@@ -3717,7 +3919,9 @@ $("#refreshModels").onclick = e => refreshModels(e.currentTarget);
 $("#modelReload").onclick = e => refreshModels(e.currentTarget);
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
-  if (!confirm("Delete the whole conversation?")) return;
+  if (!confirm("Delete the messages in this conversation?\n\n" +
+      "The conversation itself stays in the list. To remove it entirely, use " +
+      "Delete in the conversations menu.")) return;
   S.history = []; persist(); renderAll();
   // persist()'s queued push carries nothing for an empty array (there is
   // nothing to upsert), so the remote copy needs its own explicit delete or
@@ -3759,17 +3963,104 @@ $("#syncWipe").onclick = async () => {
 };
 /* Plain text, labelled. "notice" turns are error cards -- UI, not conversation --
  * and are skipped for the same reason windowed() and messageToRow() skip them. */
-function conversationText() {
-  return S.history
+function conversationText(turns) {
+  return (turns || S.history)
     .filter(t => t.role === "user" || t.role === "assistant")
     .map(t => (t.role === "user" ? "You: " : "Partner: ") + t.text)
     .join("\n\n");
 }
-$("#copyChat").onclick = e => {
-  const text = conversationText();
-  if (!text) { e.currentTarget.textContent = "nothing to copy"; return; }
-  copyText(text, e.currentTarget);
-};
+/* ------------------------------------------------- the conversation list */
+
+function renderChatWarning() {
+  const box = $("#chatWarn");
+  if (!box) return;
+  box.textContent = storageFull
+    ? "This device's storage is full, so the newest messages may not survive a reload. " +
+      "Delete a conversation here to make room. With cloud sync on, nothing already " +
+      "synced is at risk."
+    : (HSKSync.conversationsSupported() ? "" :
+      "Conversations are not syncing: this deployment's database has not had the " +
+      "conversations migration applied. The Hsk_chat administrator needs to run " +
+      "db/schema.sql against the Supabase project. Until then everything works here " +
+      "and your messages still back up, but other devices will see one conversation.");
+}
+
+function renderChats() {
+  const box = $("#chatList");
+  if (!box) return;
+  renderChatWarning();
+  const list = HSKSync.visibleConversations(S.chats);
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<div class="note">No conversations yet.</div>';
+    return;
+  }
+  list.forEach(c => {
+    const turns = (S.chatMsgs[c.id] || []).filter(t => t.role !== "notice");
+    const row = document.createElement("div");
+    row.className = "chatrow" + (c.id === S.chatId ? " on" : "");
+
+    const title = document.createElement("b");
+    title.className = "ctitle";
+    title.textContent = c.title || titleFrom(S.chatMsgs[c.id]) || "New chat";
+    title.onclick = () => { openChat(c.id); renderChats(); closeSheet("#chatSheet"); };
+
+    const meta = document.createElement("span");
+    meta.className = "cmeta";
+    meta.textContent = turns.length + " message" + (turns.length === 1 ? "" : "s") +
+      " · " + new Date(c.updated_at || c.created_at).toLocaleDateString();
+
+    const acts = document.createElement("div");
+    acts.className = "cacts";
+    const mk = (label, cls, fn) => {
+      const b = document.createElement("button");
+      b.className = cls; b.type = "button"; b.textContent = label;
+      b.onclick = e => { e.stopPropagation(); fn(b); };
+      return b;
+    };
+    const text = () => conversationText(S.chatMsgs[c.id]);
+    acts.append(
+      mk("Copy", "quiet", b => {
+        const t = text();
+        if (!t) { b.textContent = "nothing to copy"; return; }
+        copyText(t, b);
+      }),
+      mk("Download", "quiet", b => {
+        const t = text();
+        if (!t) { b.textContent = "nothing to save"; return; }
+        deliver(t, "hsk-chat-" + (c.title || "chat").replace(/[^\w\u4e00-\u9fff-]+/g, "_")
+          .slice(0, 40) + ".txt", b);
+      }),
+      /* Renaming is why the title column exists. `renamed` stops the derived
+       * title overwriting it the next time the chat is touched. */
+      mk("Rename", "quiet", () => {
+        const name = prompt("Name this conversation", c.title || "");
+        if (name === null) return;
+        c.title = name.trim() || titleFrom(S.chatMsgs[c.id]);
+        c.renamed = !!name.trim();
+        c.updated_at = new Date().toISOString();
+        saveChats(); queueSync("conversations"); renderChats();
+      }),
+      mk("Delete", "danger", () => {
+        if (!confirm("Delete \"" + (c.title || "this conversation") + "\"?\n\n" +
+            turns.length + " message" + (turns.length === 1 ? "" : "s") +
+            " will be removed from this device and from the cloud on every device " +
+            "you sync with.\n\nWords you added are kept. This cannot be undone.")) return;
+        deleteChat(c.id);
+      })
+    );
+    row.append(title, meta, acts);
+    box.appendChild(row);
+  });
+}
+
+$("#btnChats").onclick = () => { renderChats(); openSheet("#chatSheet"); };
+$("#chatX").onclick = () => closeSheet("#chatSheet");
+$("#chatClose").onclick = () => closeSheet("#chatSheet");
+$("#chatSheet").addEventListener("click", e => {
+  if (e.target === $("#chatSheet")) closeSheet("#chatSheet");
+});
+$("#newChat").onclick = () => { newChat(); renderChats(); closeSheet("#chatSheet"); };
 
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 /* Tapping the dimmed area outside a sheet closes it. For Settings that has to
@@ -3789,6 +4080,20 @@ $("#setSheet").addEventListener("click", e => {
 
 (async function boot() {
   applyFont(S.font);
+  /* Before anything renders: S.history has to be the array inside S.chatMsgs,
+   * not a separate copy, or every turn added this session lands in one and is
+   * saved from the other. */
+  migrateChats();
+  if (!S.chatId || !chatById(S.chatId)) {
+    const first = HSKSync.visibleConversations(S.chats)[0];
+    if (first) S.chatId = first.id;
+  }
+  if (S.chatId) {
+    if (!S.chatMsgs[S.chatId]) S.chatMsgs[S.chatId] = S.history;
+    S.history = S.chatMsgs[S.chatId];
+  } else {
+    newChat();
+  }
   fillLevels(); fillModels();
   $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
   try {

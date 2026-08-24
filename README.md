@@ -313,7 +313,6 @@ key you had just pasted.)
 |---|---|
 | **Time chatting** | today and all-time, summed across every device you sync |
 | **Spend** | today, the last ten days, and all-time — what OpenRouter actually charged |
-| **Copy conversation** | the whole chat as labelled plain text, on the clipboard |
 | **API key** | OpenRouter key, stored on this device only |
 | **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
@@ -661,6 +660,60 @@ Saving compares against what the box was filled with, not a freshly generated de
 otherwise changing the level while the panel is open would silently freeze the old wording.
 
 ---
+
+# Conversations
+
+The 💬 button in the header lists every chat: **New chat** at the top, then each conversation
+with its message count and date. Tap a title to open it. Each row carries **Copy** (labelled
+plain text to the clipboard), **Download** (the same as a `.txt`), **Rename**, and **Delete**.
+Copy used to be one button in Settings, which made sense when there was only ever one
+conversation to copy.
+
+`S.history` still means what it always meant — the turns of the chat you are looking at — and
+*is* the array inside `S.chatMsgs[S.chatId]`, not a copy of it. Ordinary pushes therefore
+need no bookkeeping; the three places that reassign it are covered by `persist()` re-pointing
+the map on the way through, and every one of them already calls `persist()`.
+
+## Deleting has to leave a tombstone
+
+`conversations` is a table rather than a column on `messages` for one reason: **a delete has
+to be expressible to a device that was offline when it happened.** Hard-deleting the message
+rows says nothing to that device, so its next push puts the whole conversation back, on every
+device, and pressing delete again never makes it stick.
+
+So a deleted conversation keeps its row with `deleted_at` set, and the merge treats deletion
+as **monotonic** — a tombstone wins from either side regardless of timestamps. That exception
+is load-bearing rather than defensive: the offline device is precisely the one likely to have
+a *later* `updated_at`, because it kept chatting in a conversation that had already been
+deleted elsewhere.
+
+## Migration
+
+`conversation_id` is nullable, and every device maps `NULL` to one **fixed** legacy id
+(`00000000-0000-4000-8000-000000000001`). Deterministic on purpose: two devices each
+generating their own id for the same old history would split one conversation into two, on
+the very list whose job is telling conversations apart.
+
+Migration is content-based rather than a "have I run yet" flag — it adopts a legacy history
+when no conversation holds any messages yet. Keying it off the storage map merely existing was
+wrong: a first run creates an empty placeholder chat, which writes that map, so a legacy
+history arriving afterwards would vanish behind an empty conversation.
+
+## An unmigrated database
+
+`db/schema.sql` is safe to re-run and adds the table and the column, but somebody has to run
+it — and the person reading the screen may not be the person who owns the Supabase project.
+So the app **probes once and degrades** rather than failing: a missing table or column
+(`PGRST205` / `42P01` / `PGRST204` / `42703`, matched on code, since messages are localised)
+switches sync into a mode that strips `conversation_id` and pushes messages anyway.
+
+Backing up the conversation matters more than remembering which chat it was in, and the
+grouping comes back for free once the column exists. The 💬 sheet says so plainly, naming the
+Hsk_chat administrator rather than assuming the reader is them.
+
+Storage is the other new limit: conversation history is the first thing here that grows
+without bound, so a `localStorage` quota failure is caught and reported instead of silently
+losing the write.
 
 # Words you already know
 
