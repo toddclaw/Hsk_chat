@@ -109,10 +109,6 @@
    * heavily, lower it to flatten the curve toward counting words equally. */
   var ZIPF_EXP = 1;
   var UNRANKED = 999999;   // the wordlists' "corpus never saw this" sentinel
-  /* What a word you have written yourself is worth against one you have only
-   * read. Production lags recognition and is the harder half, so it counts for
-   * more. Set to 1 to make the estimate pure reading coverage. */
-  var PRODUCE_BONUS = 2;
 
   function weightOf(entry) {
     var f = (entry && entry.f) || UNRANKED;
@@ -121,21 +117,29 @@
 
   var asSet = function (v) { return v instanceof Set ? v : new Set(v || []); };
 
-  /* Share of a level's running text the learner can already handle, 0..1.
-   * `produced` is optional: pass it and words the learner has used themselves
-   * carry PRODUCE_BONUS; omit it for the plain reading-coverage estimate.
-   * Clamped, because the bonus can otherwise push a nearly-complete level past
-   * 1 and report 104% ready. */
-  function coverage(entries, known, produced) {
-    var have = asSet(known), mine = asSet(produced);
+  /* Share of a level's running text a given set of words covers, 0..1.
+   *
+   * One scale, no bonuses. An earlier version doubled the weight of words the
+   * learner had written themselves, to make production count for more -- it
+   * cannot work, and the failure is instructive. Weight goes as 1/rank, so the
+   * commonest words carry enormous shares (的 is rank 1 and weighs 1.0); after
+   * doubling, having typed the ten commonest words was enough to push the sum
+   * past the total and pin the bar at 100%. It also put the headline on a
+   * different scale from toTarget() below, so the panel could report 100% and
+   * "57 more words to 95%" at the same time.
+   *
+   * Production is measured by passing the produced words as `known` instead --
+   * same function, same scale, a second honest number rather than a thumb on
+   * the first one. */
+  function coverage(entries, known) {
+    var have = asSet(known);
     var total = 0, got = 0;
     (entries || []).forEach(function (e) {
       var w = weightOf(e);
       total += w;
-      if (have.has(e.w)) got += w * (mine.has(e.w) ? PRODUCE_BONUS : 1);
+      if (have.has(e.w)) got += w;
     });
-    if (!total) return 0;
-    return Math.min(1, got / total);
+    return total ? got / total : 0;
   }
 
   /* How many more words, commonest first, to reach `target` coverage. This is
@@ -163,7 +167,7 @@
     DEFAULT_RATE: DEFAULT_RATE, CREDIT_CAP: CREDIT_CAP, SLATE: SLATE, PROMOTE_AT: PROMOTE_AT,
     FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
-    ZIPF_EXP: ZIPF_EXP, PRODUCE_BONUS: PRODUCE_BONUS,
+    ZIPF_EXP: ZIPF_EXP,
     READY_AT: 0.95,      // the published "adequate comprehension" threshold
     coverage: coverage, toTarget: toTarget
   };

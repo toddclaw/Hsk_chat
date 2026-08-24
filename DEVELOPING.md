@@ -245,6 +245,20 @@ editing it:
   level. `HSKPace.coverage()` weights by `1/f` for this reason; `test/pace.test.js` asserts
   the two numbers stay far apart, so a regression to counting words fails rather than just
   looking pessimistic.
+- **Never put a thumb on a weighted score, and never let two rows of the same panel run on
+  different scales.** The headline once weighted words the learner had written by 2 and
+  clamped the result, while `toTarget()` below it did not. Because weight goes as `1/rank`,
+  typing the *ten* commonest words was enough to saturate the bar — it read "100%" next to
+  "57 more words to 95%". Reading and production are now the same `coverage()` over two
+  different word sets. `test/pace.test.js` sweeps learner states asserting the headline and
+  the countdown never disagree, and the browser suite checks the same thing through the
+  panel, since what actually broke was the panel wiring two rows to two functions.
+- **The browser suite's seeded history has to survive to reach the progress checks.** The
+  sync-wipe test clears the conversation, and production is measured by segmenting it — so
+  progress assertions placed after the wipe run against an empty history, cannot reach the
+  states where the figures could disagree, and pass against the very bug they were written
+  for. They sit before the wipe for that reason, and the seed carries a full sentence of
+  common words rather than two short turns.
 - **`f` is a rank, not a token count.** Weighting by `1/f` is a Zipf assumption about the
   corpus, not a measurement of it. `ZIPF_EXP` in `pace.js` is the calibration knob and the
   percentage is labelled "estimated" in the UI. The word counts shown underneath it are

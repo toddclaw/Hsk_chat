@@ -135,13 +135,30 @@ const unranked = [{ w: "a", f: 1 }, { w: "b", f: 999999 }, { w: "c" }];
 check(P.toTarget(unranked, ["a"], 0.99) === 0,
   "words the corpus never saw are never counted toward a target");
 
-/* Production counts double, so writing a word moves the estimate more than
- * reading it. The bonus is a knob (PRODUCE_BONUS); this checks it is wired,
- * not that 2 is the right number. */
-const readOnly = P.coverage(h2, h1w);
-const alsoWritten = P.coverage(h2, h1w, h1w.slice(0, 50));
-check(alsoWritten > readOnly, "words you have written yourself count for more");
-check(alsoWritten <= 1, "and the bonus cannot push the estimate past 100%");
+/* Production is a second reading of the same scale, not a bonus on the first.
+ * Words you have written are a subset of words you can read, so it can only be
+ * lower -- that gap is the receptive/productive one, and showing it is the
+ * point. */
+const readCov = P.coverage(h2, h1w);
+const useCov = P.coverage(h2, h1w.slice(0, 50));
+check(useCov < readCov, "production coverage sits below reading coverage");
+check(useCov >= 0 && readCov <= 1, "both stay on the same 0..1 scale");
+
+/* The bug this replaced: the headline was weighted and clamped while
+ * toTarget() was not, so the panel could show 100% and "57 more words to 95%"
+ * in the same breath. They have to agree at the threshold, whatever the
+ * learner knows. Checked across a sweep rather than one state, since the
+ * disagreement only showed up once enough common words were produced. */
+let incoherent = 0;
+for (let n = 0; n <= 400; n += 40) {
+  const known = h1w.concat(P.buildPool(h1, h2).slice(0, n).map(e => e.w));
+  const atOrPast = P.coverage(h2, known) >= P.READY_AT;
+  const nothingToGo = P.toTarget(h2, known, P.READY_AT) === 0;
+  if (atOrPast !== nothingToGo) incoherent++;
+}
+check(incoherent === 0,
+  "the headline and the words-to-threshold count never contradict each other",
+  `${incoherent} states disagreed`);
 
 check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
 
