@@ -162,5 +162,29 @@ check(incoherent === 0,
 
 check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
 
+/* ------------------------------------------------ documented figures ------
+ *
+ * README.md and RESEARCH.md both reason in concrete numbers -- 520 words at
+ * HSK 1, 741 new at HSK 2, ~85% coverage, ~147 words to the threshold -- and
+ * RESEARCH.md is published for people to check the argument against. Prose
+ * drifts from data silently: the README's counts were already stale by a dozen
+ * words before anyone noticed. Pin them.
+ */
+const SIZES = [520, 1261, 2211, 3182, 4241, 5364, 10970];
+SIZES.forEach((n, i) => {
+  check(load(i + 1).length === n,
+    `HSK ${i + 1} ships ${n} entries, as the docs say`,
+    `actually ${load(i + 1).length}`);
+});
+check(h2.length - h1.length === 741,
+  "741 new words between HSK 1 and HSK 2, as RESEARCH.md states",
+  `actually ${h2.length - h1.length}`);
+check(Math.round(P.coverage(h2, h1w) * 100) === 85,
+  "HSK 1 covers 85% of HSK 2 text, the figure RESEARCH.md argues from",
+  `actually ${Math.round(P.coverage(h2, h1w) * 100)}%`);
+check(P.toTarget(h2, h1w, 0.95) === 147,
+  "and 147 words reach the 95% mark, the number the panel shows a beginner",
+  `actually ${P.toTarget(h2, h1w, 0.95)}`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

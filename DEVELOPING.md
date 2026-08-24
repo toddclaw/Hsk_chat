@@ -4,6 +4,12 @@ Notes for working on this app: how to run it, and the things that have already
 cost someone an afternoon. README.md covers what the app *is* and how to set up
 your own Supabase project — this file is about working on the code.
 
+**RESEARCH.md** covers *why the pedagogical constants are what they are* — the
+coverage thresholds, the sighting count, the frequency weighting — with
+citations, the measurements behind them, and an explicit list of where the
+evidence is thin. Change a number in `pace.js` and that is the file to update,
+and the one to check first for whether the number was arbitrary or argued.
+
 Not published to the site (`.github/publish-files` is an allowlist, and this
 file is deliberately not on it).
 
@@ -259,6 +265,10 @@ editing it:
   states where the figures could disagree, and pass against the very bug they were written
   for. They sit before the wipe for that reason, and the seed carries a full sentence of
   common words rather than two short turns.
+- **The reasoning behind these numbers is in RESEARCH.md, not here.** This section is the
+  operational half — what breaks and how. Why 95% rather than 90%, why six sightings rather
+  than three or ten, and how much of that rests on a single regression with 66 participants,
+  all live there.
 - **Do not invent a threshold for production.** Reading has 95%/98% because unknown-word
   density and comprehension have a testable relationship. Production has no equivalent: the
   gap from reading widens with proficiency and not every word becomes productive, so a fixed
