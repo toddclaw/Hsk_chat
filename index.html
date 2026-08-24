@@ -73,6 +73,13 @@ header button{padding:8px 10px; flex:0 0 auto}
 .copy{border:1px solid var(--line); border-radius:999px; padding:2px 9px; min-height:0;
       background:none; color:var(--dim); font-size:12px; cursor:pointer}
 .copy:active{color:var(--ink)}
+/* The answer behind this button is already stored: pressing it costs nothing
+   and returns instantly, rather than spending a model call and a wait. Blue,
+   not yellow: .badge.warn is yellow for "2 tries" and sits in this same .meta
+   row, and two unrelated meanings sharing a colour a few pixels apart reads as
+   one meaning. --accent is what the app already uses for "this is live and
+   fine" -- the pinyin toggle, a focused input, a fresh word. */
+.copy.cached{color:var(--accent); border-color:#2f4a6b}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -581,11 +588,22 @@ footer{
   </div>
   <div class="note">This chat is not restricted to your word list in either direction — ask
   anything, in Chinese or English, and answers may use any words needed to explain clearly.</div>
-  <div style="margin-top:16px"><button id="explainClose" class="primary">Done</button></div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+    <button id="explainClose" class="primary">Done</button>
+    <!-- Throws the transcript away and asks once more. Not a second opinion
+         appended to the first: see the handler for why starting over is the
+         only shape that helps. -->
+    <button id="explainRedo" class="quiet" type="button">Ask again</button>
+  </div>
 </div></div>
 
 <div class="sheet" id="vocabSheet"><div class="card">
-  <h2>Added vocabulary</h2>
+  <!-- Same sticky header as Settings, and for the same reason: the way out
+       should be one tap away rather than a scroll past the whole word list. -->
+  <div class="sheethead">
+    <h2>Added vocabulary</h2>
+    <button id="vocabX" class="sheetx" type="button" aria-label="Close vocabulary" title="Close">✕</button>
+  </div>
   <label class="toggle" for="autoAdd">
     <input type="checkbox" id="autoAdd">
     <span>Add the words I type automatically</span>
@@ -594,6 +612,9 @@ footer{
     <input id="addWord" type="text" placeholder="add a word by hand，比如 苹果" autocomplete="off">
     <button id="addWordBtn">Add</button>
   </div>
+  <!-- Words the list already covers are skipped, which is indistinguishable
+       from the Add button doing nothing at all. This says which and why. -->
+  <div class="note" id="addNote"></div>
   <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
     <button id="expAnki">Export for Anki</button>
     <button id="expPleco">Export for Pleco</button>
@@ -681,7 +702,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v44 — 2026-08-23";
+const VERSION   = "v46 — 2026-08-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -785,6 +806,11 @@ const S = {
 let syncUser = null;             // the signed-in user, or null
 let syncBusy = false;            // a pull or push is in flight right now
 let syncLastError = "";
+/* The last thing said about sync. Held here because the element it is written
+ * to only exists while Settings is open, and because renderSyncSection() runs
+ * far more often than anything that has news -- without this it repaints the
+ * line from scratch and blanks whatever the last pull reported. */
+let syncStatus = "";
 const syncQueue = { messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
 let syncTimer = null;
 
@@ -1423,15 +1449,40 @@ function renderMessage(turnObj, shownExtra) {
    * question does: against a reply it is "what does this mean", against your
    * own line it is "did I say what I meant". */
   const translate = document.createElement("button");
-  translate.className = "copy";
+  translate.className = "copy" + (turnObj.translation ? " cached" : "");
   translate.textContent = (turnObj.translation && turnObj.showTranslation)
     ? "Hide translation" : "English translation";
   translate.onclick = e => { e.stopPropagation(); toggleTranslation(turnObj, translate, transBox); };
+  meta.appendChild(translate);
+  /* Only where there is something to replace. Two things ask for it: a call
+   * that came back wrong or garbled is stored like any good one and would
+   * otherwise be permanent, and switching the teaching model does not reach
+   * back into answers the old one already gave. */
+  if (turnObj.translation) {
+    const redo = document.createElement("button");
+    redo.className = "copy";
+    redo.textContent = "redo";
+    redo.title = "Translate again with the current model";
+    redo.onclick = async e => {
+      e.stopPropagation();
+      const had = turnObj.translation;
+      turnObj.translation = "";
+      await toggleTranslation(turnObj, translate, transBox);
+      // A redo that fails must not cost you the answer you already had.
+      if (!turnObj.translation) {
+        turnObj.translation = had;
+        transBox.textContent = had;
+        translate.textContent = turnObj.showTranslation ? "Hide translation" : "English translation";
+      }
+    };
+    meta.appendChild(redo);
+  }
   const explain = document.createElement("button");
-  explain.className = "copy";
+  explain.className = "copy" +
+    ((turnObj.explainChat && turnObj.explainChat.length) ? " cached" : "");
   explain.textContent = turnObj.role === "user" ? "Check my grammar" : "English explanation";
   explain.onclick = e => { e.stopPropagation(); openExplain(turnObj); };
-  meta.append(translate, explain);
+  meta.appendChild(explain);
   el.appendChild(meta);
 
   (turnObj.introduced || []).forEach(w => {
@@ -1690,7 +1741,14 @@ function queueSync(kind) {
 }
 
 async function flushSync() {
-  if (!S.sync.on || !syncUser || syncBusy) return;
+  if (!S.sync.on || !syncUser) return;
+  /* Busy means a pull or an earlier push is still in flight. The queue survives
+   * that -- the flags are only cleared below -- but the timer that just fired
+   * does not, and queueSync() is the only thing that ever sets another. So
+   * returning here bare strands everything queued until some unrelated edit
+   * happens to restart the clock, which is how an initial sync could pull
+   * cleanly and then never push back. Come round again instead. */
+  if (syncBusy) { clearTimeout(syncTimer); syncTimer = setTimeout(flushSync, 1000); return; }
   const q = Object.assign({}, syncQueue);
   if (!Object.values(q).some(Boolean)) return;
   Object.keys(syncQueue).forEach(k => { syncQueue[k] = false; });
@@ -1805,6 +1863,13 @@ async function pullAndMerge() {
 }
 
 async function signInForSync() {
+  /* Settings commits before the redirect, never after. Signing in navigates
+   * away and comes back as a fresh load, so everything commitSettings() reads
+   * out of the DOM -- the reply length, the tries, the Anki fields, the system
+   * prompt, and until this line the API key with them -- was being discarded by
+   * a button that looks like it only concerns sync. This is the same reason the
+   * backdrop tap and the ✕ both route through it. */
+  commitSettings();
   try {
     await ensureSyncClient();
     const redirectTo = location.origin + location.pathname;
@@ -1814,6 +1879,9 @@ async function signInForSync() {
     // on the way back.
   } catch (e) {
     syncLastError = (e && e.message) || String(e);
+    // No redirect happened, so the error needs the sheet commitSettings() just
+    // closed. Reopened rather than never closed: committing is the point.
+    openSheet("#setSheet");
     renderSyncStatus("Couldn't sign in — " + syncLastError);
   }
 }
@@ -1825,6 +1893,7 @@ async function signOutOfSync() {
 }
 
 function renderSyncStatus(text) {
+  syncStatus = text;
   const el = $("#syncStatus");
   if (el) el.textContent = text;
 }
@@ -1844,7 +1913,12 @@ function renderSyncSection() {
     $("#syncWho").textContent = "Signed in as " +
       (syncUser.user_metadata && (syncUser.user_metadata.user_name || syncUser.user_metadata.preferred_username)
         || syncUser.email || "GitHub");
-    renderSyncStatus(syncLastError ? "Couldn't sync — " + syncLastError : "");
+    /* Keeps what the last pull or push reported instead of clearing it. Landing
+     * back from the GitHub redirect calls this *after* the first pull finishes
+     * -- boot() renders the section once its session check returns -- so a sync
+     * that had just said "Synced just now" was being wiped to a blank line, and
+     * the only way to see the app confirm anything was to press Sync now. */
+    renderSyncStatus(syncLastError ? "Couldn't sync — " + syncLastError : syncStatus);
   } else {
     signedOut.style.display = ""; signedIn.style.display = "none";
   }
@@ -1925,9 +1999,13 @@ async function toggleTranslation(turnObj, btn, box) {
     turnObj.translation = en;
     turnObj.showTranslation = true;
     persist();
-    box.textContent = en;
-    box.style.display = "";
-    btn.textContent = "Hide translation";
+    /* Rebuilt rather than patched button-by-button: there is now a stored
+     * answer behind this button, which changes its label, marks it cached and
+     * puts a redo next to it. Nothing else re-renders the log on this path, and
+     * the same click handler is where retryLast() and acceptWord() already
+     * call renderAll() -- the node this click came from going away mid-handler
+     * is the established shape here, not a new hazard. */
+    renderAll();
   } catch (e) {
     // A native tooltip, not alert(): consistent with the rest of the app,
     // which never interrupts with a modal for a failed background fetch.
@@ -1992,6 +2070,10 @@ async function explainAsk(turnObj, question) {
     pending.remove();
     $("#explainSend").disabled = false;
     if (explainTurnObj === turnObj) renderExplainLog();
+    /* The button behind the sheet has to learn there is now (or, after Ask
+     * again, is briefly not) something stored -- it is what marks itself
+     * yellow, and nothing else re-renders the log on this path. */
+    renderAll();
   }
 }
 
@@ -2717,6 +2799,18 @@ function sendExplainQuestion() {
 $("#explainSend").onclick = sendExplainQuestion;
 $("#explainInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendExplainQuestion(); } });
 $("#explainClose").onclick = () => closeSheet("#explainSheet");
+/* Start over rather than append. A call that failed leaves "(couldn't reach the
+ * model…)" stored as the answer, and every follow-up asked afterwards carries
+ * that transcript as context -- so asking again on top of it inherits the
+ * failure it was meant to escape. Switching the teaching model wants the same
+ * clean slate, for the same reason. */
+$("#explainRedo").onclick = () => {
+  if (!explainTurnObj) return;
+  explainTurnObj.explainChat = [];
+  persist();
+  renderExplainLog();
+  explainAsk(explainTurnObj, null);
+};
 
 $("#btnVocab").onclick = () => {
   $("#autoAdd").checked = S.autoAdd;
@@ -2727,8 +2821,17 @@ function addByHand() {
   const box = $("#addWord");
   const words = box.value.trim().split(/[\s,，、]+/).filter(Boolean);
   if (!words.length) return;
+  /* Exactly addWords()'s own skip condition, read before it runs -- written as
+   * a second, looser test the two could drift apart and the note would start
+   * describing something the app did not do. */
+  const have = words.filter(w => isExtra(w) || S.lex.words.has(w));
   const missing = addWords(words);
   box.value = "";
+  $("#addNote").textContent = have.length
+    ? "Already usable: " + have.join("、") + " — in " + levelLabel() +
+      " or in words you have added, so " +
+      (have.length > 1 ? "they were" : "it was") + " not added again."
+    : "";
   renderVocab(); updateMirror(); renderAll();
   glossWords(missing);
 }
@@ -2742,7 +2845,17 @@ function exportCards(kind) {
 $("#expAnki").onclick = () => exportCards("anki");
 $("#expPleco").onclick = () => exportCards("pleco");
 $("#addWord").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addByHand(); } });
-$("#vocabClose").onclick = () => closeSheet("#vocabSheet");
+/* Words are stored the moment they are added, so there is nothing to commit on
+ * the way out -- except a word still sitting unsubmitted in the box, which is
+ * the one thing closing could throw away. Every exit routes through here for
+ * the same reason commitSettings() catches all three of Settings' exits. */
+function closeVocab() {
+  addByHand();                     // no-op when the box is empty
+  $("#addNote").textContent = "";
+  closeSheet("#vocabSheet");
+}
+$("#vocabClose").onclick = closeVocab;
+$("#vocabX").onclick = closeVocab;
 /* What each collapsed row says on its right-hand side. Only where there is a
  * real answer worth reading without opening the section -- a row captioned with
  * something obvious is worse than a bare one, since it costs a line and teaches
@@ -2985,10 +3098,20 @@ $("#freeOnly").onchange = e => {
  * it is shown when there is no catalogue, which is exactly when someone needs
  * a working model now, not a string to remember to commit later. */
 $("#modelExample").onchange = e => setChatModel(e.target.value);
+/* Saved as it is typed, not only when Settings closes. Everything else in this
+ * sheet can be retyped in seconds; the key is forty characters from another
+ * site, and it was being lost to any load the page did not choose -- signing in
+ * for sync navigating away, a new service worker reloading, a phone dropping a
+ * backgrounded tab. commitSettings() still writes it too, which costs nothing
+ * and keeps this from being the only thing standing between a typed key and a
+ * stored one. Programmatic writes to the field ("Paste") do not fire `input`,
+ * so they call this directly. */
+const saveKey = () => store.set(K.key, $("#key").value.trim());
+$("#key").addEventListener("input", saveKey);
 $("#keyPaste").onclick = async () => {
   try {
     const text = await navigator.clipboard.readText();
-    if (text) { $("#key").value = text.trim(); $("#keyTestNote").textContent = ""; }
+    if (text) { $("#key").value = text.trim(); saveKey(); $("#keyTestNote").textContent = ""; }
   } catch (e) {
     // iOS requires a user gesture and can still refuse; there is no silent
     // workaround, so say so rather than leaving the button looking broken.
@@ -3138,8 +3261,12 @@ $("#copyChat").onclick = e => {
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 /* Tapping the dimmed area outside a sheet closes it. For Settings that has to
  * be the committing close, not a bare closeSheet -- see commitSettings(). */
-[["#vocabSheet", "#vocabClose"], ["#explainSheet", "#explainClose"]].forEach(([sheet]) => {
-  $(sheet).addEventListener("click", e => { if (e.target === $(sheet)) closeSheet(sheet); });
+$("#explainSheet").addEventListener("click", e => {
+  if (e.target === $("#explainSheet")) closeSheet("#explainSheet");
+});
+// Like Settings, the vocabulary sheet has a committing close -- see closeVocab().
+$("#vocabSheet").addEventListener("click", e => {
+  if (e.target === $("#vocabSheet")) closeVocab();
 });
 $("#setSheet").addEventListener("click", e => {
   if (e.target === $("#setSheet")) commitSettings();
