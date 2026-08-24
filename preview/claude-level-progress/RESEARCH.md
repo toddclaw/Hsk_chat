@@ -28,7 +28,7 @@ support it is worse than one labelled a guess, because nobody re-examines it.
 |---|---|
 | **Follows from the literature** | the research supports this fairly directly |
 | **Informed by it** | the research constrains the choice but does not make it |
-| **Ours** | a judgement call; the research is silent or mixed |
+| **Ours** | a judgment call; the research is silent or mixed |
 | **Measured** | we ran it against a real model and counted |
 
 Constants live in `pace.js` and `prompt.js`. Every claim below names the one it justifies, so
@@ -80,7 +80,7 @@ differs by *what* is being learned: orthographic knowledge benefits greatly from
 exposures, while most semantic gain lands between three and seven.
 
 The app previously used 3. That sits at the very bottom of every estimate above, and squarely
-in the "you can now recognise the shape of it" band rather than the "you know what it means"
+in the "you can now recognize the shape of it" band rather than the "you know what it means"
 band. Six is the low end of the reliable range and the top of the semantic-gain window.
 
 **Why not 10.** Words are held in the reuse list until promoted, and that list is capped at
@@ -226,7 +226,7 @@ Two findings worth carrying:
 
 ### Earlier measurements
 
-Recorded in DEVELOPING.md with their working, and summarised here because they set the
+Recorded in DEVELOPING.md with their working, and summarized here because they set the
 methodology:
 
 - **A cheaper model is not a cheaper conversation.** Across 16 replies at HSK 2, a model at
@@ -284,7 +284,7 @@ Stated plainly so nobody cites this file for more than it holds.
 - **The English thresholds are applied to Chinese unchanged.** The 95%/98% coverage figures
   and the encounter counts come from L2 English research. Zipfian structure transfers well;
   whether the specific numbers do is unestablished.
-- **Nothing here is tested against learners.** Every measurement is of model behaviour. The
+- **Nothing here is tested against learners.** Every measurement is of model behavior. The
   pedagogy is drawn from published research; the app has not run a study of its own.
 
 ## Bibliography

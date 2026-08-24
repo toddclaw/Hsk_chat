@@ -363,7 +363,7 @@
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
    * undefined_table; PGRST204 / 42703 are the column equivalents, which is what
    * a push of conversation_id hits when only the ALTER is missing. Matched on
-   * code rather than message text, which is localised and changes. */
+   * code rather than message text, which is localized and changes. */
   function isMissingSchema(err) {
     if (!err) return false;
     var code = String(err.code || "");

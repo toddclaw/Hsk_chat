@@ -76,7 +76,7 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* The answer behind this button is already stored: pressing it costs nothing
    and returns instantly, rather than spending a model call and a wait. Blue,
    not yellow: .badge.warn is yellow for "2 tries" and sits in this same .meta
-   row, and two unrelated meanings sharing a colour a few pixels apart reads as
+   row, and two unrelated meanings sharing a color a few pixels apart reads as
    one meaning. --accent is what the app already uses for "this is live and
    fine" -- the pinyin toggle, a focused input, a fresh word. */
 .copy.cached{color:var(--accent); border-color:#2f4a6b}
@@ -111,7 +111,7 @@ header button{padding:8px 10px; flex:0 0 auto}
 .bar>b{position:absolute; left:0; top:0; bottom:0; background:var(--ok); border-radius:999px}
 .bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
-/* Each figure takes the colour of the bar it describes, so the legend is the
+/* Each figure takes the color of the bar it describes, so the legend is the
    text itself rather than a key you have to hold in your head. */
 .barnote b{color:var(--accent); font-weight:600}
 .barnote i{color:var(--ok); font-style:normal; font-weight:600}
@@ -425,11 +425,11 @@ footer{
     </label>
     <label class="toggle" for="favOnly">
       <input type="checkbox" id="favOnly">
-      <span>Display favourites only</span>
+      <span>Display favorites only</span>
     </label>
     <div class="note">Both filters are ignored when they would leave the pickers empty — a
-    list with nothing in it is worse than an unfiltered one, and "favourites only" starts
-    with no favourites.</div>
+    list with nothing in it is worse than an unfiltered one, and "favorites only" starts
+    with no favorites.</div>
     <label for="modelSort">Sort models</label>
     <select id="modelSort">
       <option value="price">by price — free first</option>
@@ -806,7 +806,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v52 — 2026-08-24";
+const VERSION   = "v53 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -839,13 +839,22 @@ const K = {
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly",
   chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
+  prefsPushedAt:"hsk1chat.prefsPushedAt",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
   known:"hsk1chat.knownAhead", sync:"hsk1chat.syncOn"
 };
 
+/* Set by store.set when a write fails, which in practice means the quota is
+ * full. It used to swallow the error entirely: every setting written after the
+ * one that overflowed was silently dropped, the app carried on looking fine,
+ * and the loss only showed up on the next reload. */
+let storageFailed = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  set(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch (e) { storageFailed = true; console.warn("storage write failed", k, e); return false; }
+  }
 };
 
 /* ------------------------------------------------------------------- state */
@@ -900,6 +909,13 @@ const S = {
    * it had to change. It IS S.chatMsgs[S.chatId], the same array object, so
    * ordinary pushes need no bookkeeping; the three places that *reassign* it
    * are covered by persist() re-pointing the map on the way through. */
+  /* When this device last pushed its preferences. Persisted, and that is the
+   * whole point: it gates whether a pulled prefs blob is newer than what we
+   * have. Left in memory only, it was undefined on every load, so every load
+   * took the "no record of pushing" branch and overwrote local settings with
+   * whatever the cloud happened to hold -- which is stale exactly when you
+   * changed a setting and reloaded before the 2s debounce could push it. */
+  prefsPushedAt: store.get(K.prefsPushedAt, ""),
   chats:    store.get(K.chats, []),
   chatMsgs: store.get(K.chatMsgs, null),
   chatId:   store.get(K.chatId, ""),
@@ -1820,20 +1836,14 @@ function migrateChats() {
 }
 
 /* Storage is finite and this feature is the first thing here that grows without
- * bound. A quota failure is silent otherwise -- the write throws, the app
- * carries on, and the next reload has lost whatever did not fit. */
-let storageFull = false;
+ * bound. store.set reports failure rather than swallowing it, so a full quota
+ * reaches the reader instead of quietly losing the next thing written. */
 function saveChats() {
-  try {
-    store.set(K.chats, S.chats);
-    store.set(K.chatMsgs, S.chatMsgs);
-    store.set(K.chatId, S.chatId);
-    storageFull = false;
-  } catch (e) {
-    storageFull = true;
-    console.warn("chat storage full", e);
-    renderChatWarning();
-  }
+  storageFailed = false;
+  store.set(K.chats, S.chats);
+  store.set(K.chatMsgs, S.chatMsgs);
+  store.set(K.chatId, S.chatId);
+  if (storageFailed) renderChatWarning();
 }
 
 function currentChat() {
@@ -1898,7 +1908,10 @@ function persist() {
   // Covers every reassignment of S.history -- each one calls through here.
   if (S.chatId) S.chatMsgs[S.chatId] = S.history;
   touchChat();
-  store.set(K.history, S.history);
+  /* K.history is not written any more. It held the same turns as
+   * K.chatMsgs[S.chatId], so every message was stored twice -- doubling the
+   * quota needed by the one feature here that grows without bound. It is still
+   * *read* once, by migrateChats(), which is all it was ever for. */
   saveChats();
   queueSync("messages");
 }
@@ -2049,6 +2062,7 @@ async function flushSync() {
     if (q.prefs) {
       await HSKSync.pushPrefs(syncUser.id, HSKSync.prefsSnapshot(S));
       S.prefsPushedAt = new Date().toISOString();
+      store.set(K.prefsPushedAt, S.prefsPushedAt);
     }
     syncLastError = "";
     renderSyncStatus("Synced just now");
@@ -2154,12 +2168,12 @@ async function pullAndMerge() {
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       S.prefsPushedAt = prefsRow.updated_at;
+      store.set(K.prefsPushedAt, S.prefsPushedAt);
       applyFont(S.font);
       if (S.level !== oldLevel) await loadLevel(S.level);
       else if (S.script !== oldScript) rebuildLexicon();
     }
 
-    store.set(K.history, S.history);
     saveChats();
     renderChats();
     store.set(K.extra, S.extra); store.set(K.learning, S.learning); store.set(K.known, S.known);
@@ -2761,7 +2775,7 @@ function toggleFav(id) {
 /* Both filters, in one place, so the dropdowns and the browse sheet can never
  * disagree about what is on offer. Each is skipped when it would empty the
  * list -- a picker with nothing in it is worse than an unfiltered one, and
- * "favourites only" with no favourites yet is the first run of this feature. */
+ * "favorites only" with no favorites yet is the first run of this feature. */
 function filterModels(all) {
   let list = all;
   if (S.favOnly) {
@@ -2801,7 +2815,18 @@ function fillModels() {
    * "free models only": the free tier is exactly where the accuracy problem
    * this setting exists to solve lives, so hiding paid models here would hide
    * the fix. Its own id is carried in for the same reason the chat one is. */
+  /* Favorites apply here; "free models only" deliberately does not. The two
+   * filters are not the same kind of thing: starring is about keeping a short
+   * list to hand, which is just as useful for this picker, whereas the free
+   * filter would hide the paid models that are the entire reason this setting
+   * exists. Leaving favorites out was an oversight -- the browse sheet
+   * honored it for both pickers while this dropdown did not, so the two
+   * disagreed about what was on offer. */
   let tList = all;
+  if (S.favOnly) {
+    const favs = tList.filter(m => isFav(m.id));
+    if (favs.length) tList = favs;
+  }
   if (S.teachModel && !tList.some(m => m.id === S.teachModel)) {
     tList = [{ id: S.teachModel, label: S.teachModel }].concat(tList);
   }
@@ -2838,7 +2863,7 @@ function renderModelList() {
   const all = sortModels((cached && cached.length ? cached : MODELS).slice());
   /* The teaching picker is never narrowed to free models -- the accuracy
    * problem that setting exists to solve lives in the free tier, so hiding
-   * paid models there hides the fix. Favourites still apply to both. */
+   * paid models there hides the fix. favorites still apply to both. */
   let list = modelPickFor === "teach"
     ? (S.favOnly && all.some(m => isFav(m.id)) ? all.filter(m => isFav(m.id)) : all)
     : filterModels(all);
@@ -2857,7 +2882,7 @@ function renderModelList() {
     list = [known || { id: current, label: current }].concat(list);
   }
   $("#modelPickNote").textContent = list.length + " model" + (list.length === 1 ? "" : "s") +
-    (S.favOnly ? ", favourites only" : "") + (S.freeOnly && modelPickFor === "chat" ? ", free only" : "") +
+    (S.favOnly ? ", favorites only" : "") + (S.freeOnly && modelPickFor === "chat" ? ", free only" : "") +
     ". Tap a row to choose it; tap ★ to keep it at hand.";
   box.innerHTML = "";
   if (!list.length) {
@@ -2878,7 +2903,7 @@ function renderModelList() {
     name.innerHTML = escapeHtml(m.label || m.id) +
       '<span class="g">' + escapeHtml(m.id + priceLabel(m)) + "</span>";
     row.append(star, name);
-    /* Choosing closes. This is a picker first and a favourites editor second,
+    /* Choosing closes. This is a picker first and a favorites editor second,
      * and leaving it open after a choice means the next tap is "close" every
      * time. Starring deliberately does not close -- that one is a batch job. */
     row.onclick = () => {
@@ -3025,8 +3050,8 @@ async function loadPoolLevel(id) {
 /* The four states a word can be in, in the order they are worth reading: what
  * is left to do first, then the three kinds of already-done. Each is its own
  * <details> block carrying its count, which turns "endless scroll" into a
- * question you can answer at a glance -- and makes the colour coding
- * self-explanatory, since the group heading says what the colour means.
+ * question you can answer at a glance -- and makes the color coding
+ * self-explanatory, since the group heading says what the color means.
  *
  * `usable` is what the three done states share: the partner may already use
  * the word and it will never be flagged. They are kept apart anyway because
@@ -3974,7 +3999,7 @@ function conversationText(turns) {
 function renderChatWarning() {
   const box = $("#chatWarn");
   if (!box) return;
-  box.textContent = storageFull
+  box.textContent = storageFailed
     ? "This device's storage is full, so the newest messages may not survive a reload. " +
       "Delete a conversation here to make room. With cloud sync on, nothing already " +
       "synced is at risk."
@@ -4125,6 +4150,21 @@ $("#setSheet").addEventListener("click", e => {
       }
     })();
   }
+  /* A queued push waits 2s for edits to settle, and a reload inside that window
+   * used to drop it -- which is exactly what happens when you change a setting
+   * and immediately reload to pick up a new version. pagehide is the event that
+   * actually fires on mobile Safari (unload does not, reliably), and
+   * visibilitychange covers the app being backgrounded and killed. */
+  const flushNow = () => {
+    if (!S.sync.on || !syncUser) return;
+    clearTimeout(syncTimer);
+    flushSync();
+  };
+  window.addEventListener("pagehide", flushNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushNow();
+  });
+
   if ("serviceWorker" in navigator) {
     /* A new worker calls skipWaiting and claims the page; reload once so the
      * running app is the one that was just deployed. Two guards: controllerchange
