@@ -81,6 +81,18 @@ header button{padding:8px 10px; flex:0 0 auto}
    fine" -- the pinyin toggle, a focused input, a fresh word. */
 .copy.cached{color:var(--accent); border-color:#2f4a6b}
 
+/* Model browser rows. A row is a tap target for choosing; the star inside it is
+   its own, so starring never changes what you are talking to by accident. */
+.modelrow{display:flex; align-items:center; gap:10px; padding:9px 4px;
+          border-bottom:1px solid var(--line); cursor:pointer}
+.modelrow.on{background:var(--panel2)}
+.modelrow .mname{flex:1; min-width:0; font-size:14px}
+.modelrow .mname .g{display:block; color:var(--dim); font-size:11px;
+                    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.starbtn{flex:0 0 auto; width:32px; height:32px; min-height:0; padding:0; border-radius:50%;
+         background:none; border:1px solid var(--line); color:var(--dim); font-size:15px; line-height:1}
+.starbtn.on{color:#ffd479; border-color:#5a4a22}
+
 /* Progress bar. <i> is the fill, <u> the threshold tick -- two elements rather
    than a background gradient so the 95% mark stays put when the fill moves. */
 .bar{position:relative; height:10px; border-radius:999px; background:var(--panel2);
@@ -267,7 +279,7 @@ footer{
 .poolrow input[type=checkbox]{width:22px; height:22px; flex:0 0 auto; accent-color:var(--ok)}
 .poolrow .w2{font-size:20px; min-width:2.6em}
 .poolrow .g{flex:1; font-size:12.5px; color:var(--dim); min-width:0}
-#poolSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
+#poolSearch,#modelSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
   background:var(--panel2); min-height:44px; margin-bottom:4px}
 .stats td{padding:2px 10px 2px 0}
 
@@ -387,9 +399,11 @@ footer{
 
     <label for="modelChat">Chat model</label>
     <select id="modelChat"></select>
+    <button id="browseChatModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
 
     <label for="teachModel">Model for translation and grammar checks</label>
     <select id="teachModel"></select>
+    <button id="browseTeachModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
     <!-- The evidence for keeping these two apart is in README.md; what belongs
          here is the bit that changes what you would pick. -->
     <div class="note">Only runs when you press <b>English translation</b> or <b>Check my
@@ -400,6 +414,13 @@ footer{
       <input type="checkbox" id="freeOnly">
       <span>Display free models only</span>
     </label>
+    <label class="toggle" for="favOnly">
+      <input type="checkbox" id="favOnly">
+      <span>Display favourites only</span>
+    </label>
+    <div class="note">Both filters are ignored when they would leave the pickers empty — a
+    list with nothing in it is worse than an unfiltered one, and "favourites only" starts
+    with no favourites.</div>
     <label for="modelSort">Sort models</label>
     <select id="modelSort">
       <option value="price">by price — free first</option>
@@ -564,6 +585,15 @@ footer{
       <div class="note">Off by default. Sign in to back up your conversation, added words, and
       settings, and pick up where you left off on another device. Your OpenRouter key never
       syncs — it only ever stays on this device.</div>
+      <!-- Asked more than once, and it looks like data loss when it happens:
+           a private window is a separate storage partition, so it has its own
+           copy of everything including whether sync is on and who is signed
+           in. -->
+      <div class="note"><b>A private window counts as a different device.</b> Whether sync is
+      on, and who is signed in, live in this browser's own storage — a private or incognito
+      window has its own, and Safari discards it when the session ends. Your cloud data is
+      unaffected either way: turn sync on and sign in again and it all comes back. Do not
+      rely on a private window as the only copy of anything.</div>
       <div id="syncSignedOut" style="display:none">
         <button id="syncSignIn" type="button">Sign in with GitHub</button>
       </div>
@@ -621,6 +651,20 @@ footer{
   for words you brought with you, not ones the app taught you.</div>
   <div id="poolList" style="margin-top:10px"></div>
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="modelSheet"><div class="card">
+  <div class="sheethead">
+    <h2 id="modelPickTitle">Choose a model</h2>
+    <button id="modelX" class="sheetx" type="button" aria-label="Close model list" title="Close">✕</button>
+  </div>
+  <input id="modelSearch" type="text" placeholder="search name or id" autocomplete="off">
+  <!-- No filter or sort controls of its own: it reads the ones in Settings, so
+       there is one answer to "what am I looking at" rather than two that can
+       disagree. -->
+  <div class="note" id="modelPickNote"></div>
+  <div id="modelPickList" style="margin-top:10px"></div>
+  <div style="margin-top:16px"><button id="modelPickClose" class="primary">Done</button></div>
 </div></div>
 
 <div class="sheet" id="explainSheet"><div class="card">
@@ -747,7 +791,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v50 — 2026-08-24";
+const VERSION   = "v51 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -778,6 +822,7 @@ const K = {
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
+  favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
   known:"hsk1chat.knownAhead", sync:"hsk1chat.syncOn"
 };
@@ -845,7 +890,11 @@ const S = {
   // Whether cloud sync is turned on. Off by default; this alone does not
   // mean signed in -- see syncUser below, tracked separately since it is
   // session state, not a setting to persist.
-  sync:    store.get(K.sync, { on: false })
+  sync:    store.get(K.sync, { on: false }),
+  // Starred model ids, and whether the pickers are filtered down to them. The
+  // catalogue runs to several hundred entries and nobody uses more than a few.
+  favModels: store.get(K.favModels, []),
+  favOnly: store.get(K.favOnly, false)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -2496,14 +2545,38 @@ function sortModels(list) {
                          : (a.free ? -1 : 1)));
 }
 
+const isFav = id => S.favModels.indexOf(id) !== -1;
+
+function toggleFav(id) {
+  const i = S.favModels.indexOf(id);
+  if (i === -1) S.favModels.push(id); else S.favModels.splice(i, 1);
+  store.set(K.favModels, S.favModels);
+  queueSync("prefs");
+  fillModels();
+  renderModelList();
+}
+
+/* Both filters, in one place, so the dropdowns and the browse sheet can never
+ * disagree about what is on offer. Each is skipped when it would empty the
+ * list -- a picker with nothing in it is worse than an unfiltered one, and
+ * "favourites only" with no favourites yet is the first run of this feature. */
+function filterModels(all) {
+  let list = all;
+  if (S.favOnly) {
+    const favs = list.filter(m => isFav(m.id));
+    if (favs.length) list = favs;
+  }
+  if (S.freeOnly) {
+    const free = list.filter(m => m.free);
+    if (free.length) list = free;
+  }
+  return list;
+}
+
 function fillModels() {
   const cached = store.get(K.models, null);
   const all = sortModels((cached && cached.length ? cached : MODELS).slice());
-  let list = all;
-  if (S.freeOnly) {
-    const free = all.filter(m => m.free);
-    if (free.length) list = free;                 // never leave the picker empty
-  }
+  let list = filterModels(all);
   /* The selected model always stays in the list, or the picker would silently
    * switch what you are talking to. Carry its catalogue entry across so a paid
    * model kept under the free filter still shows its name and price rather
@@ -2545,6 +2618,93 @@ function fillModels() {
     const free = cached.filter(m => m.free).length;
     $("#modelNote").textContent = cached.length + " models cached, " + free + " of them free.";
   }
+}
+
+/* ------------------------------------------------------- the model browser
+ *
+ * The catalogue runs to several hundred entries and a <select> that long is
+ * unusable on a phone, so picking and starring both happen here instead. It
+ * reads S.freeOnly, S.favOnly and S.modelSort rather than carrying its own
+ * copies -- one answer to "what am I looking at", not two that drift apart.
+ */
+let modelPickFor = "chat";      // which of the two pickers opened this
+
+function renderModelList() {
+  const box = $("#modelPickList");
+  if (!box) return;
+  const cached = store.get(K.models, null);
+  const all = sortModels((cached && cached.length ? cached : MODELS).slice());
+  /* The teaching picker is never narrowed to free models -- the accuracy
+   * problem that setting exists to solve lives in the free tier, so hiding
+   * paid models there hides the fix. Favourites still apply to both. */
+  let list = modelPickFor === "teach"
+    ? (S.favOnly && all.some(m => isFav(m.id)) ? all.filter(m => isFav(m.id)) : all)
+    : filterModels(all);
+  const q = $("#modelSearch").value.trim().toLowerCase();
+  if (q) list = list.filter(m =>
+    m.id.toLowerCase().includes(q) || String(m.label || "").toLowerCase().includes(q));
+
+  const current = modelPickFor === "teach" ? S.teachModel : S.model;
+  /* The model in use is always listed, even when a filter or the catalogue
+   * would drop it -- the same rule fillModels() follows for the dropdowns. A
+   * picker that cannot show you what you are currently talking to is worse
+   * than one showing an extra row, and an id typed by hand need never be in
+   * the catalogue at all. */
+  if (current && !list.some(m => m.id === current)) {
+    const known = all.find(m => m.id === current);
+    list = [known || { id: current, label: current }].concat(list);
+  }
+  $("#modelPickNote").textContent = list.length + " model" + (list.length === 1 ? "" : "s") +
+    (S.favOnly ? ", favourites only" : "") + (S.freeOnly && modelPickFor === "chat" ? ", free only" : "") +
+    ". Tap a row to choose it; tap ★ to keep it at hand.";
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<div class="note">Nothing matches.</div>';
+    return;
+  }
+  list.slice(0, POOL_PAGE).forEach(m => {
+    const row = document.createElement("div");
+    row.className = "modelrow" + (m.id === current ? " on" : "");
+    const star = document.createElement("button");
+    star.className = "starbtn" + (isFav(m.id) ? " on" : "");
+    star.type = "button";
+    star.textContent = isFav(m.id) ? "★" : "☆";
+    star.setAttribute("aria-label", (isFav(m.id) ? "Unstar " : "Star ") + (m.label || m.id));
+    star.onclick = e => { e.stopPropagation(); toggleFav(m.id); };
+    const name = document.createElement("span");
+    name.className = "mname";
+    name.innerHTML = escapeHtml(m.label || m.id) +
+      '<span class="g">' + escapeHtml(m.id + priceLabel(m)) + "</span>";
+    row.append(star, name);
+    /* Choosing closes. This is a picker first and a favourites editor second,
+     * and leaving it open after a choice means the next tap is "close" every
+     * time. Starring deliberately does not close -- that one is a batch job. */
+    row.onclick = () => {
+      if (modelPickFor === "teach") {
+        S.teachModel = m.id;
+        store.set(K.teachModel, S.teachModel);
+        queueSync("prefs");
+        fillModels();
+      } else {
+        setChatModel(m.id);
+      }
+      closeSheet("#modelSheet");
+    };
+    box.appendChild(row);
+  });
+  if (list.length > POOL_PAGE) {
+    box.insertAdjacentHTML("beforeend",
+      '<div class="note">Showing the first ' + POOL_PAGE + " — search to narrow it.</div>");
+  }
+}
+
+function openModelPicker(which) {
+  modelPickFor = which;
+  $("#modelPickTitle").textContent =
+    which === "teach" ? "Model for translation and grammar checks" : "Chat model";
+  $("#modelSearch").value = "";
+  openSheet("#modelSheet");
+  renderModelList();
 }
 
 // Reachable from either the setup button or the quiet reload one; whichever was
@@ -3233,6 +3393,7 @@ $("#btnSet").onclick = () => {
   renderPaceNote();
   renderProgress();
   $("#freeOnly").checked = S.freeOnly;
+  $("#favOnly").checked = S.favOnly;
   $("#modelSort").value = S.modelSort;
   $("#script").value = S.script;
   $("#speechRate").innerHTML = [0.5, 0.6, 0.7, 0.8, 0.9, 1].map(r =>
@@ -3416,12 +3577,14 @@ $("#modelSort").onchange = e => {
   S.modelSort = e.target.value; store.set(K.modelSort, S.modelSort);
   queueSync("prefs");
   fillModels();
+  renderModelList();
 };
 $("#freeOnly").onchange = e => {
   S.freeOnly = e.target.checked;
   store.set(K.freeOnly, S.freeOnly);
   queueSync("prefs");
   fillModels();
+  renderModelList();
   if (S.freeOnly && !store.get(K.models, null)) {
     $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
   }
@@ -3535,6 +3698,21 @@ $("#syncSignIn").onclick = signInForSync;
 $("#syncNow").onclick = () => pullAndMerge();
 $("#syncSignOut").onclick = signOutOfSync;
 
+$("#browseChatModel").onclick = () => openModelPicker("chat");
+$("#browseTeachModel").onclick = () => openModelPicker("teach");
+$("#modelSearch").addEventListener("input", renderModelList);
+$("#modelX").onclick = () => closeSheet("#modelSheet");
+$("#modelPickClose").onclick = () => closeSheet("#modelSheet");
+$("#modelSheet").addEventListener("click", e => {
+  if (e.target === $("#modelSheet")) closeSheet("#modelSheet");
+});
+$("#favOnly").onchange = e => {
+  S.favOnly = e.target.checked;
+  store.set(K.favOnly, S.favOnly);
+  queueSync("prefs");
+  fillModels();
+  renderModelList();
+};
 $("#refreshModels").onclick = e => refreshModels(e.currentTarget);
 $("#modelReload").onclick = e => refreshModels(e.currentTarget);
 $("#checkUpdate").onclick = checkUpdate;
