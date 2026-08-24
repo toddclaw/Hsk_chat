@@ -231,5 +231,36 @@ check(Sync.rowToMessage({ id: "m1", role: "user", text: "x", created_at: "t" }).
 check(/^[0-9a-f-]{36}$/.test(Sync.LEGACY_ID),
   "the legacy id is a real uuid, since the column is typed");
 
+/* ------------------------------------------------- prefs freshness gate ---
+ *
+ * applyPrefsSnapshot is guarded at the call site by "is the remote newer than
+ * the last thing I pushed", and the answer has to survive a reload. It did not:
+ * prefsPushedAt lived in memory only, so every load answered "I have never
+ * pushed" and adopted whatever the cloud held -- stale precisely when you
+ * changed a setting and reloaded before the 2s debounce could push it, which
+ * is reloading to pick up a new version. Settings appeared to revert on
+ * upgrade.
+ *
+ * The gate itself is one comparison, so it is checked here directly rather
+ * than mimed through the app. */
+const fresher = (remoteAt, pushedAt) => !pushedAt || remoteAt > pushedAt;
+
+check(fresher("2026-01-02T00:00:00Z", "2026-01-01T00:00:00Z"),
+  "a genuinely newer remote snapshot is adopted");
+check(!fresher("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"),
+  "an older one is not");
+check(!fresher("2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"),
+  "and our own last push is not treated as news");
+check(fresher("2026-01-01T00:00:00Z", ""),
+  "with no record of pushing, the remote wins -- which is why the record must persist");
+
+/* The shape of the loss: adopting an older snapshot silently replaces exactly
+ * the settings the learner had just changed. */
+const local = { model: "new/model", replyLength: "long", attempts: 6, key: "keep" };
+Sync.applyPrefsSnapshot(local, { model: "old/model", replyLength: "short", attempts: 3 });
+check(local.model === "old/model" && local.replyLength === "short" && local.attempts === 3,
+  "an adopted snapshot overwrites model, reply length and tries -- the reported symptom");
+check(local.key === "keep", "though never the API key");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

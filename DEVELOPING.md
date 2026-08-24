@@ -407,7 +407,22 @@ Project setup lives in README.md. What is easy to get wrong:
 - **The Supabase project may not have had the migration run.** Whoever deployed it is not
   necessarily whoever is using it, so a missing table or column degrades rather than throws:
   `conversation_id` is stripped and messages still push. Detection matches error *codes*
-  (`PGRST205`, `42P01`, `PGRST204`, `42703`) — the messages are localised and change.
+  (`PGRST205`, `42P01`, `PGRST204`, `42703`) — the messages are localized and change.
+- **`prefsPushedAt` must persist, or every reload adopts the cloud's settings.** It gates
+  `applyPrefsSnapshot` with "is the remote newer than my last push". Held in memory only it
+  was `undefined` on every load, so every load took the never-pushed branch and overwrote
+  local settings — invisible while the cloud is current, and destructive exactly when it is
+  behind, which is when you changed a setting and reloaded before the 2s debounce pushed it.
+  Reloading to pick up a new version is that case. This shipped broken and was reported as
+  "the upgrade lost my model, reply length and tries".
+- **`store.set` reports failure now; it used to swallow it.** A full quota meant every write
+  after the overflowing one vanished with no error, the app looking fine until the next
+  reload. Anything relying on a `try` around `store.set` was dead code — the `catch` was
+  inside.
+- **Do not store the conversation twice.** `persist()` wrote `K.history` *and*
+  `K.chatMsgs[S.chatId]`, the same turns in both, doubling the quota needed by the one
+  feature here that grows without bound. `K.history` is now read once, by `migrateChats()`,
+  and never written.
 - **A private window is a different device, and it reads as data loss.** Sync state and the
   Supabase session both live in `localStorage`, which is partitioned per browsing context —
   so the same browser in a normal window has sync off and no session, shows an empty app,

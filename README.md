@@ -318,7 +318,8 @@ key you had just pasted.)
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
 | **Browse and star models** | the catalogue as a searchable sheet: tap a row to choose it, tap ★ to keep it at hand |
-| **Favourites only** | narrows both pickers to starred models |
+| **Favorites only** | narrows both pickers to starred models |
+| | (*free models only* deliberately does not reach the teaching picker — it would hide the paid models that setting exists to reach) |
 | **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |
 | **Text size** | 16–34px, with a live preview |
@@ -593,7 +594,7 @@ would empty the picker, and the model currently in use is always listed even whe
 the catalogue would drop it: a picker that cannot show what you are talking to is worse than
 one showing an extra row, and a hand-typed id need never be in the catalogue at all.
 
-Favourites sync with the rest of preferences.
+Favorites sync with the rest of preferences.
 
 ## Correcting the learner's own Chinese
 
@@ -704,7 +705,7 @@ history arriving afterwards would vanish behind an empty conversation.
 `db/schema.sql` is safe to re-run and adds the table and the column, but somebody has to run
 it — and the person reading the screen may not be the person who owns the Supabase project.
 So the app **probes once and degrades** rather than failing: a missing table or column
-(`PGRST205` / `42P01` / `PGRST204` / `42703`, matched on code, since messages are localised)
+(`PGRST205` / `42P01` / `PGRST204` / `42703`, matched on code, since messages are localized)
 switches sync into a mode that strips `conversation_id` and pushes messages anyway.
 
 Backing up the conversation matters more than remembering which chat it was in, and the
@@ -785,7 +786,7 @@ offers them commonest-first, so it is working through them in the cheapest possi
 Separate figures rather than one blended score, because they mean different things and the
 gaps between them are the informative part. **Blue** is what you can **read** — every word the
 level allows you. **Green** is what you can **use**, the same measure over the words you have
-actually written. Each figure is printed in its bar's colour, so the legend is the text
+actually written. Each figure is printed in its bar's color, so the legend is the text
 itself rather than a key you have to hold in your head. Green always trails blue, and that
 gap is normal.
 **Met** is what pacing has taught you. **Used by you** is that same production as a count,

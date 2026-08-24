@@ -555,19 +555,36 @@ return true;
                .classList.contains('on');`),
       "the star shows as set without reopening the sheet");
 
-    /* Favourites-only has to reach the dropdowns, not just the sheet -- two
+    /* Favorites-only has to reach the dropdowns, not just the sheet -- two
      * lists disagreeing about what is available is the whole failure mode. */
+    const teachBefore = await exec(`
+      return document.querySelector('#teachModel').options.length;`);
     await exec(`
       var b = document.querySelector('#favOnly');
       b.checked = true; b.dispatchEvent(new Event("change")); return true;`);
     check(await exec(`return document.querySelector('#modelChat').options.length;`) === 1,
-      "favourites-only narrows the Settings dropdown, not only the sheet",
+      "Favorites-only narrows the Settings dropdown, not only the sheet",
       await exec(`return document.querySelector('#modelChat').options.length + " options";`));
+    /* And the teaching picker, which it did not reach at first: the browse
+     * sheet honored favorites for both pickers while this dropdown honored it
+     * for neither, so the two disagreed about what was on offer. "Free models
+     * only" is the one filter that deliberately stops here -- it would hide the
+     * paid models this setting exists to reach. */
+    /* Compared, not counted to a constant: the picker always carries the
+     * teaching model in use and the same-as-chat option on top of whatever
+     * survives the filter, so the absolute number says little. That it went
+     * down is the whole claim. */
+    check(await exec(`
+      return document.querySelector('#teachModel').options.length;`) < teachBefore,
+      "and narrows the teaching picker too, which it did not at first",
+      await exec(`
+        return Array.prototype.map.call(document.querySelector('#teachModel').options,
+          function (o) { return o.textContent; }).join(" | ");`));
     check(await exec(`
       return document.querySelectorAll('#modelPickList .modelrow').length;`) === 1,
       "and the sheet agrees with it");
 
-    /* An empty picker is worse than an unfiltered one. With favourites on and
+    /* An empty picker is worse than an unfiltered one. With favorites on and
      * none set, the filter has to yield rather than leave nothing to choose.
      * Unstarred through the UI, not by writing localStorage -- S is read once
      * at boot, so poking storage directly leaves the running app believing the
@@ -578,7 +595,7 @@ return true;
       return (JSON.parse(localStorage.getItem("hsk1chat.favModels")) || []).length;`) === 0,
       "tapping ★ again unstars it");
     check(await exec(`return document.querySelector('#modelChat').options.length;`) >= 2,
-      "favourites-only with no favourites falls back rather than emptying the picker",
+      "Favorites-only with no favorites falls back rather than emptying the picker",
       await exec(`return document.querySelector('#modelChat').options.length + " options";`));
 
     // Choosing closes; this is a picker first and an editor second.
@@ -899,7 +916,7 @@ return true;
     const pctMatch = /(\d+)% you can read/.exec(prog || "");
     check(!!pctMatch, "the progress panel reports a percentage of the next level",
       JSON.stringify((prog || "").slice(0, 160)));
-    /* Both figures are named in words, so the bar's two colours do not have to
+    /* Both figures are named in words, so the bar's two colors do not have to
      * be decoded from a key that is not on screen. */
     const useMatch = /(\d+)% you can use/.exec(prog || "");
     check(!!useMatch && Number(useMatch[1]) < Number(pctMatch ? pctMatch[1] : 0),
@@ -1149,6 +1166,23 @@ return true;
       JSON.stringify(await exec(`
         return document.querySelector('#syncStatus').textContent;`)));
 
+    /* prefsPushedAt has to reach disk, not just memory. In memory it is
+     * undefined on every load, so every load takes the "I have never pushed"
+     * branch and adopts whatever the cloud holds -- overwriting local settings
+     * whenever the cloud is behind, which is exactly the case when you change a
+     * setting and reload before the 2s debounce can push it. Reloading to pick
+     * up a new version is that case.
+     *
+     * Driven by changing a real preference and waiting for the push, rather
+     * than asserting on a key that a passing test might never have caused to be
+     * written. */
+    await exec(`
+      var b = document.querySelector('#showStarters');
+      b.checked = !b.checked; b.dispatchEvent(new Event("change")); return true;`);
+    await waitFor(`localStorage.getItem("hsk1chat.prefsPushedAt") !== null`,
+      "the prefs push being recorded on disk");
+    check(true, "the last prefs push is recorded on disk, so a reload cannot re-adopt a stale cloud copy");
+
     // The feature under test.
     await exec(`window.__t.calls = []; document.querySelector("#syncWipe").click(); return true;`);
     await waitFor("(document.querySelector('#syncWipeNote').textContent || '').length > 0",
@@ -1198,7 +1232,7 @@ return true;
      * a silent one: the box clears, the list does not change, and the Add
      * button looks broken. 你 is HSK 1, so it is covered at every level the app
      * offers. Asserted on the note, not on the list, because "nothing was
-     * added" is the correct behaviour -- the bug was never saying so. */
+     * added" is the correct behavior -- the bug was never saying so. */
     await exec(`
       document.querySelector('#addWord').value = "你";
       document.querySelector('#addWordBtn').click();
