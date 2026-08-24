@@ -287,6 +287,32 @@ return true;
     check(!!ownBtns && ownBtns.indexOf("Check my grammar") !== -1,
       "a user message offers the grammar-check button", JSON.stringify(ownBtns));
 
+    /* Yellow means "already answered -- pressing this is free and instant".
+     * The seed gives both states from one render: the first user turn has a
+     * stored explain-chat and no translation, the last has neither. Checked on
+     * both sides because a rule that marked every button, or none, would sail
+     * through a one-sided assertion. */
+    const marks = await exec(`
+      function state(m) {
+        var out = {};
+        Array.prototype.forEach.call(m.querySelectorAll('.meta button'), function (b) {
+          out[b.textContent] = b.className;
+        });
+        return out;
+      }
+      var msgs = document.querySelectorAll('#log .msg.user');
+      return { first: state(msgs[0]), last: state(msgs[msgs.length - 1]) };`);
+    check(/\bcached\b/.test(marks.first["Check my grammar"] || ""),
+      "a stored explanation marks its button as cached", JSON.stringify(marks.first));
+    check(!/\bcached\b/.test(marks.first["English translation"] || ""),
+      "an untranslated message's translate button is not marked",
+      JSON.stringify(marks.first));
+    check(!/\bcached\b/.test(marks.last["Check my grammar"] || ""),
+      "and a turn with nothing stored is not marked either", JSON.stringify(marks.last));
+    check(!("redo" in marks.first),
+      "redo is offered only where there is an answer to replace",
+      JSON.stringify(marks.first));
+
     /* Opening that sheet exercises md.js against the DOM for real: node can
      * check the string it returns, but only a browser shows whether the result
      * reaches the page as formatting or as text. The seeded explain-chat means
@@ -354,6 +380,24 @@ return true;
       "with {text} replaced by the actual sentence", JSON.stringify(body));
     check(!/\{level\}/.test(body || ""),
       "and {level} substituted rather than left as a placeholder", JSON.stringify(body));
+    /* That translation has just landed, so the button above it has to say so
+     * and the redo has to appear -- neither waits for a render this path used
+     * not to do at all. This is the resubmit feature's only entry point for a
+     * translation, so it is the assertion that keeps it reachable. */
+    await waitFor(`(function () {
+      var m = document.querySelector('#log .msg.user');
+      return Array.prototype.some.call(m.querySelectorAll('.meta button'),
+        function (b) { return b.textContent === "redo"; });
+    })()`, "the redo button appearing once a translation is stored");
+    const transBtns = await exec(`
+      var out = {};
+      Array.prototype.forEach.call(
+        document.querySelectorAll('#log .msg.user .meta button'),
+        function (b) { out[b.textContent] = b.className; });
+      return out;`);
+    check(/\bcached\b/.test(transBtns["Hide translation"] || ""),
+      "and the translate button is marked cached without a reload",
+      JSON.stringify(transBtns));
     /* The grammar check should see what the student was replying to. 我也是 is
      * the case that makes it matter: fine after a statement, odd after a
      * question, and unjudgeable with neither. */
@@ -486,6 +530,23 @@ return true;
     await exec(`
       var b = document.querySelector('#modelId');
       b.value = "big/one"; b.dispatchEvent(new Event("change")); return true;`);
+
+    /* The key is stored as it is typed, with Settings still open and nothing
+     * committed. It was only ever written on close, so signing in for sync --
+     * which navigates the page away to GitHub and comes back as a fresh load --
+     * threw away a key that had just been entered and tested. Asserted while
+     * the sheet is open, because "after closing" is the case that already
+     * worked and would hide the regression. */
+    await exec(`
+      var k = document.querySelector('#key');
+      k.value = "sk-or-typed-not-yet-closed";
+      k.dispatchEvent(new Event("input"));
+      return true;`);
+    check(await exec(`return document.querySelector('#setSheet').classList.contains('open');`),
+      "Settings is still open with the typed key uncommitted");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.apiKey"));`)
+            === "sk-or-typed-not-yet-closed",
+      "the API key is stored as it is typed, not only when Settings closes");
 
     /* Settings has no Cancel: the fields are read out of the DOM when it closes,
      * so ✕ must commit exactly what Done commits. Asserted through a field in a
@@ -724,6 +785,19 @@ return true;
       "the signed-in sync section");
     check(true, "switching sync on reaches a signed-in state against the mock");
 
+    /* The first pull says "Synced just now" and then renderSyncSection() runs
+     * immediately after it -- here at the end of the toggle handler, and again
+     * on the load that lands back from the GitHub redirect. It used to repaint
+     * that line from scratch and blank it, so a sync that had in fact just
+     * succeeded reported nothing at all, and pressing "Sync now" was the only
+     * way to see the app confirm anything. Asserted after the re-render, which
+     * is the whole point: during the pull it was never blank. */
+    check(/synced/i.test(await exec(`
+      return document.querySelector('#syncStatus').textContent;`)),
+      "the first pull's outcome survives the re-render that follows it",
+      JSON.stringify(await exec(`
+        return document.querySelector('#syncStatus').textContent;`)));
+
     // The feature under test.
     await exec(`window.__t.calls = []; document.querySelector("#syncWipe").click(); return true;`);
     await waitFor("(document.querySelector('#syncWipeNote').textContent || '').length > 0",
@@ -761,6 +835,50 @@ return true;
       var n = document.querySelector('#syncWipeNote');
       return n.offsetParent !== null || n.getClientRects().length > 0;`),
       "the outcome message is still visible after the section is hidden");
+
+    /* ------------------------------------------------ the vocabulary sheet */
+
+    await exec(`document.querySelector('#btnVocab').click(); return true;`);
+    await waitFor("document.querySelector('#vocabSheet').classList.contains('open')",
+      "the vocabulary sheet");
+
+    /* Adding a word the level already covers is a no-op inside addWords(), and
+     * a silent one: the box clears, the list does not change, and the Add
+     * button looks broken. 你 is HSK 1, so it is covered at every level the app
+     * offers. Asserted on the note, not on the list, because "nothing was
+     * added" is the correct behaviour -- the bug was never saying so. */
+    await exec(`
+      document.querySelector('#addWord').value = "你";
+      document.querySelector('#addWordBtn').click();
+      return true;`);
+    const addNote = await exec(`return document.querySelector('#addNote').textContent;`);
+    check(addNote.indexOf("你") !== -1 && /already/i.test(addNote),
+      "adding a word already on the list says so instead of ignoring it",
+      JSON.stringify(addNote));
+
+    /* Same sticky ✕ as Settings, and it has to actually close. The word box is
+     * empty here, so closeVocab()'s commit is the no-op path -- the committing
+     * half is checked below. */
+    check(await exec(`
+      document.querySelector('#vocabX').click();
+      return !document.querySelector('#vocabSheet').classList.contains('open');`),
+      "the ✕ closes the vocabulary sheet");
+
+    /* A word still sitting unsubmitted in the box is the one thing closing
+     * could throw away, so ✕ adds it on the way out -- "exit and save", the
+     * same contract Settings' ✕ has. 咖啡 is HSK 3 and absent from HSK 1, which
+     * is the level this run is at, so it is genuinely an addition rather than
+     * another already-covered no-op. */
+    await exec(`
+      document.querySelector('#btnVocab').click();
+      document.querySelector('#addWord').value = "咖啡";
+      document.querySelector('#vocabX').click();
+      return true;`);
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.extraVocab")) || [])
+        .some(function (e) { return e.w === "咖啡"; });`),
+      "and commits a word left in the box rather than discarding it",
+      await exec(`return localStorage.getItem("hsk1chat.extraVocab");`));
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

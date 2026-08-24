@@ -278,6 +278,24 @@ Project setup lives in README.md. What is easy to get wrong:
   gateway rejects a request that also carries one as `Authorization: Bearer`,
   because it tries to parse it as a JWT. This is why `keepalive.yml` looks the
   way it does.
+- **`renderSyncStatus()` is the only writer of the sync line, and it remembers.**
+  `renderSyncSection()` runs far more often than anything with news to report,
+  and it runs *right after* the first pull on the load that lands back from the
+  GitHub redirect. Repainting that line from a fresh string blanks whatever the
+  pull just said, so a sync that worked reports nothing and the only way to see
+  a confirmation is to press **Sync now** — which is exactly what it looked
+  like from the outside. Route new status text through `renderSyncStatus()`.
+- **`flushSync()` must reschedule when it finds `syncBusy`, not just return.**
+  The queue survives an early return (the flags are cleared further down), but
+  the timer that fired does not, and `queueSync()` is the only other thing that
+  ever sets one. A bare return therefore strands everything queued until an
+  unrelated edit happens to restart the clock.
+- **Anything Settings reads out of the DOM is gone if the page navigates away.**
+  `commitSettings()` runs on close, so signing in for sync — which leaves for
+  GitHub and comes back as a fresh load — used to discard the API key, the reply
+  length, the tries, the Anki fields and the system prompt. `signInForSync()`
+  commits first for that reason. The key is additionally stored on every
+  keystroke, because it is the one field that cannot be retyped from memory.
 - **Free-tier projects pause after 7 days without database *activity*.** Dashboard
   visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
   real row every 3 days; it needs the `SUPABASE_URL` and
