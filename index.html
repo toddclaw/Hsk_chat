@@ -91,11 +91,10 @@ header button{padding:8px 10px; flex:0 0 auto}
 .bar>b{position:absolute; left:0; top:0; bottom:0; background:var(--ok); border-radius:999px}
 .bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
-.barnote b{color:var(--ink); font-weight:600}
-/* Word state in the level browser: at your level, met, or neither. */
-.lvstate{font-size:11px; color:var(--dim); white-space:nowrap}
-.lvstate.have{color:var(--ok)}
-.lvstate.met{color:var(--accent)}
+/* Each figure takes the colour of the bar it describes, so the legend is the
+   text itself rather than a key you have to hold in your head. */
+.barnote b{color:var(--accent); font-weight:600}
+.barnote i{color:var(--ok); font-style:normal; font-weight:600}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -270,7 +269,6 @@ footer{
 .poolrow .g{flex:1; font-size:12.5px; color:var(--dim); min-width:0}
 #poolSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
   background:var(--panel2); min-height:44px; margin-bottom:4px}
-#poolMore{width:100%; margin-top:8px}
 .stats td{padding:2px 10px 2px 0}
 
 #pop{
@@ -464,7 +462,12 @@ footer{
            the lists are cumulative and frequency-ordered, so HSK 1's 520 words
            are 41% of the HSK 2 list but around 85% of HSK 2 running text. A
            bar starting at zero would be telling you something untrue. -->
-      <div class="note">An estimate of how much of the next level you can already read,
+      <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
+      word the level allows you. <b style="color:var(--ok)">Green</b> is what you can
+      <em>use</em>: the same measure over the words you have actually written yourself. Green
+      always trails blue, and the gap between them is normal — recognising a word is easier
+      than reaching for it, and that gap widens as you improve.
+      An estimate of how much of the next level you can already read,
       not how much of its list you have ticked off — the commonest words carry most of the
       text, so the first few hundred matter far more than the rest. 95% is where reading
       stops being work; published research puts adequate comprehension there and comfortable
@@ -610,13 +613,14 @@ footer{
   <label for="poolLevel">Level</label>
   <select id="poolLevel"></select>
   <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning" style="margin-top:8px">
-  <div class="note">Commonest first, which is the order they are worth learning in. Tick any
-  word you already know. It joins the allowlist immediately — the partner may use it, and it
-  will not be offered or flagged again — but it will not appear in 词 or in flashcard exports:
-  this list is for words you brought with you, not ones the app taught you. Words already at
-  your level, or already met, are marked and need no tick.</div>
+  <div class="note">Grouped by what you have done with each word, commonest first inside each
+  group — which is the order they are worth learning in. Only <b>Not yet</b> and <b>Ticked as
+  already known</b> have boxes, because those are the two you can change: an empty box means
+  the word is not usable yet, and ticking it says you already know it, which joins it to the
+  allowlist at once. Words at your level or already met need no box — they are usable
+  either way. Ticked words stay out of 词 and the flashcard exports on purpose: that list is
+  for words you brought with you, not ones the app taught you.</div>
   <div id="poolList" style="margin-top:10px"></div>
-  <button id="poolMore" style="display:none"></button>
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
 </div></div>
 
@@ -744,7 +748,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v48 — 2026-08-24";
+const VERSION   = "v49 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2629,7 +2633,6 @@ function renderLearning() {
  * in one go is the wrong tradeoff for a list meant to be skimmed quickly;
  * "show more" grows it in the same increments search narrows it by. */
 const POOL_PAGE = 150;
-let poolShown = POOL_PAGE;
 
 /* Which level the browser is showing. Session state, not a setting: it opens
  * on the next level every time, which is the one the pacing engine is working
@@ -2649,13 +2652,94 @@ function poolMatches() {
  * the network. */
 async function loadPoolLevel(id) {
   poolLevel = id;
-  poolShown = POOL_PAGE;
+  poolShownBy = {};
   $("#poolList").innerHTML = '<div class="note">Loading…</div>';
   /* Commonest first. buildPool already sorts this way for the pacing pool, but
    * this list is unfiltered, so it has to sort for itself. */
   poolEntries = (await levelList(id)).slice()
     .sort((a, b) => (a.f || Infinity) - (b.f || Infinity) || a.w.localeCompare(b.w));
   renderPool();
+}
+
+/* The four states a word can be in, in the order they are worth reading: what
+ * is left to do first, then the three kinds of already-done. Each is its own
+ * <details> block carrying its count, which turns "endless scroll" into a
+ * question you can answer at a glance -- and makes the colour coding
+ * self-explanatory, since the group heading says what the colour means.
+ *
+ * `usable` is what the three done states share: the partner may already use
+ * the word and it will never be flagged. They are kept apart anyway because
+ * how a word became usable is the useful part -- one was free with the level,
+ * one you were taught, one you claimed. */
+const POOL_GROUPS = [
+  { key: "todo",  label: "Not yet",
+    note: "Not usable yet. Pacing offers these commonest-first, and they are flagged if the partner uses one. Tick any you already know." },
+  { key: "have",  label: "Already at your level",
+    note: "In your level's own list. Always usable, nothing to do." },
+  { key: "met",   label: "Met — added or introduced",
+    note: "Introduced by pacing, typed by you, or added by hand. Already usable, and these are the ones worth drilling." },
+  { key: "known", label: "Ticked as already known",
+    note: "You told the app you knew these. Usable, never offered, never flagged. Untick to undo." }
+];
+
+// Per group, so opening one long block does not page the others with it.
+let poolShownBy = {};
+
+function poolGroupOf(e, baseSet) {
+  if (baseSet.has(e.w)) return "have";
+  if (isExtra(e.w) || learned(e.w)) return "met";
+  if (isKnownAhead(e.w)) return "known";
+  return "todo";
+}
+
+function poolRow(e, group) {
+  const row = document.createElement("div");
+  row.className = "poolrow";
+  /* Only the two states you can change carry a box. Ticking a word that is
+   * already at your level, or that the app taught you, would do nothing, so it
+   * is shown as done rather than as a box that quietly ignores you. */
+  const box = (group === "todo" || group === "known")
+    ? '<input type="checkbox"' + (group === "known" ? " checked" : "") + ">"
+    : '<span style="width:16px"></span>';
+  row.innerHTML = box +
+    '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+    '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+  const tick = row.querySelector("input");
+  if (tick) tick.onchange = ev => {
+    if (ev.target.checked) {
+      if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
+    } else {
+      S.known = S.known.filter(k => k.w !== e.w);
+      deleteSyncedWord("vocab_known", e.w);
+    }
+    store.set(K.known, S.known);
+    rebuildLexicon(); updateMirror();
+    renderPool();
+    // Ticking a word is a claim about what you can read, so the estimate has
+    // to move with it -- that is the whole point of ticking.
+    renderProgress(); renderSectionNotes();
+  };
+  return row;
+}
+
+/* Rows for one group, capped, with its own "show more". Capped rather than
+ * rendered whole even inside a collapsed <details>: collapsing hides the nodes,
+ * it does not avoid building them, and HSK 7-9 is 10,970 of them. */
+function renderPoolGroup(wrap, spec, entries) {
+  const shown = poolShownBy[spec.key] || POOL_PAGE;
+  entries.slice(0, shown).forEach(e => wrap.appendChild(poolRow(e, spec.key)));
+  const left = entries.length - shown;
+  if (left > 0) {
+    const more = document.createElement("button");
+    more.className = "quiet";
+    more.style.cssText = "margin-top:8px";
+    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
+    more.onclick = () => {
+      poolShownBy[spec.key] = shown + POOL_PAGE;
+      renderPool();
+    };
+    wrap.appendChild(more);
+  }
 }
 
 function renderPool() {
@@ -2669,50 +2753,39 @@ function renderPool() {
     box.innerHTML = '<div class="note">' +
       (poolEntries.length ? "Nothing matches that search."
                           : "That level's list could not be loaded.") + "</div>";
+    return;
   }
-  matches.slice(0, poolShown).forEach(e => {
-    const row = document.createElement("div");
-    row.className = "poolrow";
-    /* Three states worth distinguishing, and only the third has anything to
-     * tick: already legal at your level, already met through pacing or added
-     * by hand, or not yet reached. Ticking a word you already have would do
-     * nothing, so it is shown as done rather than as an unchecked box that
-     * quietly ignores you. */
-    const have = baseSet.has(e.w);
-    const met = !have && (isExtra(e.w) || !!learned(e.w));
-    const state = have ? '<span class="lvstate have">your level</span>'
-                : met  ? '<span class="lvstate met">met</span>' : "";
-    row.innerHTML = (have || met ? '<span style="width:16px"></span>'
-        : '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + ">") +
-      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
-      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>" + state;
-    const tick = row.querySelector("input");
-    if (tick) tick.onchange = ev => {
-      if (ev.target.checked) {
-        if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
-      } else {
-        S.known = S.known.filter(k => k.w !== e.w);
-        deleteSyncedWord("vocab_known", e.w);
-      }
-      store.set(K.known, S.known);
-      rebuildLexicon(); updateMirror();
-      // S.pool membership does not change -- only isKnownAhead(w) does -- so a
-      // plain re-render (no re-fetch) is enough, and the row stays put either way.
-      renderPool();
-      // Ticking a word is a claim about what you can read, so the estimate has
-      // to move with it -- that is the whole point of ticking.
-      renderProgress(); renderSectionNotes();
-    };
-    box.appendChild(row);
+
+  /* A search is a question about particular words, not about how far along you
+   * are, so it answers flat -- grouping a three-word result into four headings
+   * buries the answer it was asked for. */
+  if ($("#poolSearch").value.trim()) {
+    matches.slice(0, POOL_PAGE).forEach(e =>
+      box.appendChild(poolRow(e, poolGroupOf(e, baseSet))));
+    const left = matches.length - POOL_PAGE;
+    box.insertAdjacentHTML("afterbegin", '<div class="note">' + matches.length +
+      " match" + (matches.length === 1 ? "" : "es") +
+      (left > 0 ? ", showing the commonest " + POOL_PAGE : "") + ".</div>");
+    return;
+  }
+
+  const by = { todo: [], have: [], met: [], known: [] };
+  matches.forEach(e => by[poolGroupOf(e, baseSet)].push(e));
+  // The first group with anything in it opens, so the sheet never lands on
+  // four closed headings with no indication of what is inside them.
+  let opened = false;
+  POOL_GROUPS.forEach(spec => {
+    const entries = by[spec.key];
+    if (!entries.length) return;
+    const d = document.createElement("details");
+    d.className = "sec";
+    if (!opened) { d.open = true; opened = true; }
+    d.innerHTML = "<summary>" + escapeHtml(spec.label) +
+      '<span class="secnote">' + entries.length + "</span></summary>" +
+      '<div class="note">' + escapeHtml(spec.note) + "</div>";
+    renderPoolGroup(d, spec, entries);
+    box.appendChild(d);
   });
-  const more = $("#poolMore");
-  const left = matches.length - poolShown;
-  if (left > 0) {
-    more.style.display = "";
-    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
-  } else {
-    more.style.display = "none";
-  }
 }
 
 function renderVocab() {
@@ -2879,8 +2952,9 @@ function renderProgress() {
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + pct + "%</b> of " + escapeHtml(r.next.label) +
-      " you can read — estimated" + '<span>' + use + "% you can use</span></div>" +
+    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+      "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
+      "<i>" + use + "% you can use</i></div>" +
     "<table><tr><td>to " + mark + "%</td><td>" +
       (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
         ", commonest first" : "there already") + "</td></tr>" +
@@ -2995,8 +3069,8 @@ function openPool(id) {
 $("#btnPool").onclick = () => openPool(Math.min(S.level + 1, LEVELS[LEVELS.length - 1].id));
 $("#btnLevels").onclick = () => openPool(S.level);
 $("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
-$("#poolSearch").addEventListener("input", () => { poolShown = POOL_PAGE; renderPool(); });
-$("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
+// A new query re-pages every group: the counts and the rows both change.
+$("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(); });
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolX").onclick = () => closeSheet("#poolSheet");
 

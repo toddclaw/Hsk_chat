@@ -614,11 +614,25 @@ order pacing already offers them in. Paged 150 at a time, so a jump of a few tho
 allowlist immediately: it stops being flagged, and pacing stops spending a credit offering
 something you already had.
 
-Each row says which of three states it is in — already at your level, already met, or not
-yet reached — and only the third has a tick box, since ticking a word you already have would
-do nothing. **Any** level, including your own: it used to be hardcoded to the next one, so
-there was no way to review the list you are actually on without first dropping a level to
-look at it from below.
+Grouped into four collapsible blocks, each carrying its count, so a level is a set of
+answerable questions rather than one long scroll:
+
+| | |
+|---|---|
+| **Not yet** | not usable yet. Pacing offers these commonest-first, and they are flagged if the partner uses one. Tick any you already know |
+| **Already at your level** | in the level's own list. Always usable, nothing to do |
+| **Met — added or introduced** | introduced by pacing, typed by you, or added by hand. Usable, and the ones worth drilling |
+| **Ticked as already known** | you told the app you knew these. Usable, never offered, never flagged |
+
+Only the first and last have tick boxes, because those are the two you can change — ticking
+a word that is already usable would do nothing, so it is shown as done rather than as a box
+that quietly ignores you. The first non-empty group opens, so the sheet never lands on four
+closed headings. Searching answers flat instead of grouped: a search is a question about
+particular words, and burying a three-word result under four headings hides the answer.
+
+**Any** level, including your own: it used to be hardcoded to the next one, so there was no
+way to review the list you are actually on without first dropping a level to look at it from
+below.
 
 It is kept as its own list (`S.known`), separate from words the app taught you (`S.extra`):
 it has no sentence context, was not learned through a conversation, and so stays out of the
@@ -659,8 +673,11 @@ that is roughly 147 of the 741 new HSK 2 words to reach 95% — not 741 — and 
 offers them commonest-first, so it is working through them in the cheapest possible order.
 
 Separate figures rather than one blended score, because they mean different things and the
-gaps between them are the informative part. The outer bar is what you can **read**; the inner
-one is what you can **use**, measured the same way over the words you have actually written.
+gaps between them are the informative part. **Blue** is what you can **read** — every word the
+level allows you. **Green** is what you can **use**, the same measure over the words you have
+actually written. Each figure is printed in its bar's colour, so the legend is the text
+itself rather than a key you have to hold in your head. Green always trails blue, and that
+gap is normal.
 **Met** is what pacing has taught you. **Used by you** is that same production as a count,
 segmented out of your own messages — it needs no new storage, since every message is already
 saved, and it will always lag: recognition runs ahead of production and the gap widens with

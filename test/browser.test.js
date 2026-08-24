@@ -790,8 +790,14 @@ return true;
      * one would land at 0 or 100. */
     const prog = await exec(`
       return document.querySelector('#progress').textContent;`);
-    const pctMatch = /(\d+)% of HSK 2/.exec(prog || "");
+    const pctMatch = /(\d+)% you can read/.exec(prog || "");
     check(!!pctMatch, "the progress panel reports a percentage of the next level",
+      JSON.stringify((prog || "").slice(0, 160)));
+    /* Both figures are named in words, so the bar's two colours do not have to
+     * be decoded from a key that is not on screen. */
+    const useMatch = /(\d+)% you can use/.exec(prog || "");
+    check(!!useMatch && Number(useMatch[1]) < Number(pctMatch ? pctMatch[1] : 0),
+      "and production is labelled and sits below reading",
       JSON.stringify((prog || "").slice(0, 160)));
     const pct = pctMatch ? Number(pctMatch[1]) : -1;
     check(pct > 70 && pct < 100,
@@ -851,9 +857,27 @@ return true;
     check(await exec(`
       return Number(document.querySelector('#poolLevel').value);`) === 1,
       "Browse opens on your own level, which used to be unreachable");
+    /* Grouped rather than one flat scroll, and each heading carries its count.
+     * Browsing your own level, everything is already usable, so the group that
+     * exists is "Already at your level" -- and its rows must have no tick box,
+     * since ticking a word you already have would do nothing. */
+    const groups = await exec(`
+      return Array.prototype.map.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return d.querySelector('summary').textContent.trim(); });`);
+    check(groups.length > 0 && groups.some(g => /Already at your level/.test(g)),
+      "the list is grouped by what you have done with each word",
+      JSON.stringify(groups));
+    check(groups.some(g => /\d/.test(g)),
+      "and every heading carries its own count", JSON.stringify(groups));
     check(await exec(`
-      return document.querySelectorAll('#poolList .lvstate.have').length > 0;`),
-      "and marks those words as already at your level rather than offering a tick");
+      return document.querySelectorAll('#poolList details')[0].open;`),
+      "the first non-empty group opens, so the sheet never lands on closed headings");
+    check(await exec(`
+      var d = document.querySelector('#poolList details');
+      return d.querySelectorAll('.poolrow').length > 0 &&
+             d.querySelectorAll('.poolrow input').length === 0;`),
+      "words already at your level have no tick box to ignore");
     /* Commonest first -- the order they are worth learning in, and the order
      * pacing already offers them in. 的 outranks everything in the corpus, so
      * an unsorted or reverse-sorted list cannot start with it. */
