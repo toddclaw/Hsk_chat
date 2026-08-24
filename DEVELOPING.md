@@ -259,6 +259,20 @@ editing it:
   states where the figures could disagree, and pass against the very bug they were written
   for. They sit before the wipe for that reason, and the seed carries a full sentence of
   common words rather than two short turns.
+- **Do not invent a threshold for production.** Reading has 95%/98% because unknown-word
+  density and comprehension have a testable relationship. Production has no equivalent: the
+  gap from reading widens with proficiency and not every word becomes productive, so a fixed
+  target is wrong at every level. The actionable form is the list of introduced words never
+  written (`S.learning` minus `producedWords()`), not a gauge — and moving up is not gated
+  on it.
+- **`S.learning` rows carry no `f`.** `settlePace()` stores `w/p/d/seen/from` only, so
+  sorting them by `e.f` compiles, runs, and silently does nothing because every value is
+  `undefined`. Look frequency up through `S.nextList` instead.
+- **Seed the state an assertion needs, or it passes without testing anything.** The
+  never-used row only renders when there are introduced words *and* a typed history; with
+  the old two-turn seed both sides of the subtraction were empty, the row never appeared,
+  and a both-or-neither check passed vacuously. Same failure as the progress checks sitting
+  after the sync wipe — twice now, in the same file.
 - **`f` is a rank, not a token count.** Weighting by `1/f` is a Zipf assumption about the
   corpus, not a measurement of it. `ZIPF_EXP` in `pace.js` is the calibration knob and the
   percentage is labelled "estimated" in the UI. The word counts shown underneath it are

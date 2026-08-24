@@ -225,7 +225,7 @@ return true;
          * check downstream exists to catch. Common, high-frequency words on
          * purpose: those carry nearly all the weight. */
         { id: "44444444-4444-4444-8444-444444444444", role: "user",
-          text: "我们今天来这里看看，你的东西很多，我不去了，这个很好。",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
           needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z" },
         { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
           text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
@@ -244,6 +244,14 @@ return true;
        * Settings sheet when no key is stored, and the wipe checks further down
        * assert on an element inside that sheet, so seeding a key here hides it
        * and breaks a test that has nothing to do with models. */
+      /* Two HSK 2 words introduced by pacing, of which the typed history above
+       * uses exactly one. That makes the never-used row's subtraction
+       * non-empty on both sides -- without it the row is simply absent and any
+       * assertion about it passes without testing anything. */
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "可以", p: "kě yǐ", d: "can; may", seen: 2, from: 2 },
+        { w: "已经", p: "yǐ jīng", d: "already",  seen: 1, from: 2 }
+      ]));
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       /* Two devices' worth of recorded time, so the display has something to
        * sum. Seeded before boot because S reads it once at startup. */
@@ -814,6 +822,26 @@ return true;
     check(/used by you/.test(prog || ""),
       "production is reported separately from exposure",
       JSON.stringify((prog || "").slice(0, 200)));
+
+    /* Production has no threshold to hit -- the receptive/productive gap widens
+     * with proficiency and not every word becomes productive, so a fixed target
+     * would be wrong at every level. What is actionable is the list, not a
+     * number: words the app taught you that you have never written. Named, not
+     * just counted, because three characters you can put in your next message
+     * is a prompt and "5 unused" is a statistic. The seed has introduced words
+     * and a typed history, so both sides of the subtraction are non-empty. */
+    check(/never used/.test(prog || ""),
+      "the panel names what to do next, not only what has happened",
+      JSON.stringify((prog || "").slice(0, 260)));
+    check(/1 of the 2 you have met/.test(prog || ""),
+      "counting only introduced words the learner has never written",
+      JSON.stringify((prog || "").slice(0, 260)));
+    /* 已经 is the seeded word the history never uses; 可以 is the one it does.
+     * Naming the used one would make the row busywork. */
+    check(/never used[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
+          !/never used[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
+      "and naming the unused word rather than one already written",
+      JSON.stringify((prog || "").slice(0, 260)));
 
     /* The bug this replaced: the headline was weighted for production and
      * clamped while the words-to-threshold row was not, so the panel showed

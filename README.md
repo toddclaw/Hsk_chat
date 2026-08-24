@@ -683,6 +683,28 @@ segmented out of your own messages — it needs no new storage, since every mess
 saved, and it will always lag: recognition runs ahead of production and the gap widens with
 proficiency.
 
+**There is no threshold on the green bar, deliberately.** The 95%/98% reading marks exist
+because unknown-word density and comprehension have a clean, testable relationship. Nothing
+equivalent holds for production: the receptive/productive gap *widens* with proficiency, and
+not every word a learner knows ever becomes productive — so any fixed "you should be able to
+use X%" would be wrong at every level, and wrong in the same flattering direction. Published
+productive targets are absolute vocabulary sizes instead (Nation puts functional speaking and
+writing at 2000–3000 word families), not ratios against what you can read.
+
+What *is* actionable is a list rather than a number, in the spirit of Laufer and Nation's
+Lexical Frequency Profile — the question is not "what percentage" but "are you reaching for
+the newer words or coasting on the commonest ones". So the panel's last row names words the
+app has taught you that you have never once written:
+
+```
+never used   5 of the 9 you have met — try 说话、可以、以后
+```
+
+Commonest first, three at a time, from `S.learning` minus the words segmented out of your own
+messages. Three characters you can put in your next message is a prompt; "5 unused" is a
+statistic. Moving up is **not** gated on it, for the same reason there is no threshold — that
+would block advancement on a gap that is supposed to be there.
+
 An earlier version instead gave words you had written double weight inside a single score.
 It cannot work, and the way it fails is worth knowing. Weight goes as `1/rank`, so the
 commonest words carry enormous shares — `的` is rank 1 and weighs a full point — and having
