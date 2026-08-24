@@ -467,12 +467,11 @@ footer{
       <em>use</em>: the same measure over the words you have actually written yourself. Green
       always trails blue, and the gap between them is normal — recognising a word is easier
       than reaching for it, and that gap widens as you improve.
-      An estimate of how much of the next level you can already read,
-      not how much of its list you have ticked off — the commonest words carry most of the
-      text, so the first few hundred matter far more than the rest. 95% is where reading
-      stops being work; published research puts adequate comprehension there and comfortable
-      independent reading at 98%. Words you have written yourself count double, since using
-      a word is harder than recognising it.</div>
+      Both are estimates of how much of the next level you can handle, not of how much of its
+      list you have ticked off — the commonest words carry most of the text, so the first few
+      hundred matter far more than the rest. 95% is where reading stops being work; published
+      research puts adequate comprehension there and comfortable independent reading at
+      98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
 
     <label class="toggle" for="paceOn">
@@ -748,7 +747,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v49 — 2026-08-24";
+const VERSION   = "v50 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2916,6 +2915,7 @@ function readiness() {
   // A Set, not S.base.some() inside a filter: at HSK 6 -> 7-9 that pair is
   // 5364 x 10970 comparisons and the sheet visibly stalls opening.
   const baseSet = new Set(S.base.map(e => e.w));
+  const freq = new Map(S.nextList.map(e => [e.w, e.f || Infinity]));
   return {
     next: next,
     /* Two readings of the same scale, never one blended score. Production is
@@ -2927,7 +2927,18 @@ function readiness() {
     total: S.nextList.length,
     newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
     met: met,
-    used: S.nextList.filter(e => mine.has(e.w)).length
+    used: S.nextList.filter(e => mine.has(e.w)).length,
+    /* The actionable half. There is no published threshold for production the
+     * way there is 95%/98% for reading -- the receptive/productive gap widens
+     * with proficiency and not every word ever becomes productive, so any
+     * fixed target would be wrong at every level and wrong in the same
+     * direction. What is actionable is not a number to hit but a list to work
+     * through: words the app taught you that you have never once written. */
+    /* Sorted commonest-first through the level list, because S.learning rows
+     * carry no frequency of their own -- sorting them by e.f silently does
+     * nothing, since every value is undefined. */
+    unused: S.learning.filter(e => (e.from || 0) > S.level && !mine.has(e.w))
+      .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity))
   };
 }
 
@@ -2961,6 +2972,15 @@ function renderProgress() {
     "<tr><td>met</td><td>" + r.met + " of " + r.newWords + " new at " +
       escapeHtml(r.next.label) + "</td></tr>" +
     "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
+    (r.unused.length
+      ? "<tr><td>never used</td><td>" + r.unused.length + " of the " + r.met +
+        " you have met — try " +
+        /* Named, not just counted. "5 words unused" is a statistic; 说话、可以
+         * is something you can do in your next message, which is the whole
+         * difference between a gauge and a prompt. */
+        escapeHtml(r.unused.slice(0, 3).map(e => e.w).join("、")) +
+        "</td></tr>"
+      : "") +
     "</table>";
   const btn = $("#moveUp");
   if (btn) {
