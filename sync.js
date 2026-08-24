@@ -166,7 +166,7 @@
    * would resolve to whichever synced last. It is merged instead, per device,
    * by time.js. Kept out of PREFS_KEYS rather than special-cased inside
    * applyPrefsSnapshot so that the list keeps meaning one thing. */
-  var MERGED_KEYS = ["chatTime"];
+  var MERGED_KEYS = ["chatTime", "cost"];
 
   function prefsSnapshot(S) {
     var data = {};
