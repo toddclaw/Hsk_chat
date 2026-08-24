@@ -74,9 +74,12 @@ header button{padding:8px 10px; flex:0 0 auto}
       background:none; color:var(--dim); font-size:12px; cursor:pointer}
 .copy:active{color:var(--ink)}
 /* The answer behind this button is already stored: pressing it costs nothing
-   and returns instantly, rather than spending a model call and a wait. Same
-   yellow as .badge.warn, which is the palette's existing "read this" colour. */
-.copy.cached{color:#ffd479; border-color:#5a4a22}
+   and returns instantly, rather than spending a model call and a wait. Blue,
+   not yellow: .badge.warn is yellow for "2 tries" and sits in this same .meta
+   row, and two unrelated meanings sharing a colour a few pixels apart reads as
+   one meaning. --accent is what the app already uses for "this is live and
+   fine" -- the pinyin toggle, a focused input, a fresh word. */
+.copy.cached{color:var(--accent); border-color:#2f4a6b}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -699,7 +702,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v45 — 2026-08-23";
+const VERSION   = "v46 — 2026-08-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
