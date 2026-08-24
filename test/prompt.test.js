@@ -253,6 +253,17 @@ check(/corrected version/.test(P.explain(mine)) && /Name the rule/.test(P.explai
 check(/homophone/.test(P.explain(mine)),
   "own: explain knows wrong characters come from pinyin input");
 
+/* Output is the expensive side of the bill, and models decorate this answer
+ * whether or not it is asked for. Naming what not to emit cut output 39% with
+ * the catch rate unchanged; "concise" alone had not. Pinned because it is worth
+ * real money and would be easy to tidy away as boilerplate. */
+for (const p of [P.explain(mine), P.explain(reply)]) {
+  check(/No headings, no bullet lists, no bold, no emoji/.test(p),
+    "explain names the decoration it does not want");
+  check(/Stop when the fourth is done/.test(p),
+    "and tells it when to stop rather than only to be brief");
+}
+
 /* The turns leading up to the sentence. A learner line is often only judgeable
  * against what it answers -- 我也是 is fine after a statement and odd after a
  * question -- but the thing being checked is still the one sentence. */

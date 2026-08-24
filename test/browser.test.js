@@ -243,6 +243,11 @@ return true;
       localStorage.setItem("hsk1chat.teachPrompts", JSON.stringify({
         transMine: "CUSTOM TRANSLATE PROMPT for {text} at {level}"
       }));
+      /* Spend, seeded like the time totals: S reads it once at startup. */
+      localStorage.setItem("hsk1chat.cost", JSON.stringify({
+        "dev-a": { total: 1.25, days: { "${TODAY}": 0.0234 } },
+        "dev-b": { total: 0.75, days: { "${TODAY}": 0.0066 } }
+      }));
       localStorage.setItem("hsk1chat.chatTime", JSON.stringify({
         "dev-a": { total: 5880, days: { "${TODAY}": 1440 } },
         "dev-b": { total: 120,  days: { "${TODAY}": 60 } }
@@ -531,6 +536,98 @@ return true;
       all + " min from " + JSON.stringify(clock.body));
     check(/^2[567] min today$/.test(clock.row),
       "the collapsed Conversation row shows today's time", JSON.stringify(clock.row));
+
+    /* Spend. Seeded 0.0234 + 0.0066 = $0.03 today, 1.25 + 0.75 = $2.00 all time.
+     * Summed across devices for the same reason the time totals are. */
+    const cost = await exec(`return document.querySelector('#costBox').textContent;`);
+    check(/\$0\.030/.test(cost) && /today/.test(cost),
+      "today's spend sums every device", JSON.stringify(cost));
+    check(/\$2\.00 all time/.test(cost),
+      "and so does the all-time total", JSON.stringify(cost));
+
+    /* The Connection headline reports the balance rather than "key saved". The
+     * balance is fetched, so drive it through the element refreshBalance fills. */
+    /* Driven through the real path -- refreshBalance() clears the field and
+     * refills it from the key endpoint, so seeding the element directly would be
+     * wiped the next time Settings opened. Stub the lookup instead. */
+    await exec(`
+      window.__realFetch2 = window.fetch;
+      window.fetch = function (url) {
+        if (String(url).indexOf("/api/v1/key") !== -1) {
+          return Promise.resolve({ ok: true, json: function () {
+            return Promise.resolve({ data: { limit: 20, limit_remaining: 19.56, usage: 0.44 } });
+          } });
+        }
+        return window.__realFetch2.apply(window, arguments);
+      };
+      document.querySelector('#setX').click();
+      document.querySelector('#btnSet').click();
+      return true;`);
+    await waitFor(
+      "/19\\.56/.test(document.querySelector('#secConnectionNote').textContent)",
+      "the balance to reach the headline");
+    check(true, "the Connection headline shows the balance");
+    /* And when the lookup cannot be made -- offline, or a rejected key -- it says
+     * a key is stored rather than inventing a number. balanceText returns "" on
+     * purpose for that case; see the note above it. */
+    check("key saved" === (await exec(`
+      window.fetch = function () { return Promise.reject(new Error("offline")); };
+      document.querySelector('#setX').click();
+      document.querySelector('#btnSet').click();
+      return document.querySelector('#secConnectionNote').textContent;`)),
+      "and falls back to 'key saved' when the balance is unknown");
+    await exec(`window.fetch = window.__realFetch2; return true;`);
+
+    /* Both prices in the picker. The seeded catalogue has one free model and one
+     * paid, so this also covers the free case. */
+    const opts = await exec(`
+      return Array.prototype.map.call(document.querySelector('#modelChat').options,
+        function (o) { return o.textContent; });`);
+    check(opts.some(o => /\$0\.09→\$0\.55\/M/.test(o)),
+      "the picker shows input and output prices", JSON.stringify(opts));
+    check(opts.some(o => / · free$/.test(o)),
+      "and still says free for a free model", JSON.stringify(opts));
+
+    /* Teaching text tracks the size slider rather than sitting at a fixed 14px.
+     * Asserted as computed pixels at two slider positions, since the whole point
+     * is that it moves. */
+    const sizes = await exec(`
+      function expPx() {
+        var d = document.createElement('div');
+        d.className = 'explainMsg';
+        document.body.appendChild(d);
+        var px = parseFloat(getComputedStyle(d).fontSize);
+        d.remove();
+        return px;
+      }
+      var f = document.querySelector('#fontSize');
+      f.value = "34"; f.dispatchEvent(new Event("input"));
+      var big = expPx();
+      f.value = "18"; f.dispatchEvent(new Event("input"));
+      var small = expPx();
+      return { big: big, small: small };`);
+    check(sizes.big > sizes.small,
+      "explanation text grows with the size slider", JSON.stringify(sizes));
+    check(sizes.big > 18 && sizes.big < 24,
+      "at 34px it is prose-sized, not headline-sized", JSON.stringify(sizes));
+    check(sizes.small >= 13,
+      "and never drops below the readable floor", JSON.stringify(sizes));
+
+    /* Copy conversation. The clipboard is not readable from a headless browser,
+     * so capture what copyText hands to it. */
+    const copied = await exec(`
+      var got = null;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: function (t) { got = t; return Promise.resolve(); } }
+      });
+      document.querySelector('#copyChat').click();
+      return got;`);
+    check(/^Partner: 你喜欢吃什么？/m.test(copied || "") || /Partner: /.test(copied || ""),
+      "copy produces labelled turns", JSON.stringify(copied));
+    check(/You: 你好/.test(copied || ""),
+      "with the student's turns labelled You", JSON.stringify(copied));
+    check(/\n\n/.test(copied || ""), "and a blank line between turns");
 
     // Section order: Conversation sits directly under Models.
     const order = await exec(`

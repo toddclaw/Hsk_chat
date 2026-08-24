@@ -169,6 +169,30 @@ Rules of thumb this leaves:
 - Temperature is not zero in normal use, so a single sample proves nothing in
   either direction.
 
+### A cheaper model is not a cheaper conversation
+
+Per-token price is the least important of the three things that set what a reply
+costs. The other two are how much the model writes, and how often it writes
+something out of level and triggers a retry — and both vary by an order of
+magnitude more than price does.
+
+Measured across sixteen replies, four conversations, at HSK 2:
+
+| | out-of-level (retries) | output tokens | real cost per reply |
+| --- | --- | --- | --- |
+| `qwen3-30b-a3b` ($0.19/M out) | 4/16 | 17 | **$0.000032** |
+| `deepseek-v4-flash` ($0.098/M out) | 8/16 | 125 | $0.000046 |
+
+Half the listed output price, 44% more expensive in practice. Judge a candidate
+with `usage: {include: true}` and the validator, not with the price column.
+
+The same applies to prompts. `explain()` carries explicit "no headings, no
+bullets, no bold, no emoji" rules because *"keep it concise"* did nothing
+measurable, and naming the decoration cut output 39%. Position mattered too:
+appended at the very end of the prompt it saved 47%, but that puts formatting
+rules after the sentence being explained, so the shipped version takes the
+smaller saving for the sane ordering.
+
 ### md.js
 
 Models answer the explain prompt in Markdown whether or not they are asked to,

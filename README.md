@@ -137,6 +137,23 @@ It is a reasonable default for this app generally: the task is short, simple Chi
 hard constraint, which rewards instruction-following and Chinese-native training far more
 than reasoning ability.
 
+Two alternatives were measured against it and both lost, which is worth recording because
+neither is an obviously bad model:
+
+| | out-of-level replies | output tokens | real cost per reply |
+| --- | --- | --- | --- |
+| `qwen3-30b-a3b` | 4/16 | 17 | **$0.000032** |
+| `deepseek-v4-flash` | 8/16 | 125 | $0.000046 |
+
+DeepSeek V4 Flash lists at *half* the output price and came out 44% dearer per reply, because
+brevity and retry rate dominate the per-token rate at this scale.
+
+For the teaching model, `qwen-2.5-72b-instruct` caught **10 of 20** planted grammar errors
+against `qwen3-235b-a22b`'s **20 of 20**, on the same cases and five trials each. It is
+cost-neutral and terser, and it misses half of what the grammar check exists to find — which
+is close to worse than nothing, since the failure mode is telling you a wrong sentence is
+fine.
+
 ---
 
 # What the app does
@@ -220,6 +237,34 @@ partner's. `{text}` is the sentence, `{level}` your level, `{recent}` the words 
 been introduced to, `{context}` the turns leading up to it. Left alone, each keeps tracking the app's own version rather than freezing
 today's wording, the same bargain the system prompt makes.
 
+## What it has cost
+
+**Connection → Spend** shows today, each of the last ten days, and an all-time total, and the
+collapsed Connection row shows your **remaining balance** rather than just confirming a key is
+stored.
+
+The figures are what OpenRouter actually charged, not tokens multiplied by a price list: every
+call asks for `usage.include` and the reply carries its own cost, already net of any prompt
+caching. That cannot drift when a price changes, and needs no model catalogue loaded. Retries
+count, because a retry is real money; so do the translate and grammar-check buttons.
+
+Spend is kept **per device and summed**, for the same reason time is — see below. Ten days of
+detail, then the running total.
+
+Prices in the model pickers show **both sides**, `$0.09→$0.55/M`, because output is the
+expensive one and the two do not track each other. That matters more than it sounds: a model
+with a *lower* per-token price can cost more per reply if it is wordier, and cost more again
+if its replies fail the level check and trigger retries. Measured on this app, one model at
+half the output price came out **44% more expensive per reply** than the default, because it
+wrote seven times as much and needed twice as many retries. **Optimise for retry rate and
+brevity, not sticker price.**
+
+The teaching prompts also ask, in so many words, for no headings, no bullets, no bold, no
+emoji and no closing encouragement. "Be concise" on its own did nothing — models decorate this
+answer whether or not it is wanted, and the decoration is pure output cost. Naming the
+specific things not to emit cut output 39%, from 289 tokens to 177, with the error-catching
+rate unchanged and no faults invented in correct sentences.
+
 ## Time chatting
 
 **Conversation → Time chatting** keeps a today and an all-time total, and today's shows on the
@@ -267,6 +312,8 @@ key you had just pasted.)
 | | |
 |---|---|
 | **Time chatting** | today and all-time, summed across every device you sync |
+| **Spend** | today, the last ten days, and all-time — what OpenRouter actually charged |
+| **Copy conversation** | the whole chat as labelled plain text, on the clipboard |
 | **API key** | OpenRouter key, stored on this device only |
 | **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |

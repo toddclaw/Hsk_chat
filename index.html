@@ -14,6 +14,11 @@
   --ink:#e8edf2; --dim:#8c9aa8; --accent:#6aa9ff; --bad:#ff6b6b; --ok:#5ecb8b;
   --tap:44px;
   --msg:26px;          /* message text size, set from Settings */
+  /* Teaching output -- translations and the explain sheet -- tracks the slider
+     rather than ignoring it, but at a fraction of it: --msg is sized for Chinese
+     characters, and English prose set at 26px is about four words to a phone
+     line. The floor keeps the smallest slider setting readable. */
+  --exp:max(13px, calc(var(--msg) * 0.62));
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -100,8 +105,8 @@ header button{padding:8px 10px; flex:0 0 auto}
  * Chinese stays the primary reading target and the translation is a fallback
  * to glance at, not the first thing the eye lands on. */
 .translation{margin-top:6px; padding:9px 12px; background:var(--panel2); border:1px solid var(--line);
-  border-radius:12px; font-size:14px; line-height:1.5; color:var(--dim)}
-.explainMsg{margin:0 0 10px; padding:10px 12px; border-radius:12px; font-size:14px;
+  border-radius:12px; font-size:var(--exp); line-height:1.5; color:var(--dim)}
+.explainMsg{margin:0 0 10px; padding:10px 12px; border-radius:12px; font-size:var(--exp);
   line-height:1.6; background:var(--panel2); white-space:pre-wrap}
 .explainMsg.user{background:#233246; margin-left:16px}
 .explainMsg .who{font-size:11px; color:var(--dim); margin-bottom:4px}
@@ -312,6 +317,12 @@ footer{
         <button id="keyTest">Test connection</button>
         <span class="note" id="keyTestNote" style="margin:0;align-self:center"></span>
       </div>
+      <label>Spend</label>
+      <div class="stats" id="costBox"></div>
+      <div class="note">What this key has actually been charged, as reported by OpenRouter
+      per call — retries and the translate and grammar-check buttons included. Kept for the
+      last ten days. With cloud sync on, every device adds to the same total.</div>
+
       <div class="note"><b>Free setup:</b> make an account at
       <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>,
       create a key, add no credit, then pick the free example model below, or tick
@@ -390,6 +401,12 @@ footer{
       <div class="note">Counted while the app is open and you are using it, and paused
       after a couple of minutes of quiet. With cloud sync on, every device you use adds
       to the same total.</div>
+
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button id="copyChat" type="button">Copy conversation</button>
+      </div>
+      <div class="note">Puts the whole conversation on the clipboard as plain text, labelled
+      Partner and You.</div>
 
     <label for="replyLength">Reply length</label>
       <select id="replyLength"></select>
@@ -664,7 +681,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v43 — 2026-08-22";
+const VERSION   = "v44 — 2026-08-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -688,7 +705,7 @@ const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
-  chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId",
+  chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId", cost:"hsk1chat.cost",
   teachPrompts:"hsk1chat.teachPrompts",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
@@ -714,6 +731,10 @@ const S = {
    * one number: a counter under last-write-wins loses whichever device synced
    * first, without saying so. */
   chatTime: store.get(K.chatTime, {}),
+  /* Spend, in the same per-device day-bucketed shape as chatTime and for the
+   * same reason: it is a counter, and a counter under last-write-wins loses
+   * whichever device synced first. time.js does the arithmetic for both. */
+  cost: store.get(K.cost, {}),
   // Per-prompt overrides, keyed by TEACH_PROMPTS[].key. Absent = use the default.
   teachPrompts: store.get(K.teachPrompts, {}),
   mode:    store.get(K.mode, "without-list"),
@@ -1006,7 +1027,11 @@ async function callModel(messages, maxTokens, model) {
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model || S.model, messages: messages,
-      max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7
+      max_tokens: maxTokens || lengthSpec().maxTokens, temperature: 0.7,
+      /* Ask for what the call actually cost. OpenRouter returns it per request,
+       * already net of any cache discount, which beats multiplying tokens by a
+       * cached price table that goes stale the moment a price moves. */
+      usage: { include: true }
     })
   });
   const body = await r.json().catch(() => ({}));
@@ -1024,6 +1049,7 @@ async function callModel(messages, maxTokens, model) {
   // finish_reason "length" means the ceiling cut the reply off mid-sentence,
   // which is a different problem from the model choosing to stop.
   callModel.lastFinish = choice.finish_reason || "";
+  recordCost(body.usage && body.usage.cost);
   return txt.trim();
 }
 
@@ -1738,6 +1764,11 @@ async function pullAndMerge() {
       store.set(K.chatTime, S.chatTime);
       renderChatTime();
     }
+    if (prefsRow && prefsRow.data && prefsRow.data.cost) {
+      S.cost = HSKTime.merge(S.cost, prefsRow.data.cost);
+      store.set(K.cost, S.cost);
+      renderCost();
+    }
     if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
@@ -2057,6 +2088,8 @@ function plecoUrl(word) {
  * part-tick in progress when you close the tab, which is not worth the
  * bookkeeping to recover.
  */
+const COST_DAYS = 10;    // how many days of spend to keep and show
+let costSinceSync = 0;
 const TICK = 15000;          // how often the clock advances
 const IDLE = 120000;         // silence after which it stops advancing
 let lastActivity = Date.now();
@@ -2085,6 +2118,49 @@ function chatClockTick() {
    * nobody is watching in real time. Also pushed on the way out below. */
   sinceTimeSync += TICK;
   if (sinceTimeSync >= 300000) { sinceTimeSync = 0; queueSync("prefs"); }
+}
+
+/* Spend runs from fractions of a cent to whole dollars, so a fixed two decimals
+ * is useless at one end and noise at the other: a day of chatting reads $0.00
+ * and a month reads $1.2300. Precision follows magnitude instead. */
+function costText(n) {
+  n = Number(n) || 0;
+  if (n === 0) return "$0";
+  if (n < 0.01) return "$" + n.toFixed(4);
+  if (n < 1) return "$" + n.toFixed(3);
+  return "$" + n.toFixed(2);
+}
+
+/* Only successful calls have a cost, and a retry is a separate call recorded
+ * separately -- which is right, because a retry is real money spent. */
+function recordCost(amount) {
+  if (!(amount > 0)) return;
+  HSKTime.add(S.cost, deviceId(), amount);
+  HSKTime.prune(S.cost, COST_DAYS);
+  store.set(K.cost, S.cost);
+  renderCost();
+  costSinceSync += amount;
+  if (costSinceSync >= 0.01) { costSinceSync = 0; queueSync("prefs"); }
+}
+
+function renderCost() {
+  const el = $("#costBox");
+  if (!el) return;
+  const t = HSKTime.totals(S.cost);
+  // Newest first: today is the number being looked for, and it is at the top.
+  const rows = [];
+  for (let i = 0; i < COST_DAYS; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = HSKTime.dayKey(d);
+    const day = HSKTime.totals(S.cost, key).today;
+    if (i === 0 || day > 0) {
+      rows.push("<div><b>" + costText(day) + "</b> " +
+        escapeHtml(i === 0 ? "today" : key) + "</div>");
+    }
+  }
+  el.innerHTML = rows.join("") +
+    '<div style="margin-top:6px">' + costText(t.total) + " all time</div>";
 }
 
 function renderChatTime() {
@@ -2252,7 +2328,12 @@ function fillLevels() {
 function priceLabel(m) {
   if (m.free) return " · free";
   if (typeof m.inM !== "number") return "";
-  return " · $" + (m.inM < 1 ? m.inM.toFixed(2) : m.inM.toFixed(1)) + "/M";
+  /* Both sides, because output is the expensive one and the two do not track
+     each other: two models can share an input price and differ threefold on
+     output, which is the whole cost of a conversation. */
+  const n = v => "$" + (v < 1 ? v.toFixed(2) : v.toFixed(1));
+  if (typeof m.outM !== "number") return " · " + n(m.inM) + "/M";
+  return " · " + n(m.inM) + "→" + n(m.outM) + "/M";
 }
 
 /* Sorting happens at render, not at fetch, so changing the order does not need
@@ -2668,7 +2749,12 @@ $("#vocabClose").onclick = () => closeSheet("#vocabSheet");
  * you to stop reading them. */
 function renderSectionNotes() {
   const hasKey = !!store.get(K.key, "");
-  $("#secConnectionNote").textContent = hasKey ? "key saved" : "no key yet";
+  /* The balance is the thing worth seeing without opening the section. It stays
+   * blank when the lookup could not be made -- deliberately, see balanceText --
+   * so fall back to saying a key exists rather than showing a wrong number. */
+  const bal = ($("#keyBalance") && $("#keyBalance").textContent) || "";
+  $("#secConnectionNote").textContent =
+    !hasKey ? "no key yet" : (bal || "key saved");
   /* The chat model, not both: the teaching model is usually the default and
    * naming two ids here would not fit a phone. */
   const m = S.model || "";
@@ -2680,6 +2766,7 @@ function renderSectionNotes() {
 $("#btnSet").onclick = () => {
   renderSectionNotes();
   renderChatTime();
+  renderCost();
   /* A first run opens Settings precisely because there is no key, so the one
    * section that run needs is the one that should already be open. Otherwise
    * every section starts collapsed -- the whole point is the short list. */
@@ -2942,6 +3029,7 @@ async function refreshBalance() {
     const r = await fetch(KEY_URL, { headers: { "Authorization": "Bearer " + key } });
     if (!r.ok) return;
     el.textContent = balanceText((await r.json()).data || {});
+    renderSectionNotes();          // the collapsed headline shows it too
   } catch (e) { /* offline, or the lookup failed: say nothing */ }
 }
 
@@ -3033,6 +3121,20 @@ $("#syncWipe").onclick = async () => {
     renderSyncSection();
   }
 };
+/* Plain text, labelled. "notice" turns are error cards -- UI, not conversation --
+ * and are skipped for the same reason windowed() and messageToRow() skip them. */
+function conversationText() {
+  return S.history
+    .filter(t => t.role === "user" || t.role === "assistant")
+    .map(t => (t.role === "user" ? "You: " : "Partner: ") + t.text)
+    .join("\n\n");
+}
+$("#copyChat").onclick = e => {
+  const text = conversationText();
+  if (!text) { e.currentTarget.textContent = "nothing to copy"; return; }
+  copyText(text, e.currentTarget);
+};
+
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 /* Tapping the dimmed area outside a sheet closes it. For Settings that has to
  * be the committing close, not a bare closeSheet -- see commitSettings(). */

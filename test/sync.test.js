@@ -116,6 +116,16 @@ check(Sync.PREFS_KEYS.indexOf("teachPrompts") !== -1, "PREFS_KEYS names teachPro
  * by time.js. */
 check(Sync.PREFS_KEYS.indexOf("chatTime") === -1,
   "chatTime is NOT a last-write-wins pref -- it is a counter, not a setting");
+check(Sync.PREFS_KEYS.indexOf("cost") === -1,
+  "and neither is cost, for exactly the same reason");
+const withCost = Sync.prefsSnapshot(Object.assign({}, S,
+  { cost: { "dev-a": { total: 0.5, days: { "2026-08-23": 0.5 } } } }));
+check(withCost.cost && withCost.cost["dev-a"].total === 0.5,
+  "a prefs push carries spend");
+const spend = { cost: { "dev-a": { total: 9.99, days: {} } } };
+Sync.applyPrefsSnapshot(spend, { cost: { "dev-a": { total: 0.01, days: {} } } });
+check(spend.cost["dev-a"].total === 9.99,
+  "applyPrefsSnapshot cannot overwrite spend with an older, smaller copy");
 const withTime = Sync.prefsSnapshot(Object.assign({}, S,
   { chatTime: { "dev-a": { total: 60, days: { "2026-08-22": 60 } } } }));
 check(withTime.chatTime && withTime.chatTime["dev-a"].total === 60,
