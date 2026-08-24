@@ -76,10 +76,45 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* The answer behind this button is already stored: pressing it costs nothing
    and returns instantly, rather than spending a model call and a wait. Blue,
    not yellow: .badge.warn is yellow for "2 tries" and sits in this same .meta
-   row, and two unrelated meanings sharing a colour a few pixels apart reads as
+   row, and two unrelated meanings sharing a color a few pixels apart reads as
    one meaning. --accent is what the app already uses for "this is live and
    fine" -- the pinyin toggle, a focused input, a fresh word. */
 .copy.cached{color:var(--accent); border-color:#2f4a6b}
+
+/* Model browser rows. A row is a tap target for choosing; the star inside it is
+   its own, so starring never changes what you are talking to by accident. */
+/* Conversation rows: a tap target for opening, with its own actions beneath so
+   Delete can never be hit while reaching for the chat. */
+.chatrow{padding:10px 4px; border-bottom:1px solid var(--line)}
+.chatrow .ctitle{display:block; font-size:15px; cursor:pointer}
+.chatrow.on .ctitle{color:var(--accent); font-weight:600}
+.chatrow .cmeta{display:block; color:var(--dim); font-size:11px; margin-top:2px}
+.chatrow .cacts{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
+
+.modelrow{display:flex; align-items:center; gap:10px; padding:9px 4px;
+          border-bottom:1px solid var(--line); cursor:pointer}
+.modelrow.on{background:var(--panel2)}
+.modelrow .mname{flex:1; min-width:0; font-size:14px}
+.modelrow .mname .g{display:block; color:var(--dim); font-size:11px;
+                    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.starbtn{flex:0 0 auto; width:32px; height:32px; min-height:0; padding:0; border-radius:50%;
+         background:none; border:1px solid var(--line); color:var(--dim); font-size:15px; line-height:1}
+.starbtn.on{color:#ffd479; border-color:#5a4a22}
+
+/* Progress bar. <i> is the fill, <u> the threshold tick -- two elements rather
+   than a background gradient so the 95% mark stays put when the fill moves. */
+.bar{position:relative; height:10px; border-radius:999px; background:var(--panel2);
+     border:1px solid var(--line); overflow:hidden; margin:2px 0 6px}
+.bar>i{display:block; height:100%; background:var(--accent); border-radius:999px}
+/* Production, drawn over the reading fill on the same axis. Green against the
+   accent blue, so the gap between "can read" and "can use" is one glance. */
+.bar>b{position:absolute; left:0; top:0; bottom:0; background:var(--ok); border-radius:999px}
+.bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
+.barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
+/* Each figure takes the color of the bar it describes, so the legend is the
+   text itself rather than a key you have to hold in your head. */
+.barnote b{color:var(--accent); font-weight:600}
+.barnote i{color:var(--ok); font-style:normal; font-weight:600}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -252,9 +287,8 @@ footer{
 .poolrow input[type=checkbox]{width:22px; height:22px; flex:0 0 auto; accent-color:var(--ok)}
 .poolrow .w2{font-size:20px; min-width:2.6em}
 .poolrow .g{flex:1; font-size:12.5px; color:var(--dim); min-width:0}
-#poolSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
+#poolSearch,#modelSearch{width:100%; padding:11px; border-radius:10px; border:1px solid var(--line);
   background:var(--panel2); min-height:44px; margin-bottom:4px}
-#poolMore{width:100%; margin-top:8px}
 .stats td{padding:2px 10px 2px 0}
 
 #pop{
@@ -279,6 +313,7 @@ footer{
   <select id="level" title="Vocabulary level"></select>
   <select id="model" title="Model"></select>
   <button id="btnPy" title="Pinyin">拼</button>
+  <button id="btnChats" title="Conversations">💬</button>
   <button id="btnVocab" title="Vocabulary">词</button>
   <button id="btnSet" title="Settings">⚙</button>
 </header>
@@ -373,9 +408,11 @@ footer{
 
     <label for="modelChat">Chat model</label>
     <select id="modelChat"></select>
+    <button id="browseChatModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
 
     <label for="teachModel">Model for translation and grammar checks</label>
     <select id="teachModel"></select>
+    <button id="browseTeachModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
     <!-- The evidence for keeping these two apart is in README.md; what belongs
          here is the bit that changes what you would pick. -->
     <div class="note">Only runs when you press <b>English translation</b> or <b>Check my
@@ -386,6 +423,13 @@ footer{
       <input type="checkbox" id="freeOnly">
       <span>Display free models only</span>
     </label>
+    <label class="toggle" for="favOnly">
+      <input type="checkbox" id="favOnly">
+      <span>Display favorites only</span>
+    </label>
+    <div class="note">Both filters are ignored when they would leave the pickers empty — a
+    list with nothing in it is worse than an unfiltered one, and "favorites only" starts
+    with no favorites.</div>
     <label for="modelSort">Sort models</label>
     <select id="modelSort">
       <option value="price">by price — free first</option>
@@ -409,12 +453,6 @@ footer{
       after a couple of minutes of quiet. With cloud sync on, every device you use adds
       to the same total.</div>
 
-      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-        <button id="copyChat" type="button">Copy conversation</button>
-      </div>
-      <div class="note">Puts the whole conversation on the clipboard as plain text, labelled
-      Partner and You.</div>
-
     <label for="replyLength">Reply length</label>
       <select id="replyLength"></select>
       <div class="note">Longer replies give more to read, and more chances to reach for a word
@@ -433,12 +471,34 @@ footer{
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
       </div>
-      <div class="note">Wipes the messages on this device. Added words and counters are kept.
-      With cloud sync on, this device pushes the empty conversation to the others.</div>
+      <div class="note">Empties the conversation you are in, keeping it in the list. Added
+      words and counters are kept. To remove a whole conversation, use <b>Delete</b> in the
+      💬 menu. With cloud sync on, this device pushes the empty conversation to the others.</div>
   </details>
 
   <details class="sec">
-    <summary>Learning</summary>
+    <summary>Learning<span class="secnote" id="secLearningNote"></span></summary>
+    <label>Progress to the next level</label>
+      <div class="stats" id="progress"></div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="moveUp" class="primary" type="button" style="display:none"></button>
+      </div>
+      <!-- Why the headline is a percentage of text and not a count of words:
+           the lists are cumulative and frequency-ordered, so HSK 1's 520 words
+           are 41% of the HSK 2 list but around 85% of HSK 2 running text. A
+           bar starting at zero would be telling you something untrue. -->
+      <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
+      word the level allows you. <b style="color:var(--ok)">Green</b> is what you can
+      <em>use</em>: the same measure over the words you have actually written yourself. Green
+      always trails blue, and the gap between them is normal — recognising a word is easier
+      than reaching for it, and that gap widens as you improve.
+      Both are estimates of how much of the next level you can handle, not of how much of its
+      list you have ticked off — the commonest words carry most of the text, so the first few
+      hundred matter far more than the rest. 95% is where reading stops being work; published
+      research puts adequate comprehension there and comfortable independent reading at
+      98%.</div>
+      <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
+
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -529,6 +589,15 @@ footer{
       <div class="note">Off by default. Sign in to back up your conversation, added words, and
       settings, and pick up where you left off on another device. Your OpenRouter key never
       syncs — it only ever stays on this device.</div>
+      <!-- Asked more than once, and it looks like data loss when it happens:
+           a private window is a separate storage partition, so it has its own
+           copy of everything including whether sync is on and who is signed
+           in. -->
+      <div class="note"><b>A private window counts as a different device.</b> Whether sync is
+      on, and who is signed in, live in this browser's own storage — a private or incognito
+      window has its own, and Safari discards it when the session ends. Your cloud data is
+      unaffected either way: turn sync on and sign in again and it all comes back. Do not
+      rely on a private window as the only copy of anything.</div>
       <div id="syncSignedOut" style="display:none">
         <button id="syncSignIn" type="button">Sign in with GitHub</button>
       </div>
@@ -567,15 +636,50 @@ footer{
 </div></div>
 
 <div class="sheet" id="poolSheet"><div class="card">
-  <h2 id="poolTitle">Next-level words</h2>
-  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning">
-  <div class="note">Tick any word you already know. It joins the allowlist immediately —
-  the partner may use it, and it will not be offered or flagged again — but it will not
-  appear in 词 or in flashcard exports: this list is for words you brought with you, not
-  ones the app taught you.</div>
+  <div class="sheethead">
+    <h2 id="poolTitle">Words by level</h2>
+    <button id="poolX" class="sheetx" type="button" aria-label="Close word list" title="Close">✕</button>
+  </div>
+  <!-- Any level, not only the next one. It used to be hardcoded to level+1,
+       which left no way to review the list you are actually on without first
+       dropping a level to see it from below. -->
+  <label for="poolLevel">Level</label>
+  <select id="poolLevel"></select>
+  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning" style="margin-top:8px">
+  <div class="note">Grouped by what you have done with each word, commonest first inside each
+  group — which is the order they are worth learning in. Only <b>Not yet</b> and <b>Ticked as
+  already known</b> have boxes, because those are the two you can change: an empty box means
+  the word is not usable yet, and ticking it says you already know it, which joins it to the
+  allowlist at once. Words at your level or already met need no box — they are usable
+  either way. Ticked words stay out of 词 and the flashcard exports on purpose: that list is
+  for words you brought with you, not ones the app taught you.</div>
   <div id="poolList" style="margin-top:10px"></div>
-  <button id="poolMore" style="display:none"></button>
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="chatSheet"><div class="card">
+  <div class="sheethead">
+    <h2>Conversations</h2>
+    <button id="chatX" class="sheetx" type="button" aria-label="Close conversations" title="Close">✕</button>
+  </div>
+  <button id="newChat" class="primary" type="button" style="width:100%">New chat</button>
+  <div class="note" id="chatWarn"></div>
+  <div id="chatList" style="margin-top:10px"></div>
+  <div style="margin-top:16px"><button id="chatClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="modelSheet"><div class="card">
+  <div class="sheethead">
+    <h2 id="modelPickTitle">Choose a model</h2>
+    <button id="modelX" class="sheetx" type="button" aria-label="Close model list" title="Close">✕</button>
+  </div>
+  <input id="modelSearch" type="text" placeholder="search name or id" autocomplete="off">
+  <!-- No filter or sort controls of its own: it reads the ones in Settings, so
+       there is one answer to "what am I looking at" rather than two that can
+       disagree. -->
+  <div class="note" id="modelPickNote"></div>
+  <div id="modelPickList" style="margin-top:10px"></div>
+  <div style="margin-top:16px"><button id="modelPickClose" class="primary">Done</button></div>
 </div></div>
 
 <div class="sheet" id="explainSheet"><div class="card">
@@ -702,7 +806,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v46 — 2026-08-23";
+const VERSION   = "v53 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -733,13 +837,24 @@ const K = {
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
+  favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly",
+  chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
+  prefsPushedAt:"hsk1chat.prefsPushedAt",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
   known:"hsk1chat.knownAhead", sync:"hsk1chat.syncOn"
 };
 
+/* Set by store.set when a write fails, which in practice means the quota is
+ * full. It used to swallow the error entirely: every setting written after the
+ * one that overflowed was silently dropped, the app carried on looking fine,
+ * and the loss only showed up on the next reload. */
+let storageFailed = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  set(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+    catch (e) { storageFailed = true; console.warn("storage write failed", k, e); return false; }
+  }
 };
 
 /* ------------------------------------------------------------------- state */
@@ -789,15 +904,37 @@ const S = {
   refLex:  null,                              // and as a lexicon, for re-segmenting
   extra:   store.get(K.extra, []),
   history: store.get(K.history, []),
+  /* Conversation history. S.history keeps meaning exactly what it always
+   * meant -- the turns of the chat you are looking at -- so nothing that reads
+   * it had to change. It IS S.chatMsgs[S.chatId], the same array object, so
+   * ordinary pushes need no bookkeeping; the three places that *reassign* it
+   * are covered by persist() re-pointing the map on the way through. */
+  /* When this device last pushed its preferences. Persisted, and that is the
+   * whole point: it gates whether a pulled prefs blob is newer than what we
+   * have. Left in memory only, it was undefined on every load, so every load
+   * took the "no record of pushing" branch and overwrote local settings with
+   * whatever the cloud happened to hold -- which is stale exactly when you
+   * changed a setting and reloaded before the 2s debounce could push it. */
+  prefsPushedAt: store.get(K.prefsPushedAt, ""),
+  chats:    store.get(K.chats, []),
+  chatMsgs: store.get(K.chatMsgs, null),
+  chatId:   store.get(K.chatId, ""),
   stats:   store.get(K.stats, {}),
   base:    [],        // the level's wordlist
   dict:    new Map(), // REF_LIST, for glossing words above the current level
   lex:     null,
+  // The next level's whole wordlist, unfiltered -- S.pool strips out what you
+  // already know, which is exactly what readiness needs in the denominator.
+  nextList: [],
   busy:    false,
   // Whether cloud sync is turned on. Off by default; this alone does not
   // mean signed in -- see syncUser below, tracked separately since it is
   // session state, not a setting to persist.
-  sync:    store.get(K.sync, { on: false })
+  sync:    store.get(K.sync, { on: false }),
+  // Starred model ids, and whether the pickers are filtered down to them. The
+  // catalogue runs to several hundred entries and nobody uses more than a few.
+  favModels: store.get(K.favModels, []),
+  favOnly: store.get(K.favOnly, false)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -811,7 +948,7 @@ let syncLastError = "";
  * far more often than anything that has news -- without this it repaints the
  * line from scratch and blanks whatever the last pull reported. */
 let syncStatus = "";
-const syncQueue = { messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
+const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
 let syncTimer = null;
 
 const $ = s => document.querySelector(s);
@@ -843,29 +980,49 @@ const isExtra = w => S.extra.some(e => e.w === w);
 
 /* The pool is the next level minus this one. Loaded only when pacing is on, so
  * nobody pays for a second wordlist they are not using. */
+/* Wordlists, by level id, fetched once each. The pool browser can now reach any
+ * level rather than only the next one, and re-fetching 5000 entries every time
+ * the picker moves is the kind of thing that makes a phone feel broken. */
+const levelCache = new Map();
+async function levelList(id) {
+  if (!levelCache.has(id)) {
+    const lv = LEVELS.find(l => l.id === id);
+    if (!lv) return [];
+    try {
+      const r = await fetch(lv.file);
+      levelCache.set(id, r.ok ? await r.json() : []);
+    } catch (e) { return []; }
+  }
+  return levelCache.get(id);
+}
+
 async function loadPool() {
   S.pool = [];
+  S.nextList = [];
   const next = LEVELS.find(l => l.id === S.level + 1);
   // The pool backs both pacing and the "words I already know" browser, so it
   // loads whenever there is a level above -- not only while pacing is on.
   if (!next) return;
   try {
-    const r = await fetch(next.file);
     /* Exclude everything already usable, not just the level list: the particles
      * in EXTRA_ALLOWED and any word already added, introduced, or marked known
      * ahead of time. Offering 啊, which is permitted at every level, would
      * spend a credit on nothing. */
-    if (r.ok) {
-      /* S.pool is every word not yet formally usable -- it deliberately still
-       * includes ones marked "known ahead", so the browser can list them
-       * pre-checked and let you change your mind. Pacing draws its own
-       * candidates from this at offer time, filtered by isKnownAhead there,
-       * so the two do not need two copies of the underlying data. */
-      const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
-      S.pool = HSKPace.buildPool(usable, await r.json());
-    }
+    /* The unfiltered list is kept as well. Readiness is a question about the
+     * whole level -- what share of HSK 2 you can read -- so it needs the words
+     * you already know in the denominator, which is exactly what buildPool
+     * strips out. */
+    S.nextList = await levelList(next.id);
+    /* S.pool is every word not yet formally usable -- it deliberately still
+     * includes ones marked "known ahead", so the browser can list them
+     * pre-checked and let you change your mind. Pacing draws its own
+     * candidates from this at offer time, filtered by isKnownAhead there,
+     * so the two do not need two copies of the underlying data. */
+    const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
+    S.pool = HSKPace.buildPool(usable, S.nextList);
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
+  renderProgress();
 }
 
 async function loadLevel(n) {
@@ -1630,7 +1787,134 @@ function acceptWord(n, sentence) {
   renderAll();
 }
 
-function persist() { store.set(K.history, S.history); queueSync("messages"); }
+/* ------------------------------------------------------ conversations */
+
+const LEGACY_CID = "00000000-0000-4000-8000-000000000001";
+
+function newId() {
+  return (crypto.randomUUID && crypto.randomUUID()) ||
+    ("cid-" + Date.now() + "-" + Math.random().toString(16).slice(2));
+}
+
+// First thing the learner said, which is what a chat is actually about.
+function titleFrom(turns) {
+  const first = (turns || []).find(t => t.role === "user" && t.text);
+  if (!first) return "New chat";
+  const t = first.text.trim().replace(/\s+/g, " ");
+  return t.length > 28 ? t.slice(0, 28) + "…" : t;
+}
+
+const chatById = id => S.chats.find(c => c.id === id);
+
+/* One-time move from a single flat history to a list of conversations. The
+ * legacy id is fixed rather than generated: two devices each inventing one for
+ * the same old history would split it into two chats that then both sync. */
+function migrateChats() {
+  if (!S.chatMsgs) S.chatMsgs = {};
+  /* Content-based, not a "have I run yet" flag. Keying off S.chatMsgs merely
+   * existing was wrong: boot creates an empty chat for a first run, which
+   * writes the map, so a legacy history arriving after that point would never
+   * be adopted and would simply vanish behind an empty conversation. The real
+   * question is whether there is anything to adopt and anywhere it already
+   * lives. */
+  const haveMessages = Object.keys(S.chatMsgs).some(k => (S.chatMsgs[k] || []).length);
+  if (!S.history.length || haveMessages) return;
+  /* Any chat sitting here now is empty -- the check above returned if even one
+   * held a message -- so it is the placeholder boot makes for a first run, not
+   * anything anyone wrote. Adopting the legacy history beside it would leave
+   * two conversations where there was one. */
+  S.chats = S.chats.filter(c => (S.chatMsgs[c.id] || []).length);
+  S.chatMsgs = {};
+  S.chatMsgs[LEGACY_CID] = S.history;
+  if (!chatById(LEGACY_CID)) {
+    S.chats.unshift({ id: LEGACY_CID, title: titleFrom(S.history),
+                      created_at: S.history[0].created_at || new Date().toISOString(),
+                      updated_at: new Date().toISOString(), deleted: false });
+  }
+  S.chatId = LEGACY_CID;
+  saveChats();
+}
+
+/* Storage is finite and this feature is the first thing here that grows without
+ * bound. store.set reports failure rather than swallowing it, so a full quota
+ * reaches the reader instead of quietly losing the next thing written. */
+function saveChats() {
+  storageFailed = false;
+  store.set(K.chats, S.chats);
+  store.set(K.chatMsgs, S.chatMsgs);
+  store.set(K.chatId, S.chatId);
+  if (storageFailed) renderChatWarning();
+}
+
+function currentChat() {
+  if (!S.chatId || !chatById(S.chatId)) return null;
+  return chatById(S.chatId);
+}
+
+// Called whenever the open chat changes, so the list order and title follow it.
+function touchChat() {
+  const c = currentChat();
+  if (!c) return;
+  c.updated_at = new Date().toISOString();
+  if (!c.renamed) c.title = titleFrom(S.history);
+  queueSync("conversations");
+}
+
+function newChat() {
+  const c = { id: newId(), title: "New chat", created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(), deleted: false };
+  S.chats.unshift(c);
+  S.chatId = c.id;
+  S.chatMsgs[c.id] = [];
+  S.history = S.chatMsgs[c.id];
+  saveChats();
+  queueSync("conversations");
+  renderAll(); renderStarters(); updateMirror();
+  return c;
+}
+
+function openChat(id) {
+  if (!S.chatMsgs[id]) S.chatMsgs[id] = [];
+  S.chatId = id;
+  S.history = S.chatMsgs[id];
+  saveChats();
+  renderAll(); renderStarters(); updateMirror();
+}
+
+/* Tombstoned locally and remotely, never merely removed. A device that was
+ * offline still holds this chat; without a tombstone to pull, its next push
+ * puts the whole thing back. */
+function deleteChat(id) {
+  const c = chatById(id);
+  if (!c) return;
+  c.deleted = true;
+  c.deleted_at = new Date().toISOString();
+  c.updated_at = c.deleted_at;
+  delete S.chatMsgs[id];
+  if (S.chatId === id) {
+    const next = HSKSync.visibleConversations(S.chats)[0];
+    if (next) openChat(next.id); else newChat();
+  }
+  saveChats();
+  queueSync("conversations");
+  if (S.sync.on && syncUser) {
+    HSKSync.deleteConversationMessages(syncUser.id, id)
+      .catch(e => console.warn("conversation delete failed", e));
+  }
+  renderChats();
+}
+
+function persist() {
+  // Covers every reassignment of S.history -- each one calls through here.
+  if (S.chatId) S.chatMsgs[S.chatId] = S.history;
+  touchChat();
+  /* K.history is not written any more. It held the same turns as
+   * K.chatMsgs[S.chatId], so every message was stored twice -- doubling the
+   * quota needed by the one feature here that grows without bound. It is still
+   * *read* once, by migrateChats(), which is all it was ever for. */
+  saveChats();
+  queueSync("messages");
+}
 
 /* Settle the reply against the pacing budget: bank what was introduced, count
  * reuse toward promotion, then earn credit from the characters just read. */
@@ -1754,8 +2038,22 @@ async function flushSync() {
   Object.keys(syncQueue).forEach(k => { syncQueue[k] = false; });
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
+    if (q.conversations) {
+      await HSKSync.pushConversations(
+        S.chats.map(c => HSKSync.conversationToRow(c, syncUser.id)).filter(Boolean));
+    }
     if (q.messages) {
-      const rows = S.history.map(t => HSKSync.messageToRow(t, syncUser.id)).filter(Boolean);
+      /* Every conversation, not only the open one. A message edited in an old
+       * chat -- a translation added, an explain follow-up -- has to reach the
+       * server too, and upserts are idempotent so re-sending settled rows costs
+       * a request rather than correctness. */
+      const rows = [];
+      Object.keys(S.chatMsgs).forEach(cid => {
+        (S.chatMsgs[cid] || []).forEach(t => {
+          const row = HSKSync.messageToRow(t, syncUser.id, cid);
+          if (row) rows.push(row);
+        });
+      });
       await HSKSync.pushMessages(rows);
     }
     if (q.vocab_extra) await HSKSync.pushVocab("vocab_extra", HSKSync.vocabToRows(S.extra, syncUser.id));
@@ -1764,6 +2062,7 @@ async function flushSync() {
     if (q.prefs) {
       await HSKSync.pushPrefs(syncUser.id, HSKSync.prefsSnapshot(S));
       S.prefsPushedAt = new Date().toISOString();
+      store.set(K.prefsPushedAt, S.prefsPushedAt);
     }
     syncLastError = "";
     renderSyncStatus("Synced just now");
@@ -1800,14 +2099,45 @@ async function pullAndMerge() {
   if (!S.sync.on || !syncUser || syncBusy) return;
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
-    const [msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+    const [convRows, msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+      HSKSync.pullConversations(syncUser.id),
       HSKSync.pullMessages(syncUser.id),
       HSKSync.pullVocab("vocab_extra", syncUser.id),
       HSKSync.pullVocab("vocab_learning", syncUser.id),
       HSKSync.pullVocab("vocab_known", syncUser.id),
       HSKSync.pullPrefs(syncUser.id)
     ]);
-    S.history = HSKSync.mergeMessages(S.history, msgRows);
+    /* Conversations first: the tombstones decide which incoming messages are
+     * worth merging at all, and a deleted chat's rows may still be on the way
+     * down from a device that had not pulled yet. */
+    S.chats = HSKSync.mergeConversations(S.chats, convRows);
+    const dead = new Set(S.chats.filter(c => c.deleted).map(c => c.id));
+    dead.forEach(id => { delete S.chatMsgs[id]; });
+
+    const byChat = {};
+    (msgRows || []).forEach(row => {
+      const cid = row.conversation_id || LEGACY_CID;
+      if (dead.has(cid)) return;
+      (byChat[cid] || (byChat[cid] = [])).push(row);
+    });
+    Object.keys(byChat).forEach(cid => {
+      S.chatMsgs[cid] = HSKSync.mergeMessages(S.chatMsgs[cid] || [], byChat[cid]);
+      /* A conversation the server has messages for but no row of its own --
+       * an unmigrated database, or a device that pushed messages before its
+       * conversations write landed. Better a chat with a derived title than
+       * messages with nowhere to live. */
+      if (!chatById(cid)) {
+        S.chats.push({ id: cid, title: titleFrom(S.chatMsgs[cid]),
+                       created_at: (S.chatMsgs[cid][0] || {}).created_at || new Date().toISOString(),
+                       updated_at: new Date().toISOString(), deleted: false });
+      }
+    });
+    if (!S.chatId || dead.has(S.chatId) || !chatById(S.chatId)) {
+      const first = HSKSync.visibleConversations(S.chats)[0];
+      S.chatId = first ? first.id : S.chatId;
+    }
+    if (S.chatId && !S.chatMsgs[S.chatId]) S.chatMsgs[S.chatId] = [];
+    S.history = S.chatId ? S.chatMsgs[S.chatId] : S.history;
     S.extra = HSKSync.mergeWordList(S.extra, HSKSync.rowsToVocab(extraRows));
     S.learning = HSKSync.mergeWordList(S.learning, HSKSync.rowsToVocab(learningRows), "seen");
     S.known = HSKSync.mergeWordList(S.known, HSKSync.rowsToVocab(knownRows));
@@ -1838,12 +2168,14 @@ async function pullAndMerge() {
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       S.prefsPushedAt = prefsRow.updated_at;
+      store.set(K.prefsPushedAt, S.prefsPushedAt);
       applyFont(S.font);
       if (S.level !== oldLevel) await loadLevel(S.level);
       else if (S.script !== oldScript) rebuildLexicon();
     }
 
-    store.set(K.history, S.history);
+    saveChats();
+    renderChats();
     store.set(K.extra, S.extra); store.set(K.learning, S.learning); store.set(K.known, S.known);
     rebuildLexicon(); updateMirror(); renderAll(); renderStarters(); renderPaceNote();
     if ($("#vocabSheet").classList.contains("open")) { renderVocab(); renderLearning(); }
@@ -1852,7 +2184,8 @@ async function pullAndMerge() {
     syncLastError = "";
     renderSyncStatus("Synced just now");
     // Whatever the merge added locally that the server did not have yet.
-    queueSync("messages"); queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
+    queueSync("conversations"); queueSync("messages");
+    queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
   } catch (e) {
     console.warn("sync pull failed", e);
     syncLastError = (e && e.message) || String(e);
@@ -2428,14 +2761,38 @@ function sortModels(list) {
                          : (a.free ? -1 : 1)));
 }
 
+const isFav = id => S.favModels.indexOf(id) !== -1;
+
+function toggleFav(id) {
+  const i = S.favModels.indexOf(id);
+  if (i === -1) S.favModels.push(id); else S.favModels.splice(i, 1);
+  store.set(K.favModels, S.favModels);
+  queueSync("prefs");
+  fillModels();
+  renderModelList();
+}
+
+/* Both filters, in one place, so the dropdowns and the browse sheet can never
+ * disagree about what is on offer. Each is skipped when it would empty the
+ * list -- a picker with nothing in it is worse than an unfiltered one, and
+ * "favorites only" with no favorites yet is the first run of this feature. */
+function filterModels(all) {
+  let list = all;
+  if (S.favOnly) {
+    const favs = list.filter(m => isFav(m.id));
+    if (favs.length) list = favs;
+  }
+  if (S.freeOnly) {
+    const free = list.filter(m => m.free);
+    if (free.length) list = free;
+  }
+  return list;
+}
+
 function fillModels() {
   const cached = store.get(K.models, null);
   const all = sortModels((cached && cached.length ? cached : MODELS).slice());
-  let list = all;
-  if (S.freeOnly) {
-    const free = all.filter(m => m.free);
-    if (free.length) list = free;                 // never leave the picker empty
-  }
+  let list = filterModels(all);
   /* The selected model always stays in the list, or the picker would silently
    * switch what you are talking to. Carry its catalogue entry across so a paid
    * model kept under the free filter still shows its name and price rather
@@ -2458,7 +2815,18 @@ function fillModels() {
    * "free models only": the free tier is exactly where the accuracy problem
    * this setting exists to solve lives, so hiding paid models here would hide
    * the fix. Its own id is carried in for the same reason the chat one is. */
+  /* Favorites apply here; "free models only" deliberately does not. The two
+   * filters are not the same kind of thing: starring is about keeping a short
+   * list to hand, which is just as useful for this picker, whereas the free
+   * filter would hide the paid models that are the entire reason this setting
+   * exists. Leaving favorites out was an oversight -- the browse sheet
+   * honored it for both pickers while this dropdown did not, so the two
+   * disagreed about what was on offer. */
   let tList = all;
+  if (S.favOnly) {
+    const favs = tList.filter(m => isFav(m.id));
+    if (favs.length) tList = favs;
+  }
   if (S.teachModel && !tList.some(m => m.id === S.teachModel)) {
     tList = [{ id: S.teachModel, label: S.teachModel }].concat(tList);
   }
@@ -2477,6 +2845,93 @@ function fillModels() {
     const free = cached.filter(m => m.free).length;
     $("#modelNote").textContent = cached.length + " models cached, " + free + " of them free.";
   }
+}
+
+/* ------------------------------------------------------- the model browser
+ *
+ * The catalogue runs to several hundred entries and a <select> that long is
+ * unusable on a phone, so picking and starring both happen here instead. It
+ * reads S.freeOnly, S.favOnly and S.modelSort rather than carrying its own
+ * copies -- one answer to "what am I looking at", not two that drift apart.
+ */
+let modelPickFor = "chat";      // which of the two pickers opened this
+
+function renderModelList() {
+  const box = $("#modelPickList");
+  if (!box) return;
+  const cached = store.get(K.models, null);
+  const all = sortModels((cached && cached.length ? cached : MODELS).slice());
+  /* The teaching picker is never narrowed to free models -- the accuracy
+   * problem that setting exists to solve lives in the free tier, so hiding
+   * paid models there hides the fix. favorites still apply to both. */
+  let list = modelPickFor === "teach"
+    ? (S.favOnly && all.some(m => isFav(m.id)) ? all.filter(m => isFav(m.id)) : all)
+    : filterModels(all);
+  const q = $("#modelSearch").value.trim().toLowerCase();
+  if (q) list = list.filter(m =>
+    m.id.toLowerCase().includes(q) || String(m.label || "").toLowerCase().includes(q));
+
+  const current = modelPickFor === "teach" ? S.teachModel : S.model;
+  /* The model in use is always listed, even when a filter or the catalogue
+   * would drop it -- the same rule fillModels() follows for the dropdowns. A
+   * picker that cannot show you what you are currently talking to is worse
+   * than one showing an extra row, and an id typed by hand need never be in
+   * the catalogue at all. */
+  if (current && !list.some(m => m.id === current)) {
+    const known = all.find(m => m.id === current);
+    list = [known || { id: current, label: current }].concat(list);
+  }
+  $("#modelPickNote").textContent = list.length + " model" + (list.length === 1 ? "" : "s") +
+    (S.favOnly ? ", favorites only" : "") + (S.freeOnly && modelPickFor === "chat" ? ", free only" : "") +
+    ". Tap a row to choose it; tap ★ to keep it at hand.";
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<div class="note">Nothing matches.</div>';
+    return;
+  }
+  list.slice(0, POOL_PAGE).forEach(m => {
+    const row = document.createElement("div");
+    row.className = "modelrow" + (m.id === current ? " on" : "");
+    const star = document.createElement("button");
+    star.className = "starbtn" + (isFav(m.id) ? " on" : "");
+    star.type = "button";
+    star.textContent = isFav(m.id) ? "★" : "☆";
+    star.setAttribute("aria-label", (isFav(m.id) ? "Unstar " : "Star ") + (m.label || m.id));
+    star.onclick = e => { e.stopPropagation(); toggleFav(m.id); };
+    const name = document.createElement("span");
+    name.className = "mname";
+    name.innerHTML = escapeHtml(m.label || m.id) +
+      '<span class="g">' + escapeHtml(m.id + priceLabel(m)) + "</span>";
+    row.append(star, name);
+    /* Choosing closes. This is a picker first and a favorites editor second,
+     * and leaving it open after a choice means the next tap is "close" every
+     * time. Starring deliberately does not close -- that one is a batch job. */
+    row.onclick = () => {
+      if (modelPickFor === "teach") {
+        S.teachModel = m.id;
+        store.set(K.teachModel, S.teachModel);
+        queueSync("prefs");
+        fillModels();
+      } else {
+        setChatModel(m.id);
+      }
+      closeSheet("#modelSheet");
+    };
+    box.appendChild(row);
+  });
+  if (list.length > POOL_PAGE) {
+    box.insertAdjacentHTML("beforeend",
+      '<div class="note">Showing the first ' + POOL_PAGE + " — search to narrow it.</div>");
+  }
+}
+
+function openModelPicker(which) {
+  modelPickFor = which;
+  $("#modelPickTitle").textContent =
+    which === "teach" ? "Model for translation and grammar checks" : "Chat model";
+  $("#modelSearch").value = "";
+  openSheet("#modelSheet");
+  renderModelList();
 }
 
 // Reachable from either the setup button or the quiet reload one; whichever was
@@ -2517,10 +2972,21 @@ async function refreshModels(btn) {
 function renderLearning() {
   const box = $("#learningList");
   if (!box) return;
-  const list = S.learning.slice().reverse();
+  /* Only words still ahead of you. Once you move up, everything introduced
+   * from the level you moved into is simply part of your level, and leaving it
+   * here captioned "from HSK 2" turns a working set into a permanent archive
+   * that grows every time you advance. Filtered, never deleted -- the seen
+   * counts stay, and dropping back down brings the rows back. */
+  const ahead = S.learning.filter(e => (e.from || 0) > S.level);
+  const absorbed = S.learning.length - ahead.length;
+  const list = ahead.slice().reverse();
+  const note = absorbed
+    ? '<div class="note">' + absorbed + " more " +
+      (absorbed === 1 ? "word is" : "words are") + " now part of " +
+      escapeHtml(levelLabel()) + " and no longer listed here.</div>" : "";
   if (!list.length) {
-    box.innerHTML = S.pace.on
-      ? '<div class="note">Nothing introduced yet — keep reading.</div>' : "";
+    box.innerHTML = note || (S.pace.on
+      ? '<div class="note">Nothing introduced yet — keep reading.</div>' : "");
     return;
   }
   box.innerHTML = "";
@@ -2545,6 +3011,7 @@ function renderLearning() {
     row.appendChild(del);
     box.appendChild(row);
   });
+  if (note) box.insertAdjacentHTML("beforeend", note);
 }
 
 /* How many matching rows are rendered at once. Some pools run to several
@@ -2552,55 +3019,159 @@ function renderLearning() {
  * in one go is the wrong tradeoff for a list meant to be skimmed quickly;
  * "show more" grows it in the same increments search narrows it by. */
 const POOL_PAGE = 150;
-let poolShown = POOL_PAGE;
+
+/* Which level the browser is showing. Session state, not a setting: it opens
+ * on the next level every time, which is the one the pacing engine is working
+ * through and the answer to "what is coming". */
+let poolLevel = null;
+let poolEntries = [];
 
 function poolMatches() {
   const q = $("#poolSearch").value.trim().toLowerCase();
-  if (!q) return S.pool;
-  return S.pool.filter(e =>
+  if (!q) return poolEntries;
+  return poolEntries.filter(e =>
     e.w.includes(q) || (e.p || "").toLowerCase().includes(q) || (e.d || "").toLowerCase().includes(q));
 }
 
-function renderPool() {
-  const next = LEVELS.find(l => l.id === S.level + 1);
-  $("#poolTitle").textContent = next ? "Words at " + next.label : "No level above " + levelLabel();
-  const matches = poolMatches();
-  const box = $("#poolList");
-  box.innerHTML = "";
-  if (!S.pool.length) {
-    box.innerHTML = '<div class="note">' +
-      (next ? "Nothing left to review — every word at " + next.label + " is already usable."
-            : "There is no level above this one.") + "</div>";
-  }
-  matches.slice(0, poolShown).forEach(e => {
-    const row = document.createElement("div");
-    row.className = "poolrow";
-    row.innerHTML = '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + '>' +
-      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
-      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
-    row.querySelector("input").onchange = ev => {
-      if (ev.target.checked) {
-        if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
-      } else {
-        S.known = S.known.filter(k => k.w !== e.w);
-        deleteSyncedWord("vocab_known", e.w);
-      }
-      store.set(K.known, S.known);
-      rebuildLexicon(); updateMirror();
-      // S.pool membership does not change -- only isKnownAhead(w) does -- so a
-      // plain re-render (no re-fetch) is enough, and the row stays put either way.
+/* Fetch the chosen level and show it. Kept separate from renderPool so that
+ * searching and "show more" -- which happen on every keystroke -- never touch
+ * the network. */
+async function loadPoolLevel(id) {
+  poolLevel = id;
+  poolShownBy = {};
+  $("#poolList").innerHTML = '<div class="note">Loading…</div>';
+  /* Commonest first. buildPool already sorts this way for the pacing pool, but
+   * this list is unfiltered, so it has to sort for itself. */
+  poolEntries = (await levelList(id)).slice()
+    .sort((a, b) => (a.f || Infinity) - (b.f || Infinity) || a.w.localeCompare(b.w));
+  renderPool();
+}
+
+/* The four states a word can be in, in the order they are worth reading: what
+ * is left to do first, then the three kinds of already-done. Each is its own
+ * <details> block carrying its count, which turns "endless scroll" into a
+ * question you can answer at a glance -- and makes the color coding
+ * self-explanatory, since the group heading says what the color means.
+ *
+ * `usable` is what the three done states share: the partner may already use
+ * the word and it will never be flagged. They are kept apart anyway because
+ * how a word became usable is the useful part -- one was free with the level,
+ * one you were taught, one you claimed. */
+const POOL_GROUPS = [
+  { key: "todo",  label: "Not yet",
+    note: "Not usable yet. Pacing offers these commonest-first, and they are flagged if the partner uses one. Tick any you already know." },
+  { key: "have",  label: "Already at your level",
+    note: "In your level's own list. Always usable, nothing to do." },
+  { key: "met",   label: "Met — added or introduced",
+    note: "Introduced by pacing, typed by you, or added by hand. Already usable, and these are the ones worth drilling." },
+  { key: "known", label: "Ticked as already known",
+    note: "You told the app you knew these. Usable, never offered, never flagged. Untick to undo." }
+];
+
+// Per group, so opening one long block does not page the others with it.
+let poolShownBy = {};
+
+function poolGroupOf(e, baseSet) {
+  if (baseSet.has(e.w)) return "have";
+  if (isExtra(e.w) || learned(e.w)) return "met";
+  if (isKnownAhead(e.w)) return "known";
+  return "todo";
+}
+
+function poolRow(e, group) {
+  const row = document.createElement("div");
+  row.className = "poolrow";
+  /* Only the two states you can change carry a box. Ticking a word that is
+   * already at your level, or that the app taught you, would do nothing, so it
+   * is shown as done rather than as a box that quietly ignores you. */
+  const box = (group === "todo" || group === "known")
+    ? '<input type="checkbox"' + (group === "known" ? " checked" : "") + ">"
+    : '<span style="width:16px"></span>';
+  row.innerHTML = box +
+    '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+    '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
+  const tick = row.querySelector("input");
+  if (tick) tick.onchange = ev => {
+    if (ev.target.checked) {
+      if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
+    } else {
+      S.known = S.known.filter(k => k.w !== e.w);
+      deleteSyncedWord("vocab_known", e.w);
+    }
+    store.set(K.known, S.known);
+    rebuildLexicon(); updateMirror();
+    renderPool();
+    // Ticking a word is a claim about what you can read, so the estimate has
+    // to move with it -- that is the whole point of ticking.
+    renderProgress(); renderSectionNotes();
+  };
+  return row;
+}
+
+/* Rows for one group, capped, with its own "show more". Capped rather than
+ * rendered whole even inside a collapsed <details>: collapsing hides the nodes,
+ * it does not avoid building them, and HSK 7-9 is 10,970 of them. */
+function renderPoolGroup(wrap, spec, entries) {
+  const shown = poolShownBy[spec.key] || POOL_PAGE;
+  entries.slice(0, shown).forEach(e => wrap.appendChild(poolRow(e, spec.key)));
+  const left = entries.length - shown;
+  if (left > 0) {
+    const more = document.createElement("button");
+    more.className = "quiet";
+    more.style.cssText = "margin-top:8px";
+    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
+    more.onclick = () => {
+      poolShownBy[spec.key] = shown + POOL_PAGE;
       renderPool();
     };
-    box.appendChild(row);
-  });
-  const more = $("#poolMore");
-  const left = matches.length - poolShown;
-  if (left > 0) {
-    more.style.display = "";
-    more.textContent = "Show " + Math.min(left, POOL_PAGE) + " more (" + left + " left)";
-  } else {
-    more.style.display = "none";
+    wrap.appendChild(more);
   }
+}
+
+function renderPool() {
+  const lv = LEVELS.find(l => l.id === poolLevel);
+  $("#poolTitle").textContent = lv ? "Words at " + lv.label : "Words by level";
+  const matches = poolMatches();
+  const box = $("#poolList");
+  const baseSet = new Set(S.base.map(e => e.w));
+  box.innerHTML = "";
+  if (!matches.length) {
+    box.innerHTML = '<div class="note">' +
+      (poolEntries.length ? "Nothing matches that search."
+                          : "That level's list could not be loaded.") + "</div>";
+    return;
+  }
+
+  /* A search is a question about particular words, not about how far along you
+   * are, so it answers flat -- grouping a three-word result into four headings
+   * buries the answer it was asked for. */
+  if ($("#poolSearch").value.trim()) {
+    matches.slice(0, POOL_PAGE).forEach(e =>
+      box.appendChild(poolRow(e, poolGroupOf(e, baseSet))));
+    const left = matches.length - POOL_PAGE;
+    box.insertAdjacentHTML("afterbegin", '<div class="note">' + matches.length +
+      " match" + (matches.length === 1 ? "" : "es") +
+      (left > 0 ? ", showing the commonest " + POOL_PAGE : "") + ".</div>");
+    return;
+  }
+
+  const by = { todo: [], have: [], met: [], known: [] };
+  matches.forEach(e => by[poolGroupOf(e, baseSet)].push(e));
+  // The first group with anything in it opens, so the sheet never lands on
+  // four closed headings with no indication of what is inside them.
+  let opened = false;
+  POOL_GROUPS.forEach(spec => {
+    const entries = by[spec.key];
+    if (!entries.length) return;
+    const d = document.createElement("details");
+    d.className = "sec";
+    if (!opened) { d.open = true; opened = true; }
+    d.innerHTML = "<summary>" + escapeHtml(spec.label) +
+      '<span class="secnote">' + entries.length + "</span></summary>" +
+      '<div class="note">' + escapeHtml(spec.note) + "</div>";
+    renderPoolGroup(d, spec, entries);
+    box.appendChild(d);
+  });
 }
 
 function renderVocab() {
@@ -2694,6 +3265,117 @@ function renderStarters() {
 }
 
 /* What the pacing is doing right now, in the terms the setting is described in. */
+/* ------------------------------------------------------- level readiness */
+
+/* Every word the level allows, as the plain simplified forms the wordlists are
+ * written in. Not S.lex.words: that is keyed in whichever script is displayed,
+ * and the level data it would be compared against is always simplified. */
+/* ponytail: a word added by hand in traditional is stored as typed, so it will
+ * not match its simplified entry here and goes uncounted. Affects the estimate
+ * by a word or two; index both forms if it ever reads as wrong. */
+function usableWords() {
+  return new Set(S.base.concat(S.extra, S.learning, S.known).map(e => e.w));
+}
+
+/* Words the learner has actually written, from their own turns. Production is
+ * the harder half and lags recognition, so it is worth counting separately --
+ * and it costs no new storage, since every message is already saved.
+ * renderAll() segments the whole history on every render too, so the work here
+ * is nothing new. */
+function producedWords() {
+  const out = new Set();
+  S.history.forEach(t => {
+    if (t.role !== "user") return;
+    HSK.segment(t.text, S.lex).forEach(tok => {
+      if (tok.kind === "word") out.add(tok.text);
+    });
+  });
+  return out;
+}
+
+// Everything the progress panel and the collapsed-row summary both need.
+function readiness() {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!next || !S.nextList.length) return null;
+  const usable = usableWords(), mine = producedWords();
+  const met = S.learning.filter(e => e.from === S.level + 1).length;
+  // A Set, not S.base.some() inside a filter: at HSK 6 -> 7-9 that pair is
+  // 5364 x 10970 comparisons and the sheet visibly stalls opening.
+  const baseSet = new Set(S.base.map(e => e.w));
+  const freq = new Map(S.nextList.map(e => [e.w, e.f || Infinity]));
+  return {
+    next: next,
+    /* Two readings of the same scale, never one blended score. Production is
+     * the harder half and always lower; the gap between the bars is the
+     * receptive/productive one and is the informative part. */
+    read: HSKPace.coverage(S.nextList, usable),
+    produce: HSKPace.coverage(S.nextList, mine),
+    toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
+    total: S.nextList.length,
+    newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
+    met: met,
+    used: S.nextList.filter(e => mine.has(e.w)).length,
+    /* The actionable half. There is no published threshold for production the
+     * way there is 95%/98% for reading -- the receptive/productive gap widens
+     * with proficiency and not every word ever becomes productive, so any
+     * fixed target would be wrong at every level and wrong in the same
+     * direction. What is actionable is not a number to hit but a list to work
+     * through: words the app taught you that you have never once written. */
+    /* Sorted commonest-first through the level list, because S.learning rows
+     * carry no frequency of their own -- sorting them by e.f silently does
+     * nothing, since every value is undefined. */
+    unused: S.learning.filter(e => (e.from || 0) > S.level && !mine.has(e.w))
+      .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity))
+  };
+}
+
+function renderProgress() {
+  const box = $("#progress");
+  if (!box) return;
+  const r = readiness();
+  if (!r) {
+    box.innerHTML = '<div class="note">No level above ' + escapeHtml(levelLabel()) + ".</div>";
+    if ($("#moveUp")) $("#moveUp").style.display = "none";
+    return;
+  }
+  const pct = Math.round(r.read * 100);
+  const use = Math.round(r.produce * 100);
+  const ready = r.read >= HSKPace.READY_AT;
+  const mark = Math.round(HSKPace.READY_AT * 100);
+  /* The fill is reading coverage and the tick is the threshold, so the two
+   * agree with the "to 95%" row below by construction -- they are the same
+   * number read two ways. The inner fill is production, on the same axis so
+   * the gap is readable at a glance rather than needing arithmetic. */
+  box.innerHTML =
+    '<div class="bar"><i style="width:' + pct + '%"></i>' +
+    '<b style="width:' + use + '%"></b>' +
+    '<u style="left:' + mark + '%"></u></div>' +
+    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+      "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
+      "<i>" + use + "% you can use</i></div>" +
+    "<table><tr><td>to " + mark + "%</td><td>" +
+      (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
+        ", commonest first" : "there already") + "</td></tr>" +
+    "<tr><td>met</td><td>" + r.met + " of " + r.newWords + " new at " +
+      escapeHtml(r.next.label) + "</td></tr>" +
+    "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
+    (r.unused.length
+      ? "<tr><td>never used</td><td>" + r.unused.length + " of the " + r.met +
+        " you have met — try " +
+        /* Named, not just counted. "5 words unused" is a statistic; 说话、可以
+         * is something you can do in your next message, which is the whole
+         * difference between a gauge and a prompt. */
+        escapeHtml(r.unused.slice(0, 3).map(e => e.w).join("、")) +
+        "</td></tr>"
+      : "") +
+    "</table>";
+  const btn = $("#moveUp");
+  if (btn) {
+    btn.style.display = ready ? "" : "none";
+    btn.textContent = "Move up to " + r.next.label;
+  }
+}
+
 function renderPaceNote() {
   const box = $("#paceNote");
   if (!box) return;
@@ -2781,13 +3463,46 @@ $("#btnPy").onclick = () => {
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
 };
-$("#btnPool").onclick = () => {
-  poolShown = POOL_PAGE; $("#poolSearch").value = "";
-  renderPool(); openSheet("#poolSheet");
-};
-$("#poolSearch").addEventListener("input", () => { poolShown = POOL_PAGE; renderPool(); });
-$("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
+function openPool(id) {
+  $("#poolSearch").value = "";
+  $("#poolLevel").innerHTML = LEVELS.map(l =>
+    '<option value="' + l.id + '"' + (l.id === id ? " selected" : "") + ">" +
+    escapeHtml(l.label) + (l.id === S.level ? " — your level" : "") + "</option>").join("");
+  openSheet("#poolSheet");
+  loadPoolLevel(id);
+}
+// Opens on the next level: the one pacing is working through, and the answer
+// to "what is coming". The picker reaches every other one.
+$("#btnPool").onclick = () => openPool(Math.min(S.level + 1, LEVELS[LEVELS.length - 1].id));
+$("#btnLevels").onclick = () => openPool(S.level);
+$("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
+// A new query re-pages every group: the counts and the rows both change.
+$("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(); });
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
+$("#poolX").onclick = () => closeSheet("#poolSheet");
+
+/* Moving up. Never automatic: the level decides what the validator enforces and
+ * what the partner is allowed to say, so it changing itself mid-conversation
+ * would be the app rewriting the rules under you. The confirmation spells out
+ * what carries over because that is the question that stops people -- nothing
+ * is lost, but "nothing is lost" is not obvious from the outside. */
+$("#moveUp").onclick = async () => {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!next) return;
+  const kept = S.extra.length + S.learning.length + S.known.length;
+  if (!confirm("Move up to " + next.label + "?\n\n" +
+      "Your " + kept + " added, introduced and ticked words stay usable — nothing is lost.\n" +
+      "The partner may now use any " + next.label + " word.\n" +
+      "New words will start coming from " + (LEVELS.find(l => l.id === next.id + 1) || {}).label +
+        ", and the pacing budget starts fresh.\n\n" +
+      "You can move back down at any time.")) return;
+  await loadLevel(next.id);
+  queueSync("prefs");
+  $("#level").value = String(S.level);
+  fillLevels();
+  updateMirror(); renderAll(); renderStarters();
+  renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
+};
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
 
 function sendExplainQuestion() {
@@ -2872,6 +3587,12 @@ function renderSectionNotes() {
    * naming two ids here would not fit a phone. */
   const m = S.model || "";
   $("#secModelsNote").textContent = m.length > 24 ? m.slice(m.indexOf("/") + 1) : m;
+  /* The one number worth seeing without opening the section: how close the
+   * next level is. Blank at the top level, where there is nothing to be close
+   * to -- a row captioned with a meaningless figure is worse than a bare one. */
+  const r = readiness();
+  $("#secLearningNote").textContent =
+    r ? Math.round(r.read * 100) + "% to " + r.next.label : "";
   $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
   $("#secVersionNote").textContent = VERSION.split(" ")[0];
 }
@@ -2897,7 +3618,9 @@ $("#btnSet").onclick = () => {
     '<option value="' + n + '"' + (n === S.pace.rate ? " selected" : "") + ">one new word per " +
     n + " characters" + (n === 45 ? " — graded-reader pace" : "") + "</option>").join("");
   renderPaceNote();
+  renderProgress();
   $("#freeOnly").checked = S.freeOnly;
+  $("#favOnly").checked = S.favOnly;
   $("#modelSort").value = S.modelSort;
   $("#script").value = S.script;
   $("#speechRate").innerHTML = [0.5, 0.6, 0.7, 0.8, 0.9, 1].map(r =>
@@ -3081,12 +3804,14 @@ $("#modelSort").onchange = e => {
   S.modelSort = e.target.value; store.set(K.modelSort, S.modelSort);
   queueSync("prefs");
   fillModels();
+  renderModelList();
 };
 $("#freeOnly").onchange = e => {
   S.freeOnly = e.target.checked;
   store.set(K.freeOnly, S.freeOnly);
   queueSync("prefs");
   fillModels();
+  renderModelList();
   if (S.freeOnly && !store.get(K.models, null)) {
     $("#modelNote").textContent = "Load the model list first — the free ones can only be identified from live pricing.";
   }
@@ -3200,11 +3925,28 @@ $("#syncSignIn").onclick = signInForSync;
 $("#syncNow").onclick = () => pullAndMerge();
 $("#syncSignOut").onclick = signOutOfSync;
 
+$("#browseChatModel").onclick = () => openModelPicker("chat");
+$("#browseTeachModel").onclick = () => openModelPicker("teach");
+$("#modelSearch").addEventListener("input", renderModelList);
+$("#modelX").onclick = () => closeSheet("#modelSheet");
+$("#modelPickClose").onclick = () => closeSheet("#modelSheet");
+$("#modelSheet").addEventListener("click", e => {
+  if (e.target === $("#modelSheet")) closeSheet("#modelSheet");
+});
+$("#favOnly").onchange = e => {
+  S.favOnly = e.target.checked;
+  store.set(K.favOnly, S.favOnly);
+  queueSync("prefs");
+  fillModels();
+  renderModelList();
+};
 $("#refreshModels").onclick = e => refreshModels(e.currentTarget);
 $("#modelReload").onclick = e => refreshModels(e.currentTarget);
 $("#checkUpdate").onclick = checkUpdate;
 $("#clearHistory").onclick = () => {
-  if (!confirm("Delete the whole conversation?")) return;
+  if (!confirm("Delete the messages in this conversation?\n\n" +
+      "The conversation itself stays in the list. To remove it entirely, use " +
+      "Delete in the conversations menu.")) return;
   S.history = []; persist(); renderAll();
   // persist()'s queued push carries nothing for an empty array (there is
   // nothing to upsert), so the remote copy needs its own explicit delete or
@@ -3246,17 +3988,104 @@ $("#syncWipe").onclick = async () => {
 };
 /* Plain text, labelled. "notice" turns are error cards -- UI, not conversation --
  * and are skipped for the same reason windowed() and messageToRow() skip them. */
-function conversationText() {
-  return S.history
+function conversationText(turns) {
+  return (turns || S.history)
     .filter(t => t.role === "user" || t.role === "assistant")
     .map(t => (t.role === "user" ? "You: " : "Partner: ") + t.text)
     .join("\n\n");
 }
-$("#copyChat").onclick = e => {
-  const text = conversationText();
-  if (!text) { e.currentTarget.textContent = "nothing to copy"; return; }
-  copyText(text, e.currentTarget);
-};
+/* ------------------------------------------------- the conversation list */
+
+function renderChatWarning() {
+  const box = $("#chatWarn");
+  if (!box) return;
+  box.textContent = storageFailed
+    ? "This device's storage is full, so the newest messages may not survive a reload. " +
+      "Delete a conversation here to make room. With cloud sync on, nothing already " +
+      "synced is at risk."
+    : (HSKSync.conversationsSupported() ? "" :
+      "Conversations are not syncing: this deployment's database has not had the " +
+      "conversations migration applied. The Hsk_chat administrator needs to run " +
+      "db/schema.sql against the Supabase project. Until then everything works here " +
+      "and your messages still back up, but other devices will see one conversation.");
+}
+
+function renderChats() {
+  const box = $("#chatList");
+  if (!box) return;
+  renderChatWarning();
+  const list = HSKSync.visibleConversations(S.chats);
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<div class="note">No conversations yet.</div>';
+    return;
+  }
+  list.forEach(c => {
+    const turns = (S.chatMsgs[c.id] || []).filter(t => t.role !== "notice");
+    const row = document.createElement("div");
+    row.className = "chatrow" + (c.id === S.chatId ? " on" : "");
+
+    const title = document.createElement("b");
+    title.className = "ctitle";
+    title.textContent = c.title || titleFrom(S.chatMsgs[c.id]) || "New chat";
+    title.onclick = () => { openChat(c.id); renderChats(); closeSheet("#chatSheet"); };
+
+    const meta = document.createElement("span");
+    meta.className = "cmeta";
+    meta.textContent = turns.length + " message" + (turns.length === 1 ? "" : "s") +
+      " · " + new Date(c.updated_at || c.created_at).toLocaleDateString();
+
+    const acts = document.createElement("div");
+    acts.className = "cacts";
+    const mk = (label, cls, fn) => {
+      const b = document.createElement("button");
+      b.className = cls; b.type = "button"; b.textContent = label;
+      b.onclick = e => { e.stopPropagation(); fn(b); };
+      return b;
+    };
+    const text = () => conversationText(S.chatMsgs[c.id]);
+    acts.append(
+      mk("Copy", "quiet", b => {
+        const t = text();
+        if (!t) { b.textContent = "nothing to copy"; return; }
+        copyText(t, b);
+      }),
+      mk("Download", "quiet", b => {
+        const t = text();
+        if (!t) { b.textContent = "nothing to save"; return; }
+        deliver(t, "hsk-chat-" + (c.title || "chat").replace(/[^\w\u4e00-\u9fff-]+/g, "_")
+          .slice(0, 40) + ".txt", b);
+      }),
+      /* Renaming is why the title column exists. `renamed` stops the derived
+       * title overwriting it the next time the chat is touched. */
+      mk("Rename", "quiet", () => {
+        const name = prompt("Name this conversation", c.title || "");
+        if (name === null) return;
+        c.title = name.trim() || titleFrom(S.chatMsgs[c.id]);
+        c.renamed = !!name.trim();
+        c.updated_at = new Date().toISOString();
+        saveChats(); queueSync("conversations"); renderChats();
+      }),
+      mk("Delete", "danger", () => {
+        if (!confirm("Delete \"" + (c.title || "this conversation") + "\"?\n\n" +
+            turns.length + " message" + (turns.length === 1 ? "" : "s") +
+            " will be removed from this device and from the cloud on every device " +
+            "you sync with.\n\nWords you added are kept. This cannot be undone.")) return;
+        deleteChat(c.id);
+      })
+    );
+    row.append(title, meta, acts);
+    box.appendChild(row);
+  });
+}
+
+$("#btnChats").onclick = () => { renderChats(); openSheet("#chatSheet"); };
+$("#chatX").onclick = () => closeSheet("#chatSheet");
+$("#chatClose").onclick = () => closeSheet("#chatSheet");
+$("#chatSheet").addEventListener("click", e => {
+  if (e.target === $("#chatSheet")) closeSheet("#chatSheet");
+});
+$("#newChat").onclick = () => { newChat(); renderChats(); closeSheet("#chatSheet"); };
 
 $("#resetStats").onclick = () => { S.stats = {}; store.set(K.stats, S.stats); renderStats(); };
 /* Tapping the dimmed area outside a sheet closes it. For Settings that has to
@@ -3276,6 +4105,20 @@ $("#setSheet").addEventListener("click", e => {
 
 (async function boot() {
   applyFont(S.font);
+  /* Before anything renders: S.history has to be the array inside S.chatMsgs,
+   * not a separate copy, or every turn added this session lands in one and is
+   * saved from the other. */
+  migrateChats();
+  if (!S.chatId || !chatById(S.chatId)) {
+    const first = HSKSync.visibleConversations(S.chats)[0];
+    if (first) S.chatId = first.id;
+  }
+  if (S.chatId) {
+    if (!S.chatMsgs[S.chatId]) S.chatMsgs[S.chatId] = S.history;
+    S.history = S.chatMsgs[S.chatId];
+  } else {
+    newChat();
+  }
   fillLevels(); fillModels();
   $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
   try {
@@ -3307,6 +4150,21 @@ $("#setSheet").addEventListener("click", e => {
       }
     })();
   }
+  /* A queued push waits 2s for edits to settle, and a reload inside that window
+   * used to drop it -- which is exactly what happens when you change a setting
+   * and immediately reload to pick up a new version. pagehide is the event that
+   * actually fires on mobile Safari (unload does not, reliably), and
+   * visibilitychange covers the app being backgrounded and killed. */
+  const flushNow = () => {
+    if (!S.sync.on || !syncUser) return;
+    clearTimeout(syncTimer);
+    flushSync();
+  };
+  window.addEventListener("pagehide", flushNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushNow();
+  });
+
   if ("serviceWorker" in navigator) {
     /* A new worker calls skipWaiting and claims the page; reload once so the
      * running app is the one that was just deployed. Two guards: controllerchange

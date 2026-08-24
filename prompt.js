@@ -286,35 +286,63 @@
      * things not to emit cut output from 289 tokens to 154, a 47% saving, with
      * the error-catching rate unchanged at 10/10 and no faults invented in
      * correct sentences. Measured; see the commit. */
+    /* Shared decoration rules only. The paragraph count belongs to each branch:
+     * the two questions have different shapes, and "four numbered paragraphs"
+     * was forcing the grammar check to pad a one-line answer up to four. */
     var tail = "You may reply in English and quote Chinese as needed -- you are not " +
       "restricted to the student's vocabulary here.\n\n" +
       "Formatting: plain sentences only. No headings, no bullet lists, no bold, no emoji, " +
-      "and no closing encouragement. Four short paragraphs, numbered 1 to 4. Stop when the " +
-      "fourth is done.\n\n";
+      "and no closing encouragement.\n\n";
 
     if (!opts.own) {
       return head +
         "Explain the following Chinese sentence in plain English: the grammar structures used, " +
         "why each word or particle is there, and call out anything above the student's level. " +
-        tail + "Sentence: " + opts.text;
+        tail + "Four short paragraphs, numbered 1 to 4. Stop when the fourth is done.\n\n" +
+        "Sentence: " + opts.text;
     }
+    /* Verdict first, and only as much after it as the verdict earns.
+     *
+     * This used to ask for four numbered paragraphs always: what the sentence
+     * says in English, whether it is correct, a correction, then the rule. Two
+     * problems. The first paragraph re-translated the sentence, which is what
+     * the translate button next to it already does, so every check opened with
+     * the answer to a different question. And a fixed four-part shape means a
+     * correct sentence still gets four paragraphs, which reads as though
+     * something must be wrong with it.
+     *
+     * The answer wanted here is: is this good Chinese at my level? If not,
+     * what should it be, and why did I get it wrong? Everything else is
+     * padding on a check meant to be read in a couple of seconds. */
     return head +
       "The student wrote the sentence below THEMSELVES, so it may well be wrong. Do not assume " +
-      "it is correct, and do not silently answer as if it were. Cover, in this order:\n" +
-      "1. What it actually says in English, and what you think they were reaching for if " +
-      "those are different.\n" +
-      "2. Whether it is correct. If it is, say so plainly and do not manufacture a problem " +
-      "to have something to teach.\n" +
-      "3. If it is not, one natural corrected version, staying inside the student's level " +
-      "where that is possible.\n" +
-      "4. What went wrong and why -- word order, a missing or wrong particle, measure words, " +
-      "aspect, or a word used in a sense it does not carry. Name the rule, so it transfers to " +
-      "the next sentence rather than only fixing this one.\n\n" +
+      "it is correct, and do not silently answer as if it were.\n\n" +
+      "Answer in this shape and nothing else:\n" +
+      /* The three verdicts are given as the literal words to emit. Described
+       * rather than quoted ("say which of three it is: natural at their
+       * level..."), the model echoed the description back including its
+       * third person -- the learner was told "natural Chinese at their
+       * level", which reads as a note written about them to someone else. */
+      "Start with exactly one of these three lines, on its own:\n" +
+      "Natural.\n" +
+      "Understandable, but not how a native speaker would say it.\n" +
+      "Not correct.\n" +
+      "The middle one is for Chinese that breaks no rule but no native speaker would choose: " +
+      "a calque from English, a stiff or abrupt phrasing, or a word that is technically right " +
+      "and not the one used here. Judge idiom, not only grammar -- most sentences a learner " +
+      "worries about are in this middle case rather than outright broken.\n" +
+      "After \"Natural.\" stop immediately. Do not add a translation, do not restate the " +
+      "sentence, do not offer an alternative, and do not manufacture a problem to have " +
+      "something to teach.\n" +
+      "Otherwise, give the corrected sentence on its own line, with no commentary attached, " +
+      "staying inside the student's level where that is possible.\n" +
+      "Then at most two sentences on what led them astray -- word order, a missing or wrong " +
+      "particle, a measure word, aspect, or a word used in a sense it does not carry. Name the " +
+      "rule rather than describing the edit, so it transfers to the next sentence.\n\n" +
       "Two failure modes are easy to misread. The student types pinyin and picks a character " +
       "from a list, so a wrong character is often a homophone of the right one rather than a " +
       "misunderstanding. And a sentence can be entirely grammatical yet blunt or unidiomatic; " +
-      "say which of the two you are looking at instead of calling both an error. Be " +
-      "encouraging and concrete.\n\n" + tail +
+      "that is the middle verdict, not the third one.\n\n" + tail +
       /* Context goes immediately before the sentence, not up with the level and
        * the recent words. A learner sentence is often only judgeable against
        * what it answers -- 我也是 and 很好 are correct or nonsense depending on

@@ -30,11 +30,12 @@
    * on whose turn gets the next id. "notice" turns (error cards) are UI,
    * not conversation, and are never synced -- same reasoning as why they
    * are excluded from windowed() in index.html. */
-  function messageToRow(turnObj, userId) {
+  function messageToRow(turnObj, userId, conversationId) {
     if (!turnObj || turnObj.role === "notice" || !turnObj.id) return null;
     return {
       id: turnObj.id,
       user_id: userId,
+      conversation_id: conversationId || turnObj.cid || LEGACY_ID,
       role: turnObj.role,
       text: turnObj.text,
       needs: turnObj.needs || null,
@@ -53,6 +54,7 @@
   function rowToMessage(row) {
     var t = {
       id: row.id, role: row.role, text: row.text,
+      cid: row.conversation_id || LEGACY_ID,
       created_at: row.created_at
     };
     if (row.needs) t.needs = row.needs;
@@ -98,6 +100,75 @@
     var aRichness = (a.translation ? 1 : 0) + (a.explainChat ? a.explainChat.length : 0);
     var bRichness = (b.translation ? 1 : 0) + (b.explainChat ? b.explainChat.length : 0);
     return aRichness > bRichness;
+  }
+
+  /* ------------------------------------------------------ conversations */
+
+  /* Messages written before conversation history existed carry no
+   * conversation_id. Every device maps NULL to this one fixed id rather than
+   * generating its own -- two devices each inventing an id for the same old
+   * history would turn one conversation into two, on a list where the whole
+   * point is knowing which chat is which. */
+  var LEGACY_ID = "00000000-0000-4000-8000-000000000001";
+
+  function conversationToRow(c, userId) {
+    if (!c || !c.id) return null;
+    return {
+      id: c.id,
+      user_id: userId,
+      title: c.title || null,
+      created_at: c.created_at,
+      updated_at: c.updated_at || new Date().toISOString(),
+      deleted_at: c.deleted ? (c.deleted_at || new Date().toISOString()) : null
+    };
+  }
+
+  function rowToConversation(row) {
+    return {
+      id: row.id,
+      title: row.title || "",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      deleted: !!row.deleted_at,
+      deleted_at: row.deleted_at || null
+    };
+  }
+
+  /* Union by id, newer updated_at wins -- except deletion, which is monotonic
+   * and wins from either side regardless of timestamps.
+   *
+   * That exception is the whole feature. A device that was offline when a chat
+   * was deleted still holds it, and its local copy may carry a later
+   * updated_at (it kept chatting). Resolving purely by recency would let that
+   * device undelete a chat someone deliberately removed, on every device, and
+   * no amount of pressing delete again would make it stick. */
+  function mergeConversations(local, remote) {
+    var byId = new Map();
+    (local || []).forEach(function (c) { if (c && c.id) byId.set(c.id, c); });
+    (remote || []).forEach(function (row) {
+      var incoming = rowToConversation(row);
+      var existing = byId.get(row.id);
+      if (!existing) { byId.set(row.id, incoming); return; }
+      var newer = (incoming.updated_at || "") > (existing.updated_at || "")
+        ? incoming : existing;
+      // Copied, never mutated in place: `existing` is the caller's own object.
+      var merged = {
+        id: newer.id, title: newer.title,
+        created_at: existing.created_at || incoming.created_at,
+        updated_at: newer.updated_at,
+        deleted: !!(existing.deleted || incoming.deleted),
+        deleted_at: existing.deleted_at || incoming.deleted_at || null
+      };
+      byId.set(row.id, merged);
+    });
+    return Array.from(byId.values()).sort(function (a, b) {
+      return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+    });
+  }
+
+  // Newest first, tombstones dropped -- what the chat list actually shows.
+  function visibleConversations(list) {
+    return (list || []).filter(function (c) { return c && !c.deleted; });
   }
 
   /* -------------------------------------------------------------- vocab */
@@ -157,7 +228,7 @@
   var PREFS_KEYS = [
     "level", "model", "teachModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "pace", "budget", "teachPrompts"
+    "freeOnly", "modelSort", "favModels", "favOnly", "pace", "budget", "teachPrompts"
   ];
 
   /* chatTime rides in the same prefs blob but is deliberately NOT in the list
@@ -189,6 +260,11 @@
     mergeWordList: mergeWordList,
     vocabToRows: vocabToRows,
     rowsToVocab: rowsToVocab,
+    LEGACY_ID: LEGACY_ID,
+    conversationToRow: conversationToRow,
+    rowToConversation: rowToConversation,
+    mergeConversations: mergeConversations,
+    visibleConversations: visibleConversations,
     PREFS_KEYS: PREFS_KEYS,
     prefsSnapshot: prefsSnapshot,
     applyPrefsSnapshot: applyPrefsSnapshot
@@ -228,8 +304,26 @@
 
   async function pushMessages(rows) {
     if (!rows.length) return;
-    var r = await client.from("messages").upsert(rows);
-    if (r.error) throw r.error;
+    /* An unmigrated database has no conversation_id column, and upserting one
+     * fails the whole batch -- so the conversation grouping is dropped rather
+     * than the messages. Backing up the conversation matters more than
+     * remembering which chat it was in, and the grouping comes back for free
+     * once the column exists. */
+    var payload = schemaHasConversations === false
+      ? rows.map(function (r) {
+          var copy = {};
+          Object.keys(r).forEach(function (k) { if (k !== "conversation_id") copy[k] = r[k]; });
+          return copy;
+        })
+      : rows;
+    var r = await client.from("messages").upsert(payload);
+    if (r.error) {
+      if (isMissingSchema(r.error) && schemaHasConversations !== false) {
+        schemaHasConversations = false;
+        return pushMessages(rows);        // once, with the column stripped
+      }
+      throw r.error;
+    }
   }
   async function pullMessages(userId, sinceISO) {
     var q = client.from("messages").select("*").eq("user_id", userId);
@@ -258,6 +352,52 @@
     var r = await client.from(table).delete().eq("user_id", userId).eq("word", word);
     if (r.error) throw r.error;
   }
+  /* Whether this project has had the conversations migration applied. Probed
+   * once per session by pullConversations() below, because the app has to keep
+   * working against a database whose owner has not run the SQL yet -- whoever
+   * runs the deployment may not be the person reading the screen. */
+  var schemaHasConversations = null;   // null = not probed yet
+
+  function conversationsSupported() { return schemaHasConversations !== false; }
+
+  /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
+   * undefined_table; PGRST204 / 42703 are the column equivalents, which is what
+   * a push of conversation_id hits when only the ALTER is missing. Matched on
+   * code rather than message text, which is localized and changes. */
+  function isMissingSchema(err) {
+    if (!err) return false;
+    var code = String(err.code || "");
+    return code === "PGRST205" || code === "42P01" ||
+           code === "PGRST204" || code === "42703";
+  }
+
+  async function pullConversations(userId) {
+    var r = await client.from("conversations").select("*").eq("user_id", userId);
+    if (r.error) {
+      if (isMissingSchema(r.error)) { schemaHasConversations = false; return []; }
+      throw r.error;
+    }
+    schemaHasConversations = true;
+    return r.data || [];
+  }
+
+  async function pushConversations(rows) {
+    if (!rows.length || schemaHasConversations === false) return;
+    var r = await client.from("conversations").upsert(rows);
+    if (r.error) {
+      if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
+      throw r.error;
+    }
+  }
+
+  // Messages belonging to one conversation, gone for good. The tombstone in
+  // `conversations` is what tells other devices; this just reclaims the rows.
+  async function deleteConversationMessages(userId, conversationId) {
+    var r = await client.from("messages").delete()
+      .eq("user_id", userId).eq("conversation_id", conversationId);
+    if (r.error && !isMissingSchema(r.error)) throw r.error;
+  }
+
   async function deleteAllMessages(userId) {
     var r = await client.from("messages").delete().eq("user_id", userId);
     if (r.error) throw r.error;
@@ -267,7 +407,8 @@
    * cannot drift from the schema: a table added to db/schema.sql and forgotten
    * here would leave data behind that the app promised to remove, so
    * test/sync.test.js reads the schema and checks this list still matches it. */
-  var USER_TABLES = ["messages", "vocab_extra", "vocab_learning", "vocab_known", "prefs"];
+  var USER_TABLES = ["conversations", "messages", "vocab_extra", "vocab_learning",
+                     "vocab_known", "prefs"];
 
   /* Sequential rather than Promise.all: the point of this call is that the user
    * is told the truth about what happened, and a partial failure buried inside a
@@ -300,6 +441,10 @@
     onAuthChange: onAuthChange,
     pushMessages: pushMessages,
     pullMessages: pullMessages,
+    pullConversations: pullConversations,
+    pushConversations: pushConversations,
+    deleteConversationMessages: deleteConversationMessages,
+    conversationsSupported: conversationsSupported,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
     deleteVocab: deleteVocab,

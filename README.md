@@ -313,11 +313,13 @@ key you had just pasted.)
 |---|---|
 | **Time chatting** | today and all-time, summed across every device you sync |
 | **Spend** | today, the last ten days, and all-time — what OpenRouter actually charged |
-| **Copy conversation** | the whole chat as labelled plain text, on the clipboard |
 | **API key** | OpenRouter key, stored on this device only |
 | **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
+| **Browse and star models** | the catalogue as a searchable sheet: tap a row to choose it, tap ★ to keep it at hand |
+| **Favorites only** | narrows both pickers to starred models |
+| | (*free models only* deliberately does not reach the teaching picker — it would hide the paid models that setting exists to reach) |
 | **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |
 | **Text size** | 16–34px, with a live preview |
@@ -539,6 +541,61 @@ assertions would pass vacuously on unconverted text.
 
 Words you added keep the form you added them in; switching scripts does not rewrite them.
 
+## The grammar check answers in one line when it can
+
+**Check my grammar** used to ask for four numbered paragraphs whatever the answer: what the
+sentence says in English, whether it is correct, a correction, then the rule. Two problems.
+The first paragraph re-translated the sentence, which is exactly what the **English
+translation** button beside it does, so every check opened by answering a different question.
+And a fixed four-part shape means a *correct* sentence still gets four paragraphs, which
+reads as though something must be wrong with it.
+
+It now leads with one of three verdicts, quoted in the prompt as literal lines so they come
+back scannable and identical every time:
+
+```
+Natural.
+Understandable, but not how a native speaker would say it.
+Not correct.
+```
+
+After **Natural.** it stops. Otherwise the corrected sentence goes on its own line, then at
+most two sentences naming the rule rather than describing the edit. The middle verdict is
+carried by an explicit instruction to judge idiom and not only grammar — described only as
+"blunt or unidiomatic" it never fired, and the three-way verdict collapsed to two.
+
+Measured against `qwen3-235b` over fourteen HSK 1–2 sentences, eight with a known error and
+six correct:
+
+| | errors caught | false alarms | output tokens/reply |
+| --- | --- | --- | --- |
+| four paragraphs | 8/8 | 0/6 | 172 |
+| verdict first | 8/8 | 0/6 | **34** |
+
+Same detection, same restraint, 80% shorter and 60% cheaper. The verdicts are **quoted**
+rather than described for a reason worth keeping: described as "say which of three it is:
+natural at their level…", the model echoed the description back including its third person,
+so the learner was told *"natural Chinese at their level"* — a note about them, addressed to
+someone else.
+
+The explain-a-reply prompt keeps its four paragraphs. It is answering an open question about
+someone else's sentence, which is a different shape from a verdict.
+
+## Choosing a model without scrolling
+
+The live catalogue runs to several hundred entries, which is not a `<select>` on a phone.
+**Browse and star models** opens the same list as a sheet with search, a sticky ✕, and a ★ on
+each row. Tapping a row chooses that model and closes; tapping ★ keeps it and does not,
+because starring is a batch job and choosing is not.
+
+It reads `S.freeOnly`, `S.favOnly` and `S.modelSort` rather than carrying its own copies —
+one answer to "what am I looking at", not two that drift apart. Both filters yield when they
+would empty the picker, and the model currently in use is always listed even when a filter or
+the catalogue would drop it: a picker that cannot show what you are talking to is worse than
+one showing an extra row, and a hand-typed id need never be in the catalogue at all.
+
+Favorites sync with the rest of preferences.
+
 ## Correcting the learner's own Chinese
 
 A rule at every level: when the student's grammar or word choice is off, restate what they
@@ -605,13 +662,88 @@ otherwise changing the level while the panel is open would silently freeze the o
 
 ---
 
+# Conversations
+
+The 💬 button in the header lists every chat: **New chat** at the top, then each conversation
+with its message count and date. Tap a title to open it. Each row carries **Copy** (labelled
+plain text to the clipboard), **Download** (the same as a `.txt`), **Rename**, and **Delete**.
+Copy used to be one button in Settings, which made sense when there was only ever one
+conversation to copy.
+
+`S.history` still means what it always meant — the turns of the chat you are looking at — and
+*is* the array inside `S.chatMsgs[S.chatId]`, not a copy of it. Ordinary pushes therefore
+need no bookkeeping; the three places that reassign it are covered by `persist()` re-pointing
+the map on the way through, and every one of them already calls `persist()`.
+
+## Deleting has to leave a tombstone
+
+`conversations` is a table rather than a column on `messages` for one reason: **a delete has
+to be expressible to a device that was offline when it happened.** Hard-deleting the message
+rows says nothing to that device, so its next push puts the whole conversation back, on every
+device, and pressing delete again never makes it stick.
+
+So a deleted conversation keeps its row with `deleted_at` set, and the merge treats deletion
+as **monotonic** — a tombstone wins from either side regardless of timestamps. That exception
+is load-bearing rather than defensive: the offline device is precisely the one likely to have
+a *later* `updated_at`, because it kept chatting in a conversation that had already been
+deleted elsewhere.
+
+## Migration
+
+`conversation_id` is nullable, and every device maps `NULL` to one **fixed** legacy id
+(`00000000-0000-4000-8000-000000000001`). Deterministic on purpose: two devices each
+generating their own id for the same old history would split one conversation into two, on
+the very list whose job is telling conversations apart.
+
+Migration is content-based rather than a "have I run yet" flag — it adopts a legacy history
+when no conversation holds any messages yet. Keying it off the storage map merely existing was
+wrong: a first run creates an empty placeholder chat, which writes that map, so a legacy
+history arriving afterwards would vanish behind an empty conversation.
+
+## An unmigrated database
+
+`db/schema.sql` is safe to re-run and adds the table and the column, but somebody has to run
+it — and the person reading the screen may not be the person who owns the Supabase project.
+So the app **probes once and degrades** rather than failing: a missing table or column
+(`PGRST205` / `42P01` / `PGRST204` / `42703`, matched on code, since messages are localized)
+switches sync into a mode that strips `conversation_id` and pushes messages anyway.
+
+Backing up the conversation matters more than remembering which chat it was in, and the
+grouping comes back for free once the column exists. The 💬 sheet says so plainly, naming the
+Hsk_chat administrator rather than assuming the reader is them.
+
+Storage is the other new limit: conversation history is the first thing here that grows
+without bound, so a `localStorage` quota failure is caught and reported instead of silently
+losing the write.
+
 # Words you already know
 
-Settings → **Words I already know at the next level** opens a searchable, checkbox list of
-the next level's pool — the same list pacing draws from, paged 150 at a time so a jump of a
-few thousand words (HSK 6 → 7–9) does not render as one giant DOM dump. Ticking a word joins
-it to the allowlist immediately: it stops being flagged, and pacing stops spending a credit
-offering something you already had.
+Settings → **Browse the words at any level** opens a searchable, checkbox list of any band's
+vocabulary, commonest first — which is the order the words are worth learning in, and the
+order pacing already offers them in. Paged 150 at a time, so a jump of a few thousand words
+(HSK 6 → 7–9) does not render as one giant DOM dump. Ticking a word joins it to the
+allowlist immediately: it stops being flagged, and pacing stops spending a credit offering
+something you already had.
+
+Grouped into four collapsible blocks, each carrying its count, so a level is a set of
+answerable questions rather than one long scroll:
+
+| | |
+|---|---|
+| **Not yet** | not usable yet. Pacing offers these commonest-first, and they are flagged if the partner uses one. Tick any you already know |
+| **Already at your level** | in the level's own list. Always usable, nothing to do |
+| **Met — added or introduced** | introduced by pacing, typed by you, or added by hand. Usable, and the ones worth drilling |
+| **Ticked as already known** | you told the app you knew these. Usable, never offered, never flagged |
+
+Only the first and last have tick boxes, because those are the two you can change — ticking
+a word that is already usable would do nothing, so it is shown as done rather than as a box
+that quietly ignores you. The first non-empty group opens, so the sheet never lands on four
+closed headings. Searching answers flat instead of grouped: a search is a question about
+particular words, and burying a three-word result under four headings hides the answer.
+
+**Any** level, including your own: it used to be hardcoded to the next one, so there was no
+way to review the list you are actually on without first dropping a level to look at it from
+below.
 
 It is kept as its own list (`S.known`), separate from words the app taught you (`S.extra`):
 it has no sentence context, was not learned through a conversation, and so stays out of the
@@ -624,6 +756,105 @@ ticked ones removed from what it may offer, or a credit gets spent confirming so
 already know. One list serves both: `S.pool` never excludes known-ahead words, and pacing
 filters them out only at the moment it draws a slate. Excluding them from `S.pool` itself was
 the first attempt, and it meant a ticked checkbox made its own row vanish with no way back.
+
+# Knowing when to move up
+
+The lists are cumulative and frequency-ordered, and those two facts together make the
+obvious progress bar a liar. HSK 1 is 520 words and HSK 2 is 1261, so at HSK 1 you have
+ticked off 41% of the HSK 2 *list* — but because language is Zipfian and the commonest words
+carry most of the text, those same 520 words already cover about **85% of HSK 2 running
+text**. A bar that starts at zero is telling you that you understand none of a level you can
+mostly already read.
+
+So Settings → **Learning** leads with the number that answers the question actually being
+asked:
+
+```
+Progress to the next level
+  ████████████████░░░░  87% of HSK 2 you can read — estimated     41% you can use
+  to 95%       147 more words, commonest first
+  met          34 of 741 new at HSK 2
+  used by you  12 written in your own messages
+```
+
+A word's share of running text goes as 1/rank, so coverage weights each word by `1/f` rather
+than counting it as one. The published thresholds this is measured against: **95%** lexical
+coverage for adequate comprehension, **98%** for comfortable independent reading. At HSK 1
+that is roughly 147 of the 741 new HSK 2 words to reach 95% — not 741 — and pacing already
+offers them commonest-first, so it is working through them in the cheapest possible order.
+
+Separate figures rather than one blended score, because they mean different things and the
+gaps between them are the informative part. **Blue** is what you can **read** — every word the
+level allows you. **Green** is what you can **use**, the same measure over the words you have
+actually written. Each figure is printed in its bar's color, so the legend is the text
+itself rather than a key you have to hold in your head. Green always trails blue, and that
+gap is normal.
+**Met** is what pacing has taught you. **Used by you** is that same production as a count,
+segmented out of your own messages — it needs no new storage, since every message is already
+saved, and it will always lag: recognition runs ahead of production and the gap widens with
+proficiency.
+
+> Every constant in this section — 95%, `1/rank`, six sightings — is argued with citations in
+> **[RESEARCH.md](RESEARCH.md)**, along with the measurements behind them and an explicit
+> account of where the evidence is thin. The 95% mark in particular rests on a regression
+> between two tested points with 66 participants, and a 2023 replication found no threshold
+> at all; it is a convention worth using and worth knowing the shape of.
+
+**There is no threshold on the green bar, deliberately.** The 95%/98% reading marks exist
+because unknown-word density and comprehension have a clean, testable relationship. Nothing
+equivalent holds for production: the receptive/productive gap *widens* with proficiency, and
+not every word a learner knows ever becomes productive — so any fixed "you should be able to
+use X%" would be wrong at every level, and wrong in the same flattering direction. Published
+productive targets are absolute vocabulary sizes instead (Nation puts functional speaking and
+writing at 2000–3000 word families), not ratios against what you can read.
+
+What *is* actionable is a list rather than a number, in the spirit of Laufer and Nation's
+Lexical Frequency Profile — the question is not "what percentage" but "are you reaching for
+the newer words or coasting on the commonest ones". So the panel's last row names words the
+app has taught you that you have never once written:
+
+```
+never used   5 of the 9 you have met — try 说话、可以、以后
+```
+
+Commonest first, three at a time, from `S.learning` minus the words segmented out of your own
+messages. Three characters you can put in your next message is a prompt; "5 unused" is a
+statistic. Moving up is **not** gated on it, for the same reason there is no threshold — that
+would block advancement on a gap that is supposed to be there.
+
+An earlier version instead gave words you had written double weight inside a single score.
+It cannot work, and the way it fails is worth knowing. Weight goes as `1/rank`, so the
+commonest words carry enormous shares — `的` is rank 1 and weighs a full point — and having
+typed the **ten** commonest words was enough to push the sum past the total and pin the bar
+at 100%. Worse, it put the headline on a different scale from the words-to-threshold row
+below it, so the panel could report "100%" and "57 more words to 95%" in the same breath.
+One scale, two honest readings of it.
+
+The percentage is an **estimate** and is labelled as one. `f` is a rank, not a token count,
+so weighting by `1/f` is an assumption about the corpus rather than a measurement of it —
+`ZIPF_EXP` in `pace.js` is the knob if it ever reads wrong. The word counts underneath it
+are exact, which is half the reason both are on screen.
+
+## What moving up does
+
+At 95% a **Move up to HSK 2** button appears. It is a recommendation, never automatic: the
+level decides what the validator enforces and what the partner may say, so changing it under
+you mid-conversation would be the app rewriting the rules while you were using them. The
+confirmation spells out what carries over, because "what happens to my words" is the
+question that stops people:
+
+- Everything you added, were introduced to, or ticked as known **stays usable**. Nothing is
+  lost — `loadLevel()` replaces the level list only, and the allowlist is the union of all
+  four sources.
+- The partner may now use any word at the new level.
+- New words start coming from the level above that, and the pacing budget starts fresh
+  (it is kept per level).
+- You can move back down at any time.
+
+Words introduced from the level you just moved *into* stop appearing under "introduced from
+the next level" — they are simply part of your level now, and leaving them there turned a
+working set into an archive that grew every time you advanced. Filtered, never deleted: the
+sighting counts survive and dropping back down brings the rows back.
 
 # Meeting new words at a graded-reader pace
 
@@ -661,8 +892,16 @@ you are on.
   uses, and the same slate is re-offered across repair attempts, so a reply rejected for
   unrelated reasons never costs the introduction.
 - **Consolidation** — an introduced word is highlighted, permanently allowed, and actively
-  reused by the partner until you have seen it three times, then it becomes ordinary
+  reused by the partner until you have seen it **six** times, then it becomes ordinary
   vocabulary and stops standing out. A word met once is not learned.
+
+  Six, not three. Incidental acquisition needs roughly 8–10 encounters to be reliable and
+  most semantic gain lands between 3 and 7, so three was calling a word learned at the very
+  bottom of the range. This is not just a label: the same test picks the list of words the
+  prompt asks the partner to work back in, so raising it is what actually buys the extra
+  encounters. Measured against the real model before shipping — 60 replies per arm, no
+  change in out-of-level rate or reply length, about six times as many reuse words actually
+  used. The numbers are in DEVELOPING.md.
 
 The 词 panel lists what has been introduced with sightings and source level, and the
 flashcard exports include them — they are exactly the words worth drilling.
@@ -962,8 +1201,10 @@ Settings and 词 panels open.
 ## Wordlist provenance
 
 `data/*.json` is generated by `tools/convert.py` from the HSK 3.0 level dumps supplied by
-the user — 506 / 1,256 / 2,209 / 3,181 / 4,240 / 5,363 / 10,969 words, cumulative, level 7
-being the combined 7–9 band. The converter merges duplicate entries, repairs CC-CEDICT's
+the user — 520 / 1,261 / 2,211 / 3,182 / 4,241 / 5,364 / 10,970 words, cumulative, level 7
+being the combined 7–9 band. (These are the shipped files' own entry counts, asserted by
+`test/pace.test.js` so they cannot drift from the prose again — the figures here were stale
+by a dozen or so words, and RESEARCH.md reasons about HSK 1 → 2 in terms of them.) The converter merges duplicate entries, repairs CC-CEDICT's
 `u:` notation (`nu:3` → `nǚ`), and picks a display reading: an explicit override for
 function words whose literary reading carries more senses than the everyday one (了 le,
 吧 ba, 着 zhe), then non-surname readings, then the reading with the most senses.
