@@ -607,11 +607,18 @@ otherwise changing the level while the panel is open would silently freeze the o
 
 # Words you already know
 
-Settings → **Words I already know at the next level** opens a searchable, checkbox list of
-the next level's pool — the same list pacing draws from, paged 150 at a time so a jump of a
-few thousand words (HSK 6 → 7–9) does not render as one giant DOM dump. Ticking a word joins
-it to the allowlist immediately: it stops being flagged, and pacing stops spending a credit
-offering something you already had.
+Settings → **Browse the words at any level** opens a searchable, checkbox list of any band's
+vocabulary, commonest first — which is the order the words are worth learning in, and the
+order pacing already offers them in. Paged 150 at a time, so a jump of a few thousand words
+(HSK 6 → 7–9) does not render as one giant DOM dump. Ticking a word joins it to the
+allowlist immediately: it stops being flagged, and pacing stops spending a credit offering
+something you already had.
+
+Each row says which of three states it is in — already at your level, already met, or not
+yet reached — and only the third has a tick box, since ticking a word you already have would
+do nothing. **Any** level, including your own: it used to be hardcoded to the next one, so
+there was no way to review the list you are actually on without first dropping a level to
+look at it from below.
 
 It is kept as its own list (`S.known`), separate from words the app taught you (`S.extra`):
 it has no sentence context, was not learned through a conversation, and so stays out of the
@@ -624,6 +631,65 @@ ticked ones removed from what it may offer, or a credit gets spent confirming so
 already know. One list serves both: `S.pool` never excludes known-ahead words, and pacing
 filters them out only at the moment it draws a slate. Excluding them from `S.pool` itself was
 the first attempt, and it meant a ticked checkbox made its own row vanish with no way back.
+
+# Knowing when to move up
+
+The lists are cumulative and frequency-ordered, and those two facts together make the
+obvious progress bar a liar. HSK 1 is 520 words and HSK 2 is 1261, so at HSK 1 you have
+ticked off 41% of the HSK 2 *list* — but because language is Zipfian and the commonest words
+carry most of the text, those same 520 words already cover about **85% of HSK 2 running
+text**. A bar that starts at zero is telling you that you understand none of a level you can
+mostly already read.
+
+So Settings → **Learning** leads with the number that answers the question actually being
+asked:
+
+```
+Progress to the next level
+  ████████████████░░░░  87% of HSK 2 — estimated       95% is comfortable reading
+  to 95%       147 more words, commonest first
+  met          34 of 741 new at HSK 2
+  used by you  12 written in your own messages
+```
+
+A word's share of running text goes as 1/rank, so coverage weights each word by `1/f` rather
+than counting it as one. The published thresholds this is measured against: **95%** lexical
+coverage for adequate comprehension, **98%** for comfortable independent reading. At HSK 1
+that is roughly 147 of the 741 new HSK 2 words to reach 95% — not 741 — and pacing already
+offers them commonest-first, so it is working through them in the cheapest possible order.
+
+Three numbers rather than one score, because they mean different things and the gaps between
+them are informative. **Met** is what pacing has taught you. **Used by you** is production,
+segmented out of your own messages — it needs no new storage, since every message is already
+saved, and it will always lag the other two: recognition runs ahead of production and the
+gap widens with proficiency. Words you have written yourself count double toward the
+estimate, since using a word is harder than recognising it.
+
+The percentage is an **estimate** and is labelled as one. `f` is a rank, not a token count,
+so weighting by `1/f` is an assumption about the corpus rather than a measurement of it —
+`ZIPF_EXP` in `pace.js` is the knob if it ever reads wrong. The word counts underneath it
+are exact, which is half the reason both are on screen.
+
+## What moving up does
+
+At 95% a **Move up to HSK 2** button appears. It is a recommendation, never automatic: the
+level decides what the validator enforces and what the partner may say, so changing it under
+you mid-conversation would be the app rewriting the rules while you were using them. The
+confirmation spells out what carries over, because "what happens to my words" is the
+question that stops people:
+
+- Everything you added, were introduced to, or ticked as known **stays usable**. Nothing is
+  lost — `loadLevel()` replaces the level list only, and the allowlist is the union of all
+  four sources.
+- The partner may now use any word at the new level.
+- New words start coming from the level above that, and the pacing budget starts fresh
+  (it is kept per level).
+- You can move back down at any time.
+
+Words introduced from the level you just moved *into* stop appearing under "introduced from
+the next level" — they are simply part of your level now, and leaving them there turned a
+working set into an archive that grew every time you advanced. Filtered, never deleted: the
+sighting counts survive and dropping back down brings the rows back.
 
 # Meeting new words at a graded-reader pace
 
@@ -661,8 +727,16 @@ you are on.
   uses, and the same slate is re-offered across repair attempts, so a reply rejected for
   unrelated reasons never costs the introduction.
 - **Consolidation** — an introduced word is highlighted, permanently allowed, and actively
-  reused by the partner until you have seen it three times, then it becomes ordinary
+  reused by the partner until you have seen it **six** times, then it becomes ordinary
   vocabulary and stops standing out. A word met once is not learned.
+
+  Six, not three. Incidental acquisition needs roughly 8–10 encounters to be reliable and
+  most semantic gain lands between 3 and 7, so three was calling a word learned at the very
+  bottom of the range. This is not just a label: the same test picks the list of words the
+  prompt asks the partner to work back in, so raising it is what actually buys the extra
+  encounters. Measured against the real model before shipping — 60 replies per arm, no
+  change in out-of-level rate or reply length, about six times as many reuse words actually
+  used. The numbers are in DEVELOPING.md.
 
 The 词 panel lists what has been introduced with sightings and source level, and the
 flashcard exports include them — they are exactly the words worth drilling.

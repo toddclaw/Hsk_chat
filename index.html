@@ -81,6 +81,19 @@ header button{padding:8px 10px; flex:0 0 auto}
    fine" -- the pinyin toggle, a focused input, a fresh word. */
 .copy.cached{color:var(--accent); border-color:#2f4a6b}
 
+/* Progress bar. <i> is the fill, <u> the threshold tick -- two elements rather
+   than a background gradient so the 95% mark stays put when the fill moves. */
+.bar{position:relative; height:10px; border-radius:999px; background:var(--panel2);
+     border:1px solid var(--line); overflow:hidden; margin:2px 0 6px}
+.bar>i{display:block; height:100%; background:var(--accent); border-radius:999px}
+.bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
+.barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
+.barnote b{color:var(--ink); font-weight:600}
+/* Word state in the level browser: at your level, met, or neither. */
+.lvstate{font-size:11px; color:var(--dim); white-space:nowrap}
+.lvstate.have{color:var(--ok)}
+.lvstate.met{color:var(--accent)}
+
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
 /* inline-block, not inline-flex: a flex box serializes as a block, so copying a
@@ -438,7 +451,24 @@ footer{
   </details>
 
   <details class="sec">
-    <summary>Learning</summary>
+    <summary>Learning<span class="secnote" id="secLearningNote"></span></summary>
+    <label>Progress to the next level</label>
+      <div class="stats" id="progress"></div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="moveUp" class="primary" type="button" style="display:none"></button>
+      </div>
+      <!-- Why the headline is a percentage of text and not a count of words:
+           the lists are cumulative and frequency-ordered, so HSK 1's 520 words
+           are 41% of the HSK 2 list but around 85% of HSK 2 running text. A
+           bar starting at zero would be telling you something untrue. -->
+      <div class="note">An estimate of how much of the next level you can already read,
+      not how much of its list you have ticked off — the commonest words carry most of the
+      text, so the first few hundred matter far more than the rest. 95% is where reading
+      stops being work; published research puts adequate comprehension there and comfortable
+      independent reading at 98%. Words you have written yourself count double, since using
+      a word is harder than recognising it.</div>
+      <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
+
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -567,12 +597,21 @@ footer{
 </div></div>
 
 <div class="sheet" id="poolSheet"><div class="card">
-  <h2 id="poolTitle">Next-level words</h2>
-  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning">
-  <div class="note">Tick any word you already know. It joins the allowlist immediately —
-  the partner may use it, and it will not be offered or flagged again — but it will not
-  appear in 词 or in flashcard exports: this list is for words you brought with you, not
-  ones the app taught you.</div>
+  <div class="sheethead">
+    <h2 id="poolTitle">Words by level</h2>
+    <button id="poolX" class="sheetx" type="button" aria-label="Close word list" title="Close">✕</button>
+  </div>
+  <!-- Any level, not only the next one. It used to be hardcoded to level+1,
+       which left no way to review the list you are actually on without first
+       dropping a level to see it from below. -->
+  <label for="poolLevel">Level</label>
+  <select id="poolLevel"></select>
+  <input id="poolSearch" type="text" placeholder="search word, pinyin or meaning" style="margin-top:8px">
+  <div class="note">Commonest first, which is the order they are worth learning in. Tick any
+  word you already know. It joins the allowlist immediately — the partner may use it, and it
+  will not be offered or flagged again — but it will not appear in 词 or in flashcard exports:
+  this list is for words you brought with you, not ones the app taught you. Words already at
+  your level, or already met, are marked and need no tick.</div>
   <div id="poolList" style="margin-top:10px"></div>
   <button id="poolMore" style="display:none"></button>
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
@@ -702,7 +741,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v46 — 2026-08-23";
+const VERSION   = "v47 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -793,6 +832,9 @@ const S = {
   base:    [],        // the level's wordlist
   dict:    new Map(), // REF_LIST, for glossing words above the current level
   lex:     null,
+  // The next level's whole wordlist, unfiltered -- S.pool strips out what you
+  // already know, which is exactly what readiness needs in the denominator.
+  nextList: [],
   busy:    false,
   // Whether cloud sync is turned on. Off by default; this alone does not
   // mean signed in -- see syncUser below, tracked separately since it is
@@ -843,29 +885,49 @@ const isExtra = w => S.extra.some(e => e.w === w);
 
 /* The pool is the next level minus this one. Loaded only when pacing is on, so
  * nobody pays for a second wordlist they are not using. */
+/* Wordlists, by level id, fetched once each. The pool browser can now reach any
+ * level rather than only the next one, and re-fetching 5000 entries every time
+ * the picker moves is the kind of thing that makes a phone feel broken. */
+const levelCache = new Map();
+async function levelList(id) {
+  if (!levelCache.has(id)) {
+    const lv = LEVELS.find(l => l.id === id);
+    if (!lv) return [];
+    try {
+      const r = await fetch(lv.file);
+      levelCache.set(id, r.ok ? await r.json() : []);
+    } catch (e) { return []; }
+  }
+  return levelCache.get(id);
+}
+
 async function loadPool() {
   S.pool = [];
+  S.nextList = [];
   const next = LEVELS.find(l => l.id === S.level + 1);
   // The pool backs both pacing and the "words I already know" browser, so it
   // loads whenever there is a level above -- not only while pacing is on.
   if (!next) return;
   try {
-    const r = await fetch(next.file);
     /* Exclude everything already usable, not just the level list: the particles
      * in EXTRA_ALLOWED and any word already added, introduced, or marked known
      * ahead of time. Offering 啊, which is permitted at every level, would
      * spend a credit on nothing. */
-    if (r.ok) {
-      /* S.pool is every word not yet formally usable -- it deliberately still
-       * includes ones marked "known ahead", so the browser can list them
-       * pre-checked and let you change your mind. Pacing draws its own
-       * candidates from this at offer time, filtered by isKnownAhead there,
-       * so the two do not need two copies of the underlying data. */
-      const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
-      S.pool = HSKPace.buildPool(usable, await r.json());
-    }
+    /* The unfiltered list is kept as well. Readiness is a question about the
+     * whole level -- what share of HSK 2 you can read -- so it needs the words
+     * you already know in the denominator, which is exactly what buildPool
+     * strips out. */
+    S.nextList = await levelList(next.id);
+    /* S.pool is every word not yet formally usable -- it deliberately still
+     * includes ones marked "known ahead", so the browser can list them
+     * pre-checked and let you change your mind. Pacing draws its own
+     * candidates from this at offer time, filtered by isKnownAhead there,
+     * so the two do not need two copies of the underlying data. */
+    const usable = S.base.concat(S.extra, S.learning, HSK.EXTRA_ALLOWED);
+    S.pool = HSKPace.buildPool(usable, S.nextList);
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
+  renderProgress();
 }
 
 async function loadLevel(n) {
@@ -2517,10 +2579,21 @@ async function refreshModels(btn) {
 function renderLearning() {
   const box = $("#learningList");
   if (!box) return;
-  const list = S.learning.slice().reverse();
+  /* Only words still ahead of you. Once you move up, everything introduced
+   * from the level you moved into is simply part of your level, and leaving it
+   * here captioned "from HSK 2" turns a working set into a permanent archive
+   * that grows every time you advance. Filtered, never deleted -- the seen
+   * counts stay, and dropping back down brings the rows back. */
+  const ahead = S.learning.filter(e => (e.from || 0) > S.level);
+  const absorbed = S.learning.length - ahead.length;
+  const list = ahead.slice().reverse();
+  const note = absorbed
+    ? '<div class="note">' + absorbed + " more " +
+      (absorbed === 1 ? "word is" : "words are") + " now part of " +
+      escapeHtml(levelLabel()) + " and no longer listed here.</div>" : "";
   if (!list.length) {
-    box.innerHTML = S.pace.on
-      ? '<div class="note">Nothing introduced yet — keep reading.</div>' : "";
+    box.innerHTML = note || (S.pace.on
+      ? '<div class="note">Nothing introduced yet — keep reading.</div>' : "");
     return;
   }
   box.innerHTML = "";
@@ -2545,6 +2618,7 @@ function renderLearning() {
     row.appendChild(del);
     box.appendChild(row);
   });
+  if (note) box.insertAdjacentHTML("beforeend", note);
 }
 
 /* How many matching rows are rendered at once. Some pools run to several
@@ -2554,31 +2628,63 @@ function renderLearning() {
 const POOL_PAGE = 150;
 let poolShown = POOL_PAGE;
 
+/* Which level the browser is showing. Session state, not a setting: it opens
+ * on the next level every time, which is the one the pacing engine is working
+ * through and the answer to "what is coming". */
+let poolLevel = null;
+let poolEntries = [];
+
 function poolMatches() {
   const q = $("#poolSearch").value.trim().toLowerCase();
-  if (!q) return S.pool;
-  return S.pool.filter(e =>
+  if (!q) return poolEntries;
+  return poolEntries.filter(e =>
     e.w.includes(q) || (e.p || "").toLowerCase().includes(q) || (e.d || "").toLowerCase().includes(q));
 }
 
+/* Fetch the chosen level and show it. Kept separate from renderPool so that
+ * searching and "show more" -- which happen on every keystroke -- never touch
+ * the network. */
+async function loadPoolLevel(id) {
+  poolLevel = id;
+  poolShown = POOL_PAGE;
+  $("#poolList").innerHTML = '<div class="note">Loading…</div>';
+  /* Commonest first. buildPool already sorts this way for the pacing pool, but
+   * this list is unfiltered, so it has to sort for itself. */
+  poolEntries = (await levelList(id)).slice()
+    .sort((a, b) => (a.f || Infinity) - (b.f || Infinity) || a.w.localeCompare(b.w));
+  renderPool();
+}
+
 function renderPool() {
-  const next = LEVELS.find(l => l.id === S.level + 1);
-  $("#poolTitle").textContent = next ? "Words at " + next.label : "No level above " + levelLabel();
+  const lv = LEVELS.find(l => l.id === poolLevel);
+  $("#poolTitle").textContent = lv ? "Words at " + lv.label : "Words by level";
   const matches = poolMatches();
   const box = $("#poolList");
+  const baseSet = new Set(S.base.map(e => e.w));
   box.innerHTML = "";
-  if (!S.pool.length) {
+  if (!matches.length) {
     box.innerHTML = '<div class="note">' +
-      (next ? "Nothing left to review — every word at " + next.label + " is already usable."
-            : "There is no level above this one.") + "</div>";
+      (poolEntries.length ? "Nothing matches that search."
+                          : "That level's list could not be loaded.") + "</div>";
   }
   matches.slice(0, poolShown).forEach(e => {
     const row = document.createElement("div");
     row.className = "poolrow";
-    row.innerHTML = '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + '>' +
+    /* Three states worth distinguishing, and only the third has anything to
+     * tick: already legal at your level, already met through pacing or added
+     * by hand, or not yet reached. Ticking a word you already have would do
+     * nothing, so it is shown as done rather than as an unchecked box that
+     * quietly ignores you. */
+    const have = baseSet.has(e.w);
+    const met = !have && (isExtra(e.w) || !!learned(e.w));
+    const state = have ? '<span class="lvstate have">your level</span>'
+                : met  ? '<span class="lvstate met">met</span>' : "";
+    row.innerHTML = (have || met ? '<span style="width:16px"></span>'
+        : '<input type="checkbox"' + (isKnownAhead(e.w) ? " checked" : "") + ">") +
       '<span class="w2">' + escapeHtml(e.w) + '</span>' +
-      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>";
-    row.querySelector("input").onchange = ev => {
+      '<span class="g">' + escapeHtml(e.p) + " — " + escapeHtml(e.d) + "</span>" + state;
+    const tick = row.querySelector("input");
+    if (tick) tick.onchange = ev => {
       if (ev.target.checked) {
         if (!isKnownAhead(e.w)) { S.known.push({ w: e.w, p: e.p, d: e.d }); queueSync("vocab_known"); }
       } else {
@@ -2590,6 +2696,9 @@ function renderPool() {
       // S.pool membership does not change -- only isKnownAhead(w) does -- so a
       // plain re-render (no re-fetch) is enough, and the row stays put either way.
       renderPool();
+      // Ticking a word is a claim about what you can read, so the estimate has
+      // to move with it -- that is the whole point of ticking.
+      renderProgress(); renderSectionNotes();
     };
     box.appendChild(row);
   });
@@ -2694,6 +2803,87 @@ function renderStarters() {
 }
 
 /* What the pacing is doing right now, in the terms the setting is described in. */
+/* ------------------------------------------------------- level readiness */
+
+/* Every word the level allows, as the plain simplified forms the wordlists are
+ * written in. Not S.lex.words: that is keyed in whichever script is displayed,
+ * and the level data it would be compared against is always simplified. */
+/* ponytail: a word added by hand in traditional is stored as typed, so it will
+ * not match its simplified entry here and goes uncounted. Affects the estimate
+ * by a word or two; index both forms if it ever reads as wrong. */
+function usableWords() {
+  return new Set(S.base.concat(S.extra, S.learning, S.known).map(e => e.w));
+}
+
+/* Words the learner has actually written, from their own turns. Production is
+ * the harder half and lags recognition, so it is worth counting separately --
+ * and it costs no new storage, since every message is already saved.
+ * renderAll() segments the whole history on every render too, so the work here
+ * is nothing new. */
+function producedWords() {
+  const out = new Set();
+  S.history.forEach(t => {
+    if (t.role !== "user") return;
+    HSK.segment(t.text, S.lex).forEach(tok => {
+      if (tok.kind === "word") out.add(tok.text);
+    });
+  });
+  return out;
+}
+
+// Everything the progress panel and the collapsed-row summary both need.
+function readiness() {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!next || !S.nextList.length) return null;
+  const usable = usableWords(), mine = producedWords();
+  const met = S.learning.filter(e => e.from === S.level + 1).length;
+  // A Set, not S.base.some() inside a filter: at HSK 6 -> 7-9 that pair is
+  // 5364 x 10970 comparisons and the sheet visibly stalls opening.
+  const baseSet = new Set(S.base.map(e => e.w));
+  return {
+    next: next,
+    // Reading coverage, and the same estimate with production counted double.
+    read: HSKPace.coverage(S.nextList, usable),
+    score: HSKPace.coverage(S.nextList, usable, mine),
+    toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
+    total: S.nextList.length,
+    newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
+    met: met,
+    used: S.nextList.filter(e => mine.has(e.w)).length
+  };
+}
+
+function renderProgress() {
+  const box = $("#progress");
+  if (!box) return;
+  const r = readiness();
+  if (!r) {
+    box.innerHTML = '<div class="note">No level above ' + escapeHtml(levelLabel()) + ".</div>";
+    if ($("#moveUp")) $("#moveUp").style.display = "none";
+    return;
+  }
+  const pct = Math.round(r.score * 100);
+  const ready = r.score >= HSKPace.READY_AT;
+  const mark = Math.round(HSKPace.READY_AT * 100);
+  box.innerHTML =
+    '<div class="bar"><i style="width:' + pct + '%"></i>' +
+    '<u style="left:' + mark + '%"></u></div>' +
+    '<div class="barnote"><b>' + pct + "%</b> of " + escapeHtml(r.next.label) +
+      " — estimated" + '<span>' + mark + "% is comfortable reading</span></div>" +
+    "<table><tr><td>to " + mark + "%</td><td>" +
+      (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
+        ", commonest first" : "there already") + "</td></tr>" +
+    "<tr><td>met</td><td>" + r.met + " of " + r.newWords + " new at " +
+      escapeHtml(r.next.label) + "</td></tr>" +
+    "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
+    "</table>";
+  const btn = $("#moveUp");
+  if (btn) {
+    btn.style.display = ready ? "" : "none";
+    btn.textContent = "Move up to " + r.next.label;
+  }
+}
+
 function renderPaceNote() {
   const box = $("#paceNote");
   if (!box) return;
@@ -2781,13 +2971,46 @@ $("#btnPy").onclick = () => {
   $("#btnPy").title = "Pinyin: " + S.pinyin;
   renderAll();
 };
-$("#btnPool").onclick = () => {
-  poolShown = POOL_PAGE; $("#poolSearch").value = "";
-  renderPool(); openSheet("#poolSheet");
-};
+function openPool(id) {
+  $("#poolSearch").value = "";
+  $("#poolLevel").innerHTML = LEVELS.map(l =>
+    '<option value="' + l.id + '"' + (l.id === id ? " selected" : "") + ">" +
+    escapeHtml(l.label) + (l.id === S.level ? " — your level" : "") + "</option>").join("");
+  openSheet("#poolSheet");
+  loadPoolLevel(id);
+}
+// Opens on the next level: the one pacing is working through, and the answer
+// to "what is coming". The picker reaches every other one.
+$("#btnPool").onclick = () => openPool(Math.min(S.level + 1, LEVELS[LEVELS.length - 1].id));
+$("#btnLevels").onclick = () => openPool(S.level);
+$("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
 $("#poolSearch").addEventListener("input", () => { poolShown = POOL_PAGE; renderPool(); });
 $("#poolMore").onclick = () => { poolShown += POOL_PAGE; renderPool(); };
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
+$("#poolX").onclick = () => closeSheet("#poolSheet");
+
+/* Moving up. Never automatic: the level decides what the validator enforces and
+ * what the partner is allowed to say, so it changing itself mid-conversation
+ * would be the app rewriting the rules under you. The confirmation spells out
+ * what carries over because that is the question that stops people -- nothing
+ * is lost, but "nothing is lost" is not obvious from the outside. */
+$("#moveUp").onclick = async () => {
+  const next = LEVELS.find(l => l.id === S.level + 1);
+  if (!next) return;
+  const kept = S.extra.length + S.learning.length + S.known.length;
+  if (!confirm("Move up to " + next.label + "?\n\n" +
+      "Your " + kept + " added, introduced and ticked words stay usable — nothing is lost.\n" +
+      "The partner may now use any " + next.label + " word.\n" +
+      "New words will start coming from " + (LEVELS.find(l => l.id === next.id + 1) || {}).label +
+        ", and the pacing budget starts fresh.\n\n" +
+      "You can move back down at any time.")) return;
+  await loadLevel(next.id);
+  queueSync("prefs");
+  $("#level").value = String(S.level);
+  fillLevels();
+  updateMirror(); renderAll(); renderStarters();
+  renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
+};
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
 
 function sendExplainQuestion() {
@@ -2872,6 +3095,12 @@ function renderSectionNotes() {
    * naming two ids here would not fit a phone. */
   const m = S.model || "";
   $("#secModelsNote").textContent = m.length > 24 ? m.slice(m.indexOf("/") + 1) : m;
+  /* The one number worth seeing without opening the section: how close the
+   * next level is. Blank at the top level, where there is nothing to be close
+   * to -- a row captioned with a meaningless figure is worse than a bare one. */
+  const r = readiness();
+  $("#secLearningNote").textContent =
+    r ? Math.round(r.score * 100) + "% to " + r.next.label : "";
   $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
   $("#secVersionNote").textContent = VERSION.split(" ")[0];
 }
@@ -2897,6 +3126,7 @@ $("#btnSet").onclick = () => {
     '<option value="' + n + '"' + (n === S.pace.rate ? " selected" : "") + ">one new word per " +
     n + " characters" + (n === 45 ? " — graded-reader pace" : "") + "</option>").join("");
   renderPaceNote();
+  renderProgress();
   $("#freeOnly").checked = S.freeOnly;
   $("#modelSort").value = S.modelSort;
   $("#script").value = S.script;

@@ -879,6 +879,97 @@ return true;
         .some(function (e) { return e.w === "咖啡"; });`),
       "and commits a word left in the box rather than discarding it",
       await exec(`return localStorage.getItem("hsk1chat.extraVocab");`));
+    /* ------------------------------------------------ level progress */
+
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the progress panel");
+
+    /* The number that makes the whole feature worth having. A learner at HSK 1
+     * has ticked off 41% of the HSK 2 *list* but can already read about 85% of
+     * HSK 2 *text*, because the lists are frequency-ordered and language is
+     * Zipfian. Asserted as a band, not a constant: the exact figure moves with
+     * ZIPF_EXP and with anything the earlier tests added to the word lists, but
+     * a panel reporting the list share instead would land near 41% and a broken
+     * one would land at 0 or 100. */
+    const prog = await exec(`
+      return document.querySelector('#progress').textContent;`);
+    const pctMatch = /(\d+)% of HSK 2/.exec(prog || "");
+    check(!!pctMatch, "the progress panel reports a percentage of the next level",
+      JSON.stringify((prog || "").slice(0, 160)));
+    const pct = pctMatch ? Number(pctMatch[1]) : -1;
+    check(pct > 70 && pct < 100,
+      `and it is text coverage (~85%), not list share (~41%) -- got ${pct}%`,
+      JSON.stringify((prog || "").slice(0, 160)));
+
+    /* The actionable half: how many words to the threshold. 741 would mean the
+     * whole remaining list; the frequency-weighted answer is a few hundred at
+     * most, and that difference is the point of the feature. */
+    const toGo = /(\d+) more words?, commonest first/.exec(prog || "");
+    check(!!toGo && Number(toGo[1]) > 0 && Number(toGo[1]) < 500,
+      "and names a reachable number of words to the threshold, not the whole list",
+      JSON.stringify((prog || "").slice(0, 200)));
+    check(/used by you/.test(prog || ""),
+      "production is reported separately from exposure",
+      JSON.stringify((prog || "").slice(0, 200)));
+
+    /* Below the threshold there must be no Move up button: it is a
+     * recommendation, and offering it early would make it meaningless. */
+    check(await exec(`
+      var b = document.querySelector('#moveUp');
+      return b.style.display === "none" || b.offsetParent === null;`),
+      "Move up is hidden until the threshold is reached");
+
+    check(/% to HSK 2/.test(await exec(`
+      return document.querySelector('#secLearningNote').textContent;`)),
+      "the collapsed Learning row carries the number without opening it",
+      await exec(`return document.querySelector('#secLearningNote').textContent;`));
+
+    /* ------------------------------------------------- the level browser */
+
+    /* The first-level problem: the browser was hardcoded to level+1, so there
+     * was no way to see or tick the list you are actually on without dropping
+     * a level to look at it from below. */
+    await exec(`document.querySelector('#btnLevels').click(); return true;`);
+    await waitFor("document.querySelector('#poolSheet').classList.contains('open')",
+      "the level browser");
+    await waitFor("document.querySelectorAll('#poolList .poolrow').length > 0",
+      "the level browser's rows");
+    check(await exec(`
+      return document.querySelector('#poolLevel').options.length;`) === 8,
+      "every level is reachable from the picker");
+    check(await exec(`
+      return Number(document.querySelector('#poolLevel').value);`) === 1,
+      "Browse opens on your own level, which used to be unreachable");
+    check(await exec(`
+      return document.querySelectorAll('#poolList .lvstate.have').length > 0;`),
+      "and marks those words as already at your level rather than offering a tick");
+    /* Commonest first -- the order they are worth learning in, and the order
+     * pacing already offers them in. 的 outranks everything in the corpus, so
+     * an unsorted or reverse-sorted list cannot start with it. */
+    check(await exec(`
+      var r = document.querySelectorAll('#poolList .poolrow');
+      return r.length ? r[0].querySelector('.w2').textContent : "";`) === "\u7684",
+      "and lists the commonest word first",
+      await exec(`
+        var r = document.querySelectorAll('#poolList .poolrow');
+        return Array.prototype.slice.call(r, 0, 5).map(function (x) {
+          return x.querySelector('.w2').textContent; }).join(" ");`));
+
+    // Switching levels re-fetches and re-renders, including upward.
+    await exec(`
+      var sel = document.querySelector('#poolLevel');
+      sel.value = "3"; sel.dispatchEvent(new Event("change")); return true;`);
+    await waitFor(`document.querySelector('#poolTitle').textContent.indexOf('HSK 3') !== -1`,
+      "the browser switching to HSK 3");
+    check(await exec(`
+      return document.querySelectorAll('#poolList .poolrow').length > 0;`),
+      "a level above the next one can be browsed too");
+    check(await exec(`
+      document.querySelector('#poolX').click();
+      return !document.querySelector('#poolSheet').classList.contains('open');`),
+      "the level browser closes with the sheet ✕");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

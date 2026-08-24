@@ -97,8 +97,53 @@ check(!skipBoth.includes("让") && !skipBoth.includes("但"),
   skipBoth.join(" "));
 
 // --- promotion --------------------------------------------------------------
-check(P.isNew({ seen: 0 }) && P.isNew({ seen: 2 }) && !P.isNew({ seen: 3 }),
+check(P.isNew({ seen: 0 }) && P.isNew({ seen: P.PROMOTE_AT - 1 }) && !P.isNew({ seen: P.PROMOTE_AT }),
   `new until ${P.PROMOTE_AT} sightings`);
+
+
+/* ------------------------------------------------------- level readiness */
+
+/* The whole point of weighting by 1/f: the list share and the text share are
+ * very different numbers, and only the second one answers "am I ready". Built
+ * from the real wordlists rather than a fixture, because the gap between them
+ * is a property of the shipped data -- a fixture could show the arithmetic
+ * working while the data it runs on had quietly changed shape. */
+const h1 = load(1), h2 = load(2);
+const h1w = h1.map(e => e.w);
+
+const cov = P.coverage(h2, h1w);
+check(cov > 0.80 && cov < 0.90,
+  `HSK 1 covers ~85% of HSK 2 text (got ${(cov * 100).toFixed(1)}%)`);
+check(h1.length / h2.length < 0.45,
+  "while covering under 45% of the HSK 2 list -- the two are not the same question");
+check(cov > h1.length / h2.length + 0.3,
+  "and text coverage runs far ahead of list coverage");
+
+check(P.coverage(h2, h2.map(e => e.w)) === 1, "knowing every word is full coverage");
+check(P.coverage(h2, []) === 0, "knowing none is zero");
+check(P.coverage([], ["x"]) === 0, "an empty level does not divide by zero");
+
+const need = P.toTarget(h2, h1w, 0.95);
+check(need > 100 && need < 220,
+  `~147 words to 95%, not 741 (got ${need})`);
+check(P.toTarget(h2, h1w, 0.98) > need, "98% costs more words than 95%");
+check(P.toTarget(h2, h2.map(e => e.w), 0.95) === 0, "already past target needs nothing");
+
+/* Unranked words carry no weight, so a target that cannot be reached must stop
+ * rather than hand back the whole remaining list as if it would help. */
+const unranked = [{ w: "a", f: 1 }, { w: "b", f: 999999 }, { w: "c" }];
+check(P.toTarget(unranked, ["a"], 0.99) === 0,
+  "words the corpus never saw are never counted toward a target");
+
+/* Production counts double, so writing a word moves the estimate more than
+ * reading it. The bonus is a knob (PRODUCE_BONUS); this checks it is wired,
+ * not that 2 is the right number. */
+const readOnly = P.coverage(h2, h1w);
+const alsoWritten = P.coverage(h2, h1w, h1w.slice(0, 50));
+check(alsoWritten > readOnly, "words you have written yourself count for more");
+check(alsoWritten <= 1, "and the bonus cannot push the estimate past 100%");
+
+check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

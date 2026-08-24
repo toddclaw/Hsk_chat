@@ -169,6 +169,33 @@ Rules of thumb this leaves:
 - Temperature is not zero in normal use, so a single sample proves nothing in
   either direction.
 
+### Worked example: raising PROMOTE_AT from 3 to 6
+
+The change that turns "seen three times" into "seen six times" looks like a display constant
+and is not. `HSKPace.isNew()` also picks the `reuse` list that goes into the system prompt
+(`请多用：…`), so the threshold is how long the partner keeps working a word back into the
+conversation. Pressing harder on reuse is exactly the kind of prompt edit the section above
+says reads as obviously-correct and sometimes measures backwards.
+
+Measured on `qwen3-30b-a3b`, 60 replies per arm, HSK 1, ten introduced words with sightings
+spread 1–5 (the spread is the experiment: at 3 the 3s/4s/5s have dropped out of the reuse
+list, at 6 they have not):
+
+| | out-of-level | chars/reply | reuse words used per reply |
+| --- | --- | --- | --- |
+| `PROMOTE_AT = 3` | 14/60 | 16 | 0.05 |
+| `PROMOTE_AT = 6` | 16/60 | 17 | **0.29** |
+
+About six times the reuse for no measurable cost. The out-of-level difference is two replies
+in sixty — not significant, and not something sixty samples could resolve either way if it
+were real.
+
+**The first run of this measured something else entirely.** The seed sentences included
+`我叫王明`, and `王明` was the most common violation in *both* arms — the HSK lists contain
+almost no name characters, and `王` is HSK 4 (see [The validator](#the-validator)). It added
+noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
+must be namefree, or the thing being measured is the name.
+
 ### A cheaper model is not a cheaper conversation
 
 Per-token price is the least important of the three things that set what a reply
@@ -208,6 +235,36 @@ editing it:
 - **Bold has to be consumed before italic, and `***triple***` before both**, or
   the tags come out interleaved rather than nested (`<strong><em>x</strong></em>`)
   and the DOM quietly rewrites them into something else.
+
+## Level readiness
+
+- **List share and text share are very different numbers, and only one of them is the
+  answer.** The wordlists are cumulative and frequency-ordered, so at HSK 1 you have 41% of
+  the HSK 2 *list* and about 85% of HSK 2 *text*. Anything that reports progress as a word
+  count will read as "you know almost nothing" to someone who can already follow most of the
+  level. `HSKPace.coverage()` weights by `1/f` for this reason; `test/pace.test.js` asserts
+  the two numbers stay far apart, so a regression to counting words fails rather than just
+  looking pessimistic.
+- **`f` is a rank, not a token count.** Weighting by `1/f` is a Zipf assumption about the
+  corpus, not a measurement of it. `ZIPF_EXP` in `pace.js` is the calibration knob and the
+  percentage is labelled "estimated" in the UI. The word counts shown underneath it are
+  exact — that is half of why both are on screen.
+- **`toTarget()` has to stop when the weight stops rising.** Words the corpus never saw carry
+  `f = 999999` and weigh zero, so a target that cannot be reached would otherwise walk to the
+  end of the list and hand back a count of words that buy no coverage at all.
+- **`S.pool` is not the level.** `buildPool()` strips out everything already usable, which is
+  exactly what readiness needs in its *denominator*. `S.nextList` keeps the unfiltered list
+  for that; using `S.pool` for coverage silently computes a fraction of the wrong total.
+- **Do not put `S.base.some()` inside a filter over a wordlist.** At HSK 6 → 7–9 that is
+  5364 × 10970 comparisons and the sheet visibly stalls opening. Build a `Set` first.
+- **The level browser reaches every level, and that is the point.** It was hardcoded to
+  `S.level + 1`, which left no way to review the list you are on without dropping a level to
+  see it from below. `levelCache` holds each fetched list, since the picker would otherwise
+  re-fetch several thousand entries on every change.
+- **`renderLearning()` filters by `e.from > S.level` rather than deleting.** Once you move
+  up, words introduced from the level you moved into are simply part of your level; leaving
+  them listed as "from HSK 2" turns a working set into an archive that grows on every
+  advance. Filtering keeps the sighting counts and makes dropping back down restore the rows.
 
 ## Releasing and previews
 
