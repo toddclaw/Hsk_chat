@@ -318,6 +318,8 @@ key you had just pasted.)
 | **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
+| **Browse and star models** | the catalogue as a searchable sheet: tap a row to choose it, tap ★ to keep it at hand |
+| **Favourites only** | narrows both pickers to starred models |
 | **Speaking speed** | 0.5× to normal, and which Chinese voice is being used |
 | **Conversation starters** | show or hide the chip row |
 | **Text size** | 16–34px, with a live preview |
@@ -538,6 +540,61 @@ traditional lexicon, plus a check that the conversion is doing real work — oth
 assertions would pass vacuously on unconverted text.
 
 Words you added keep the form you added them in; switching scripts does not rewrite them.
+
+## The grammar check answers in one line when it can
+
+**Check my grammar** used to ask for four numbered paragraphs whatever the answer: what the
+sentence says in English, whether it is correct, a correction, then the rule. Two problems.
+The first paragraph re-translated the sentence, which is exactly what the **English
+translation** button beside it does, so every check opened by answering a different question.
+And a fixed four-part shape means a *correct* sentence still gets four paragraphs, which
+reads as though something must be wrong with it.
+
+It now leads with one of three verdicts, quoted in the prompt as literal lines so they come
+back scannable and identical every time:
+
+```
+Natural.
+Understandable, but not how a native speaker would say it.
+Not correct.
+```
+
+After **Natural.** it stops. Otherwise the corrected sentence goes on its own line, then at
+most two sentences naming the rule rather than describing the edit. The middle verdict is
+carried by an explicit instruction to judge idiom and not only grammar — described only as
+"blunt or unidiomatic" it never fired, and the three-way verdict collapsed to two.
+
+Measured against `qwen3-235b` over fourteen HSK 1–2 sentences, eight with a known error and
+six correct:
+
+| | errors caught | false alarms | output tokens/reply |
+| --- | --- | --- | --- |
+| four paragraphs | 8/8 | 0/6 | 172 |
+| verdict first | 8/8 | 0/6 | **34** |
+
+Same detection, same restraint, 80% shorter and 60% cheaper. The verdicts are **quoted**
+rather than described for a reason worth keeping: described as "say which of three it is:
+natural at their level…", the model echoed the description back including its third person,
+so the learner was told *"natural Chinese at their level"* — a note about them, addressed to
+someone else.
+
+The explain-a-reply prompt keeps its four paragraphs. It is answering an open question about
+someone else's sentence, which is a different shape from a verdict.
+
+## Choosing a model without scrolling
+
+The live catalogue runs to several hundred entries, which is not a `<select>` on a phone.
+**Browse and star models** opens the same list as a sheet with search, a sticky ✕, and a ★ on
+each row. Tapping a row chooses that model and closes; tapping ★ keeps it and does not,
+because starring is a batch job and choosing is not.
+
+It reads `S.freeOnly`, `S.favOnly` and `S.modelSort` rather than carrying its own copies —
+one answer to "what am I looking at", not two that drift apart. Both filters yield when they
+would empty the picker, and the model currently in use is always listed even when a filter or
+the catalogue would drop it: a picker that cannot show what you are talking to is worse than
+one showing an extra row, and a hand-typed id need never be in the catalogue at all.
+
+Favourites sync with the rest of preferences.
 
 ## Correcting the learner's own Chinese
 

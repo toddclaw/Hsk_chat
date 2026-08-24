@@ -199,6 +199,31 @@ the commonest violation in *both* arms — the HSK lists contain almost no name 
 `王` is HSK 4. It added noise to both arms and buried the effect. Seed material for any
 prompt experiment here must be namefree.
 
+### Shortening the grammar check
+
+**Measured.** Verdict-first instead of four fixed paragraphs. `qwen3-235b`, fourteen HSK 1–2
+sentences — eight with a known error, six correct — with a stronger model judging each reply
+for whether it caught the error or invented one.
+
+| | errors caught | false alarms | output tokens/reply |
+| --- | --- | --- | --- |
+| four numbered paragraphs | 8/8 | 0/6 | 172 |
+| verdict first, stop if natural | 8/8 | 0/6 | **34** |
+
+Detection and restraint both unchanged at 80% fewer tokens. The obvious risk — that an answer
+allowed to stop early stops catching things — did not materialise at this sample size.
+
+Two findings worth carrying:
+
+- **Quote the words you want, do not describe them.** Described as *"say which of three it is:
+  natural at their level…"*, the model echoed the description back verbatim, third person
+  included, and told the learner their sentence was *"natural Chinese at their level"*.
+  Quoting the three verdict lines fixed it and made them scannable.
+- **A verdict the prompt only implies never fires.** "A sentence can be grammatical yet blunt
+  or unidiomatic" was already in the prompt and the middle verdict still never appeared until
+  an explicit *judge idiom, not only grammar* was added. Three-way verdicts collapse to two
+  unless the middle one is argued for.
+
 ### Earlier measurements
 
 Recorded in DEVELOPING.md with their working, and summarised here because they set the

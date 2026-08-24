@@ -391,6 +391,12 @@ Project setup lives in README.md. What is easy to get wrong:
   length, the tries, the Anki fields and the system prompt. `signInForSync()`
   commits first for that reason. The key is additionally stored on every
   keystroke, because it is the one field that cannot be retyped from memory.
+- **A private window is a different device, and it reads as data loss.** Sync state and the
+  Supabase session both live in `localStorage`, which is partitioned per browsing context —
+  so the same browser in a normal window has sync off and no session, shows an empty app,
+  and looks like it lost everything. Safari additionally keeps private-mode `localStorage`
+  in memory and discards it when the session ends, so a private window is not a safe only
+  copy. Nothing to fix in code; the Sync section says so.
 - **Free-tier projects pause after 7 days without database *activity*.** Dashboard
   visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
   real row every 3 days; it needs the `SUPABASE_URL` and

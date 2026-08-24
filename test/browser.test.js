@@ -506,6 +506,97 @@ return true;
     check(after.teach === after.chat + 1,
       "the teaching picker adds the same-as-chat option", JSON.stringify(after));
 
+    /* --------------------------------------------- the model browser
+     *
+     * A few hundred catalogue entries do not fit a <select> on a phone, so
+     * picking and starring happen in a sheet. The thing that can silently
+     * break is the sheet growing its own idea of what is on offer: it must
+     * read the same filters and sort as the dropdowns, not copies. */
+    /* Pin the chat model to something in the seeded catalogue first. The
+     * default id is not in it, and a starred model the catalogue has never
+     * heard of cannot narrow a list built from the catalogue -- the filter
+     * would fall back to unfiltered and the assertions below would be
+     * measuring the fallback rather than the filter. */
+    await exec(`
+      var b = document.querySelector('#modelId');
+      b.value = "big/one"; b.dispatchEvent(new Event("change")); return true;`);
+    await exec(`document.querySelector('#browseChatModel').click(); return true;`);
+    await waitFor("document.querySelector('#modelSheet').classList.contains('open')",
+      "the model browser");
+    await waitFor("document.querySelectorAll('#modelPickList .modelrow').length > 0",
+      "model rows");
+    check(await exec(`
+      return document.querySelectorAll('#modelPickList .modelrow').length;`) >= 2,
+      "the browser lists the cached catalogue");
+
+    // Starring is its own tap target -- it must not change the chat model.
+    const chatBefore = await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`);
+    /* Star the model already in use. fillModels() always carries the current
+     * model into the pickers so a filter can never silently switch what you
+     * are talking to -- so starring any *other* model leaves two entries and
+     * the narrowing below would prove nothing. */
+    await exec(`
+      document.querySelector('#modelPickList .modelrow.on .starbtn').click(); return true;`);
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.favModels")) || []).length;`) === 1,
+      "tapping ★ stars the model");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) === chatBefore,
+      "and does not change which model you are talking to");
+    /* The star sits inside a row that is itself a tap target, so it has to stop
+     * the event. Without that, starring also selects and closes -- which the
+     * model check above cannot see when the starred row is the one already in
+     * use, since selecting it changes nothing. Starring is a batch job; it
+     * stays open on purpose. */
+    check(await exec(`
+      return document.querySelector('#modelSheet').classList.contains('open');`),
+      "and leaves the sheet open, since starring is a batch job");
+    check(await exec(`
+      return document.querySelector('#modelPickList .modelrow.on .starbtn')
+               .classList.contains('on');`),
+      "the star shows as set without reopening the sheet");
+
+    /* Favourites-only has to reach the dropdowns, not just the sheet -- two
+     * lists disagreeing about what is available is the whole failure mode. */
+    await exec(`
+      var b = document.querySelector('#favOnly');
+      b.checked = true; b.dispatchEvent(new Event("change")); return true;`);
+    check(await exec(`return document.querySelector('#modelChat').options.length;`) === 1,
+      "favourites-only narrows the Settings dropdown, not only the sheet",
+      await exec(`return document.querySelector('#modelChat').options.length + " options";`));
+    check(await exec(`
+      return document.querySelectorAll('#modelPickList .modelrow').length;`) === 1,
+      "and the sheet agrees with it");
+
+    /* An empty picker is worse than an unfiltered one. With favourites on and
+     * none set, the filter has to yield rather than leave nothing to choose.
+     * Unstarred through the UI, not by writing localStorage -- S is read once
+     * at boot, so poking storage directly leaves the running app believing the
+     * old value and tests the fallback against a state that never happens. */
+    await exec(`
+      document.querySelector('#modelPickList .modelrow.on .starbtn').click(); return true;`);
+    check(await exec(`
+      return (JSON.parse(localStorage.getItem("hsk1chat.favModels")) || []).length;`) === 0,
+      "tapping ★ again unstars it");
+    check(await exec(`return document.querySelector('#modelChat').options.length;`) >= 2,
+      "favourites-only with no favourites falls back rather than emptying the picker",
+      await exec(`return document.querySelector('#modelChat').options.length + " options";`));
+
+    // Choosing closes; this is a picker first and an editor second.
+    await exec(`
+      var b = document.querySelector('#favOnly');
+      b.checked = false; b.dispatchEvent(new Event("change"));
+      var rows = document.querySelectorAll('#modelPickList .modelrow');
+      // Whichever row is not the one already in use, so "it changed" is real.
+      for (var i = 0; i < rows.length; i++) {
+        if (!rows[i].classList.contains("on")) { rows[i].click(); break; }
+      }
+      return true;`);
+    check(!(await exec(`
+      return document.querySelector('#modelSheet').classList.contains('open');`)),
+      "choosing a model closes the sheet");
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) !== chatBefore,
+      "and actually changes the chat model");
+
     /* One setting, three controls. Leaving any of them stale would show you a
      * model you are not actually talking to. */
     await exec(`
