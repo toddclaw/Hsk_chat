@@ -280,8 +280,17 @@
       (opts.own ? "who is writing" : "who is reading") + " Chinese at " + opts.label +
       ". Recently introduced words they are still practicing: " + (opts.recent || "none yet") +
       ".\n\n";
+    /* "Keep it concise" on its own does not work -- models answer this in
+     * decorated Markdown whether or not it is asked for, and the decoration is
+     * pure output cost on the expensive side of the bill. Naming the specific
+     * things not to emit cut output from 289 tokens to 154, a 47% saving, with
+     * the error-catching rate unchanged at 10/10 and no faults invented in
+     * correct sentences. Measured; see the commit. */
     var tail = "You may reply in English and quote Chinese as needed -- you are not " +
-      "restricted to the student's vocabulary here. Keep it concise but complete.\n\n";
+      "restricted to the student's vocabulary here.\n\n" +
+      "Formatting: plain sentences only. No headings, no bullet lists, no bold, no emoji, " +
+      "and no closing encouragement. Four short paragraphs, numbered 1 to 4. Stop when the " +
+      "fourth is done.\n\n";
 
     if (!opts.own) {
       return head +
