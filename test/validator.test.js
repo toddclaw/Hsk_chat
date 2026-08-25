@@ -71,8 +71,11 @@ check(HSK.isAscii("50%") && !HSK.isAscii("我"), "isAscii distinguishes the lear
 /* Echoing. A partner under tight vocabulary and length limits can satisfy
  * every rule by handing the learner's question back -- 你喜欢喝茶吗？ answered
  * with 你喜欢喝吗？ -- which reads as not having understood a word of it. */
+/* HSK 1 rather than the old local HSK 0.5 band, which is gone: the fixtures
+ * are echo cases, and the tightest real level is where echoing is most
+ * tempting for a model with the least vocabulary to work with. */
 const l0lex = HSK.buildLexicon(
-  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk0.json"), "utf8")));
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk1.json"), "utf8")));
 for (const c of fx.echo) {
   const got = HSK.echoesQuestion(c.reply, c.said, l0lex);
   check(got === c.echo, `echo (${c.echo ? "yes" : "no"}): ${c.why}`,
@@ -111,10 +114,11 @@ for (const file of levels) {
   check(miss === 0, `${file}: all ${entries.length} entries validate against their own list`, `${miss} failed`);
 }
 
-/* Levels must nest. HSK 1.0 and HSK 3.0 disagree about 14 words -- 猫, 苹果,
- * 怎么样, 火车站 among them -- and without nesting a learner moving from HSK 0.5
- * to HSK 1 would lose vocabulary they had been using. tools/nest_levels.py
- * carries lower levels upward; this is what keeps it true. */
+/* Levels must nest: a word met at HSK 1 stays legal at HSK 4, or advancing
+ * would silently take vocabulary away. The syllabus lists some words at two
+ * bands for different senses (半 at 1 and 4), so tools/convert.py assigns each
+ * word its earliest band and builds every file cumulatively. This is what
+ * keeps that true. */
 const ordered = levels.slice().sort((a, b) => parseInt(a.slice(3)) - parseInt(b.slice(3)));
 let below = null;
 for (const file of ordered) {
@@ -145,7 +149,7 @@ for (const c of fx.boundaries) {
   check(same, `boundaries at HSK ${c.level}: ${c.t}`,
     `want [${c.learn}] got [${learned}] — ${c.why}`);
 }
-// 起走 is the span HSK 0.5 flags: 我0 喜1 欢2 跟3 狗4 一5 起6 走7
+// 起走 is the span a tight level flags: 我0 喜1 欢2 跟3 狗4 一5 起6 走7
 check(HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join() === "一起,走",
   "the reported case resolves to 一起 and 走, never the fragment 起走",
   HSK.wordsAt("我喜欢跟狗一起走。", 6, 8, refLex).join());

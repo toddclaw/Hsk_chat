@@ -484,8 +484,8 @@ footer{
         <button id="moveUp" class="primary" type="button" style="display:none"></button>
       </div>
       <!-- Why the headline is a percentage of text and not a count of words:
-           the lists are cumulative and frequency-ordered, so HSK 1's 520 words
-           are 41% of the HSK 2 list but around 85% of HSK 2 running text. A
+           the lists are cumulative and frequency-ordered, so HSK 1's 300 words
+           are 60% of the HSK 2 list but around 88% of HSK 2 running text. A
            bar starting at zero would be telling you something untrue. -->
       <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
       word the level allows you. <b style="color:var(--ok)">Green</b> is what you can
@@ -494,9 +494,9 @@ footer{
       than reaching for it, and that gap widens as you improve.
       Both are estimates of how much of the next level you can handle, not of how much of its
       list you have ticked off — the commonest words carry most of the text, so the first few
-      hundred matter far more than the rest. 95% is where reading stops being work; published
-      research puts adequate comprehension there and comfortable independent reading at
-      98%.</div>
+      hundred matter far more than the rest. Published research puts adequate comprehension at
+      95% and comfortable independent reading at 98%; moving up makes the next level the one
+      you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
 
     <label class="toggle" for="paceOn">
@@ -790,7 +790,6 @@ const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
-  { id: 0, file: "data/hsk0.json", label: "HSK 0.5" },
   { id: 1, file: "data/hsk1.json", label: "HSK 1" },
   { id: 2, file: "data/hsk2.json", label: "HSK 2" },
   { id: 3, file: "data/hsk3.json", label: "HSK 3" },
@@ -806,7 +805,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v53 — 2026-08-24";
+const VERSION   = "v54 — 2026-08-24";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -860,7 +859,9 @@ const store = {
 /* ------------------------------------------------------------------- state */
 
 const S = {
-  level:   store.get(K.level, 1),
+  /* HSK 0.5 was a local invention -- the old HSK 1.0 syllabus wedged in below
+   * HSK 3.0 band 1 -- and it is gone, so anyone stored on it comes up to 1. */
+  level:   Math.max(1, store.get(K.level, 1)),
   model:   store.get(K.model, MODELS[0].id),
   teachModel: store.get(K.teachModel, TEACH_MODEL),
   /* Per-device chat time, summed for display. See time.js for why it is not

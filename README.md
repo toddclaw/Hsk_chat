@@ -158,22 +158,25 @@ fine.
 
 # What the app does
 
-**Levels.** The picker in the header switches the whole allowlist between **HSK 0.5** and the
-combined 7–9 band, mid-conversation. HSK 0.5 is **the old HSK 1.0 syllabus** — the
-official 150-word level 1 from before HSK 3.0 — and its grammar rule is stricter than HSK 1's:
-no 了 at all, and sentences under about eight characters.
+**Levels.** The picker in the header switches the whole allowlist between **HSK 1** and the
+combined 7–9 band, mid-conversation. The bands are the official **HSK 3.0** syllabus
+(《国际中文教育中文水平等级标准》, 2021), parsed from
+[hsk-syllabus-vocabulary-parser](https://github.com/Punpuf/hsk-syllabus-vocabulary-parser):
+**300 / 497 / 988 / 1,978 / 3,557 / 5,334 / 10,896** words, cumulative.
 
-A frequency-derived approximation of that list agreed with the real one only 55% of the time,
-which is a good measure of how far corpus frequency is from a teaching order: the official list
-is concrete and classroom-shaped (七 八 九 十, 医院 学校 商店, 桌子 椅子 杯子, 狗 猫, 不客气
-没关系), while frequency gives function words and abstractions (就 还 过 着 觉得 重要 非常).
+Cumulative is the app's own doing, and it matters. The syllabus lists each band's *additions*
+(300 / 204 / 507 / 1,019 / 1,638 / 1,815 / 5,622), and lists a handful of words at two bands
+for two different senses — 半 appears at both 1 and 4. A level here is the whole allowlist
+rather than the band's own additions, so `tools/convert.py` assigns every word its **earliest**
+band and builds each file from all bands at or below it. That is why the cumulative totals come
+out slightly under the syllabus's running sums, and why a word met at HSK 1 stays legal at
+HSK 4 — advancing must never take vocabulary away. `test/validator.test.js` fails if the levels
+ever stop nesting. Existing messages re-render against the new list.
 
-**The two standards genuinely disagree**, and 14 of the official 150 are not in HSK 3.0
-level 1: 出租车 饭馆 分钟 狗 猫 漂亮 喂 椅子 怎么样 are level 2, 后面 苹果 前面 are level 3,
-些 is level 4, and 火车站 is absent entirely. Left alone that would mean *losing* 猫 on moving
-from HSK 0.5 to HSK 1, so `tools/nest_levels.py` carries every level's words upward into all
-the levels above it. The lower level wins. This is the one deliberate deviation from the
-HSK 3.0 lists, and `test/validator.test.js` fails if the levels ever stop nesting. Existing messages re-render against the new list.
+An earlier version of this app carried an invented **HSK 0.5** band — the old HSK 1.0 syllabus
+wedged in below band 1 — and level files from a source that disagreed with the standard by a few
+dozen words per band. Both are gone. The counts above are asserted by `test/prompt.test.js`, so
+the prose and the shipped data cannot drift apart.
 
 **Conversation starters.** A scrollable row above the composer, in that level's own
 vocabulary. At HSK 1 the hard part is not saying a sentence, it is knowing which sentence
@@ -430,7 +433,7 @@ open at HSK 3, directional complements 方向补语 at HSK 4 — rather than inv
 
 | Level | 得 | 着 | 过 |
 |---|---|---|---|
-| HSK 0.5–1 | none | none | none |
+| HSK 1 | none | none | none |
 | HSK 2 | none | zhe_durative | guo_experiential |
 | HSK 3 | de_complement | + zhao_resultative | guo_experiential |
 | HSK 4 | de_complement | both | + guo_verb |
@@ -448,7 +451,7 @@ change-of-state/emphasis: 我不去了, 太好了) is the same shape and this ap
 tries to gate it below HSK 2 — but 了 is standalone in a large fraction of ordinary replies
 from HSK 2 up, and a classify call on most turns is real added latency and OpenRouter cost that
 the prompt-only rule avoids; left ungated by choice, not by oversight. 把 does not exist in this
-app's own HSK 1–2 word lists at all — `nest_levels.py`'s data only adds it at HSK 3, the same
+app's own HSK 1–2 word lists at all — the syllabus first lists it at HSK 3, the same
 level the 把-construction is already unlocked — so there is no gap between what vocabulary
 already blocks and what a sense policy would add. 的, 一, 在, 要 are ruled out on frequency
 alone (的 alone appears in nearly every sentence); 就 and 才 have too many overlapping discourse
@@ -760,10 +763,10 @@ the first attempt, and it meant a ticked checkbox made its own row vanish with n
 # Knowing when to move up
 
 The lists are cumulative and frequency-ordered, and those two facts together make the
-obvious progress bar a liar. HSK 1 is 520 words and HSK 2 is 1261, so at HSK 1 you have
-ticked off 41% of the HSK 2 *list* — but because language is Zipfian and the commonest words
-carry most of the text, those same 520 words already cover about **85% of HSK 2 running
-text**. A bar that starts at zero is telling you that you understand none of a level you can
+obvious progress bar a liar. HSK 1 is 300 words and HSK 2 is 497, so at HSK 1 you have
+ticked off 60% of the HSK 2 *list* — but because language is Zipfian and the commonest words
+carry most of the text, those same 300 words already cover about **88% of HSK 2 running
+text**. The gap holds at every band, not just the first. A bar that starts at zero is telling you that you understand none of a level you can
 mostly already read.
 
 So Settings → **Learning** leads with the number that answers the question actually being
@@ -771,16 +774,16 @@ asked:
 
 ```
 Progress to the next level
-  ████████████████░░░░  87% of HSK 2 you can read — estimated     41% you can use
-  to 95%       147 more words, commonest first
-  met          34 of 741 new at HSK 2
+  ████████████████░░░░  88% of HSK 2 you can read — estimated     41% you can use
+  to 98%       58 more words, commonest first
+  met          12 of 197 new at HSK 2
   used by you  12 written in your own messages
 ```
 
 A word's share of running text goes as 1/rank, so coverage weights each word by `1/f` rather
 than counting it as one. The published thresholds this is measured against: **95%** lexical
 coverage for adequate comprehension, **98%** for comfortable independent reading. At HSK 1
-that is roughly 147 of the 741 new HSK 2 words to reach 95% — not 741 — and pacing already
+that is roughly 58 of the 197 new HSK 2 words to reach 98% — not 197 — and pacing already
 offers them commonest-first, so it is working through them in the cheapest possible order.
 
 Separate figures rather than one blended score, because they mean different things and the
@@ -931,7 +934,7 @@ Two problems the naive version gets wrong, both handled:
 - A violation span is a *run* of unmatchable characters, so it can fuse two words
   (因为苹果). Runs are split against the reference list before being stored.
 - A violation is cut where the *level's* lexicon happens to end, which is rarely where the
-  word ends. At HSK 0.5, 我喜欢跟狗一起走 flags 起走 — 一 is known, 起 and 走 are not — and
+  word ends. At HSK 1, 我喜欢跟狗一起走 flags 起走 — 一 is known, 起 and 走 are not — and
   storing that fragment teaches the app a word that does not exist, then legalises it, so the
   partner starts using 起走 back. `wordsAt()` reads the span off a *dictionary* segmentation
   of the same sentence (我 喜欢 跟 狗 一起 走) and stores the words overlapping it: 一起 and 走.
@@ -1201,7 +1204,7 @@ Settings and 词 panels open.
 ## Wordlist provenance
 
 `data/*.json` is generated by `tools/convert.py` from the HSK 3.0 level dumps supplied by
-the user — 520 / 1,261 / 2,211 / 3,182 / 4,241 / 5,364 / 10,970 words, cumulative, level 7
+the syllabus — 300 / 497 / 988 / 1,978 / 3,557 / 5,334 / 10,896 words, cumulative, level 7
 being the combined 7–9 band. (These are the shipped files' own entry counts, asserted by
 `test/pace.test.js` so they cannot drift from the prose again — the figures here were stale
 by a dozen or so words, and RESEARCH.md reasons about HSK 1 → 2 in terms of them.) The converter merges duplicate entries, repairs CC-CEDICT's

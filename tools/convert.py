@@ -1,104 +1,151 @@
 #!/usr/bin/env python3
-"""Convert complete-hsk-vocabulary level files to the app's {w,p,d} format.
+"""Build data/hsk<N>.json from the HSK 3.0 syllabus TSV.
 
-Input:  the upstream HSK 3.0 level dumps (rich, ~1-2MB each)
-Output: data/hsk<N>.json  ->  [{"w":"你好","p":"nǐ hǎo","d":"hello"}, ...]
+    python3 tools/convert.py hsk_word_list.tsv
+
+Input is the parsed official syllabus from
+https://github.com/Punpuf/hsk-syllabus-vocabulary-parser -- one row per word,
+columns: word_index, level, word, pinyin, part_of_speech, pinyin_numbered,
+pinyin_cc-cedict, traditional_cc-cedict, definition_cc-cedict.
+
+Output is cumulative: data/hsk2.json contains every HSK 1 word as well, which
+is what the validator wants (a level is the whole allowlist, not the band's
+own additions) and what makes the coverage arithmetic in pace.js meaningful.
+
+    [{"w":"你好","p":"nǐhǎo","d":"hello","f":384,"t":null}, ...]
+
+`f` is a corpus frequency rank, lower being commoner. The syllabus carries no
+frequency at all, and pace.js needs one for everything it does -- ordering what
+gets introduced, weighting coverage, counting words to the next threshold. It
+is joined in from tools/hsk-frequency.json, extracted from the previous
+wordlists. Words with no rank are written without `f` and weigh nothing in the
+coverage estimate; at HSK 1 and 2 that is 7 words and 0 words respectively, so
+the levels the progress panel actually reasons about are effectively complete.
 """
-import json, sys, os
+import csv, json, os, re, sys
 
-# CC-CEDICT writes ü as "u:" and a few entries leak the numeric form (nu:3).
-UMLAUT = {"u:1": "ǖ", "u:2": "ǘ", "u:3": "ǚ", "u:4": "ǜ", "u:5": "ü", "u:": "ü"}
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+FREQ = os.path.join(HERE, "hsk-frequency.json")
 
-# Function words a frequency-free heuristic always gets wrong: the rare literary
-# reading carries more dictionary senses than the everyday particle.
-PREFERRED = {
-    "吗": "ma", "吧": "ba", "着": "zhe", "那": "nà", "重": "zhòng",
-    "了": "le", "得": "de", "不": "bù", "一": "yī", "么": "me",
-    "没": "méi", "雨": "yǔ", "教": "jiāo", "为": "wèi", "行": "xíng",
-}
+# Band ids as the app numbers them. "7-9" is one combined band, id 7.
+LEVELS = ["1", "2", "3", "4", "5", "6", "7-9"]
 
 
-def fix_umlaut(p):
-    for k, v in sorted(UMLAUT.items(), key=lambda kv: -len(kv[0])):
-        p = p.replace(k, v)
-    return p
+def clean_word(w):
+    """Strip the syllabus's homograph suffix: 点1 / 点2 are one written word.
+
+    Ninety entries carry one. They disambiguate readings or parts of speech in
+    the syllabus, but the app matches on the written form -- a lexicon keyed by
+    "点1" would never match 点 in a sentence, so the word would be invisible to
+    the validator while still counting toward the level's size."""
+    return re.sub(r"\d+$", "", w.strip())
 
 
-def reading(form):
-    return fix_umlaut(form.get("transcriptions", {}).get("pinyin", "").strip())
+# How many senses a gloss keeps. This string is rendered under a tapped word
+# in a chat, not in a dictionary: the syllabus merges every CC-CEDICT sense of
+# every reading, so 点 arrives with 559 characters of them and 和 with 250.
+# Six covers the ordinary polysemy of a function word while staying readable on
+# a phone; the reference list is there for anyone who wants the full entry.
+MAX_SENSES = 6
 
 
-def traditional(word, forms):
-    """The traditional form of the preferred reading, omitted when it matches
-    the simplified. About 3% of entries list several (variant characters such as
-    岸/㟁, 幫/幇/幚); taking the preferred reading's form picks the standard one."""
-    t = (forms[0].get("traditional") or "").strip()
-    return t if t and t != word else None
+def clean_def(d):
+    """CC-CEDICT senses are /-separated, with reference-work notation inside.
 
+    "(coll.) father; dad/CL:個|个[ge4],位[wei4]" -> "(coll.) father; dad"
+    "variant of 個|个[ge4]"                     -> "variant of 个"
 
-def is_surname(form):
-    ms = form.get("meanings", [])
-    return bool(ms) and all(m.lower().startswith("surname") for m in ms)
-
-
-def ordered(word, forms):
-    """Rank readings: explicit override first, then surname-only readings last,
-    then the reading carrying the most dictionary senses (a decent proxy for
-    the everyday one -- 打 dǎ over dá, 看 kàn over kān)."""
-    pref = PREFERRED.get(word)
-    return sorted(forms, key=lambda f: (
-        0 if pref and reading(f) == pref else 1,
-        is_surname(f),
-        -len(f.get("meanings", [])),
-    ))
-
-
-def gloss(forms, limit=3):
-    seen, out = set(), []
-    for f in forms:
-        for m in f.get("meanings", []):
-            m = m.strip()
-            if m and m not in seen:
-                seen.add(m); out.append(m)
-    return "; ".join(out[:limit])
-
-def pinyin(forms):
-    """First reading is what the ruby shows; keep at most one alternate."""
-    seen, out = set(), []
-    for f in forms:
-        p = reading(f)
-        k = p.lower()
-        if p and k not in seen:
-            seen.add(k); out.append(p)
-    return " / ".join(out[:2])
-
-def convert(src, dst):
-    data = json.load(open(src, encoding="utf-8"))
-    merged, freq = {}, {}
-    for e in data:
-        merged.setdefault(e["simplified"], []).extend(e["forms"])
-        r = e.get("frequency")
-        if r and (e["simplified"] not in freq or r < freq[e["simplified"]]):
-            freq[e["simplified"]] = r
+    Three things go. CL: classifier notes, which are notation rather than
+    meaning. Bracketed numbered pinyin ([ge4]), which is how a dictionary
+    cross-references and how nothing else writes a definition. And the
+    traditional half of a 傳統|简体 pair, keeping the simplified -- the app's
+    own data is simplified, and showing both mid-gloss reads as a typo."""
+    parts = [p.strip() for p in d.split("/") if p.strip()]
+    parts = [p for p in parts if not p.startswith("CL:")]
     out = []
-    for w, f in merged.items():
-        f = ordered(w, f)
-        entry = {"w": w, "p": pinyin(f), "d": gloss(f)}
-        # Corpus frequency rank, lower being commoner. It decides the order new
-        # words are introduced in, so the useful ones come first.
-        rank = freq.get(w)
-        if rank:
-            entry["f"] = rank
-        t = traditional(w, f)
-        if t:
-            entry["t"] = t
-        out.append(entry)
-    out.sort(key=lambda x: x["w"])
-    with open(dst, "w", encoding="utf-8") as fh:
-        json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
-        fh.write("\n")
-    print(f"{dst}: {len(out)} entries, maxLen {max(len(x['w']) for x in out)}")
+    for p in parts:
+        p = re.sub(r"\[[^\]]*\]", "", p)              # [ge4]
+        # "(Taiwan pr. [han4])" is a pronunciation cross-reference, and once the
+        # bracket goes it reads as an unfinished sentence. Drop the whole aside.
+        p = re.sub(r"\s*\([^)]*\bpr\.\s*\)", "", p)
+        p = re.sub(r"[\u4e00-\u9fff]+\|([\u4e00-\u9fff]+)", r"\1", p)   # 個|个 -> 个
+        p = re.sub(r"\s{2,}", " ", p).strip(" ,;")
+        if p:
+            out.append(p)
+    if len(out) > MAX_SENSES:
+        out = out[:MAX_SENSES] + ["…"]
+    return "; ".join(out)
+
+
+def traditional(simp, field):
+    """The traditional form, or None when it is the same as the simplified.
+
+    CC-CEDICT lists variants /-separated (咊/和/龢, 吃/喫, 個/箇). Taking the
+    first is wrong often enough to matter -- 和's first listed variant is the
+    rare 咊. But if the simplified form is itself among the variants, then the
+    simplified IS the standard traditional and there is nothing to convert;
+    only when it is absent is a real conversion needed, and then the first
+    variant is the standard one (个 -> 個)."""
+    variants = [v.strip() for v in (field or "").split("/") if v.strip()]
+    if not variants or simp in variants:
+        return None
+    return variants[0]
+
+
+def main(tsv_path):
+    with open(FREQ, encoding="utf-8") as fh:
+        freq = json.load(fh)
+
+    with open(tsv_path, encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+
+    # A word listed at two levels belongs at the earlier one -- 半 appears at
+    # both 1 and 4 for different senses, and a learner who met it at HSK 1 has
+    # met it. Keeping the later listing would also drop it out of hsk1.json
+    # while the app still expects HSK 1 to be self-contained.
+    order = {lv: i for i, lv in enumerate(LEVELS)}
+    best = {}
+    for r in rows:
+        w = clean_word(r["word"])
+        if not w:
+            continue
+        lv = r["level"]
+        if lv not in order:
+            sys.exit("unknown level %r" % lv)
+        prev = best.get(w)
+        if prev is None or order[lv] < order[prev["level"]]:
+            best[w] = {"level": lv, "row": r}
+
+    counts = []
+    seen = []
+    for lv in LEVELS:
+        for w, hit in best.items():
+            if hit["level"] != lv:
+                continue
+            r = hit["row"]
+            entry = {"w": w, "p": r["pinyin"].strip(), "d": clean_def(r["definition_cc-cedict"])}
+            rank = freq.get(w)
+            if rank:
+                entry["f"] = rank
+            t = traditional(w, r["traditional_cc-cedict"])
+            if t:
+                entry["t"] = t
+            seen.append(entry)
+        # Sorted by frequency so the file itself reads commonest-first; the app
+        # re-sorts for its own purposes but this makes the data inspectable.
+        out = sorted(seen, key=lambda e: (e.get("f", 10 ** 9), e["w"]))
+        n = LEVELS.index(lv) + 1
+        path = os.path.join(ROOT, "data", "hsk%d.json" % n)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
+        counts.append((n, len(out)))
+        print("data/hsk%d.json  %5d words" % (n, len(out)))
+
+    print("\ncumulative: " + " / ".join(str(c) for _, c in counts))
+
 
 if __name__ == "__main__":
-    for src, dst in zip(sys.argv[1::2], sys.argv[2::2]):
-        convert(src, dst)
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    main(sys.argv[1])

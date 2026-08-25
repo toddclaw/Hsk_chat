@@ -245,8 +245,8 @@ editing it:
 ## Level readiness
 
 - **List share and text share are very different numbers, and only one of them is the
-  answer.** The wordlists are cumulative and frequency-ordered, so at HSK 1 you have 41% of
-  the HSK 2 *list* and about 85% of HSK 2 *text*. Anything that reports progress as a word
+  answer.** The wordlists are cumulative and frequency-ordered, so at HSK 1 you have 60% of
+  the HSK 2 *list* and about 88% of HSK 2 *text*, and the gap holds at every band. Anything that reports progress as a word
   count will read as "you know almost nothing" to someone who can already follow most of the
   level. `HSKPace.coverage()` weights by `1/f` for this reason; `test/pace.test.js` asserts
   the two numbers stay far apart, so a regression to counting words fails rather than just

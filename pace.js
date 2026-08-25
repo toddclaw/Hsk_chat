@@ -168,7 +168,19 @@
     FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,
-    READY_AT: 0.95,      // the published "adequate comprehension" threshold
+    /* The move-up recommendation fires here. 98%, the published "comfortable
+     * independent reading" threshold, rather than 95%, the "adequate
+     * comprehension" one -- moving up makes the next level your reading level,
+     * so the bar that matters is the one for reading it unaided.
+     *
+     * 95% is also degenerate against the real syllabus. The bands are
+     * cumulative and each adds mostly rarer words, so coverage of the next
+     * band starts high and climbs: HSK 5 already covers 95.3% of HSK 6 text
+     * before a single new word is learned, and the button would appear
+     * immediately having recommended nothing. At 98% every transition asks for
+     * between a quarter and a third of the new words, which is consistent
+     * across all six of them. */
+    READY_AT: 0.98,
     coverage: coverage, toTarget: toTarget
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

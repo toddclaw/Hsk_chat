@@ -37,8 +37,8 @@
       "why": "儿 suffix comes from EXTRA_ALLOWED"
     },
     {
-      "t": "好啊，我们一起去。",
-      "why": "啊 comes from EXTRA_ALLOWED"
+      "t": "好啊，我们去吧。",
+      "why": "啊 comes from EXTRA_ALLOWED (一起 is HSK 2, so the old wording no longer fits here)"
     },
     {
       "t": "现在几点了？",
@@ -84,17 +84,19 @@
     {
       "t": "他把书放在桌子上。",
       "expect": [
-        "把"
+        "把",
+        "放"
       ],
-      "why": "把 is above level and banned by the grammar list"
+      "why": "把 is above level and banned by the grammar list; 放 is HSK 3"
     },
     {
-      "t": "这个问题很复杂。",
+      "t": "他在图书馆学习复杂的中文。",
       "expect": [
-        "题",
+        "图",
+        "馆",
         "复杂"
       ],
-      "why": "partial-word and whole-word violations in one line"
+      "why": "partial-word and whole-word violations in one line: 书 is HSK 1 and sits inside 图书馆, so that word flags as two fragments, while 复杂 flags whole"
     },
     {
       "t": "Hello, how are you?",
@@ -116,11 +118,11 @@
       "why": "pinyin must not pass"
     },
     {
-      "t": "我有一千块钱。",
+      "t": "我有一万块钱。",
       "expect": [
-        "千"
+        "万"
       ],
-      "why": "千 is above level, so the numeral run must not rescue it"
+      "why": "万 is above level (千 is HSK 1), so the numeral run must not rescue it"
     }
   ],
   "spans": [
@@ -135,7 +137,7 @@
       ]
     },
     {
-      "t": "复杂的问题",
+      "t": "复杂的图书馆",
       "violations": [
         {
           "text": "复杂",
@@ -143,9 +145,14 @@
           "end": 2
         },
         {
-          "text": "题",
-          "start": 4,
-          "end": 5
+          "text": "图",
+          "start": 3,
+          "end": 4
+        },
+        {
+          "text": "馆",
+          "start": 5,
+          "end": 6
         }
       ]
     }
@@ -232,14 +239,14 @@
   ],
   "boundaries": [
     {
-      "level": 0,
+      "level": 1,
       "t": "我喜欢跟狗一起走。",
       "learn": [
         "跟",
         "一起",
         "走"
       ],
-      "why": "reported: HSK 0.5 knows 一 but not 起 or 走, so the span flags as 起走 and the fragment was being stored as a word"
+      "why": "reported: HSK 1 knows 一 but not 起 or 走, so the span flags as 起走 and the fragment was being stored as a word"
     },
     {
       "level": 1,
@@ -252,20 +259,22 @@
     },
     {
       "level": 1,
-      "t": "这个问题很复杂。",
+      "t": "他在图书馆学习复杂的中文。",
       "learn": [
-        "问题",
+        "图书馆",
+        "图书馆",
         "复杂"
       ],
-      "why": "问 and 复 are known, so the spans are 题 and 复杂; both resolve to whole words"
+      "why": "书 is known and splits 图书馆 into two fragments; both widen to the whole word, and 复杂 resolves to itself"
     },
     {
-      "level": 0,
-      "t": "我要坐出租车去火车站。",
+      "level": 1,
+      "t": "他在图书馆看书。",
       "learn": [
-        "要"
+        "图书馆",
+        "图书馆"
       ],
-      "why": "出租车 and 火车站 are in the old HSK 1.0 list; 要 is not"
+      "why": "书 is HSK 1 and sits inside 图书馆, splitting it into two separate flagged fragments 图 and 馆; both must widen to the whole word rather than being stored as two one-character non-words"
     }
   ]
 }

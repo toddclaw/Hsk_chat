@@ -995,8 +995,11 @@ return true;
     await waitFor("document.querySelectorAll('#poolList .poolrow').length > 0",
       "the level browser's rows");
     check(await exec(`
-      return document.querySelector('#poolLevel').options.length;`) === 8,
-      "every level is reachable from the picker");
+      return document.querySelector('#poolLevel').options.length;`) === 7,
+      "every level is reachable from the picker",
+      await exec(`
+        return Array.prototype.map.call(document.querySelector('#poolLevel').options,
+          function (o) { return o.textContent; }).join(" | ");`));
     check(await exec(`
       return Number(document.querySelector('#poolLevel').value);`) === 1,
       "Browse opens on your own level, which used to be unreachable");

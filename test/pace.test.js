@@ -20,7 +20,7 @@ check(pool.length > 0 && pool.length === l2.length - l1.length,
 check(pool.every(e => !l1set.has(e.w)), "pool excludes everything already known");
 check(pool.slice(0, 20).every((e, i, a) => i === 0 || (a[i - 1].f || Infinity) <= (e.f || Infinity)),
   "pool is ordered by corpus frequency");
-check(["让", "自己", "可以"].every(w => pool.slice(0, 12).some(e => e.w === w)),
+check(["让", "自己", "但"].every(w => pool.slice(0, 12).some(e => e.w === w)),
   "the commonest additions come first", pool.slice(0, 6).map(e => e.w).join(" "));
 check((pool[pool.length - 1].f || Infinity) >= (pool[0].f || 0), "unranked words sort last");
 
@@ -68,7 +68,7 @@ check(P.slate(pool, pool.map(e => e.w), 3).length === 0, "an exhausted pool offe
 // --- spotting use -----------------------------------------------------------
 // the lexicon must contain the words being looked for, or the segmenter never
 // produces them as tokens and the check would pass for the wrong reason
-const offered = pool.filter(e => ["自己", "可以", "让"].includes(e.w));
+const offered = pool.filter(e => ["自己", "但", "让"].includes(e.w));
 check(offered.length === 3, "the three test words are really in the level-2 pool");
 const lex = HSK.buildLexicon(l1.concat(offered));
 const toks = HSK.segment("我自己也可以做。", lex);
@@ -112,22 +112,43 @@ const h1 = load(1), h2 = load(2);
 const h1w = h1.map(e => e.w);
 
 const cov = P.coverage(h2, h1w);
-check(cov > 0.80 && cov < 0.90,
-  `HSK 1 covers ~85% of HSK 2 text (got ${(cov * 100).toFixed(1)}%)`);
-check(h1.length / h2.length < 0.45,
-  "while covering under 45% of the HSK 2 list -- the two are not the same question");
-check(cov > h1.length / h2.length + 0.3,
-  "and text coverage runs far ahead of list coverage");
+check(cov > 0.85 && cov < 0.92,
+  `HSK 1 covers ~88% of HSK 2 text (got ${(cov * 100).toFixed(1)}%)`);
+check(h1.length / h2.length < 0.65,
+  "while covering only ~60% of the HSK 2 list -- the two are not the same question");
+check(cov > h1.length / h2.length + 0.2,
+  "and text coverage runs well ahead of list coverage");
+/* Across every transition, not just the first: the bands are cumulative and
+ * each adds rarer words, so the gap is a property of the syllabus rather than
+ * a quirk of HSK 1. If it ever closed, weighting by 1/rank would be pointless
+ * and the panel could go back to counting words. */
+for (let n = 1; n <= 6; n++) {
+  const a = load(n), b = load(n + 1);
+  const text = P.coverage(b, a.map(e => e.w)), list = a.length / b.length;
+  check(text > list + 0.2,
+    `HSK ${n}->${n + 1}: text coverage leads list share`,
+    `${(text * 100).toFixed(1)}% vs ${(list * 100).toFixed(1)}%`);
+}
 
 check(P.coverage(h2, h2.map(e => e.w)) === 1, "knowing every word is full coverage");
 check(P.coverage(h2, []) === 0, "knowing none is zero");
 check(P.coverage([], ["x"]) === 0, "an empty level does not divide by zero");
 
-const need = P.toTarget(h2, h1w, 0.95);
-check(need > 100 && need < 220,
-  `~147 words to 95%, not 741 (got ${need})`);
-check(P.toTarget(h2, h1w, 0.98) > need, "98% costs more words than 95%");
-check(P.toTarget(h2, h2.map(e => e.w), 0.95) === 0, "already past target needs nothing");
+const need = P.toTarget(h2, h1w, P.READY_AT);
+check(need > 20 && need < 120,
+  `~58 words to the 98% mark, not all 197 (got ${need})`);
+check(P.toTarget(h2, h1w, 0.95) < need, "95% costs fewer words than 98%");
+check(P.toTarget(h2, h2.map(e => e.w), P.READY_AT) === 0, "already past target needs nothing");
+
+/* 95% would be degenerate against the real syllabus: HSK 5 already covers over
+ * 95% of HSK 6 text before anything is learned, so the recommendation would
+ * fire having recommended nothing. Every transition must actually ask for
+ * words. */
+for (let n = 1; n <= 6; n++) {
+  const a = load(n), b = load(n + 1);
+  check(P.toTarget(b, a.map(e => e.w), P.READY_AT) > 0,
+    `HSK ${n}->${n + 1}: the move-up mark is not already met on arrival`);
+}
 
 /* Unranked words carry no weight, so a target that cannot be reached must stop
  * rather than hand back the whole remaining list as if it would help. */
@@ -170,21 +191,21 @@ check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
  * drifts from data silently: the README's counts were already stale by a dozen
  * words before anyone noticed. Pin them.
  */
-const SIZES = [520, 1261, 2211, 3182, 4241, 5364, 10970];
+const SIZES = [300, 497, 988, 1978, 3557, 5334, 10896];
 SIZES.forEach((n, i) => {
   check(load(i + 1).length === n,
     `HSK ${i + 1} ships ${n} entries, as the docs say`,
     `actually ${load(i + 1).length}`);
 });
-check(h2.length - h1.length === 741,
-  "741 new words between HSK 1 and HSK 2, as RESEARCH.md states",
+check(h2.length - h1.length === 197,
+  "197 new words between HSK 1 and HSK 2, as RESEARCH.md states",
   `actually ${h2.length - h1.length}`);
-check(Math.round(P.coverage(h2, h1w) * 100) === 85,
-  "HSK 1 covers 85% of HSK 2 text, the figure RESEARCH.md argues from",
+check(Math.round(P.coverage(h2, h1w) * 100) === 88,
+  "HSK 1 covers 88% of HSK 2 text, the figure RESEARCH.md argues from",
   `actually ${Math.round(P.coverage(h2, h1w) * 100)}%`);
-check(P.toTarget(h2, h1w, 0.95) === 147,
-  "and 147 words reach the 95% mark, the number the panel shows a beginner",
-  `actually ${P.toTarget(h2, h1w, 0.95)}`);
+check(P.toTarget(h2, h1w, P.READY_AT) === 58,
+  "and 58 words reach the mark, the number the panel shows a beginner",
+  `actually ${P.toTarget(h2, h1w, P.READY_AT)}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

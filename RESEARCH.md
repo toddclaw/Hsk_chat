@@ -2,7 +2,7 @@
 
 Why the numbers in this app are the numbers they are.
 
-Every pedagogical constant here — 95%, six sightings, one new word per 45 characters — is a
+Every pedagogical constant here — 98%, six sightings, one new word per 45 characters — is a
 decision someone could have made differently. This file records what the second-language
 acquisition literature actually says, what it does *not* say, which choices follow from it,
 and which are ours with the evidence only pointing in a direction. Where we measured
@@ -101,12 +101,17 @@ This is the part with the most research behind it and the most room to get wrong
 ### Coverage, not word count
 
 **Follows from the literature.** The HSK lists are cumulative, so the obvious progress bar —
-words ticked off the next level's list — is available and misleading. At HSK 1 you know 520 of
-HSK 2's 1261 words: 41% of the list. But because the lists are frequency-ordered and language
-is Zipfian, those same 520 words already account for about **85% of HSK 2 running text**.
+words ticked off the next level's list — is available and misleading. At HSK 1 you know 300 of
+HSK 2's 497 words: 60% of the list. But because the lists are frequency-ordered and language
+is Zipfian, those same 300 words already account for about **88% of HSK 2 running text**.
 
-A bar reading 41% tells a learner who can follow most of a level that they know almost none
-of it. So `HSKPace.coverage()` weights each word by `1/rank` and reports the share of *text*,
+The gap is a property of the syllabus rather than a quirk of the first band. Across all six
+transitions the list share runs 49–67% while text coverage runs 88–95%, and
+`test/pace.test.js` asserts that separation at every one of them — if it ever closed, weighting
+by `1/rank` would be pointless and the panel could go back to counting words.
+
+A bar reading 60% tells a learner who can already follow most of a level that they know barely
+half of it. So `HSKPace.coverage()` weights each word by `1/rank` and reports the share of *text*,
 not the share of the list.
 
 Chinese supports this: word-frequency distributions in large Mandarin corpora conform to
@@ -114,12 +119,13 @@ Zipf's law with an exponent very close to 1, which is why `ZIPF_EXP` defaults to
 
 ### The 95% mark
 
-**Follows from the literature, with a caveat we take seriously.** `READY_AT = 0.95`.
+**Follows from the literature, with two caveats we take seriously.** `READY_AT = 0.98`.
 
 Two thresholds are conventional. Laufer & Ravenhorst-Kalovski (2010) put **95%** coverage as
 the minimum for adequate comprehension (≈4000–5000 word families in English) and **98%** as
 optimal for independent reading (≈6000–8000). Hu & Nation (2000) is the origin of the 98%
-figure.
+figure. The app marks 98% on the bar and fires its recommendation there; 95% is named in the
+UI text as the lower reference.
 
 The caveat, which most citations of these numbers omit: **Hu & Nation never tested 98%.** They
 tested 80%, 90%, 95% and 100% coverage on a 633-word narrative seeded with pseudowords, with
@@ -128,14 +134,24 @@ points. And Kremmel et al.'s 2023 replication in *Language Learning* found that 
 vocabulary size and reading ability were accounted for, coverage remained only a weak
 predictor of comprehension, with **no clear threshold** visible at all.
 
-So 95% is a well-established convention resting on thinner evidence than its ubiquity
-suggests. We use it because a recommendation has to fire somewhere and this is the most
-defensible line available — not because a learner crossing it has crossed anything real. The
-UI says *"95% is comfortable reading"*, never *"you are ready"*, and the button it reveals is
-a suggestion.
+So these are well-established conventions resting on thinner evidence than their ubiquity
+suggests. We use one because a recommendation has to fire somewhere and they are the most
+defensible lines available — not because a learner crossing one has crossed anything real. The
+UI never says *"you are ready"*, and the button it reveals is a suggestion.
 
-At HSK 1 the mark falls at roughly **147 of the 741 new HSK 2 words** — which is the number
-worth showing a learner, rather than 741.
+**The second caveat is ours, and it decided which threshold to use.** 95% is *degenerate*
+against the real syllabus. The bands are cumulative and each adds mostly rarer words, so
+coverage of the next band starts high: HSK 5 already covers **95.3%** of HSK 6 text before a
+single new word is learned. At 95% the recommendation would fire on arrival, having
+recommended nothing. At 98% every transition asks for between a quarter and a third of the new
+words — 29 / 36 / 43 / 44 / 27 / 34 percent — which is consistent in a way 95% is not.
+
+98% is also the better fit on its own terms: moving up makes the next level the one you
+*read*, so the bar that matters is the one for reading it unaided rather than the one for
+minimally following it.
+
+At HSK 1 the mark falls at **58 of the 197 new HSK 2 words** — which is the number worth
+showing a learner, rather than 197.
 
 ### A recommendation, never automatic
 
@@ -268,8 +284,10 @@ Stated plainly so nobody cites this file for more than it holds.
 - **The coverage percentage is an estimate, and is labelled one in the UI.** `f` is a rank,
   not a token count, so `1/rank` is an assumption about a corpus rather than a measurement of
   one.
-- **We do not know which corpus the ranks come from.** They arrive in the HSK 3.0 level dumps
-  `tools/convert.py` reads. Without the corpus the exponent cannot be fitted, only assumed —
+- **We do not know which corpus the ranks come from.** The syllabus carries no frequency at
+  all; the ranks are joined in from `tools/hsk-frequency.json`, carried over from the level
+  dumps this app previously shipped, whose own provenance was never recorded. 88% of the
+  syllabus's words get one — at HSK 1 and 2, all but eight. Without the corpus the exponent cannot be fitted, only assumed —
   hence `ZIPF_EXP` being a named constant rather than an inlined `1`.
 - **The Zipf tail is not really Zipfian.** Rank-frequency relations for Chinese characters in
   long texts show two layers: a power law for frequent items and an exponential-like decay for

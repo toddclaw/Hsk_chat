@@ -184,20 +184,25 @@ for (const n of levels) {
     nums.join(","));
 }
 
-/* 10. HSK 0.5 is a first-week level: it must be a strict subset of HSK 1 and
- *     its grammar rule must be stricter, or it is not a lower level at all. */
-const l0 = JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk0.json"), "utf8"));
-const l1w = new Set(JSON.parse(
-  fs.readFileSync(path.join(__dirname, "../data/hsk1.json"), "utf8")).map(e => e.w));
-check(l0.length === 150, `HSK 0.5 has 150 words (${l0.length})`);
-check(["猫", "狗", "苹果", "怎么样", "火车站"].every(w => l0.some(e => e.w === w)),
-  "it is the old HSK 1.0 syllabus, including the words HSK 3.0 moved up");
-check(l0.every(e => l1w.has(e.w)), "HSK 0.5 is a strict subset of HSK 1");
-check(["谢谢", "再见", "名字", "不客气"].every(w => l0.some(e => e.w === w)),
-  "the words a first lesson teaches are present");
-check(/不要用「了」/.test(P.LEVEL_STYLE[0].grammar),
-  "HSK 0.5 bans 了, which HSK 1 allows", P.LEVEL_STYLE[0].grammar);
-check(P.LEVEL_STYLE[0].vocab !== P.LEVEL_STYLE[1].vocab, "and has its own vocabulary rule");
+/* 10. The bands are the official HSK 3.0 syllabus now, and the counts are load
+ *     bearing: README.md and RESEARCH.md both reason in them, and the app's
+ *     progress panel is arithmetic over their sizes. The local "HSK 0.5" band
+ *     (the old HSK 1.0 syllabus wedged in below band 1) is gone.
+ *
+ *     Cumulative, and smaller than the syllabus's own per-band sums, because a
+ *     word listed at two bands for two senses is counted once at the earlier
+ *     one -- 300 / 504 / 1011 raw becomes 300 / 497 / 988 deduplicated. */
+const CUMULATIVE = [300, 497, 988, 1978, 3557, 5334, 10896];
+CUMULATIVE.forEach((want, i) => {
+  const n = i + 1;
+  const got = JSON.parse(
+    fs.readFileSync(path.join(__dirname, `../data/hsk${n}.json`), "utf8")).length;
+  check(got === want, `HSK ${n} ships ${want} words`, `got ${got}`);
+});
+check(!fs.existsSync(path.join(__dirname, "../data/hsk0.json")),
+  "and the invented HSK 0.5 band is gone");
+check(!(0 in P.LEVEL_STYLE) && !(0 in P.STARTERS),
+  "with no prompt or starters left behind for it");
 
 /* 11. Every prompt must ask for a reply, not just impose limits. With only
  *     constraints, the cheapest way to obey them all is to echo the student. */
