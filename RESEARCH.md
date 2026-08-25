@@ -275,6 +275,30 @@ Two smaller findings:
 - **Name the rule, not the edit.** Told to tag what was *fixed*, a missing measure word reads
   as a word being added. The instruction says to tag the rule that was broken.
 
+### A response shape in the system role governs the whole conversation
+
+**Measured, after it shipped broken.** Making the grammar check verdict-first put *"start with
+exactly one of these three lines… after `Natural.` stop immediately"* into the **system**
+message. That is where the level and the formatting rules live, and it was the obvious place —
+but a system instruction applies to every later turn, not just the first.
+
+Reported from real use, on `我吃饭了。你现在要吃饭了吗？`:
+
+| | reply |
+| --- | --- |
+| first pass | `Natural.` |
+| follow-up: *"What about the 现在 and the 了?"* | `Natural.` |
+| same follow-up, conversational system prompt | *"The 现在 is fine because it clarifies the time… the 了 turns the sentence into a question about a change of state…"* |
+
+The model was not ignoring the question. It was obeying an instruction to emit one of three
+lines and stop, which nothing had withdrawn. The four-paragraph shape it replaced had no hard
+stop, so follow-ups had always worked and the regression was invisible to a suite that only
+ever asked the first question.
+
+The rule this leaves: **an output-shape instruction belongs to the turn it shapes.** When a
+prompt is reused across a conversation, the shape has to be swapped out with the question, or
+the first answer's format silently becomes the format of every answer.
+
 ### Earlier measurements
 
 Recorded in DEVELOPING.md with their working, and summarized here because they set the

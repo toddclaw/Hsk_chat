@@ -391,6 +391,11 @@ Project setup lives in README.md. What is easy to get wrong:
   length, the tries, the Anki fields and the system prompt. `signInForSync()`
   commits first for that reason. The key is additionally stored on every
   keystroke, because it is the one field that cannot be retyped from memory.
+- **A response shape in the system message governs every later turn.** The grammar check's
+  three verdict lines live in the system role, so a follow-up question was answered with the
+  verdict again — the model obeying "stop after one line", which nothing had withdrawn.
+  `explainAsk()` passes `followUp` and `HSKPrompt.explain()` swaps the shape for a
+  conversational form. A suite that only ever asks the first question cannot see this.
 - **The grader's answer is parsed, so it fails differently.** `ok` is recomputed from the
   errors and categories rather than trusted, unknown tags are dropped, and an unreadable reply
   is stored as `{unreadable:true}`. All three have a mutation test: trusting `ok`, keeping

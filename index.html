@@ -871,7 +871,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v56 — 2026-08-25";
+const VERSION   = "v57 — 2026-08-25";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1361,7 +1361,8 @@ function defaultTeachPrompt(spec, vars) {
                              recent: vars.recent, context: vars.context });
   }
   return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
-                             recent: vars.recent, context: vars.context });
+                             recent: vars.recent, context: vars.context,
+                             followUp: vars.followUp });
 }
 
 /* An untouched prompt keeps calling prompt.js rather than storing a copy of
@@ -1389,10 +1390,10 @@ async function translateText(text, own) {
   return raw.trim();
 }
 
-function explainSystemPrompt(turnObj, own) {
+function explainSystemPrompt(turnObj, own, followUp) {
   return teachPromptFor(own ? "explainMine" : "explainReply",
     { text: turnObj.text, level: levelLabel(), recent: recentWords(),
-      context: own ? contextFor(turnObj) : [] });
+      context: own ? contextFor(turnObj) : [], followUp: !!followUp });
 }
 
 function windowed() {
@@ -2569,8 +2570,12 @@ async function explainAsk(turnObj, question) {
   box.scrollTop = box.scrollHeight;
   $("#explainSend").disabled = true;
 
+  /* The verdict shape is a system instruction, so it governs every turn of this
+   * chat unless the system message changes with it. A follow-up gets the
+   * conversational form of the prompt instead. */
   const messages = [{ role: "system",
-                      content: explainSystemPrompt(turnObj, turnObj.role === "user") }];
+                      content: explainSystemPrompt(turnObj, turnObj.role === "user",
+                                                   !!question) }];
   turnObj.explainChat.forEach(m => messages.push({ role: m.role, content: m.text }));
   if (question) messages.push({ role: "user", content: question });
 

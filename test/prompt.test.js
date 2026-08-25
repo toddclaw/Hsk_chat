@@ -278,6 +278,34 @@ check(/stop immediately/.test(P.explain(mine)),
   "own: a correct sentence is allowed a one-line answer");
 check(/Judge idiom, not only grammar/.test(P.explain(mine)),
   "own: the middle verdict is about idiom, or it never fires");
+
+/* A follow-up needs a different system message. The verdict shape is an
+ * instruction to emit one of three lines and stop, and it lives in the SYSTEM
+ * role -- so it stays in force for the whole chat. Reported: asked "what about
+ * the 现在 and the 了?", the model answered "Natural." again. It was obeying. */
+// Local rather than CTX, which is declared further down this file.
+const askedAbout = [{ role: "assistant", text: "你今天吃饭了吗？" }];
+const followUp = P.explain({ text: SENT, own: true, label: "HSK 2", recent: "",
+                             context: askedAbout, followUp: true });
+check(!/Start with exactly one of these three lines/.test(followUp),
+  "own: a follow-up is not made to answer in the verdict shape");
+check(!/stop immediately/.test(followUp),
+  "and is not told to stop after one line");
+check(/Answer their question directly/.test(followUp),
+  "it is told to answer the question instead");
+check(/say plainly why it is correct/.test(followUp),
+  "and to justify a pass rather than merely restate it -- which is what was asked for");
+check(/something you missed, say so/.test(followUp),
+  "and to concede when the student has spotted something");
+// Everything that is not the shape must survive into the follow-up.
+check(followUp.includes("HSK 2") && /homophone/.test(followUp) &&
+      /No headings, no bullet lists/.test(followUp),
+  "the level, the homophone note and the formatting rules all survive");
+check(/The conversation so far/.test(followUp),
+  "and so does the turn being answered");
+check(/Start with exactly one of these three lines/.test(P.explain(
+        { text: SENT, own: true, label: "HSK 2", recent: "", context: askedAbout })),
+  "while the first pass still gets the verdict shape");
 check(!/What it actually says in English/.test(P.explain(mine)),
   "own: the grammar check does not re-translate -- that is the other button");
 check(!/numbered 1 to 4/.test(P.explain(mine)),

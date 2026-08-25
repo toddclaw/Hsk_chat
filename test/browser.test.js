@@ -438,6 +438,29 @@ return true;
       JSON.stringify((gc || "").slice(-260)));
     check((gc || "").indexOf("The conversation so far:") < (gc || "").indexOf("The student wrote:"),
       "with the context before it, not after");
+    /* A follow-up must not inherit the verdict shape. It is a SYSTEM
+     * instruction to emit one of three lines and stop, so it governs the whole
+     * chat unless the system message changes with the question. Reported:
+     * asked "what about the 现在 and the 了?", the model replied "Natural."
+     * again, because that was the only thing it was permitted to say. */
+    await exec(`
+      window.__calls = [];
+      document.querySelector('#explainInput').value = "why is that correct?";
+      document.querySelector('#explainSend').click();
+      return true;`);
+    await waitFor("window.__calls && window.__calls.length > 0", "the follow-up request");
+    const fu = await exec("return window.__calls[0].messages[0].content;");
+    check(!/Start with exactly one of these three lines/.test(fu || ""),
+      "a follow-up is not sent the verdict shape",
+      JSON.stringify((fu || "").slice(0, 200)));
+    check(/Answer their question directly/.test(fu || ""),
+      "it is asked to answer the question instead",
+      JSON.stringify((fu || "").slice(0, 200)));
+    check(/The sentence under discussion:/.test(fu || ""),
+      "and still told which sentence is being discussed");
+    check(await exec("return window.__calls[0].messages.length;") >= 3,
+      "with the verdict already given carried as context");
+
     await exec(`document.querySelector('#explainClose').click(); return true;`);
 
     check(await exec(`
