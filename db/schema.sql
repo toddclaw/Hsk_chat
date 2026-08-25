@@ -72,6 +72,14 @@ alter table public.messages add column if not exists conversation_id uuid;
 create index if not exists messages_conversation_idx
   on public.messages (user_id, conversation_id, created_at);
 
+-- The grader's verdict on one student sentence: the intended meaning, a
+-- corrected version, four category flags, and tagged errors. Nullable, because
+-- grading is optional and because messages written before it existed have
+-- none. See the note on conversation_id above for why the app tolerates this
+-- column being absent rather than requiring the migration.
+
+alter table public.messages add column if not exists grade jsonb;
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.

@@ -391,6 +391,15 @@ Project setup lives in README.md. What is easy to get wrong:
   length, the tries, the Anki fields and the system prompt. `signInForSync()`
   commits first for that reason. The key is additionally stored on every
   keystroke, because it is the one field that cannot be retyped from memory.
+- **The grader's answer is parsed, so it fails differently.** `ok` is recomputed from the
+  errors and categories rather than trusted, unknown tags are dropped, and an unreadable reply
+  is stored as `{unreadable:true}`. All three have a mutation test: trusting `ok`, keeping
+  invented tags, and storing an unreadable answer as a pass each fail one.
+- **`messages` now has two independently optional columns.** `conversation_id` and `grade`
+  arrived in separate migrations, so a project that ran one and not the other must not lose
+  the first as collateral. `probeSchema()` selects each column once per session rather than
+  parsing which one a failed push tripped over — PostgREST's message text is localized, its
+  error codes are not.
 - **Deleting anything synced needs a tombstone, not a delete.** The offline device still
   holds its copy and re-pushes it. `conversations.deleted_at` is that tombstone, and
   `mergeConversations()` treats deletion as monotonic — a tombstone wins from either side

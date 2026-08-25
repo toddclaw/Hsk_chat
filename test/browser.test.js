@@ -853,7 +853,11 @@ return true;
                states: Array.prototype.map.call(
                  document.querySelectorAll('#teachPrompts .note'),
                  function (s) { return s.textContent; }) };`);
-    check(tp.n === 4, "all four teaching prompts are exposed", JSON.stringify(tp.ids));
+    check(tp.n === 5, "every teaching prompt is exposed, the grader included",
+      JSON.stringify(tp.ids));
+    check(tp.ids.indexOf("tp_grade") !== -1,
+      "including the grader, which is a prompt like the rest and editable like the rest",
+      JSON.stringify(tp.ids));
     check(tp.hasText, "shown with {text} left in rather than filled in", JSON.stringify(tp));
     check(/custom/.test(tp.states[0]),
       "the seeded override reads as custom", JSON.stringify(tp.states));
@@ -1076,6 +1080,121 @@ return true;
       document.querySelector('#poolX').click();
       return !document.querySelector('#poolSheet').classList.contains('open');`),
       "the level browser closes with the sheet ✕");
+
+    /* ------------------------------------------------------- the grader
+     *
+     * fetch is stubbed, so nothing here spends a call. What is worth checking
+     * is the parsing, because the grader's answer is machine-read: a model
+     * that fences its JSON, invents a tag, or claims ok while listing errors
+     * must not produce a green tick over a red sheet. */
+    await exec(`
+      window.__graded = [];
+      window.__realFetch2 = window.fetch;
+      window.__reply = JSON.stringify({
+        ok: false, meant: "I was happy yesterday.", better: "\u6211\u6628\u5929\u5f88\u9ad8\u5174\u3002",
+        cats: { word: true, grammar: false, order: true, natural: true },
+        errors: [{ tag: "aspect-le", note: "\u4e86 does not attach to a stative adjective" },
+                 { tag: "grammar",   note: "a category name, not a tag -- must be dropped" }]
+      });
+      window.fetch = function (url, opts) {
+        window.__graded.push(JSON.parse((opts && opts.body) || "{}"));
+        /* Fenced, with prose either side: models do this however firmly the
+         * prompt says not to. No line breaks in the fence -- a literal newline
+         * inside this template becomes a real one in the injected script and
+         * breaks the string it sits in. */
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          return Promise.resolve({ choices: [{ message: {
+            content: "Sure! " + String.fromCharCode(96,96,96) + "json " + window.__reply + " " + String.fromCharCode(96,96,96) + " Hope that helps." },
+            finish_reason: "stop" }] });
+        } });
+      };
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      document.querySelector('#input').value = "\u6211\u6628\u5929\u5f88\u9ad8\u5174\u4e86\u3002";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`document.querySelectorAll('#log .msg.user .grade.bad').length > 0`,
+      "the grade badge landing on the message");
+    check(true, "a graded message shows a cross rather than a tick");
+
+    const sentGrade = await exec(`
+      var c = window.__graded.filter(function (b) {
+        return /only a JSON object/.test((b.messages[0] || {}).content || ""); });
+      return c.length ? c[0] : null;`);
+    check(sentGrade && sentGrade.model === "teaching/model",
+      "grading runs on the teaching model, not the chat model",
+      sentGrade ? sentGrade.model : "no grade call");
+    check(!!sentGrade && /The student wrote:/.test(sentGrade.messages[0].content),
+      "and is given the sentence it is grading");
+
+    await exec(`document.querySelector('#log .msg.user .grade.bad').click(); return true;`);
+    await waitFor("document.querySelector('#gradeSheet').classList.contains('open')",
+      "the grade detail sheet");
+    const detail = await exec(`
+      return { meant: document.querySelector('#gradeMeant').textContent,
+               better: document.querySelector('#gradeBetter').textContent,
+               cats: Array.prototype.map.call(document.querySelectorAll('#gradeCats .gcat'),
+                 function (c) { return c.className + ":" + c.querySelector('b').textContent; }),
+               errs: document.querySelector('#gradeErrors').textContent };`);
+    check(/happy yesterday/.test(detail.meant),
+      "the sheet shows the intended meaning", JSON.stringify(detail.meant));
+    check(detail.better.indexOf("\u6211\u6628\u5929\u5f88\u9ad8\u5174") === 0,
+      "and a corrected sentence", JSON.stringify(detail.better));
+    check(detail.cats.length === 4, "four category chips", JSON.stringify(detail.cats));
+    check(detail.cats.filter(c => /bad/.test(c)).length === 1,
+      "exactly the failing one marked bad", JSON.stringify(detail.cats));
+    /* The stub returned "grammar" as a tag -- a display category, which the
+     * model does emit despite the prompt. It must not reach the sheet or the
+     * ledger, where it would become a top mistake nobody can drill. */
+    check(/\u4e86/.test(detail.errs) && !/category name/.test(detail.errs),
+      "known tags are shown and invented ones dropped", JSON.stringify(detail.errs));
+
+    // Ask a follow-up hands over to the existing grammar chat rather than
+    // growing a second one.
+    check(await exec(`
+      document.querySelector('#gradeAsk').click();
+      return document.querySelector('#explainSheet').classList.contains('open') &&
+             !document.querySelector('#gradeSheet').classList.contains('open');`),
+      "Ask a follow-up opens the grammar chat and closes this sheet");
+    await exec(`document.querySelector('#explainClose').click(); return true;`);
+
+    /* ok is recomputed, never trusted: a model claiming ok while listing
+     * errors would otherwise show a green tick over a red detail sheet. */
+    await exec(`
+      window.__reply = JSON.stringify({
+        ok: true, meant: "x", better: "y",
+        cats: { word: true, grammar: true, order: true, natural: true },
+        errors: [{ tag: "measure-word", note: "contradicts its own ok" }] });
+      document.querySelector('#input').value = "\u6211\u6709\u4e09\u4e2a\u4e66\u3002";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`document.querySelectorAll('#log .msg.user .grade').length > 1`,
+      "the second grade");
+    check(await exec(`
+      var b = document.querySelectorAll('#log .msg.user .grade');
+      return b[b.length - 1].classList.contains("bad");`),
+      "a grade that lists errors is not a pass, whatever its ok field says");
+
+    // Unparseable answers are recorded as unknown, not silently as correct.
+    await exec(`
+      window.__reply = "not json at all";
+      document.querySelector('#input').value = "\u4f60\u597d\u3002";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`document.querySelectorAll('#log .msg.user .grade.unknown').length > 0`,
+      "the unreadable grade");
+    check(true, "an unreadable answer shows as unknown rather than as a pass");
+
+    // Top mistakes, counted from the grades just stored.
+    await exec(`
+      window.fetch = window.__realFetch2;
+      document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the mistake list");
+    const mis = await exec(`return document.querySelector('#mistakes').textContent;`);
+    check(/\u4e86/.test(mis) && /measure word/.test(mis),
+      "the mistake list counts what the grader logged", JSON.stringify(mis));
+    check(!/category name/.test(mis) && !/\bgrammar\b/.test(mis.replace(/grammar check/gi, "")),
+      "and never counts a tag the taxonomy does not know", JSON.stringify(mis));
 
     /* ------------------------------------------- conversation history */
 

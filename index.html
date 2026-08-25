@@ -82,6 +82,27 @@ header button{padding:8px 10px; flex:0 0 auto}
    fine" -- the pinyin toggle, a focused input, a fresh word. */
 .copy.cached{color:var(--accent); border-color:#2f4a6b}
 
+/* The grade badge. Sized like the other .meta buttons but circular, so a tick
+   and a cross read as a verdict rather than as another action. */
+.grade{width:22px; height:22px; min-height:0; padding:0; border-radius:50%; font-size:13px;
+       line-height:1; border:1px solid var(--line); background:none; cursor:pointer}
+.grade.ok{color:var(--ok); border-color:#2c5a3f; cursor:default}
+.grade.bad{color:var(--bad); border-color:#5a2626}
+.grade.pending{color:var(--dim); cursor:default}
+.grade.unknown{color:var(--dim)}
+/* Category chips in the detail sheet: the Chinese label is the icon, the tick
+   or cross is the verdict, the English is there the first few times. */
+#gradeCats{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+.gcat{display:flex; align-items:center; gap:4px; padding:5px 9px; border-radius:999px;
+      border:1px solid var(--line); font-size:12px; color:var(--dim)}
+.gcat b{font-size:14px}
+.gcat span{opacity:.75}
+.gcat.ok{color:var(--ok); border-color:#2c5a3f}
+.gcat.bad{color:var(--bad); border-color:#5a2626}
+.gerr{margin-top:8px; font-size:13px}
+.gerr b{display:block; color:var(--ink)}
+.gerr span{color:var(--dim)}
+
 /* Model browser rows. A row is a tap target for choosing; the star inside it is
    its own, so starring never changes what you are talking to by accident. */
 /* Conversation rows: a tap target for opening, with its own actions beneath so
@@ -511,6 +532,18 @@ footer{
       you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
 
+    <label style="margin-top:14px">Your top mistakes</label>
+      <div class="stats" id="mistakes"></div>
+
+    <label class="toggle" for="graderOn">
+        <input type="checkbox" id="graderOn">
+        <span>Check each message I send</span>
+      </label>
+      <div class="note">Grades what you write against the turn it answers and marks it ✓ or ✗.
+      Tap a ✗ for the intended meaning, a better version, and which of word choice, grammar,
+      word order or naturalness went wrong. Runs on the teaching model, about a hundredth of a
+      cent a message. What it finds is counted under <b>Your top mistakes</b> below.</div>
+
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -669,6 +702,27 @@ footer{
   <div style="margin-top:16px"><button id="poolClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="gradeSheet"><div class="card">
+  <div class="sheethead">
+    <h2>What to fix</h2>
+    <button id="gradeX" class="sheetx" type="button" aria-label="Close" title="Close">✕</button>
+  </div>
+  <div class="bubble" id="gradeSource" style="margin-bottom:10px"></div>
+  <label>What you probably meant</label>
+  <div class="note" id="gradeMeant" style="margin-top:2px"></div>
+  <label style="margin-top:10px">A better way to say it</label>
+  <div class="bubble" id="gradeBetter" style="margin-top:2px"></div>
+  <div id="gradeCats"></div>
+  <div id="gradeErrors" style="margin-top:10px"></div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+    <button id="gradeClose" class="primary">Done</button>
+    <!-- Hands off to the grammar-check chat rather than growing a second one.
+         The grader answers a fixed set of questions; anything else you want to
+         ask about the sentence is what that sheet is already for. -->
+    <button id="gradeAsk" class="quiet" type="button">Ask a follow-up</button>
+  </div>
+</div></div>
+
 <div class="sheet" id="chatSheet"><div class="card">
   <div class="sheethead">
     <h2>Conversations</h2>
@@ -817,7 +871,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v55 — 2026-08-25";
+const VERSION   = "v56 — 2026-08-25";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -848,7 +902,7 @@ const K = {
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
-  favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly",
+  favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly", grader:"hsk1chat.grader",
   chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
   prefsPushedAt:"hsk1chat.prefsPushedAt",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
@@ -947,7 +1001,10 @@ const S = {
   // Starred model ids, and whether the pickers are filtered down to them. The
   // catalogue runs to several hundred entries and nobody uses more than a few.
   favModels: store.get(K.favModels, []),
-  favOnly: store.get(K.favOnly, false)
+  favOnly: store.get(K.favOnly, false),
+  // Whether each message you send is graded. On by default: the badge is the
+  // feature, and a grade costs about a hundredth of a cent.
+  grader: store.get(K.grader, true)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -1269,7 +1326,9 @@ const TEACH_PROMPTS = [
   { key: "transReply",   kind: "translate", own: false,
     label: "Translation — the partner's reply" },
   { key: "explainReply", kind: "explain",   own: false,
-    label: "English explanation" }
+    label: "English explanation" },
+  { key: "grade",        kind: "grade",     own: true,
+    label: "Grader — the ✓ / ✗ on your messages" }
 ];
 
 // Recently introduced words, so an explanation can say which are still new.
@@ -1296,10 +1355,13 @@ function contextFor(turnObj) {
 }
 
 function defaultTeachPrompt(spec, vars) {
-  return spec.kind === "translate"
-    ? HSKPrompt.translate({ text: vars.text, own: spec.own })
-    : HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
-                          recent: vars.recent, context: vars.context });
+  if (spec.kind === "translate") return HSKPrompt.translate({ text: vars.text, own: spec.own });
+  if (spec.kind === "grade") {
+    return HSKPrompt.grade({ text: vars.text, label: vars.level,
+                             recent: vars.recent, context: vars.context });
+  }
+  return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
+                             recent: vars.recent, context: vars.context });
 }
 
 /* An untouched prompt keeps calling prompt.js rather than storing a copy of
@@ -1599,6 +1661,29 @@ function renderMessage(turnObj, shownExtra) {
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.innerHTML = bits.join("");
+  /* The grade badge. On your own messages only -- the partner's Chinese is
+   * already validated word by word, and grading it would be marking the app's
+   * own homework. */
+  if (turnObj.role === "user" && (turnObj.grading || turnObj.grade)) {
+    const g = turnObj.grade;
+    const b = document.createElement("button");
+    b.type = "button";
+    if (turnObj.grading) {
+      b.className = "grade pending"; b.textContent = "·"; b.title = "Checking…";
+      b.disabled = true;
+    } else if (g.unreadable) {
+      b.className = "grade unknown"; b.textContent = "?";
+      b.title = "Could not check this one" + (g.why ? ": " + g.why : "");
+      b.onclick = e => { e.stopPropagation(); delete turnObj.grade; gradeTurn(turnObj); };
+    } else if (g.ok) {
+      b.className = "grade ok"; b.textContent = "✓"; b.title = "Reads correctly";
+      b.disabled = true;
+    } else {
+      b.className = "grade bad"; b.textContent = "✗"; b.title = "Tap to see what to fix";
+      b.onclick = e => { e.stopPropagation(); openGrade(turnObj); };
+    }
+    meta.appendChild(b);
+  }
   if (turnObj.failed) {
     const again = document.createElement("button");
     again.className = "copy";
@@ -2362,6 +2447,97 @@ async function toggleTranslation(turnObj, btn, box) {
   }
 }
 
+/* --------------------------------------------------------------- grading */
+
+let gradeTurnObj = null;
+
+function openGrade(turnObj) {
+  gradeTurnObj = turnObj;
+  const g = turnObj.grade || {};
+  $("#gradeSource").textContent = turnObj.text;
+  $("#gradeMeant").textContent = g.meant || "—";
+  $("#gradeBetter").textContent = g.better || "—";
+  const cats = $("#gradeCats");
+  cats.innerHTML = "";
+  HSKPrompt.GRADE_CATS.forEach(c => {
+    const ok = (g.cats || {})[c.key] !== false;
+    const el = document.createElement("span");
+    el.className = "gcat " + (ok ? "ok" : "bad");
+    el.innerHTML = '<b>' + escapeHtml(c.zh) + "</b>" + (ok ? "✓" : "✗") +
+      '<span>' + escapeHtml(c.label) + "</span>";
+    cats.appendChild(el);
+  });
+  const list = $("#gradeErrors");
+  list.innerHTML = "";
+  (g.errors || []).forEach(e => {
+    const row = document.createElement("div");
+    row.className = "gerr";
+    row.innerHTML = '<b>' + escapeHtml(HSKPrompt.TAG_LABEL[e.tag] || e.tag) + "</b>" +
+      "<span>" + escapeHtml(e.note) + "</span>";
+    list.appendChild(row);
+  });
+  if (!(g.errors || []).length) {
+    list.innerHTML = '<div class="note">No specific rule was named.</div>';
+  }
+  openSheet("#gradeSheet");
+}
+
+
+/* Every tag the taxonomy knows, so anything else the model invents can be
+ * dropped. It does invent them: the four display categories sit near the tag
+ * list in the prompt and leak into it about once in eleven calls even when the
+ * prompt says they are not tags. An unknown tag in the ledger is worse than a
+ * missing one -- it becomes a "top mistake" nobody can drill. */
+const KNOWN_TAGS = new Set(HSKPrompt.ERROR_TAGS);
+
+/* Models fence JSON, preface it, and apologise after it however firmly told
+ * not to. Take the outermost braces and try; a failure is reported as a failure
+ * rather than silently scoring the sentence correct. */
+function parseGrade(raw) {
+  const a = String(raw || "").indexOf("{"), b = String(raw || "").lastIndexOf("}");
+  if (a === -1 || b <= a) return null;
+  let g;
+  try { g = JSON.parse(raw.slice(a, b + 1)); } catch (e) { return null; }
+  if (!g || typeof g !== "object") return null;
+  const cats = {};
+  HSKPrompt.GRADE_CATS.forEach(c => {
+    // Absent reads as fine: a model that omits a category is not accusing it.
+    cats[c.key] = (g.cats || {})[c.key] !== false;
+  });
+  const errors = (Array.isArray(g.errors) ? g.errors : [])
+    .filter(e => e && KNOWN_TAGS.has(e.tag))
+    .map(e => ({ tag: e.tag, note: String(e.note || "") }));
+  /* ok is recomputed rather than trusted. A model that lists errors and still
+   * says ok:true would show a green tick over a red detail sheet. */
+  const ok = g.ok !== false && !errors.length &&
+    HSKPrompt.GRADE_CATS.every(c => cats[c.key]);
+  return { ok: ok, meant: String(g.meant || ""), better: String(g.better || ""),
+           cats: cats, errors: errors, at: new Date().toISOString() };
+}
+
+async function gradeTurn(turnObj) {
+  if (!S.grader || turnObj.role !== "user" || turnObj.grade) return;
+  turnObj.grading = true;
+  renderAll();
+  try {
+    const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
+      text: turnObj.text, level: levelLabel(), recent: recentWords(),
+      context: contextFor(turnObj)
+    }) }], 600, teachingModel());
+    const g = parseGrade(reply);
+    /* A grade that could not be read is stored as such. Left absent it would
+     * be retried on every render, and shown as a tick it would be a lie. */
+    turnObj.grade = g || { unreadable: true, at: new Date().toISOString() };
+  } catch (e) {
+    turnObj.grade = { unreadable: true, why: (e && e.message) || String(e),
+                      at: new Date().toISOString() };
+  } finally {
+    delete turnObj.grading;
+    persist();
+    renderAll();
+  }
+}
+
 // The sheet always shows one turn's breakdown; this is which one.
 let explainTurnObj = null;
 
@@ -2629,9 +2805,15 @@ async function send() {
   input.value = ""; updateMirror(); autosize();
 
   S.history.push({ role: "user", text: text, id: newMessageId(), created_at: new Date().toISOString() });
+  const justSent = S.history[S.history.length - 1];
   // Learn before the turn, so the model's own reply may use these words too.
   const toGloss = S.autoAdd ? learnFromInput(text) : [];
   persist(); renderAll();
+  /* Not awaited, and deliberately started before the reply rather than after:
+   * the two calls are independent, and making the conversation wait on a
+   * verdict about what you already said would be the wrong thing to slow down.
+   * The badge fills in whenever it lands. */
+  gradeTurn(justSent);
   return runTurn(toGloss, text);
 }
 
@@ -3405,6 +3587,55 @@ function renderProgress() {
   }
 }
 
+/* Counted across every conversation, not just the open one: a recurring mistake
+ * is recurring precisely because it spans them. Scanned rather than stored --
+ * the grades are already on the messages, and a running tally kept beside them
+ * would be a second source of truth to drift. */
+const MISTAKES_SHOWN = 3;
+
+function mistakeCounts() {
+  const byTag = new Map();
+  Object.keys(S.chatMsgs || {}).forEach(cid => {
+    (S.chatMsgs[cid] || []).forEach(t => {
+      if (t.role !== "user" || !t.grade || !t.grade.errors) return;
+      t.grade.errors.forEach(e => {
+        if (!HSKPrompt.TAG_LABEL[e.tag]) return;      // unknown tags never count
+        const hit = byTag.get(e.tag) ||
+          { tag: e.tag, n: 0, eg: "", better: "", note: "" };
+        hit.n++;
+        // The most recent instance, which is the one worth showing back.
+        hit.eg = t.text;
+        hit.better = t.grade.better || "";
+        hit.note = e.note || hit.note;
+        byTag.set(e.tag, hit);
+      });
+    });
+  });
+  return [...byTag.values()].sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag));
+}
+
+function renderMistakes() {
+  const box = $("#mistakes");
+  if (!box) return;
+  const all = mistakeCounts();
+  if (!all.length) {
+    box.innerHTML = '<div class="note">' + (S.grader
+      ? "Nothing logged yet. Messages you send are checked as you go."
+      : "Checking is off, so nothing is being logged.") + "</div>";
+    return;
+  }
+  const top = all.slice(0, MISTAKES_SHOWN);
+  box.innerHTML = "<table>" + top.map(m =>
+    "<tr><td>" + escapeHtml(HSKPrompt.TAG_LABEL[m.tag]) + "</td><td>" + m.n +
+    "</td><td>" + escapeHtml(m.eg) +
+    (m.better ? " → " + escapeHtml(m.better) : "") + "</td></tr>").join("") +
+    "</table>" +
+    (all.length > MISTAKES_SHOWN
+      ? '<div class="note">' + (all.length - MISTAKES_SHOWN) + " other kind" +
+        (all.length - MISTAKES_SHOWN === 1 ? "" : "s") + " logged.</div>"
+      : "");
+}
+
 function renderPaceNote() {
   const box = $("#paceNote");
   if (!box) return;
@@ -3542,6 +3773,17 @@ function sendExplainQuestion() {
 }
 $("#explainSend").onclick = sendExplainQuestion;
 $("#explainInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendExplainQuestion(); } });
+$("#gradeX").onclick = () => closeSheet("#gradeSheet");
+$("#gradeClose").onclick = () => closeSheet("#gradeSheet");
+$("#gradeSheet").addEventListener("click", e => {
+  if (e.target === $("#gradeSheet")) closeSheet("#gradeSheet");
+});
+$("#gradeAsk").onclick = () => {
+  if (!gradeTurnObj) return;
+  const t = gradeTurnObj;
+  closeSheet("#gradeSheet");
+  openExplain(t);
+};
 $("#explainClose").onclick = () => closeSheet("#explainSheet");
 /* Start over rather than append. A call that failed leaves "(couldn't reach the
  * model…)" stored as the answer, and every follow-up asked afterwards carries
@@ -3642,6 +3884,8 @@ $("#btnSet").onclick = () => {
   $("#modelId").value = S.model;
   fillModels();
   $("#promptMode").value = S.mode;
+  $("#graderOn").checked = S.grader;
+  renderMistakes();
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
     '<option value="' + n + '"' + (n === S.pace.rate ? " selected" : "") + ">one new word per " +
@@ -3814,6 +4058,11 @@ $("#fontSize").oninput = e => {
   S.font = Number(e.target.value) || 26;
   applyFont(S.font);
   store.set(K.font, S.font);
+  queueSync("prefs");
+};
+$("#graderOn").onchange = e => {
+  S.grader = e.target.checked;
+  store.set(K.grader, S.grader);
   queueSync("prefs");
 };
 $("#paceOn").onchange = async e => {
