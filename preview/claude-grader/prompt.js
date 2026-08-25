@@ -413,6 +413,23 @@
      * The answer wanted here is: is this good Chinese at my level? If not,
      * what should it be, and why did I get it wrong? Everything else is
      * padding on a check meant to be read in a couple of seconds. */
+    /* A follow-up is a different question and must not be answered in the
+     * verdict shape. The shape below is an instruction to emit one of three
+     * lines and stop, and it lives in the SYSTEM message, so it stays in force
+     * for every later turn of the chat -- asked "what about the 现在 and the
+     * 了?", the model could only repeat "Natural." It was obeying. */
+    if (opts.followUp) {
+      return head +
+        "The student wrote the sentence below THEMSELVES and has already been given a " +
+        "verdict on it. They are now asking a follow-up question about it.\n\n" +
+        "Answer their question directly, in a few sentences. Quote Chinese where it helps. " +
+        "If they are asking about something you passed as correct, say plainly why it is " +
+        "correct rather than only repeating the verdict -- and if they have spotted " +
+        "something you missed, say so.\n\n" +
+        "The student types pinyin and picks a character from a list, so a wrong character " +
+        "is often a homophone of the right one rather than a misunderstanding.\n\n" +
+        tail + contextBlock(opts.context) + "The sentence under discussion: " + opts.text;
+    }
     return head +
       "The student wrote the sentence below THEMSELVES, so it may well be wrong. Do not assume " +
       "it is correct, and do not silently answer as if it were.\n\n" +
