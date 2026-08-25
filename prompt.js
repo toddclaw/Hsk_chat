@@ -264,6 +264,114 @@
     return "The conversation so far:\n" + lines.join("\n") + "\n\n";
   }
 
+  /* ------------------------------------------------------------- grading
+   *
+   * The grader runs on every sentence the student sends, so unlike explain()
+   * its answer has to be machine-readable: it drives a tick or a cross on the
+   * message, four category icons, and a stored record that "your top mistakes"
+   * counts and any future drill select on.
+   *
+   * That last use is what forces a fixed taxonomy. Free-text error
+   * descriptions do not aggregate -- every phrasing differs, so a top-three
+   * becomes a list of one-offs and a drill has nothing to filter by. The model
+   * picks a TAG from the list below and writes prose only in `note`, about
+   * this one sentence.
+   *
+   * The tags come from corpus studies of learner Chinese rather than from
+   * intuition: measure words split into missing/extra/wrong, aspect divides by
+   * marker, and adverbial word order is singled out because it alone accounts
+   * for over half of all word-order errors in learner writing. wrong-character
+   * is here because this app can see it -- the student types pinyin and picks
+   * from a candidate list, so their wrong characters are usually homophones of
+   * the right one, which a handwriting app never observes.
+   */
+  /* One row per tag: the code the model must emit, the words the mistake list
+   * shows the learner, and a worked example.
+   *
+   * The example is not decoration. Measured without them, the model tagged
+   * 三个书 as wrong-word rather than measure-word and 他比我很高 as
+   * word-order-attributive rather than comparison-bi -- it produced the right
+   * correction each time and filed it under the wrong heading, which is
+   * precisely the failure that makes a mistake ledger useless. A code and a
+   * two-word gloss are not enough to pick between seventeen headings; a
+   * wrong-to-right pair is. */
+  var TAGS = [
+    ["measure-word",           "measure word",             "三个书 → 三本书"],
+    ["aspect-le",              "了",                        "很高兴了 → 很高兴"],
+    ["aspect-guo",             "过",                        "我去过了那儿吗 → 我去过那儿吗"],
+    ["aspect-zhe",             "着",                        "他站着了 → 他站着"],
+    ["aspect-zai",             "在 / 正在",                 "我在吃饭了 → 我在吃饭"],
+    ["negation-bu-mei",        "不 vs 没",                  "他不有钱 → 他没有钱"],
+    ["de-particles",           "的 / 地 / 得",              "他说的很好 → 他说得很好"],
+    ["word-order-adverbial",   "adverbial word order",      "我去商店昨天 → 我昨天去商店"],
+    ["word-order-attributive", "attributive word order",    "朋友的我 → 我的朋友"],
+    ["comparison-bi",          "比 comparison",             "他比我很高 → 他比我高"],
+    ["ba-construction",        "把 construction",           "我把书看 → 我把书看完了"],
+    ["bei-construction",       "被 construction",           "书被我看 → 书被我看完了"],
+    ["connective",             "connectives",               "因为下雨，我不去 → 因为下雨，所以我不去"],
+    ["wrong-word",             "wrong word",                "我看音乐 → 我听音乐"],
+    ["wrong-sense",            "right word, wrong sense",   "我很开车 → 我常开车"],
+    ["wrong-character",        "wrong character",           "我的马妈 → 我的妈妈"],
+    ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水"]
+  ];
+
+  var ERROR_TAGS = TAGS.map(function (r) { return r[0]; });
+  var TAG_LABEL = {};
+  TAGS.forEach(function (r) { TAG_LABEL[r[0]] = r[1]; });
+
+  /* The four categories the detail view shows as icons. Each is a different
+   * repair: a wrong word is looked up, a wrong rule is learned, a wrong order
+   * is a pattern, and unnatural-but-correct is a collocation. Keeping the last
+   * one separate is what stops "foreign-sounding but legal" being filed as a
+   * grammar error and skewing the mistake counts. */
+  var GRADE_CATS = [
+    { key: "word",    label: "word choice", zh: "词" },
+    { key: "grammar", label: "grammar",     zh: "语法" },
+    { key: "order",   label: "word order",  zh: "语序" },
+    { key: "natural", label: "naturalness", zh: "地道" }
+  ];
+
+  function grade(opts) {
+    var tags = TAGS.map(function (r) {
+      return "  " + r[0] + "  (" + r[1] + ")  e.g. " + r[2];
+    }).join("\n");
+    return "You are grading one sentence written by a student of Chinese at " +
+      opts.label + ".\n\n" +
+      /* Same framing explain() uses and for the same measured reason: without
+       * being told the sentence may be wrong, a model answers as though it
+       * were and grades everything correct. */
+      "The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
+      "correct. Equally, do not manufacture a problem to have something to teach -- a " +
+      "correct sentence must come back with every category true and no errors.\n\n" +
+      "Two failure modes are easy to misread. The student types pinyin and picks a " +
+      "character from a list, so a wrong character is usually a homophone of the right " +
+      "one rather than a misunderstanding. And a sentence can break no rule and still " +
+      "not be what a native speaker would say; that is the naturalness category, not " +
+      "the grammar one.\n\n" +
+      "Reply with only a JSON object, no prose and no code fence:\n" +
+      '{"ok":true,"meant":"","better":"",' +
+      '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
+      "ok        — true only if you would let the sentence stand as written.\n" +
+      "meant     — in English, your best guess at what they were trying to say.\n" +
+      "better    — the sentence as a native speaker would write it, staying inside " +
+      opts.label + " vocabulary where possible. Empty string when ok is true.\n" +
+      "cats      — true means that category is fine, false means it is where the " +
+      "problem is. More than one may be false.\n" +
+      "errors    — one entry per distinct mistake, [] when ok is true. Each is " +
+      '{"tag":"","note":""} where note is one short sentence naming the rule for this ' +
+      "sentence, and tag is copied EXACTLY from the list below.\n\n" +
+      /* Said because it happened: the four category keys sit a few lines above
+       * in this same prompt, and the model reached for "grammar" and "natural"
+       * as tags. They are not tags. */
+      "The four category names are not tags. A tag is only ever one of these " +
+      "seventeen codes, spelled exactly as written:\n" + tags + "\n\n" +
+      "Pick the code that names the RULE that was broken, not the surface of the " +
+      "edit -- a missing measure word is measure-word even though the fix inserts a " +
+      "word, and a 比 sentence with 很 in it is comparison-bi even though the fix " +
+      "deletes one.\n\n" +
+      contextBlock(opts.context) + "The student wrote: " + opts.text;
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -345,7 +453,8 @@
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
               styleFor: styleFor, startersFor: startersFor, build: build,
-              translate: translate, explain: explain };
+              translate: translate, explain: explain, grade: grade,
+              ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

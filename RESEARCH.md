@@ -248,6 +248,33 @@ Two findings worth carrying:
   an explicit *judge idiom, not only grammar* was added. Three-way verdicts collapse to two
   unless the middle one is argued for.
 
+### The grader's taxonomy needs worked examples
+
+**Measured.** The grader returns a tag from a fixed list so mistakes aggregate; a code and a
+two-word gloss turned out not to be enough to choose between seventeen of them.
+`qwen3-235b`, eleven HSK 2 sentences — seven with a known error and a teacher-assigned tag,
+four correct.
+
+| tag list | JSON parsed | errors caught | correct tag | correct sentences left alone |
+| --- | --- | --- | --- | --- |
+| code + gloss | 10/10 | 6/6 | **3/6** | 4/4 |
+| code + gloss + worked example | 11/11 | 7/7 | **7/7** | 4/4 |
+
+Detection was never the problem. The model produced the right *correction* every time and
+filed it under the wrong heading — 三个书 tagged `wrong-word` rather than `measure-word`,
+他比我很高 tagged `word-order-attributive` rather than `comparison-bi`. A ledger built on that
+would have counted real mistakes under headings that could not be drilled.
+
+Two smaller findings:
+
+- **Category names leak into the tag field.** The four display categories (word, grammar,
+  order, natural) sit a few lines above the tag list in the same prompt, and the model reached
+  for them as tags. Saying "the four category names are not tags" cut it to one leak in
+  eleven; the parser drops unknown tags regardless, because no prompt wording makes that
+  guarantee.
+- **Name the rule, not the edit.** Told to tag what was *fixed*, a missing measure word reads
+  as a word being added. The instruction says to tag the rule that was broken.
+
 ### Earlier measurements
 
 Recorded in DEVELOPING.md with their working, and summarized here because they set the
