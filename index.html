@@ -12,6 +12,7 @@
 :root{
   --bg:#0f1317; --panel:#171d23; --panel2:#1e262e; --line:#2b343d;
   --ink:#e8edf2; --dim:#8c9aa8; --accent:#6aa9ff; --bad:#ff6b6b; --ok:#5ecb8b;
+  --prog:#b494f0;      /* syllabus progress -- a third measure, a third colour */
   --tap:44px;
   --msg:26px;          /* message text size, set from Settings */
   /* Teaching output -- translations and the explain sheet -- tracks the slider
@@ -109,6 +110,12 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* Production, drawn over the reading fill on the same axis. Green against the
    accent blue, so the gap between "can read" and "can use" is one glance. */
 .bar>b{position:absolute; left:0; top:0; bottom:0; background:var(--ok); border-radius:999px}
+/* The new-words bar. Its own colour because it is its own scale -- reusing the
+   reading blue would invite the two to be read as one measurement, and yellow
+   is already "2 tries" a few pixels away. */
+.bar.words{margin-top:2px}
+.bar.words>i{background:var(--prog)}
+.barnote em{color:var(--prog); font-style:normal; font-weight:600}
 .bar>u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--dim); opacity:.9}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
 /* Each figure takes the color of the bar it describes, so the legend is the
@@ -492,9 +499,14 @@ footer{
       <em>use</em>: the same measure over the words you have actually written yourself. Green
       always trails blue, and the gap between them is normal — recognising a word is easier
       than reaching for it, and that gap widens as you improve.
+      <b style="color:var(--prog)">Violet</b> is a different question on its own scale: how
+      many of the level's <em>new</em> words you have. The blue bar starts high because the
+      commonest words carry most of the text and you already have them, so the words still
+      worth learning move it only a little; the violet one runs the whole way.
       Both are estimates of how much of the next level you can handle, not of how much of its
       list you have ticked off — the commonest words carry most of the text, so the first few
-      hundred matter far more than the rest. Published research puts adequate comprehension at
+      hundred matter far more than the rest — which is why the two bars move at such different
+      speeds. Published research puts adequate comprehension at
       95% and comfortable independent reading at 98%; moving up makes the next level the one
       you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
@@ -805,7 +817,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v54 — 2026-08-24";
+const VERSION   = "v55 — 2026-08-25";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3314,6 +3326,14 @@ function readiness() {
     toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
     total: S.nextList.length,
     newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
+    /* New words at the next level you can now use, however you got them --
+     * introduced by pacing, typed, added by hand, or ticked as already known.
+     * Deliberately not `met`, which counts pacing introductions only: the
+     * coverage bar above already counts all four, and two bars on one panel
+     * disagreeing about the same word is how the last progress display went
+     * wrong. `met` survives for the never-used row, which really is about
+     * words the app taught you. */
+    newHave: S.nextList.filter(e => !baseSet.has(e.w) && usable.has(e.w)).length,
     met: met,
     used: S.nextList.filter(e => mine.has(e.w)).length,
     /* The actionable half. There is no published threshold for production the
@@ -3354,15 +3374,23 @@ function renderProgress() {
     '<div class="barnote"><b>' + pct + "% you can read</b>" +
       "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
       "<i>" + use + "% you can use</i></div>" +
+    /* A second bar, on its own scale, because the first one cannot show this.
+     * Reading coverage starts at 88% for HSK 1 -> 2 and every word that
+     * matters lives in the top 12 points of it -- correct, since that is what
+     * share of the text those words carry, but it looks full on arrival and
+     * barely moves while you work. New words learned runs 0 to 100 across the
+     * same effort. Two questions, two scales; neither is the other's units. */
+    '<div class="bar words"><i style="width:' +
+      (r.newWords ? Math.round(100 * r.newHave / r.newWords) : 0) + '%"></i></div>' +
+    '<div class="barnote"><em>' + r.newHave + " of " + r.newWords +
+      " new words</em><span>learned at " + escapeHtml(r.next.label) + "</span></div>" +
     "<table><tr><td>to " + mark + "%</td><td>" +
       (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
         ", commonest first" : "there already") + "</td></tr>" +
-    "<tr><td>met</td><td>" + r.met + " of " + r.newWords + " new at " +
-      escapeHtml(r.next.label) + "</td></tr>" +
     "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
     (r.unused.length
       ? "<tr><td>never used</td><td>" + r.unused.length + " of the " + r.met +
-        " you have met — try " +
+        " the app taught you — try " +
         /* Named, not just counted. "5 words unused" is a statistic; 说话、可以
          * is something you can do in your next message, which is the whole
          * difference between a gauge and a prompt. */

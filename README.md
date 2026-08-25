@@ -775,8 +775,8 @@ asked:
 ```
 Progress to the next level
   ████████████████░░░░  88% of HSK 2 you can read — estimated     41% you can use
+  ██░░░░░░░░░░░░░░░░░░  12 of 197 new words                      learned at HSK 2
   to 98%       58 more words, commonest first
-  met          12 of 197 new at HSK 2
   used by you  12 written in your own messages
 ```
 
@@ -785,6 +785,13 @@ than counting it as one. The published thresholds this is measured against: **95
 coverage for adequate comprehension, **98%** for comfortable independent reading. At HSK 1
 that is roughly 58 of the 197 new HSK 2 words to reach 98% — not 197 — and pacing already
 offers them commonest-first, so it is working through them in the cheapest possible order.
+
+**Two bars, because they answer different questions on different scales.** The first is
+reading ability and it starts high — 88% for HSK 1 → 2 — because that is genuinely what share
+of HSK 2 running text the HSK 1 words carry. Correct, and useless as a progress display on its
+own: every word still worth learning lives in the top twelve points of it, so it looks nearly
+full on arrival and barely moves while you work. The second is the level's **new** words, 0 to
+100 across the same effort. Neither is the other's units, so they are not folded together.
 
 Separate figures rather than one blended score, because they mean different things and the
 gaps between them are the informative part. **Blue** is what you can **read** — every word the
