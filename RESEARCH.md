@@ -111,7 +111,15 @@ transitions the list share runs 49–67% while text coverage runs 88–95%, and
 by `1/rank` would be pointless and the panel could go back to counting words.
 
 A bar reading 60% tells a learner who can already follow most of a level that they know barely
-half of it. So `HSKPace.coverage()` weights each word by `1/rank` and reports the share of *text*,
+half of it.
+
+The converse is also true and is why the panel draws **two** bars. Coverage is the right
+measure of reading ability and a poor display of effort: because the commonest words carry
+most of the text and the learner already has them, the whole useful journey from arriving at a
+level to being ready for the next sits in the top ten or twelve points of a hundred-point
+scale. It looks nearly full on day one and creeps. So the level's *new* words get their own
+bar on their own 0–100 scale. Two questions, two scales, neither expressed in the other's
+units — the same discipline that keeps reading and production apart above. So `HSKPace.coverage()` weights each word by `1/rank` and reports the share of *text*,
 not the share of the list.
 
 Chinese supports this: word-frequency distributions in large Mandarin corpora conform to

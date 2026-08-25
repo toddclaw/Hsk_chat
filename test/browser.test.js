@@ -948,7 +948,7 @@ return true;
     check(/never used/.test(prog || ""),
       "the panel names what to do next, not only what has happened",
       JSON.stringify((prog || "").slice(0, 260)));
-    check(/1 of the 2 you have met/.test(prog || ""),
+    check(/1 of the 2 the app taught you/.test(prog || ""),
       "counting only introduced words the learner has never written",
       JSON.stringify((prog || "").slice(0, 260)));
     /* 已经 is the seeded word the history never uses; 可以 is the one it does.
@@ -971,6 +971,33 @@ return true;
     check(/you can read/.test(prog || "") && /you can use/.test(prog || ""),
       "reading and production are shown as two figures on one scale",
       JSON.stringify((prog || "").slice(0, 200)));
+
+    /* The second bar answers a different question on its own scale. Reading
+     * coverage starts near 88% for HSK 1 -> 2 and every word that matters sits
+     * in the top twelve points of it, so it looks full on arrival; new words
+     * learned runs 0 to 100 across the same effort. Two bars, two scales. */
+    const newBar = /(\d+) of (\d+) new words/.exec(prog || "");
+    check(!!newBar, "the panel shows new-word progress as its own figure",
+      JSON.stringify((prog || "").slice(0, 260)));
+    /* 197, not 497. The denominator has to be what HSK 2 *adds*, not its whole
+     * cumulative list -- and "bigger than the numerator" is true of both, so
+     * the number is pinned. test/pace.test.js pins the list sizes it comes
+     * from, so the two cannot drift apart silently. */
+    check(!!newBar && Number(newBar[2]) === 197,
+      "with a denominator of the level's new words, not its whole list",
+      newBar ? newBar[0] : "no match");
+    check(await exec(`
+      return document.querySelectorAll('#progress .bar').length;`) === 2,
+      "and draws it as a second bar rather than folding it into the first");
+    /* Its fill must not track the reading bar: they are different numbers and
+     * a shared width would mean one of them is lying. */
+    check(await exec(`
+      var b = document.querySelectorAll('#progress .bar');
+      return b[0].querySelector('i').style.width !== b[1].querySelector('i').style.width;`),
+      "the two bars are filled independently",
+      await exec(`
+        var b = document.querySelectorAll('#progress .bar');
+        return b[0].querySelector('i').style.width + " vs " + b[1].querySelector('i').style.width;`));
 
     /* Below the threshold there must be no Move up button: it is a
      * recommendation, and offering it early would make it meaningless. */
