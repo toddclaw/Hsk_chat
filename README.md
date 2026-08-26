@@ -665,6 +665,74 @@ otherwise changing the level while the panel is open would silently freeze the o
 
 ---
 
+# The grader
+
+Every message you send is graded against the turn it answers, and marked **✓** or **✗** in
+its meta row. Tapping a ✗ opens what to fix:
+
+```
+我昨天很高兴了。
+What you probably meant     I was happy yesterday.
+A better way to say it      我昨天很高兴。
+  词 ✓ word choice    语法 ✗ grammar    语序 ✓ word order    地道 ✓ naturalness
+  了   了 does not attach to a stative adjective
+                                      [ Done ]  [ Ask a follow-up ]
+```
+
+Four categories, because each is a different repair: a wrong word is looked up, a broken rule
+is learned, a wrong order is a pattern, and unnatural-but-legal is a collocation. Keeping the
+last separate is what stops "foreign-sounding but correct" being filed as a grammar error and
+skewing the counts — and the grammar check already drew that distinction as its middle verdict.
+
+It runs on the teaching model, off the critical path: the reply is not made to wait on a
+verdict about what you already said, and the badge fills in when it lands. About a hundredth of
+a cent per message. Switch it off in Settings → Learning.
+
+**Ask a follow-up** hands over to the grammar-check chat rather than growing a second one. The
+grader answers a fixed set of questions; anything else about the sentence is what that sheet
+already exists for.
+
+## Tags, and why they are a fixed list
+
+The grader returns a **tag from a closed taxonomy** rather than free prose. Free-text error
+descriptions do not aggregate — every phrasing differs, so "your top mistakes" becomes a list
+of one-offs and a drill has nothing to select on. Seventeen codes, from corpus studies of
+learner Chinese rather than intuition: measure words, aspect split by marker, and adverbial
+word order singled out because it alone accounts for over half of all word-order errors in
+learner writing. `wrong-character` is there because this app can see it — you type pinyin and
+pick from a candidate list, so your wrong characters are usually homophones, which a
+handwriting app never observes.
+
+Measured before any of it was wired up: with a code and a two-word gloss the model produced the
+right *correction* every time and filed it under the wrong heading, 3/6. A worked
+wrong-to-right example per tag took that to 7/7. The table is in
+**[RESEARCH.md](RESEARCH.md)**.
+
+Three things are checked rather than trusted, because a machine-read answer fails differently
+from a human-read one:
+
+- **`ok` is recomputed.** A model that lists errors and still says `ok: true` would show a
+  green tick over a red detail sheet.
+- **Unknown tags are dropped.** The four display categories sit near the tag list in the prompt
+  and leak into it about once in eleven calls. An invented tag in the ledger is worse than a
+  missing one — it becomes a top mistake nobody can drill.
+- **An unreadable answer is recorded as unreadable**, shown as `?`, and retried on tap. Stored
+  as a pass it would be a lie; left absent it would be re-requested on every render.
+
+## Your top mistakes
+
+Settings → Learning counts the tags across **every** conversation — a recurring mistake recurs
+precisely because it spans them — and shows the top three with the most recent example:
+
+```
+了             4    我昨天很高兴了。 → 我昨天很高兴。
+measure word   3    我有三个书。 → 我有三本书。
+不 vs 没        2    他不有钱。 → 他没有钱。
+```
+
+Scanned from the stored grades rather than kept as a running tally, which would be a second
+source of truth to drift out of step.
+
 # Conversations
 
 The 💬 button in the header lists every chat: **New chat** at the top, then each conversation
