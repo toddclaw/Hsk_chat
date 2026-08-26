@@ -46,6 +46,7 @@
       translation: turnObj.translation || null,
       show_translation: !!turnObj.showTranslation,
       explain_chat: turnObj.explainChat && turnObj.explainChat.length ? turnObj.explainChat : null,
+      grade: turnObj.grade || null,
       created_at: turnObj.created_at,
       updated_at: new Date().toISOString()
     };
@@ -65,6 +66,7 @@
     if (row.translation) t.translation = row.translation;
     if (row.show_translation) t.showTranslation = true;
     if (row.explain_chat) t.explainChat = row.explain_chat;
+    if (row.grade) t.grade = row.grade;
     return t;
   }
 
@@ -228,7 +230,7 @@
   var PREFS_KEYS = [
     "level", "model", "teachModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "favModels", "favOnly", "pace", "budget", "teachPrompts"
+    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "pace", "budget", "teachPrompts"
   ];
 
   /* chatTime rides in the same prefs blob but is deliberately NOT in the list
@@ -309,18 +311,29 @@
      * than the messages. Backing up the conversation matters more than
      * remembering which chat it was in, and the grouping comes back for free
      * once the column exists. */
-    var payload = schemaHasConversations === false
+    var drop = [];
+    if (schemaHasConversations === false) drop.push("conversation_id");
+    if (schemaHasGrade === false) drop.push("grade");
+    var payload = drop.length
       ? rows.map(function (r) {
           var copy = {};
-          Object.keys(r).forEach(function (k) { if (k !== "conversation_id") copy[k] = r[k]; });
+          Object.keys(r).forEach(function (k) {
+            if (drop.indexOf(k) === -1) copy[k] = r[k];
+          });
           return copy;
         })
       : rows;
     var r = await client.from("messages").upsert(payload);
     if (r.error) {
-      if (isMissingSchema(r.error) && schemaHasConversations !== false) {
+      /* A last resort for a push that got past the probe -- a column dropped
+       * mid-session, or a probe that never ran. Drops both optional columns
+       * rather than guessing which one failed, and retries once: with both
+       * already false there is nothing left to strip, so this cannot recurse. */
+      if (isMissingSchema(r.error) &&
+          (schemaHasConversations !== false || schemaHasGrade !== false)) {
         schemaHasConversations = false;
-        return pushMessages(rows);        // once, with the column stripped
+        schemaHasGrade = false;
+        return pushMessages(rows);
       }
       throw r.error;
     }
@@ -357,8 +370,26 @@
    * working against a database whose owner has not run the SQL yet -- whoever
    * runs the deployment may not be the person reading the screen. */
   var schemaHasConversations = null;   // null = not probed yet
+  var schemaHasGrade = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
+  function gradesSupported() { return schemaHasGrade !== false; }
+
+  /* Asked once per session, before anything is pushed.
+   *
+   * Two optional columns arrived in two separate migrations, so they have to be
+   * known independently -- a project that ran the first and not the second must
+   * not lose conversation grouping as collateral. Inferring which one a failed
+   * push tripped over means parsing PostgREST's message text, which is
+   * localized; selecting each column and seeing whether it exists is
+   * unambiguous and costs two round trips once. */
+  async function probeSchema() {
+    if (schemaHasGrade === null) {
+      var r = await client.from("messages").select("grade").limit(1);
+      schemaHasGrade = !(r.error && isMissingSchema(r.error));
+    }
+    return { conversations: conversationsSupported(), grade: gradesSupported() };
+  }
 
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
    * undefined_table; PGRST204 / 42703 are the column equivalents, which is what
@@ -445,6 +476,8 @@
     pushConversations: pushConversations,
     deleteConversationMessages: deleteConversationMessages,
     conversationsSupported: conversationsSupported,
+    gradesSupported: gradesSupported,
+    probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
     deleteVocab: deleteVocab,

@@ -278,6 +278,34 @@ check(/stop immediately/.test(P.explain(mine)),
   "own: a correct sentence is allowed a one-line answer");
 check(/Judge idiom, not only grammar/.test(P.explain(mine)),
   "own: the middle verdict is about idiom, or it never fires");
+
+/* A follow-up needs a different system message. The verdict shape is an
+ * instruction to emit one of three lines and stop, and it lives in the SYSTEM
+ * role -- so it stays in force for the whole chat. Reported: asked "what about
+ * the 现在 and the 了?", the model answered "Natural." again. It was obeying. */
+// Local rather than CTX, which is declared further down this file.
+const askedAbout = [{ role: "assistant", text: "你今天吃饭了吗？" }];
+const followUp = P.explain({ text: SENT, own: true, label: "HSK 2", recent: "",
+                             context: askedAbout, followUp: true });
+check(!/Start with exactly one of these three lines/.test(followUp),
+  "own: a follow-up is not made to answer in the verdict shape");
+check(!/stop immediately/.test(followUp),
+  "and is not told to stop after one line");
+check(/Answer their question directly/.test(followUp),
+  "it is told to answer the question instead");
+check(/say plainly why it is correct/.test(followUp),
+  "and to justify a pass rather than merely restate it -- which is what was asked for");
+check(/something you missed, say so/.test(followUp),
+  "and to concede when the student has spotted something");
+// Everything that is not the shape must survive into the follow-up.
+check(followUp.includes("HSK 2") && /homophone/.test(followUp) &&
+      /No headings, no bullet lists/.test(followUp),
+  "the level, the homophone note and the formatting rules all survive");
+check(/The conversation so far/.test(followUp),
+  "and so does the turn being answered");
+check(/Start with exactly one of these three lines/.test(P.explain(
+        { text: SENT, own: true, label: "HSK 2", recent: "", context: askedAbout })),
+  "while the first pass still gets the verdict shape");
 check(!/What it actually says in English/.test(P.explain(mine)),
   "own: the grammar check does not re-translate -- that is the other button");
 check(!/numbered 1 to 4/.test(P.explain(mine)),
@@ -333,6 +361,59 @@ for (const own of [false, true]) {
   check(P.explain({ text: SENT, own: own, label: "HSK 3", recent: "" }).includes("none yet"),
     `own=${own}: an empty recent list reads as "none yet", not as blank`);
 }
+
+/* 11. The grader. Its answer is parsed rather than read, and its tags feed a
+ *     mistake ledger and any drill built on one, so the parts that have to be
+ *     exact are checkable here rather than only against a model. */
+const G = P.grade({ label: "HSK 2", text: SENT, recent: "",
+                    context: [{ role: "assistant", text: "你好吗？" }] });
+
+check(/only a JSON object/.test(G) && /"cats"/.test(G) && /"errors"/.test(G),
+  "grade asks for the object the app parses");
+check(/may well be wrong/.test(G),
+  "grade is told the sentence may be wrong, like explain");
+check(/do not manufacture a problem/.test(G),
+  "and told not to invent faults in a correct sentence");
+check(/homophone/.test(G), "grade knows wrong characters come from pinyin input");
+
+// Every tag must reach the prompt with its example: measured, the examples are
+// what took tag accuracy from 3/6 to 7/7.
+check(P.ERROR_TAGS.length === 17, `seventeen tags (${P.ERROR_TAGS.length})`);
+for (const t of P.ERROR_TAGS) {
+  check(G.includes(t), `grade lists the tag ${t}`);
+  check(!!P.TAG_LABEL[t], `${t} has a label for the mistake list`);
+}
+check((G.match(/e\.g\. /g) || []).length === P.ERROR_TAGS.length,
+  "every tag carries a worked example, not just a gloss");
+check(/not tags/.test(G),
+  "and the prompt says the category names are not tags -- the model reached for them");
+check(/names the RULE that was broken/.test(G),
+  "tags name the rule broken, not the edit made");
+
+/* The four categories are the icons the detail view shows; each is a different
+ * repair, which is why naturalness is not folded into grammar. */
+check(P.GRADE_CATS.length === 4, "four categories");
+check(P.GRADE_CATS.map(c => c.key).join(",") === "word,grammar,order,natural",
+  "word, grammar, order, natural", P.GRADE_CATS.map(c => c.key).join(","));
+for (const c of P.GRADE_CATS) {
+  check(!!c.label && !!c.zh, `category ${c.key} has an English and a Chinese label`);
+  check(P.ERROR_TAGS.indexOf(c.key) === -1,
+    `category ${c.key} is not also a tag -- that collision is what leaked`);
+}
+
+// Context reaches the grader for the same reason it reaches the grammar check:
+// 我也是 is correct or nonsense depending on what it answers.
+/* Anchored on "The student wrote:" with its colon. Without it the match lands
+ * on "The student wrote it THEMSELVES" near the top of the prompt, and the
+ * ordering check passes or fails for the wrong reason. */
+check(/The conversation so far/.test(G) &&
+      G.indexOf("你好吗？") < G.indexOf("The student wrote:"),
+  "grade sees the turn being answered, before the sentence itself");
+check(!/The conversation so far/.test(
+  P.grade({ label: "HSK 2", text: SENT, context: [] })),
+  "and omits the block entirely when there is no context");
+check(P.grade({ label: "HSK 5", text: SENT }).includes("HSK 5"),
+  "grade is told the level, which bounds the correction it offers");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
