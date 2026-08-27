@@ -110,6 +110,11 @@ header button{padding:8px 10px; flex:0 0 auto}
 .chatrow{padding:10px 4px; border-bottom:1px solid var(--line)}
 .chatrow .ctitle{display:block; font-size:15px; cursor:pointer}
 .chatrow.on .ctitle{color:var(--accent); font-weight:600}
+.chatrow .clev{
+  display:inline-block; margin-right:6px; padding:1px 6px; border-radius:999px;
+  background:var(--line); color:var(--dim); font-size:11px; font-weight:600;
+  vertical-align:1px;
+}
 .chatrow .cmeta{display:block; color:var(--dim); font-size:11px; margin-top:2px}
 .chatrow .cacts{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px}
 
@@ -897,7 +902,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v63 — 2026-08-27";
+const VERSION   = "v64 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1195,8 +1200,8 @@ function toScript(text) {
   }).join("");
 }
 
-function levelLabel() {
-  return (LEVELS.find(l => l.id === S.level) || LEVELS[0]).label;
+function levelLabel(id) {
+  return (LEVELS.find(l => l.id === (id == null ? S.level : id)) || LEVELS[0]).label;
 }
 
 function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
@@ -2102,7 +2107,13 @@ function currentActivity() {
 }
 
 function newChat(activity) {
+  /* `level` is fixed at creation, exactly like `activity` and for the same
+   * reason: it decides what the partner was allowed to say, so a transcript
+   * written under HSK 1 rules does not become an HSK 3 transcript when the
+   * learner moves up. Which makes it worth showing -- an old story is only
+   * worth re-reading if you know which rules produced it. */
   const c = { id: newId(), title: "New chat", activity: activity || "chat",
+              level: S.level,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(), deleted: false };
   S.chats.unshift(c);
@@ -4662,7 +4673,17 @@ function renderChats() {
 
     const title = document.createElement("b");
     title.className = "ctitle";
-    title.textContent = c.title || titleFrom(S.chatMsgs[c.id]) || "New chat";
+    /* Conversations written before the level was recorded have none, and the
+     * current level is not an answer -- it is whatever the learner happens to
+     * be on now. Better to say nothing than to label an old chat wrongly. */
+    if (c.level) {
+      const lev = document.createElement("span");
+      lev.className = "clev";
+      lev.textContent = levelLabel(c.level);
+      title.appendChild(lev);
+    }
+    title.appendChild(document.createTextNode(
+      c.title || titleFrom(S.chatMsgs[c.id]) || "New chat"));
     title.onclick = () => { openChat(c.id); renderChats(); closeSheet("#chatSheet"); };
 
     const meta = document.createElement("span");
