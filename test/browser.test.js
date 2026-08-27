@@ -1437,6 +1437,42 @@ return true;
         .some(function (e) { return e.w === "咖啡"; });`),
       "and commits a word left in the box rather than discarding it",
       await exec(`return localStorage.getItem("hsk1chat.extraVocab");`));
+
+    /* ------------------------------------------------------- activities */
+
+    /* S is a const in index.html so it is not on window; top-level function
+     * declarations are. Conversation state is read back through currentChat()
+     * and through the localStorage key saveChats() writes. */
+    await exec("window.newChat('story');");
+    check(await exec("return window.currentActivity();") === "story",
+      "a chat created as story time reports story");
+    check(await exec("return window.currentChat().activity;") === "story",
+      "and the activity is on the conversation object");
+    check(JSON.parse(await exec("return localStorage.getItem('hsk1chat.chats');"))[0].activity
+      === "story", "and it is persisted, not only held in memory");
+
+    await exec("window.newChat();");
+    check(await exec("return window.currentActivity();") === "chat",
+      "newChat with no argument is a chat");
+
+    // Conversations written before activities existed carry none at all.
+    await exec("window.newChat('story'); delete window.currentChat().activity;");
+    check(await exec("return window.currentActivity();") === "chat",
+      "a conversation with no activity reads as chat");
+
+    // Switching activity leaves the conversation you were in alone.
+    const beforeId = await exec("return window.currentChat().id;");
+    await exec("window.startActivity('focused');");
+    check(await exec("return window.currentChat().id;") !== beforeId,
+      "startActivity opens a different conversation");
+    check(await exec("return window.currentActivity();") === "focused",
+      "and that conversation is in the new activity");
+    check(await exec(
+      "var raw = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "var want = arguments[0];" +
+      "return raw.filter(function (c) { return c.id === want; }).length;",
+      [beforeId]) === 1, "and the previous conversation still exists");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

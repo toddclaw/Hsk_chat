@@ -1969,8 +1969,18 @@ function touchChat() {
   queueSync("conversations");
 }
 
-function newChat() {
-  const c = { id: newId(), title: "New chat", created_at: new Date().toISOString(),
+/* The activity a conversation was created in. Fixed at creation: switching
+ * activity starts a new conversation rather than changing this one, so a
+ * transcript never mixes a story with a chat. Absent means chat -- every
+ * conversation written before activities existed was one. */
+function currentActivity() {
+  const c = chatById(S.chatId);
+  return (c && c.activity) || "chat";
+}
+
+function newChat(activity) {
+  const c = { id: newId(), title: "New chat", activity: activity || "chat",
+              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(), deleted: false };
   S.chats.unshift(c);
   S.chatId = c.id;
@@ -1979,6 +1989,15 @@ function newChat() {
   saveChats();
   queueSync("conversations");
   renderAll(); renderStarters(); updateMirror();
+  return c;
+}
+
+/* Switching activity is a new conversation, not a mode change on this one.
+ * Silent on purpose: the previous chat is one tap away under the chat list, so
+ * a confirmation would be friction on something already reversible. */
+function startActivity(id) {
+  const c = newChat(HSKPrompt.ACTIVITIES[id] ? id : "chat");
+  renderStarters();
   return c;
 }
 
