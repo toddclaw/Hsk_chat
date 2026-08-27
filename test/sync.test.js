@@ -302,6 +302,30 @@ const mergedDel = Sync.mergeConversations(
   [{ id: "c7", activity: "story", updated_at: "2026-01-09T00:00:00Z" }]);
 check(mergedDel[0].deleted === true, "a deleted conversation stays deleted, activity or not");
 
+/* level is the fourth optional column, and behaves exactly like activity: fixed
+ * at creation, NULL when the column or the row predates it. NULL rather than a
+ * default, because the honest answer for a conversation held before levels were
+ * recorded is "unknown" -- guessing the current one mislabels an old chat. */
+const convL = { id: "c8", title: "T", level: 3,
+                created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z" };
+const rowL = Sync.conversationToRow(convL, "u1");
+check(rowL.level === 3, "conversationToRow carries the level");
+check(Sync.rowToConversation(rowL).level === 3, "and it survives the round trip");
+check(Sync.rowToConversation({ id: "c9", created_at: "x", updated_at: "x" }).level === null,
+  "a row with no level column reads back as no level, not as level 1");
+
+const mergedLev = Sync.mergeConversations(
+  [{ id: "d1", title: "local", level: 2, updated_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "d1", title: "remote", level: 2, updated_at: "2026-01-03T00:00:00Z" }]);
+check(mergedLev[0].level === 2, "level survives a merge -- it is not dropped");
+
+// Same rule as activity: a newer row that lost the column must not erase ours.
+const mergedLevNull = Sync.mergeConversations(
+  [{ id: "d2", level: 4, updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "d2", level: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedLevNull[0].level === 4,
+  "a newer row with no level does not erase the one we have");
+
 /* Story time runs on its own model, so that choice has to reach the other
  * device like the chat and teaching model ids do. */
 check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,

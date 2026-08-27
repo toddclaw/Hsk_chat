@@ -88,6 +88,14 @@ alter table public.messages add column if not exists grade jsonb;
 
 alter table public.conversations add column if not exists activity text;
 
+-- The vocabulary level a conversation was held at. Fixed at creation like
+-- activity, and for the same reason: a transcript written under HSK 1 rules
+-- does not become an HSK 3 transcript when the learner moves up. Nullable --
+-- conversations written before this column existed have no level, and the app
+-- shows nothing rather than guessing the current one.
+
+alter table public.conversations add column if not exists level int;
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.

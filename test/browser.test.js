@@ -1568,6 +1568,24 @@ return true;
       "the chat list says which activity a conversation was", meta);
     check(/message/.test(meta), "and still says how many messages", meta);
 
+    /* And which level it was held at. The level decides what the partner was
+     * allowed to say, so it is part of what a saved transcript IS -- and it is
+     * read off the conversation, not off S.level, or every old chat would be
+     * relabelled the moment the learner moves up. */
+    check(await exec(
+      "var b = document.querySelector('#chatList .chatrow .clev');" +
+      "return b ? b.textContent : '';") === "HSK 1",
+      "the chat list says which level a conversation was held at");
+    check(await exec("return window.currentChat().level;") === 1,
+      "the level is fixed on the conversation at creation, not derived at render");
+
+    /* A conversation from before levels were recorded has none, and the current
+     * level is not an answer for it. */
+    await exec("delete window.currentChat().level; window.renderChats();");
+    check(await exec(
+      "return !!document.querySelector('#chatList .chatrow.on .clev');") === false,
+      "a conversation with no recorded level is left unlabelled rather than guessed");
+
     /* Starters are openers for the LEARNER, so only chat wants them. The sync
      * block above flipped the global toggle to drive a prefs push, so put it
      * back first -- otherwise all three cases below are empty for a reason that

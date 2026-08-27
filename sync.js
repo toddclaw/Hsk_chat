@@ -120,6 +120,7 @@
       user_id: userId,
       title: c.title || null,
       activity: c.activity || "chat",
+      level: c.level || null,
       created_at: c.created_at,
       updated_at: c.updated_at || new Date().toISOString(),
       deleted_at: c.deleted ? (c.deleted_at || new Date().toISOString()) : null
@@ -131,6 +132,7 @@
       id: row.id,
       title: row.title || "",
       activity: row.activity || "chat",
+      level: row.level || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       deleted: !!row.deleted_at,
@@ -164,6 +166,9 @@
          * from an un-migrated database carries none, and a recency rule would
          * let it erase ours. */
         activity: existing.activity || incoming.activity || "chat",
+        // Fixed at creation exactly like activity, so the same rule: whichever
+        // side actually has one, never whichever is newer.
+        level: existing.level || incoming.level || null,
         created_at: existing.created_at || incoming.created_at,
         updated_at: newer.updated_at,
         deleted: !!(existing.deleted || incoming.deleted),
@@ -380,10 +385,12 @@
   var schemaHasConversations = null;   // null = not probed yet
   var schemaHasGrade = null;
   var schemaHasActivity = null;
+  var schemaHasLevel = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }
   function activitySupported() { return schemaHasActivity !== false; }
+  function levelSupported() { return schemaHasLevel !== false; }
 
   /* Asked once per session, before anything is pushed.
    *
@@ -402,8 +409,12 @@
       var a = await client.from("conversations").select("activity").limit(1);
       schemaHasActivity = !(a.error && isMissingSchema(a.error));
     }
+    if (schemaHasLevel === null) {
+      var l = await client.from("conversations").select("level").limit(1);
+      schemaHasLevel = !(l.error && isMissingSchema(l.error));
+    }
     return { conversations: conversationsSupported(), grade: gradesSupported(),
-             activity: activitySupported() };
+             activity: activitySupported(), level: levelSupported() };
   }
 
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
@@ -430,25 +441,34 @@
   async function pushConversations(rows) {
     if (!rows.length || schemaHasConversations === false) return;
     /* Same bargain pushMessages strikes over conversation_id: an un-migrated
-     * database has no activity column, and upserting one fails the whole batch
-     * -- which would take conversation sync down entirely rather than losing
-     * the one field. Drop the column, keep the conversations, and the labels
-     * come back for free once the ALTER has run. */
-    var payload = schemaHasActivity === false
+     * database has no activity or level column, and upserting one fails the
+     * whole batch -- which would take conversation sync down entirely rather
+     * than losing the one field. Drop the columns, keep the conversations, and
+     * the labels come back for free once the ALTER has run. */
+    var drop = [];
+    if (schemaHasActivity === false) drop.push("activity");
+    if (schemaHasLevel === false) drop.push("level");
+    var payload = drop.length
       ? rows.map(function (r) {
           var copy = {};
-          Object.keys(r).forEach(function (k) { if (k !== "activity") copy[k] = r[k]; });
+          Object.keys(r).forEach(function (k) {
+            if (drop.indexOf(k) === -1) copy[k] = r[k];
+          });
           return copy;
         })
       : rows;
     var r = await client.from("conversations").upsert(payload);
     if (r.error) {
       /* A push that got past the probe -- a column dropped mid-session, or a
-       * probe that never ran. Try without activity once before concluding the
-       * whole table is missing; with it already false there is nothing left to
-       * strip, so this cannot recurse. */
-      if (isMissingSchema(r.error) && schemaHasActivity !== false) {
+       * probe that never ran. Drop both optional columns once before concluding
+       * the whole table is missing. Both rather than the guilty one: telling
+       * them apart means parsing PostgREST's localized message text, which is
+       * what the probe exists to avoid. With both already false there is
+       * nothing left to strip, so this cannot recurse. */
+      if (isMissingSchema(r.error) &&
+          (schemaHasActivity !== false || schemaHasLevel !== false)) {
         schemaHasActivity = false;
+        schemaHasLevel = false;
         return pushConversations(rows);
       }
       if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
@@ -513,6 +533,7 @@
     conversationsSupported: conversationsSupported,
     gradesSupported: gradesSupported,
     activitySupported: activitySupported,
+    levelSupported: levelSupported,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
