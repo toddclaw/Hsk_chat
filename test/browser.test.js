@@ -1640,6 +1640,49 @@ return true;
       "function (m) { return m.textContent.trim().length > 0; });") === true,
       "and every segment has text");
 
+
+    /* --------------------------------------------------- story time, part 2 */
+
+    /* The stub answers with a question only when the story is over, so the last
+     * message proves the hand-off to phase two happened. */
+    await exec(
+      "window.__seg = 0;" +
+      "window.callModel = function (msgs) {" +
+      "  window.__seg++;" +
+      "  var sys = msgs[0].content;" +
+      "  if (sys.indexOf('\\u95ee\\u5b66\\u751f\\u4e00\\u4e2a') !== -1)" +
+      "    return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u54ea\\u513f\\uff1f');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story');");
+    await exec("window.runStory();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 6",
+      "five segments and a question");
+
+    const lastMsg = await exec(
+      "var all = document.querySelectorAll('#log .msg.bot');" +
+      "return all.length ? all[all.length - 1].textContent : '';");
+    check(/\uff1f/.test(lastMsg),
+      "after the last segment the partner asks about the story", lastMsg);
+
+    /* A segment that exhausts its attempts must not end the story. The stub
+     * returns an out-of-level word for one segment only, which drives turn()
+     * through every repair attempt and out the failure path. */
+    await exec(
+      "window.__n = 0;" +
+      "window.callModel = function () {" +
+      "  window.__n++;" +
+      "  if (window.__n >= 3 && window.__n <= 5)" +
+      "    return Promise.resolve('\\u91ce\\u9910\\u78bb\\u3002');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story');");
+    await exec("window.runStory();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "the story survived a bad segment");
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
+      "a segment that exhausts its attempts does not stop the story");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

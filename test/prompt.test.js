@@ -501,5 +501,23 @@ for (const id of ACT_IDS) {
     `activity ${id}: rule numbering is gap-free and in order`, JSON.stringify(nums));
 }
 
+/* Phase two of story time. Not a segment, so it must not be told to write
+ * another ninety characters -- and it must not carry story time's own
+ * "只讲故事，不要问学生问题", which is stated absolutely and is exactly the
+ * rule a model obeys in preference to a later one contradicting it. */
+const q = P.build({ level: 1, label: "HSK 1", length: "short",
+                    activity: "story", storyQuestion: true });
+check(q.includes("\u95ee\u5b66\u751f\u4e00\u4e2a\u5173\u4e8e\u8fd9\u4e2a\u6545\u4e8b\u7684\u95ee\u9898"),
+  "the question phase asks about the story");
+check(!q.includes("\u8fd9\u4e00\u6bb5\u5199\u5927\u6982\u4e5d\u5341\u4e2a\u6c49\u5b57"),
+  "and is not told to write another segment");
+check(!q.includes("\u4e0d\u8981\u95ee\u5b66\u751f\u95ee\u9898"),
+  "and is not still under the segment rule forbidding questions");
+check(q.includes(P.LENGTHS.short.rule),
+  "it is a conversational turn again, so the length rule is back");
+const qNums = q.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m => Number(m[1]));
+check(JSON.stringify(qNums) === JSON.stringify(qNums.map((_, i) => i + 1)),
+  "and its rule numbering is still gap-free", JSON.stringify(qNums));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -1208,6 +1208,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     script: S.script,
     activity: currentActivity(),
     storySegment: (ctx && ctx.storySegment) || null,
+    storyQuestion: !!(ctx && ctx.storyQuestion),
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -2939,6 +2940,17 @@ async function runStory() {
       recordTurn(res.attempts, res.failed);
       persist(); renderAll();
     }
+    /* Phase two is the ordinary chat loop. The story is now in windowed()'s
+     * context, so a question about it needs no new machinery -- and the answers
+     * are graded by the grader that already runs on every message. */
+    const res = await turn({ storyQuestion: true });
+    S.history.push({
+      role: "assistant", text: res.text, needs: res.needs,
+      attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
+      id: newMessageId(), created_at: new Date().toISOString()
+    });
+    recordTurn(res.attempts, res.failed);
+    persist(); renderAll();
   } catch (err) {
     console.error(err);
     S.history.push({ role: "notice", kind: err.kind || "http",

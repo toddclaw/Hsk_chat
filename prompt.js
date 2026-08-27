@@ -248,7 +248,18 @@
     /* The activity's own rules, then its position in the story if it has one.
      * Position after the activity's own rules so it reads as the more immediate
      * instruction of the two. */
-    (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    if (opts.storyQuestion) {
+      /* The story's own rules are suppressed here, not merely followed by this
+       * one. Rule 2 of story time is "只讲故事，不要问学生问题" -- stated
+       * absolutely -- and build() already knows what a model does with a later
+       * rule contradicting an earlier absolute one: it obeys the first. The
+       * same reasoning as the offer rule's exception clause above. This rule
+       * carries its own context ("故事讲完了"), so nothing is lost by dropping
+       * them. */
+      rules.push(convert("故事讲完了。现在问学生一个关于这个故事的问题，一次只问一个。"));
+    } else {
+      (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    }
     if (seg) {
       if (seg.index === 0) {
         rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
