@@ -1192,6 +1192,7 @@ function defaultPrompt(offer, reuse, required) {
     label: levelLabel(),
     length: S.replyLength,
     script: S.script,
+    activity: currentActivity(),
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -1420,6 +1421,21 @@ function windowed() {
 /* One turn against the history already containing the user's message:
  * generate, validate, repair, repair, else fall back.
  * Repair exchanges live in a scratch array and never enter the stored history. */
+/* Which words the partner is asked to work back in.
+ *
+ * Chat uses the words still being learned. Focused chat uses the ones the app
+ * taught and the learner has never once written -- readiness().unused, already
+ * computed and already sorted commonest-first, because S.learning rows carry no
+ * frequency of their own. Six either way, matching what the prompt has always
+ * been given. */
+function reuseFor(activity) {
+  if (HSKPrompt.activityFor(activity).reuse === "unused") {
+    const r = readiness();
+    return ((r && r.unused) || []).slice(0, 6);
+  }
+  return S.learning.filter(HSKPace.isNew).slice(-6);
+}
+
 async function turn() {
   /* Offer next-level words only when a credit has been earned. The same slate
    * is re-offered across repair attempts: a reply rejected for other reasons
@@ -1428,7 +1444,7 @@ async function turn() {
   const offer = (S.pace.on && b.credits > 0)
     ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
     : [];
-  const reuse = S.learning.filter(HSKPace.isNew).slice(-6);
+  const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
   const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
 

@@ -1583,6 +1583,39 @@ return true;
     check(!cls.some(c => /\buser\b/.test(c)),
       "with no learner turn invented to justify it", JSON.stringify(cls));
 
+
+    /* ------------------------------------------------------- focused chat */
+
+    /* S.learning is seeded through localStorage and a reload, exactly the way
+     * this file already seeds it further up. Sync is off by this point (the
+     * wipe turned it off), so the reload needs no supabase mock reinstalled. */
+    await exec(
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify([" +
+      "{w:'\\u82f9\\u679c',p:'ping guo',d:'apple',seen:9,from:2}," +
+      "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after reload");
+    // readiness() is null until the next level's wordlist has loaded.
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
+    await exec("window.newChat('focused');");
+
+    const focusedReuse = await exec(
+      "return window.reuseFor('focused').map(function (e) { return e.w; });");
+    check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
+      "focused chat reuses a word the learner has never written",
+      JSON.stringify(focusedReuse));
+    const chatReuse = await exec(
+      "return window.reuseFor('chat').map(function (e) { return e.w; });");
+    check(JSON.stringify(chatReuse) !== JSON.stringify(focusedReuse),
+      "and chat does not draw from the same list",
+      JSON.stringify(chatReuse) + " vs " + JSON.stringify(focusedReuse));
+
+    const fp = await exec(
+      "return window.systemPrompt([], window.reuseFor('focused'), '');");
+    check(/\u5fc5\u987b\u7528\u5230\u8fd9\u4e9b\u8bcd/.test(fp),
+      "the focused-chat rule asks the partner to build openings, not merely to use the words");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
