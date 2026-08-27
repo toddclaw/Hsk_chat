@@ -54,6 +54,7 @@ const os = require("os");
 
 const HSK = require("../validator.js");
 const HSKPrompt = require("../prompt.js");
+const HSKPace = require("../pace.js");
 
 const ROOT = path.join(__dirname, "..");
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -86,16 +87,27 @@ const entries = JSON.parse(
   fs.readFileSync(path.join(ROOT, "data", "hsk" + LEVEL + ".json"), "utf8"));
 const baseLex = HSK.buildLexicon(entries, []);
 
+/* Pacing needs the next level to draw from, exactly as loadLevel() does. Without
+ * this the harness measures a story that never introduces a word -- which is the
+ * whole feature, and what the first three runs of this file silently omitted. */
+const nextEntries = fs.existsSync(path.join(ROOT, "data", "hsk" + (LEVEL + 1) + ".json"))
+  ? JSON.parse(fs.readFileSync(path.join(ROOT, "data", "hsk" + (LEVEL + 1) + ".json"), "utf8"))
+  : [];
+const POOL = HSKPace.buildPool(entries, nextEntries);
+const ATTEMPTS = Number(arg("attempts", 3));      // index.html: S.attempts, default 3
+const PACING = args.indexOf("--nopace") === -1;
+const FALLBACKS = ["我不知道。", "我不会说。"];   // index.html
+
 /* The same call defaultPrompt() makes for a story segment. `index` is the arm:
  * the real one for "positioned", a fixed 0 for "always-first". */
-function systemPrompt(index, def) {
+function systemPrompt(index, def, offer, required) {
   /* Mutated around the call rather than passed in: build() reads the activity
    * table, so this is the only way to test a rule in the position it would
    * actually ship in. Restored immediately -- the arms interleave. */
   HSKPrompt.ACTIVITIES.story.rules = STORY_RULES.concat(def.extraRules || []);
   if (def.names) HSKPrompt.ACTIVITIES.story.names = def.names;
   const out = HSKPrompt.build({
-    offer: [], reuse: [], require: "",
+    offer: offer || [], reuse: [], require: required || "",
     level: LEVEL, label: LEVELS[LEVEL] || ("HSK " + LEVEL),
     length: "short", script: "simp",
     activity: "story",
@@ -147,6 +159,31 @@ async function callModel(model, messages, maxTokens, temperature) {
   };
 }
 
+/* A mirror of index.html's repairPrompt(), not a paraphrase of it: what the
+ * repair loop is worth depends entirely on what it says, so an approximation
+ * here would measure a loop the app does not run. The one divergence is the
+ * sense check, which costs a model call per attempt and which tools/prompt-ab.js
+ * omits for the same reason. */
+function repairPrompt(violations, attempt, lex) {
+  const latin = violations.filter(v => v.kind === "latin");
+  const words = violations.filter(v => v.kind === "bad");
+  const parts = [];
+  if (latin.length) parts.push("不要用英文，不要用拼音。只写汉字。");
+  if (words.length) {
+    parts.push("你用了" + words.map(v => "「" + v.text + "」").join("、") +
+      "。这些词太难，学生不认识，不可以用。");
+    if (attempt >= 3) {
+      words.slice(0, 3).forEach(v => {
+        const sug = HSK.suggest(v.text, lex, 4).map(e => e.w);
+        if (sug.length) parts.push("「" + v.text + "」可以换成：" + sug.join("、") + "。");
+      });
+      parts.push("只用最简单的词。");
+    }
+  }
+  parts.push("请用别的说法，再说一次。只说中文，不要解释。");
+  return parts.join("");
+}
+
 /* Character trigrams. Word segmentation would beg the question -- an HSK 1
  * lexicon cannot segment a reply that broke out of HSK 1, which is exactly the
  * reply most worth comparing. */
@@ -168,74 +205,110 @@ function jaccard(a, b) {
  * assistant messages and no user message anywhere. A story has no learner turns
  * until phase two, so that array really is system-plus-assistants, which is an
  * unusual shape to send an API and worth exercising for real. */
+/* One story, mirroring runStory() in index.html: SEGMENTS sequential turns, each
+ * seeing the ones before it exactly the way windowed() hands them over -- system,
+ * then the previous segments as assistant messages and no user message anywhere.
+ *
+ * Each segment now runs turn()'s real attempt loop and settles against the real
+ * pacing budget. The first three runs of this file did neither, and so measured
+ * a first draft against a gate the app retries three times, in a story that never
+ * introduced a word. Both of those are the feature, not noise around it.
+ */
 async function runStory(arm) {
   const def = ARM_DEFS[arm];
   const segs = [];
   let cost = 0, emptyRetries = 0;
+  // index.html: S.budget[level], and S.learning as it grows during the story.
+  const budget = { chars: 0, credits: 0, declines: 0 };
+  const learning = [];
+  const cast = def.names || STORY_NAMES;
+
   for (let i = 0; i < SEGMENTS; i++) {
-    const messages = [{ role: "system", content: systemPrompt(def.index(i), def) }]
+    /* Offer next-level words only once a credit is earned, and re-offer the same
+     * slate across repair attempts -- a reply rejected for vocabulary must not
+     * cost the introduction. Both are turn()'s rules, not this file's. */
+    const offer = (PACING && budget.credits > 0)
+      ? HSKPace.slate(POOL, learning.map(e => e.w), HSKPace.SLATE) : [];
+    const required = (offer.length && HSKPace.shouldForce(budget.declines))
+      ? offer[0].w : "";
+
+    const scratch = [{ role: "system",
+                       content: systemPrompt(def.index(i), def, offer, required) }]
       .concat(segs.map(s => ({ role: "assistant", content: s.text })));
-    /* An empty completion is retried once and counted. index.html does NOT
-     * retry -- callModel throws "empty" and the story ends on a notice card --
-     * so the retry is here to keep n usable for the continuity question, and
-     * the count is what says how often a real story would have died. */
-    let res, empties = 0;
-    for (let a = 0; ; a++) {
-      try { res = await callModel(MODEL, messages, MAX_TOKENS, 0.7); break; }
-      catch (e) {
-        if (a >= 1 || !/empty reply/.test(e.message)) {
-          e.message = "segment " + i + ": " + e.message;
-          throw e;
+
+    let attempt = 0, best = null, empties = 0;
+    while (attempt < ATTEMPTS) {
+      attempt++;
+      let res;
+      /* An empty completion is retried once and counted. index.html does NOT
+       * retry -- callModel throws "empty" and the story ends on a notice card --
+       * so the retry is here to keep n usable, and the count is what says how
+       * often a real story would have died. */
+      for (let a = 0; ; a++) {
+        try { res = await callModel(MODEL, scratch, MAX_TOKENS, 0.7); break; }
+        catch (e) {
+          if (a >= 1 || !/empty reply/.test(e.message)) {
+            e.message = "segment " + i + ": " + e.message;
+            throw e;
+          }
+          empties++;
         }
-        empties++;
+      }
+      cost += res.cost;
+      const ex = extractNeeds(HSK.stripScaffold(res.text));
+      /* The cast and the offered words join the per-turn lexicon the way turn()
+       * adds them: legal because the prompt asked for them. Score them as
+       * violations and the arm is measuring its own premise away. */
+      const lex = HSK.buildLexicon(entries,
+        cast.map(e => ({ w: e.w }))
+          .concat(learning, offer, ex.needs.map(w => ({ w: w }))));
+      const viols = HSK.validate(ex.text, lex).filter(v => !v.name);
+      if (!best) best = { text: ex.text, viols: viols, lex: lex, needs: ex.needs };
+      if (!viols.length) {
+        best = { text: ex.text, viols: [], lex: lex, needs: ex.needs, clean: true };
+        break;
+      }
+      if (attempt < ATTEMPTS) {
+        scratch.push({ role: "assistant", content: res.text });
+        scratch.push({ role: "user", content: repairPrompt(viols, attempt + 1, lex) });
       }
     }
-    emptyRetries += empties;
-    const ex = extractNeeds(HSK.stripScaffold(res.text));
-    /* The arm's names join the per-turn lexicon the way turn() adds offered and
-     * [[NEED:]] words: legal this turn because the prompt asked for them. Score
-     * them as violations and the candidate arm is measuring its own premise. */
-    const cast = def.names || STORY_NAMES;
-    const extra = cast.map(e => ({ w: e.w }))
-      .concat(ex.needs.map(w => ({ w: w })));
-    const lex = extra.length ? HSK.buildLexicon(entries, extra) : baseLex;
-    const viols = HSK.validate(ex.text, lex).filter(v => !v.name);
-    const tri = trigrams(ex.text);
+
+    /* Attempts exhausted with nothing clean: turn() shows a canned fallback,
+     * which is survivable in a chat turn and nonsense mid-narrative. Counted
+     * rather than smoothed over -- it is the failure the learner actually sees. */
+    const failed = !best.clean;
+    const text = failed ? FALLBACKS[0] : best.text;
+
+    // settlePace(): bank what was introduced, then earn from what was read.
+    const introduced = [];
+    if (PACING && !failed) {
+      const toks = HSK.segment(best.text, best.lex);
+      HSKPace.spot(toks, offer.map(e => e.w)).forEach(w => {
+        if (learning.some(e => e.w === w) || budget.credits <= 0) return;
+        const e = offer.find(o => o.w === w);
+        learning.push({ w: w, p: e.p, d: e.d });
+        budget.credits--;
+        introduced.push(w);
+      });
+      if (introduced.length) budget.declines = 0;
+      else if (offer.length) budget.declines++;
+      Object.assign(budget, HSKPace.earn(budget, best.text, HSKPace.DEFAULT_RATE));
+    }
+
+    const tri = trigrams(text);
     segs.push({
-      index: i, text: ex.text, tri: tri,
-      violations: viols.map(v => v.text),
-      han: countHan(ex.text),
-      truncated: res.finish === "length",
-      // Nearest earlier segment, not the immediately preceding one: a restart
-      // resembles segment 0, which by segment 4 is three turns back.
+      index: i, text: text, tri: tri,
+      violations: best.viols.map(v => v.text),
+      attempts: attempt, failed: failed, offered: offer.length,
+      introduced: introduced, needs: best.needs.length,
+      han: countHan(text),
       dup: segs.reduce((m, p) => Math.max(m, jaccard(tri, p.tri)), 0)
     });
-    cost += res.cost;
+    emptyRetries += empties;
   }
-  return { arm: arm, segs: segs, cost: cost, emptyRetries: emptyRetries };
-}
-
-/* The judge sees the story so far and the next segment, and is asked for one
- * word. Deliberately not asked to explain: a label is countable and a paragraph
- * is something to read, and DEVELOPING.md is emphatic about which of those
- * settles a question. */
-const JUDGE_PROMPT =
-  "You are evaluating a Chinese-language story that was generated one segment " +
-  "at a time. Below is the story so far, then the NEXT segment.\n\n" +
-  "Answer with exactly one of these words and nothing else:\n" +
-  "CONTINUES - the next segment carries the same story forward\n" +
-  "RESTARTS - the next segment begins the story again: it re-introduces " +
-  "characters or the setting already established, or retells earlier events\n" +
-  "UNRELATED - the next segment is about something else entirely\n";
-
-async function judge(prior, next) {
-  const res = await callModel(JUDGE, [
-    { role: "user", content: JUDGE_PROMPT +
-      "\n=== STORY SO FAR ===\n" + prior.join("\n") +
-      "\n\n=== NEXT SEGMENT ===\n" + next + "\n\nOne word:" }
-  ], 8, 0);
-  const m = /CONTINUES|RESTARTS|UNRELATED/.exec(res.text.toUpperCase());
-  return { label: m ? m[0] : "UNPARSED", cost: res.cost };
+  return { arm: arm, segs: segs, cost: cost, emptyRetries: emptyRetries,
+           introduced: segs.reduce((a, s) => a + s.introduced.length, 0) };
 }
 
 /* The counter the first name experiment lacked. Restarts are about structure;
@@ -372,6 +445,20 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
       allSegs: mine.flatMap(s => s.segs).length,
       truncated: mine.flatMap(s => s.segs).filter(s => s.truncated).length,
       emptyRetries: mine.reduce((a, s) => a + (s.emptyRetries || 0), 0),
+      /* The probe this run exists for: what the repair loop is worth. A segment
+       * that never comes clean shows the learner a canned fallback in the middle
+       * of a story, which is the failure that actually matters. */
+      attempts: (() => {
+        const all = mine.flatMap(s => s.segs);
+        const d = [0, 0, 0, 0, 0, 0, 0];
+        all.forEach(s => { if (!s.failed) d[s.attempts] = (d[s.attempts] || 0) + 1; });
+        return d;
+      })(),
+      failedSegs: mine.flatMap(s => s.segs).filter(s => s.failed).length,
+      storiesWithFallback: mine.filter(s => s.segs.some(g => g.failed)).length,
+      offeredSegs: mine.flatMap(s => s.segs).filter(s => s.offered > 0).length,
+      introduced: mine.reduce((a, s) => a + s.introduced, 0),
+      needSegs: mine.flatMap(s => s.segs).filter(s => s.needs > 0).length,
       han: (() => {
         const all = mine.flatMap(s => s.segs);
         return all.length ? all.reduce((a, s) => a + s.han, 0) / all.length : 0;
@@ -426,6 +513,20 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
     console.log(pad(arm, 14) + "violations/100 han: " + (h ? v / h * 100 : 0).toFixed(1) +
       "   total " + v + " over " + h + " chars");
     console.log("  top: " + top.map(e => e[0] + "×" + e[1]).join(", "));
+  });
+
+  console.log("");
+  console.log(pad("", 14) + pad("clean on try 1/2/3+", 21) + pad("never clean", 13) +
+    pad("stories hit", 13) + pad("offered", 9) + pad("introduced", 12) + "[[NEED:]]");
+  ARMS.forEach(arm => {
+    const r = rows[arm];
+    const a = r.attempts, later = a.slice(3).reduce((x, y) => x + y, 0);
+    console.log(pad(arm, 14) +
+      pad((a[1] || 0) + " / " + (a[2] || 0) + " / " + later, 21) +
+      pad(r.failedSegs + "/" + r.allSegs, 13) +
+      pad(r.storiesWithFallback + "/" + r.stories, 13) +
+      pad(r.offeredSegs + "/" + r.allSegs, 9) +
+      pad(String(r.introduced), 12) + r.needSegs);
   });
 
   const jc = judgeCosts.filter(c => typeof c === "number").reduce((a, c) => a + c, 0);
