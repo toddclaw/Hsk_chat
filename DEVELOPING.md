@@ -165,6 +165,13 @@ Naming the non-word in the prompt primed the model to *discuss* it —
 meta-commentary the partner is not supposed to produce at all. One run spent a
 `[[NEED:]]` on it. The change would have shipped as an improvement.
 
+`tools/prompt-ab.js` is the harness for this kind of question: it builds both system prompts
+the way `index.html` does, calls the real model, validates each reply through `validator.js`
+and counts out-of-level words per arm. It is deliberately not part of `test/run.sh` — it makes
+network calls and costs money. It reads the OpenRouter key from a file outside the repo into a
+variable, never an argv element. See RESEARCH.md, "Whether the allowlist belongs in the
+prompt", for a worked result and the sampling caveats it turned up.
+
 Rules of thumb this leaves:
 
 - **Never put an example of the bad output in the prompt.** It is an instruction

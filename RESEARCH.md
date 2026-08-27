@@ -299,6 +299,58 @@ The rule this leaves: **an output-shape instruction belongs to the turn it shape
 prompt is reused across a conversation, the shape has to be swapped out with the question, or
 the first answer's format silently becomes the format of every answer.
 
+### Whether the allowlist belongs in the prompt
+
+**Measured, and it comes out the opposite way round from what the app ships as its default.**
+
+Settings → Prompt mode chooses between `without-list` (the rules alone) and `with-list` (the
+level's whole allowlist appended). Both paths exist because HSKStory reported that including
+the list makes output *worse*, and this project had never checked. `tools/prompt-ab.js`,
+`qwen3-30b-a3b`, 64 replies per arm per level, eight namefree seeds from `STARTERS[1]`,
+`length=short`, arms interleaved so a mid-run provider change cannot land on one of them.
+
+| | out-of-level replies | violation tokens | chars/reply | cost / 64 replies |
+| --- | --- | --- | --- | --- |
+| HSK 1 `without-list` | 35/64 (55%) | 82 | 13.8 | $0.0030 |
+| HSK 1 `with-list` | 33/64 (52%) | **37** | 14.0 | $0.0080 |
+| HSK 3 `without-list` | 49/64 (77%) | 74 | 27.3 | $0.0030 |
+| HSK 3 `with-list` | **30/64 (47%)** | **38** | 25.5 | $0.0202 |
+
+**HSKStory's finding does not replicate here.** Including the list made output better at both
+levels, and the effect grew with the size of the list — which is the direction to expect if
+list size is the mechanism. The system prompt goes from 635 to 1438 characters at HSK 1 and
+from 664 to 3360 at HSK 3.
+
+At HSK 1 the *binary* rate is a non-result: 35 against 33 in 64, Fisher exact p = 0.86. At
+HSK 3 it is 49 against 30, p = 0.00097, and it survives deflating the sample for duplicate
+replies (p = 0.0013).
+
+**Counting violation tokens rather than replies is the better measure, and it is what makes
+HSK 1 legible.** Tokens roughly halve in the `with-list` arm at *both* levels — 82 → 37 and
+74 → 38 — while the binary rate at HSK 1 sees nothing, because one leaked 每 scores the same
+as one leaked 公园. The list was helping at HSK 1 too; a per-reply threshold could not see it.
+
+**The two arms fail differently, which is the finding underneath the rates.** `without-list`
+reaches for a concept the level does not carry and writes the ordinary word for it — 公园,
+窗户, 心情, 散步, 树, 花 — so most violations are whole out-of-level content words (50 of 82
+tokens at HSK 1 are multi-character). `with-list` stays in the semantic neighbourhood of the
+list and trips instead on collocations that *extend* a listed word: 每 out of 每天, 汗 out of
+出汗, 通 out of 通常. Neither 每天 nor 出汗 nor 通常 is itself listed at either level. The one
+English leak in 256 replies was `without-list`.
+
+**Ours, and unresolved: the cost runs the other way and gets worse where the quality gain is
+biggest.** `with-list` costs 2.7× at HSK 1 and 6.7× at HSK 3, entirely in input tokens — reply
+length is unchanged. Extrapolated to HSK 5–6 the allowlist is thousands of words, and the
+arm that helps most is the one that may not fit the context window at all. Nothing here
+measures that end of the range, so this result should not be read as "turn `with-list` on
+everywhere".
+
+Two caveats on the sampling. Eight seeds at temperature 0.7 repeat themselves — only 42 of 64
+HSK 1 `without-list` replies were distinct texts — so the samples are less independent than
+n = 64 suggests; the p-values above survive deflating for it, but a wider seed set would be
+better. And `[[NEED:]]` was used in **0 of 256 replies**, so this measurement says nothing
+about the escape hatch the prompt offers, at this model and this length setting.
+
 ### Earlier measurements
 
 Recorded in DEVELOPING.md with their working, and summarized here because they set the
