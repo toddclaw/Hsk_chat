@@ -484,13 +484,13 @@ return true;
       "and it is Connection, the one a first run needs", JSON.stringify(secs));
 
     /* The default a new install runs on. Nothing seeded hsk1chat.model, so this
-     * is MODELS[0] reaching the header picker unaided -- the cheap model the
+     * is MODELS[0] reaching the Settings picker unaided -- the cheap model the
      * app was tuned against, not whichever frontier name happens to be first in
      * the list. */
-    check(await exec(`return document.querySelector('#model').value;`)
+    check(await exec(`return document.querySelector('#modelChat').value;`)
             === "qwen/qwen3-30b-a3b-instruct-2507",
       "a fresh install defaults to the cheap Qwen model",
-      await exec(`return document.querySelector('#model').value;`));
+      await exec(`return document.querySelector('#modelChat').value;`));
 
     /* ------------------------------------------------- the Models two-step
      *
@@ -637,19 +637,18 @@ return true;
     check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) !== chatBefore,
       "and actually changes the chat model");
 
-    /* One setting, three controls. Leaving any of them stale would show you a
-     * model you are not actually talking to. */
+    /* One setting, two controls now that the header picker is gone. Leaving
+     * either stale would show you a model you are not actually talking to. */
     await exec(`
       var sel = document.querySelector('#modelChat');
       sel.value = "big/one";
       sel.dispatchEvent(new Event("change"));
       return true;`);
     const synced = await exec(`
-      return { header: document.querySelector('#model').value,
-               box: document.querySelector('#modelId').value,
+      return { box: document.querySelector('#modelId').value,
                stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
-    check(synced.header === "big/one", "choosing in Settings moves the header picker", JSON.stringify(synced));
-    check(synced.box === "big/one", "and the paste-an-id box", JSON.stringify(synced));
+    check(synced.box === "big/one", "choosing in Settings moves the paste-an-id box",
+      JSON.stringify(synced));
     check(synced.stored === "big/one", "and is persisted", JSON.stringify(synced));
 
     /* The other direction, which used not to work: the box was write-only, so a
@@ -664,13 +663,11 @@ return true;
       box.dispatchEvent(new Event("change"));
       return true;`);
     const pasted = await exec(`
-      return { header: document.querySelector('#model').value,
-               chat: document.querySelector('#modelChat').value,
+      return { chat: document.querySelector('#modelChat').value,
                stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
-    check(pasted.header === "someone/not-in-the-catalogue",
-      "pasting an id updates the header picker at once", JSON.stringify(pasted));
     check(pasted.chat === "someone/not-in-the-catalogue",
-      "and the Settings picker, without closing and reopening", JSON.stringify(pasted));
+      "pasting an id updates the Settings picker at once, without closing and reopening",
+      JSON.stringify(pasted));
     check(pasted.stored === "someone/not-in-the-catalogue",
       "and is persisted", JSON.stringify(pasted));
 
@@ -1472,6 +1469,70 @@ return true;
       "var want = arguments[0];" +
       "return raw.filter(function (c) { return c.id === want; }).length;",
       [beforeId]) === 1, "and the previous conversation still exists");
+
+
+    /* ------------------------------------------- the header after the swap */
+
+    check(await exec("return !document.querySelector('#model');") === true,
+      "the header model picker is gone");
+    check(await exec("return !!document.querySelector('#modelChat');") === true,
+      "but Settings still has one");
+    check(await exec("return !document.querySelector('header #level');") === true,
+      "the level picker has left the header");
+    check(await exec("return !!document.querySelector('#level');") === true,
+      "and is still in the document, in Settings");
+    check(await exec("return !!document.querySelector('#activity');") === true,
+      "the header has an activity selector");
+
+    /* The chip navigates, so it is a control: focusable and announced. Its
+     * visible text ("HSK 1") does not say what it does, hence the aria-label. */
+    check(await exec("return document.querySelector('#levelChip').tagName;") === "BUTTON",
+      "the level chip is a button, not a styled span");
+    check(await exec(
+      "return !!document.querySelector('#levelChip').getAttribute('aria-label');") === true,
+      "the level chip has an aria-label");
+
+    /* The handler awaits loadLevel() before anything re-renders, so this has to
+     * wait for the wordlist rather than read the chip straight back. */
+    await exec("var l = document.querySelector('#level');" +
+               "l.value = '3'; l.dispatchEvent(new Event('change'));");
+    let chipFollowed = true;
+    try {
+      await waitFor("document.querySelector('#levelChip').textContent.indexOf('3') !== -1",
+        "the level chip catching up", 15000);
+    } catch (e) { chipFollowed = false; }
+    check(chipFollowed, "the chip follows the level set in Settings",
+      await exec("return document.querySelector('#levelChip').textContent;"));
+
+    /* Back to HSK 1 for everything below: the focused-chat block seeds words
+     * introduced from HSK 2, and readiness() only counts those as unused while
+     * the current level is below the level they came from. */
+    await exec("var l = document.querySelector('#level');" +
+               "l.value = '1'; l.dispatchEvent(new Event('change'));");
+    await waitFor("document.querySelector('#levelChip').textContent.indexOf('1') !== -1",
+      "the level back at HSK 1", 15000);
+
+    const actOpts = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#activity option')," +
+      "function (o) { return o.value; });");
+    check(actOpts.indexOf("chat") !== -1 && actOpts.indexOf("focused") !== -1 &&
+          actOpts.indexOf("story") !== -1,
+      "all three activities are offered", JSON.stringify(actOpts));
+
+    await exec(
+      "var s = document.querySelector('#activity');" +
+      "s.value = 'focused'; s.dispatchEvent(new Event('change'));");
+    check(await exec("return window.currentActivity();") === "focused",
+      "choosing an activity opens a conversation in it");
+
+    /* S.busy is not reachable from here, so assert the invariant renderBusy()
+     * exists to maintain: the selector and the send button are never in
+     * disagreement about whether a turn is running. */
+    check(await exec(
+      "window.renderBusy();" +
+      "return document.querySelector('#activity').disabled ===" +
+      "       document.querySelector('#send').disabled;") === true,
+      "the activity selector shares the send button's busy state");
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

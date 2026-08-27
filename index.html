@@ -51,10 +51,10 @@ header{
    then pushed the buttons off the right edge of the screen. */
 header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
   padding:8px 6px; min-height:var(--tap); min-width:0}
-/* The level is a primary control and its options are short, so it keeps its
-   natural width; the model select absorbs all the shrinking. */
-header select#level{flex:0 0 auto}
-header select#model{flex:1 1 0}
+/* The activity is the header's one primary control now, so it absorbs all the
+   shrinking; the level chip is a short, read-only signpost beside it. */
+header select#activity{flex:1 1 auto; min-width:0}
+header button#levelChip{flex:0 0 auto; font-size:12px; padding:4px 8px; opacity:.75}
 header button{padding:8px 10px; flex:0 0 auto}
 
 #log{flex:1; overflow-y:auto; padding:14px 12px 4px; -webkit-overflow-scrolling:touch}
@@ -338,8 +338,8 @@ footer{
 </style>
 
 <header>
-  <select id="level" title="Vocabulary level"></select>
-  <select id="model" title="Model"></select>
+  <select id="activity" title="Activity"></select>
+  <button id="levelChip" title="Vocabulary level">HSK 1</button>
   <button id="btnPy" title="Pinyin">拼</button>
   <button id="btnChats" title="Conversations">💬</button>
   <button id="btnVocab" title="Vocabulary">词</button>
@@ -556,6 +556,11 @@ footer{
       text you already know. The partner is offered the three commonest words you have not met
       and uses one if it fits naturally; if none fit, the credit carries to the next turn. A new
       word stays highlighted and gets reused until you have seen it three times.</div>
+
+    <label for="level">Vocabulary level</label>
+      <select id="level"></select>
+      <div class="note">Sets what the partner may say and what the validator enforces.
+      Everything else — the starters, the prompt, the pacing pool — follows it.</div>
 
     <label for="script">Characters</label>
       <select id="script">
@@ -1785,6 +1790,10 @@ function renderMessage(turnObj, shownExtra) {
 }
 
 function renderAll() {
+  /* Ahead of the early return below: both of these describe the conversation
+   * rather than its contents, and an empty one still has an activity and a
+   * level. */
+  fillActivities(); renderLevelChip();
   log.innerHTML = "";
   if (!S.history.length) {
     log.innerHTML = '<div class="hint">Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
@@ -2835,7 +2844,7 @@ function newMessageId() {
 async function send() {
   const text = input.value.trim();
   if (!text || S.busy) return;
-  S.busy = true; $("#send").disabled = true;
+  S.busy = true; renderBusy();
   input.value = ""; updateMirror(); autosize();
 
   S.history.push({ role: "user", text: text, id: newMessageId(), created_at: new Date().toISOString() });
@@ -2860,7 +2869,7 @@ async function retryLast() {
   while (S.history.length && S.history[S.history.length - 1].role !== "user") S.history.pop();
   if (!S.history.length) return;
   const text = S.history[S.history.length - 1].text;
-  S.busy = true; $("#send").disabled = true;
+  S.busy = true; renderBusy();
   persist(); renderAll();
   return runTurn([], text);
 }
@@ -2892,7 +2901,7 @@ async function runTurn(toGloss, text) {
     persist();
   } finally {
     thinking.remove();
-    S.busy = false; $("#send").disabled = false;
+    S.busy = false; renderBusy();
     renderAll();
     glossWords(toGloss, text);
   }
@@ -2961,6 +2970,30 @@ function showPopover(el) {
 }
 
 /* ------------------------------------------------------------------- chrome */
+
+function fillActivities() {
+  const cur = currentActivity();
+  $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
+    '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
+    escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
+}
+
+/* Read-only: the level is set in Settings. It stays on screen because it governs
+ * everything the partner says, and a learner mid-conversation should not have to
+ * open a panel to find out what rules the conversation is running under. */
+function renderLevelChip() {
+  const chip = $("#levelChip");
+  if (!chip) return;
+  chip.textContent = levelLabel();
+  chip.setAttribute("aria-label", "Level: " + levelLabel() + ", open settings");
+}
+
+/* One place that knows what "a turn is running" disables. Not syncBusy:
+ * that name is taken, by the flag saying a cloud pull or push is in flight. */
+function renderBusy() {
+  $("#send").disabled = S.busy;
+  $("#activity").disabled = S.busy;
+}
 
 function fillLevels() {
   $("#level").innerHTML = LEVELS.map(l =>
@@ -3037,7 +3070,6 @@ function fillModels() {
   const opts = list.map(m =>
     '<option value="' + escapeHtml(m.id) + '"' + (m.id === S.model ? " selected" : "") + ">" +
     escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
-  $("#model").innerHTML = opts;
   $("#modelChat").innerHTML = opts;
 
   /* The teaching picker draws on the same catalogue but is never filtered by
@@ -3718,8 +3750,10 @@ document.addEventListener("click", e => {
 $("#level").onchange = async e => {
   await loadLevel(Number(e.target.value));
   queueSync("prefs");
-  updateMirror(); renderAll(); renderStarters();
+  updateMirror(); renderAll(); renderStarters(); renderLevelChip();
 };
+$("#activity").onchange = e => { startActivity(e.target.value); fillActivities(); };
+$("#levelChip").onclick = () => openSheet("#setSheet");
 /* One setting, three controls that show it: the header picker, the Settings
  * picker and the paste-an-id box. Whichever one moves, the other two follow --
  * they cannot be left disagreeing about what you are talking to. */
@@ -3733,11 +3767,10 @@ function setChatModel(id) {
    * value a <select> does not have selects nothing at all rather than failing
    * loudly. fillModels() carries the current model into both lists precisely
    * for this, so rebuild instead of assigning. */
-  if ($("#model").value !== id || $("#modelChat").value !== id) fillModels();
+  if ($("#modelChat").value !== id) fillModels();
   renderSectionNotes();
   queueSync("prefs");
 }
-$("#model").onchange = e => setChatModel(e.target.value);
 $("#modelChat").onchange = e => setChatModel(e.target.value);
 /* The box was write-only: picking a model filled it in, but typing into it
  * changed nothing until Settings was closed and reopened, because it was read
