@@ -209,6 +209,60 @@ almost no name characters, and `王` is HSK 4 (see [The validator](#the-validato
 noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
 must be namefree, or the thing being measured is the name.
 
+### Worked example: does the story-time position rule do anything?
+
+Story time generates five segments back to back, and the only thing stopping segment 4 from
+being another segment 0 is one rule — `接着上面的故事往下讲，不要从头开始` in the middle,
+with a different line at each end. `tools/story-ab.js` is the harness. The control arm is a
+**wrong** position rule (every segment told it is the first) rather than no rule, so exactly
+one line differs and the rest of the prompt — the story rules, the suppressed turn-taking
+rules, the suppressed `LENGTHS` rule, the ninety-character instruction — is held identical.
+Deleting the line instead would renumber every rule after it, which is a second change.
+
+Two counters, because one would have been trusted too easily: a judge model
+(`claude-sonnet-4.5`) labelling each segment CONTINUES / RESTARTS / UNRELATED against
+everything before it, and character-trigram overlap with the nearest earlier segment, which
+needs no model at all. Measured on `qwen3-30b-a3b`, HSK 1, 20 stories per arm:
+
+| | segments judged | RESTARTS | stories with no restart | trigram overlap ≥ .25 |
+| --- | --- | --- | --- | --- |
+| position rule correct | 60 | 12 (20%) | **5/15** | 8/60 (13%) |
+| every segment told it is the first | 36 | 10 (28%) | 0/9 | 16/36 (44%) |
+
+**The rule works, and it is not enough.** 20% against 28% is not a difference sixty samples
+can resolve, and taken alone it would have said the rule does nothing. The two measures that
+do separate are the mechanical one — repetition roughly triples without the rule — and the
+only unit a learner actually experiences, a whole story: a third of them survive with the
+rule and none survive without it. **Two thirds of stories still contain a restarted segment.**
+Context alone carries a good deal of the continuity, which is why the naive per-segment
+counter is nearly flat; the rule earns its place at the level of the story, not the segment.
+
+Three things the same run turned up that were not what it was looking for:
+
+- **Out-of-level rate per reply is not comparable across activities.** Story segments came
+  back 100% out-of-level against chat's 50%, which sounds catastrophic and mostly is not: a
+  55-character segment has four times a 13-character chat turn's chances to trip. Per hundred
+  Han characters the gap is real but smaller — **27 against chat's 4–8** — and that is the
+  number to quote. Any future activity comparison must normalise by length or it is measuring
+  reply length.
+- **Names are a third of the violations, and the activity's own rule invites them.**
+  `明` alone was 94 of 654; `明`, `白` and `红` together — 小明, 小白, 小红 — are 23–33%
+  depending on the run. `validate()` forgives a name only where `叫` or `姓` introduces it,
+  and a character named once in segment 0 is bare in all four segments after. The rule
+  `介绍一两个人和一个地方` asks for exactly what the validator cannot forgive. This is the
+  same trap as the `王明` seeds above, except here it is in shipped prompt text rather than
+  in a measurement.
+- **Segments run short of the ninety they are asked for** — 55 to 83 characters across runs.
+  The pacing argument for segmenting assumes 90, which is two credits at `DEFAULT_RATE`; 55
+  is one. The design still beats one long turn, but by less than `RESEARCH.md`'s arithmetic
+  suggests.
+
+Separately, and not a prompt question at all: **about one call in eight came back with an
+empty completion**, at concurrency 1 as well as 4, across both arms. `callModel` throws on
+an empty reply and nothing retries it, so a story that hits one dies mid-narrative on a
+notice card. The harness retries once and counts, which is the only reason the table above
+has any complete stories in it.
+
 ### A cheaper model is not a cheaper conversation
 
 Per-token price is the least important of the three things that set what a reply
