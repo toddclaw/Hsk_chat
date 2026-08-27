@@ -220,6 +220,9 @@ header button{padding:8px 10px; flex:0 0 auto}
   min-height:0; border-radius:999px; color:var(--ink);
 }
 #starters button:active{background:var(--accent); color:#08111d}
+/* Story time's control is the action that moves the story on, not one
+   suggestion among several, so it does not look like a starter. */
+#starters button.story{background:var(--accent); color:#08111d; font-weight:600}
 
 footer{
   border-top:none; background:var(--panel);
@@ -894,7 +897,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v62 — 2026-08-27";
+const VERSION   = "v63 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1330,11 +1333,26 @@ function callError(kind, message) {
   return e;
 }
 
+/* The controller behind the model call that is running right now, so a
+ * generation the learner has given up on can be stopped instead of waited out.
+ * ponytail: one controller for the whole app -- a translation started while a
+ * turn is in flight would be the thing a stop aborts. Give each call its own if
+ * that ever bites. */
+let inflight = null;
+
+/* Abort the running call. The fetch is cancelled rather than merely ignored, so
+ * a story segment that is going nowhere also stops costing money. */
+function stopTurn() {
+  if (inflight) inflight.abort();
+}
+
 async function callModel(messages, maxTokens, model) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
+  inflight = new AbortController();
   const r = await fetch(API_URL, {
     method: "POST",
+    signal: inflight.signal,
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model || S.model, messages: messages,
@@ -1344,6 +1362,13 @@ async function callModel(messages, maxTokens, model) {
        * cached price table that goes stale the moment a price moves. */
       usage: { include: true }
     })
+  }).catch(err => {
+    /* A stop is a decision, not a failure. Given its own kind so every caller
+     * can tell it from a dead endpoint and skip the error card -- and so the
+     * empty-completion retry below does not helpfully re-issue the call the
+     * learner just cancelled. */
+    if (err && err.name === "AbortError") throw callError("stopped", "");
+    throw err;
   });
   const body = await r.json().catch(() => ({}));
   const detail = (body.error && body.error.message) || "";
@@ -1878,9 +1903,12 @@ function renderAll() {
   fillActivities(); renderLevelChip();
   log.innerHTML = "";
   if (!S.history.length) {
-    log.innerHTML = '<div class="hint">Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
-      'Replies are checked against the ' + levelLabel() +
-      ' list and rewritten until they fit.</div>';
+    log.innerHTML = '<div class="hint">' + (currentActivity() === "story"
+      ? 'Tap <b>Start the story</b> below.<br>' + STORY_SEGMENTS +
+        ' short parts, one tap each \u2014<br>then the partner asks you about it.'
+      : 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
+        'Replies are checked against the ' + levelLabel() +
+        ' list and rewritten until they fit.') + '</div>';
     return;
   }
   const shownExtra = new Set();   // added words already highlighted once, this pass
@@ -1996,9 +2024,13 @@ function newId() {
     ("cid-" + Date.now() + "-" + Math.random().toString(16).slice(2));
 }
 
-// First thing the learner said, which is what a chat is actually about.
+/* The first thing anyone said, whichever side said it. Not "the first user
+ * turn": story time and focused chat open with the partner speaking, so a
+ * user-only rule leaves every story in the list called "New chat". A plain chat
+ * still starts with the learner, so nothing there changes. */
 function titleFrom(turns) {
-  const first = (turns || []).find(t => t.role === "user" && t.text);
+  const first = (turns || []).find(t =>
+    (t.role === "user" || t.role === "assistant") && t.text);
   if (!first) return "New chat";
   const t = first.text.trim().replace(/\s+/g, " ");
   return t.length > 28 ? t.slice(0, 28) + "…" : t;
@@ -2090,7 +2122,7 @@ function startActivity(id) {
   const c = newChat(HSKPrompt.ACTIVITIES[id] ? id : "chat");
   renderStarters();
   const act = HSKPrompt.activityFor(currentActivity());
-  if (act.gen === "segments") runStory();
+  if (act.gen === "segments") storyStep();
   else if (id !== "chat") openingTurn();
   return c;
 }
@@ -2960,7 +2992,7 @@ async function retryLast() {
   return runTurn([], text);
 }
 
-/* A story, one segment at a time.
+/* A story, one segment at a time -- and one tap per segment.
  *
  * Not one long turn, and the reason is pacing rather than validation cost.
  * earn(), CREDIT_CAP and SLATE are per-TURN quantities derived from graded-reader
@@ -2969,49 +3001,73 @@ async function retryLast() {
  * the one place the cap silently removes it. Segmenting gives each part its own
  * credits and its own slate without touching a researched constant.
  *
+ * Driven by the learner rather than looped, which is a change of behaviour and
+ * fixes two things at once. A five-segment loop is minutes of unattended
+ * generation on a model that takes its time, and a phone that backgrounds the
+ * tab partway through loses every segment the loop had not yet reached -- the
+ * first one included, which is why a story could vanish entirely. One segment
+ * per tap is persisted before the next is asked for, so leaving the page costs
+ * nothing, and a learner who has read enough simply stops tapping.
+ *
  * A segment that exhausts its attempts keeps its best answer and the story
- * continues: turn() returns its give-up reply rather than throwing, so the loop
- * needs no guard of its own. */
-async function runStory() {
+ * continues: turn() returns its give-up reply rather than throwing, so the step
+ * needs no guard of its own.
+ *
+ * How far the story has got is derived, never stored. Phase one is the
+ * assistant turns before the learner has said anything, so counting them needs
+ * no new field on a message -- which matters, because sync.js only round-trips
+ * the columns db/schema.sql names, and a stored position would come back from
+ * another device missing. */
+function storyTold() {
+  let n = 0;
+  for (const t of S.history) {
+    if (t.role === "user") break;
+    if (t.role === "assistant") n++;
+  }
+  return n;
+}
+
+async function storyStep() {
   if (S.busy) return;
-  S.busy = true; renderBusy();
+  const told = storyTold();
+  // Past the question, phase two is ordinary chat and has nothing to step.
+  if (told > STORY_SEGMENTS) return;
+  const asking = told === STORY_SEGMENTS;
+  S.busy = true; renderBusy(); renderStarters();
+  const bubble = thinkingBubble(asking
+    ? "Thinking of a question about the story\u2026"
+    : "Writing part " + (told + 1) + " of " + STORY_SEGMENTS + "\u2026 this takes a moment.");
   try {
-    for (let i = 0; i < STORY_SEGMENTS; i++) {
-      const res = await turn({
-        storySegment: { index: i, of: STORY_SEGMENTS },
-        maxTokens: STORY_MAX_TOKENS,
-        attempts: STORY_ATTEMPTS,
-        model: storyModel()
-      });
-      S.history.push({
-        role: "assistant", text: res.text, needs: res.needs,
-        attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
-        id: newMessageId(), created_at: new Date().toISOString()
-      });
-      const introduced = settlePace(res);
-      if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
-      recordTurn(res.attempts, res.failed);
-      persist(); renderAll();
-    }
     /* Phase two is the ordinary chat loop. The story is now in windowed()'s
      * context, so a question about it needs no new machinery -- and the answers
      * are graded by the grader that already runs on every message. */
-    const res = await turn({ storyQuestion: true, model: storyModel() });
+    const res = await turn(asking
+      ? { storyQuestion: true, model: storyModel() }
+      : { storySegment: { index: told, of: STORY_SEGMENTS },
+          maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() });
     S.history.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
       id: newMessageId(), created_at: new Date().toISOString()
     });
+    // The question is not a segment and earns no slate of its own, as before.
+    if (!asking) {
+      const introduced = settlePace(res);
+      if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
+    }
     recordTurn(res.attempts, res.failed);
-    persist(); renderAll();
-  } catch (err) {
-    console.error(err);
-    S.history.push({ role: "notice", kind: err.kind || "http",
-                     detail: (err && err.message) || "", model: S.model });
     persist();
+  } catch (err) {
+    if (err.kind !== "stopped") {
+      console.error(err);
+      S.history.push({ role: "notice", kind: err.kind || "http",
+                       detail: (err && err.message) || "", model: S.model });
+      persist();
+    }
   } finally {
+    bubble.remove();
     S.busy = false; renderBusy();
-    renderAll();
+    renderAll(); renderStarters();
   }
 }
 
@@ -3025,12 +3081,22 @@ async function openingTurn() {
   return runTurn([], "");
 }
 
+/* The placeholder standing in for a reply while it is generated. A chat turn is
+ * quick enough that a bare ellipsis reads as "working"; a story segment can take
+ * most of a minute, and an ellipsis that long reads as a hung app -- so it gets
+ * to say what it is waiting for. */
+function thinkingBubble(label) {
+  const el = document.createElement("div");
+  el.className = "msg bot";
+  el.innerHTML = '<div class="bubble" style="font-size:' + (label ? "15px" : "18px") +
+    ';color:var(--dim)">' + escapeHtml(label || "\u2026") + "</div>";
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
+  return el;
+}
+
 async function runTurn(toGloss, text) {
 
-  const thinking = document.createElement("div");
-  thinking.className = "msg bot";
-  thinking.innerHTML = '<div class="bubble" style="font-size:18px;color:var(--dim)">…</div>';
-  log.appendChild(thinking); log.scrollTop = log.scrollHeight;
+  const thinking = thinkingBubble("");
 
   try {
     const res = await turn();
@@ -3044,12 +3110,15 @@ async function runTurn(toGloss, text) {
     recordTurn(res.attempts, res.failed);
     persist();
   } catch (err) {
-    console.error(err);
-    // err.message is empty when the API gave no reason; String(err) would turn
-    // that into the word "Error", which reads as a detail and is not one.
-    S.history.push({ role: "notice", kind: err.kind || "http",
-                     detail: (err && err.message) || "", model: S.model });
-    persist();
+    // A stop is the learner's decision; retryLast() is how they resume.
+    if (err.kind !== "stopped") {
+      console.error(err);
+      // err.message is empty when the API gave no reason; String(err) would turn
+      // that into the word "Error", which reads as a detail and is not one.
+      S.history.push({ role: "notice", kind: err.kind || "http",
+                       detail: (err && err.message) || "", model: S.model });
+      persist();
+    }
   } finally {
     thinking.remove();
     S.busy = false; renderBusy();
@@ -3139,10 +3208,17 @@ function renderLevelChip() {
   chip.setAttribute("aria-label", "Level: " + levelLabel() + ", open settings");
 }
 
-/* One place that knows what "a turn is running" disables. Not syncBusy:
- * that name is taken, by the flag saying a cloud pull or push is in flight. */
+/* One place that knows what "a turn is running" changes. Not syncBusy: that
+ * name is taken, by the flag saying a cloud pull or push is in flight.
+ *
+ * The send button is not disabled while busy any more -- busy is precisely when
+ * it has something to do. It becomes the stop button, which is where every
+ * other chat app puts one, and is the only control on screen that is guaranteed
+ * to be under the learner's thumb already. */
 function renderBusy() {
-  $("#send").disabled = S.busy;
+  const b = $("#send");
+  b.textContent = S.busy ? "\u505c" : "\u9001";
+  b.title = S.busy ? "Stop generating" : "Send";
   $("#activity").disabled = S.busy;
 }
 
@@ -3684,16 +3760,44 @@ async function checkUpdate() {
   }
 }
 
-/* Tapping fills the composer instead of sending: the learner sees the sentence
- * they are about to say, can edit it, and the words get underlined and learned
- * like anything typed. */
+/* Phase one of a story is listening, not writing. The composer invites a
+ * sentence -- 用中文写 -- that has nowhere to go until the partner has finished
+ * and asked its question, so until then it invites nothing. */
+function renderComposer() {
+  const listening = currentActivity() === "story" && storyTold() <= STORY_SEGMENTS;
+  input.disabled = listening;
+  input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
+}
+
+/* One tap per segment, and the label is the only place the story says where it
+ * has got to -- five bubbles in the log all look alike. Not gated on the
+ * starters preference below: this is a control, not an opener. */
+function renderStoryControl(box) {
+  if (S.busy) return;
+  const told = storyTold();
+  if (told > STORY_SEGMENTS) return;
+  const b = document.createElement("button");
+  b.className = "story";
+  b.textContent = told === 0 ? "Start the story"
+    : told < STORY_SEGMENTS ? "Read on (" + (told + 1) + " of " + STORY_SEGMENTS + ")"
+    : "Ask me about the story";
+  b.onclick = storyStep;
+  box.appendChild(b);
+}
+
+/* Tapping a starter fills the composer instead of sending: the learner sees the
+ * sentence they are about to say, can edit it, and the words get underlined and
+ * learned like anything typed. */
 function renderStarters() {
   const box = $("#starters");
   box.innerHTML = "";
-  if (!S.starters) return;
+  renderComposer();
   /* Starters are openers for the LEARNER. Chat wants them; the other two open
    * with the partner speaking first, so offering an opener would invite the
-   * learner to talk over a story that has not started. */
+   * learner to talk over a story that has not started. Story time uses the
+   * strip for its own control instead. */
+  if (currentActivity() === "story") return renderStoryControl(box);
+  if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
     const b = document.createElement("button");
@@ -3916,7 +4020,7 @@ function closeSheet(id) { $(id).classList.remove("open"); }
 
 /* --------------------------------------------------------------- listeners */
 
-$("#send").onclick = send;
+$("#send").onclick = () => (S.busy ? stopTurn() : send());
 input.addEventListener("input", () => { updateMirror(); autosize(); });
 input.addEventListener("scroll", () => { mirror.scrollTop = input.scrollTop; });
 input.addEventListener("keydown", e => {
