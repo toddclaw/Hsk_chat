@@ -302,6 +302,80 @@ completion**, at concurrency 1 as well as 4, across every arm. `callModel` throw
 reply and nothing retries it, so a story that hits one dies mid-narrative on a notice card.
 The harness retries once and counts; the app does not, and should.
 
+### Worked example: six ways to fix story time, none of which worked
+
+Story time at HSK 1 produced nothing usable: with the real three-attempt repair loop,
+94% of segments never came clean and every story degraded into `我不知道。` repeated. Six
+strategies were measured against that, all on `qwen3-30b-a3b`, 12 stories per arm.
+
+**The metric had to be fixed first, and this is the transferable part.** The first pass had
+*fresh context per retry* winning 55% clean against the control's 12%, and *plan then
+constrain* at 62%. Both were writing `他很好。` — clean, in level, and useless as a story.
+Any measure of "did the model obey the constraint" can be maximised by saying almost
+nothing. The counter became USABLE: clean **and** at least 40 Han characters.
+
+| | usable | stories with 3+ usable | chars in clean segments |
+| --- | --- | --- | --- |
+| control (90 characters asked) | 2/55 | **0/11** | 39 |
+| redirect on failure | 0/50 | 0/10 | 25 |
+| redirect on the last attempt only | — | 0/11 | 32 |
+| fresh context per retry | 0/55 | 0/11 | 5 |
+| plan then constrain | 0/60 | 0/12 | 15 |
+| ask for 50 characters | 2/60 | 0/12 | 28 |
+| ask for 30 characters | 0/55 | 0/11 | 19 |
+
+Not one arm produced a story with three usable segments. Asking for less does raise the raw
+clean rate — 7% to 32% to 44% — and shrinks the segments in exact step, so nothing crosses
+the bar. Six attempts instead of three is included in those clean counts.
+
+**The variable none of the prompt work touched was the model.** Same control arm, same level:
+
+| | usable | stories with 3+ usable | chars in clean segments | violations/100 han | $/story |
+| --- | --- | --- | --- | --- | --- |
+| `qwen3-30b-a3b` (shipped default) | 2/55 | 0/11 | 39 | ~27 | $0.0006 |
+| `google/gemini-2.5-flash` | 11/40 | 1/8 | 45 | — | $0.004 |
+| `deepseek/deepseek-v4-pro` | 20/40 | 3/8 | 112 | 11.6 | $0.025 |
+| `anthropic/claude-sonnet-4.5` | **33/40** | **8/8** | 154 | **1.1** | $0.10 |
+
+Sonnet also introduced new words through the ordinary pacing path — 15 across 4 stories,
+with no change to `pace.js` — and used `[[NEED:]]` in 12 of 20 segments. RESEARCH.md records
+that channel firing **0 times in 512 replies**; it is not dead, it was never reachable by the
+model this app ships.
+
+**And the strategies actively hurt on a capable model.** Re-measured on Sonnet, 4 stories per
+arm, because a strategy that fails where everything fails has not really been tested:
+
+| | usable | stories with 3+ usable | chars in clean segments | words introduced |
+| --- | --- | --- | --- | --- |
+| control | **15/20** | **4/4** | 164 | **12** |
+| redirect on failure | 8/20 | 2/4 | 160 | 3 |
+| plan then constrain | 10/20 | 2/4 | 89 | 2 |
+
+Redirect discards material the model could in fact have expressed; plan confines it to a beat
+chosen before the constraint was known. **The prompt was never the problem.** Do not spend
+another run on story-time prompt strategy without first changing the model.
+
+### Two constraints any per-activity model setting has to carry
+
+Discovered while trying to measure `deepseek-v4-pro`, which at first appeared to fail
+completely — 8 stories out of 8 producing nothing.
+
+- **A reasoning model spends `max_tokens` on reasoning before it writes.** At the shipped
+  `STORY_MAX_TOKENS` of 400 it returned nothing 3 times in 5; at 800, 5 out of 5; on a repair
+  turn it burned 1200 and still came back `finish_reason: "length"` with no content. A model
+  id alone is not enough to switch to — it needs a token floor with it.
+- **It will not take the story prompt in the `system` role at all**: 0 completions out of 8,
+  against 8 out of 8 with the identical text as a `user` message. Most likely the story rules
+  tell it not to address the student, and with no user turn it concludes there is nothing to
+  say. `qwen` is unaffected either way, so this is *not* the cause of the one-in-eight empty
+  completions measured across every arm — that remains unexplained.
+
+A harness bug worth naming for the same reason: an empty reply on a *repair* turn was ending
+the whole story, which scored a model down for failing to improve a segment it had already
+written successfully. Segment 0 was returning 84 good characters and the story was thrown
+away regardless. Only an empty *first* attempt ends a story now, which is what `index.html`
+does.
+
 ### A cheaper model is not a cheaper conversation
 
 Per-token price is the least important of the three things that set what a reply
