@@ -1534,6 +1534,32 @@ return true;
       "       document.querySelector('#send').disabled;") === true,
       "the activity selector shares the send button's busy state");
 
+
+    /* --------------------------------- the chat list, and who gets starters */
+
+    await exec("window.newChat('story'); window.renderChats();");
+    const meta = await exec(
+      "var m = document.querySelector('#chatList .cmeta'); return m ? m.textContent : '';");
+    check(/Story time/.test(meta),
+      "the chat list says which activity a conversation was", meta);
+    check(/message/.test(meta), "and still says how many messages", meta);
+
+    /* Starters are openers for the LEARNER, so only chat wants them. The sync
+     * block above flipped the global toggle to drive a prefs push, so put it
+     * back first -- otherwise all three cases below are empty for a reason that
+     * has nothing to do with activities. */
+    await exec("var b = document.querySelector('#showStarters');" +
+               "b.checked = true; b.dispatchEvent(new Event('change'));");
+    await exec("window.newChat('chat'); window.renderStarters();");
+    check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
+      "chat offers starters");
+    await exec("window.newChat('story'); window.renderStarters();");
+    check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
+      "story time does not -- the partner speaks first");
+    await exec("window.newChat('focused'); window.renderStarters();");
+    check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
+      "and neither does focused chat");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
