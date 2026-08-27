@@ -236,7 +236,7 @@
    * impossible to accidentally sync the API key or the model cache, not
    * just a matter of remembering to leave them out. */
   var PREFS_KEYS = [
-    "level", "model", "teachModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
+    "level", "model", "teachModel", "storyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "anki", "font", "starters", "script", "speechRate",
     "freeOnly", "modelSort", "favModels", "favOnly", "grader", "pace", "budget", "teachPrompts"
   ];

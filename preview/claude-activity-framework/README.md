@@ -784,6 +784,15 @@ constants rather than against the number, so changing either one fails the suite
 A segment the model cannot get down to level keeps its best attempt and the story carries on.
 The canned fallback is survivable in a chat turn and nonsense in the middle of a narrative.
 
+**Story time needs its own model, and Settings gives it one.** This is the one activity a
+cheap model cannot do. Measured at HSK 1: two usable segments in fifty-five on the default
+chat model, against thirty-three in forty on the default story model — and zero stories out
+of eleven that worked, against eight out of eight. Six different prompt strategies were tried
+first and none of them helped; two of them made a capable model worse. The write-up is in
+DEVELOPING.md. It costs roughly **$0.10 a story**, about 170× a chat turn, which is why it is
+a separate setting you can see and change rather than something the app quietly spends on
+your behalf.
+
 Its characters are called **小明, 小红 and 小白**, and that is not laziness — it is the only
 way story time gets named characters at all. No name character is legal at any level the app
 offers: `明`, `王` and `李` are absent from all 10,896 words of the combined 7–9 band, and
