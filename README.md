@@ -657,17 +657,17 @@ Settings → Prompt mode toggles `without-list` (rules only) and `with-list` (al
 appended). Both paths were built because HSKStory reported that including the vocabulary list
 makes output *worse*, and for a long time this project had no key to check with.
 
-**It has now been checked, and it does not replicate.** Including the list made output
-better: violation tokens roughly halved at both HSK 1 and HSK 3, and out-of-level replies at
-HSK 3 fell from 49/64 to 30/64. The full numbers, the way the two arms fail differently, and
-the cost that runs the other way are in
+**It has now been checked at four levels, and the answer depends on the level.** The list
+helps where it constrains and stops helping once it does not: violation tokens more than
+halve at HSK 1 and HSK 3, and the advantage decays to nothing by HSK 4 (p = 0.72) and HSK 6
+(p = 1.00) while the cost climbs from 2.7× to 33×. Full numbers, the way the two arms fail
+differently, and the place name that reverses the HSK 6 result are in
 [RESEARCH.md](RESEARCH.md#whether-the-allowlist-belongs-in-the-prompt).
 
-The default is still `without-list`, because `with-list` costs 6.7× as much at HSK 3 and the
-gap widens with the list — that trade has not been measured at HSK 5–6, where the allowlist
-is thousands of words. Reproduce or extend the measurement with `tools/prompt-ab.js`; the
-in-app counters (turns, mean retries, give-ups per mode) are still there for a longer,
-messier read from real use.
+The default is `without-list` at every level, which the measurement says is the wrong arm at
+HSK 1–3 and the right one from HSK 4 up. A single global toggle cannot express that.
+Reproduce or extend with `tools/prompt-ab.js`; the in-app counters (turns, mean retries,
+give-ups per mode) remain for a longer, messier read from real use.
 
 Settings also exposes the assembled prompt itself. Untouched it keeps tracking the level and
 length pickers; edited, it is sent as written with `{level}` and `{words}` substituted.

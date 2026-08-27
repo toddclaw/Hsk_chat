@@ -301,7 +301,8 @@ the first answer's format silently becomes the format of every answer.
 
 ### Whether the allowlist belongs in the prompt
 
-**Measured, and it comes out the opposite way round from what the app ships as its default.**
+**Measured across four levels. The answer depends on the level, which is not how the setting
+is built.**
 
 Settings → Prompt mode chooses between `without-list` (the rules alone) and `with-list` (the
 level's whole allowlist appended). Both paths exist because HSKStory reported that including
@@ -309,47 +310,65 @@ the list makes output *worse*, and this project had never checked. `tools/prompt
 `qwen3-30b-a3b`, 64 replies per arm per level, eight namefree seeds from `STARTERS[1]`,
 `length=short`, arms interleaved so a mid-run provider change cannot land on one of them.
 
-| | out-of-level replies | violation tokens | chars/reply | cost / 64 replies |
-| --- | --- | --- | --- | --- |
-| HSK 1 `without-list` | 35/64 (55%) | 82 | 13.8 | $0.0030 |
-| HSK 1 `with-list` | 33/64 (52%) | **37** | 14.0 | $0.0080 |
-| HSK 3 `without-list` | 49/64 (77%) | 74 | 27.3 | $0.0030 |
-| HSK 3 `with-list` | **30/64 (47%)** | **38** | 25.5 | $0.0202 |
+| level | list words | `without` bad/64 | `with` bad/64 | Fisher p | `without` tokens | `with` tokens | token ratio | cost multiple |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| HSK 1 | 300 | 35 (55%) | 33 (52%) | 0.86 | 82 | 37 | **2.22×** | 2.7× |
+| HSK 3 | 988 | 49 (77%) | 30 (47%) | **0.00097** | 74 | 38 | **1.95×** | 6.7× |
+| HSK 4 | 1,978 | 34 (53%) | 31 (48%) | 0.72 | 53 | 42 | 1.26× | 12× |
+| HSK 6 | 5,334 | 24 (38%) | 24 (38%) | 1.00 | 35 | 30 | 1.17× | **33×** |
 
-**HSKStory's finding does not replicate here.** Including the list made output better at both
-levels, and the effect grew with the size of the list — which is the direction to expect if
-list size is the mechanism. The system prompt goes from 635 to 1438 characters at HSK 1 and
-from 664 to 3360 at HSK 3.
+**HSKStory's finding does not replicate — but the opposite claim does not hold everywhere
+either.** The list helps at low levels and stops helping well before the top of the syllabus.
+The violation-token ratio decays monotonically, 2.22 → 1.95 → 1.26 → 1.17, while cost runs the
+other way, 2.7× → 33×. Length-normalising per 100 Han characters does not rescue the top end:
+2.25 → 1.82 → 1.31 → 1.48.
 
-At HSK 1 the *binary* rate is a non-result: 35 against 33 in 64, Fisher exact p = 0.86. At
-HSK 3 it is 49 against 30, p = 0.00097, and it survives deflating the sample for duplicate
-replies (p = 0.0013).
+Only HSK 3 is individually significant (p = 0.00097, surviving deflation for duplicate
+replies). HSK 1 is a non-result on the binary rate at p = 0.86 — but its violation *tokens*
+more than halve, 82 → 37, which is the effect a per-reply threshold cannot see because one
+leaked 每 scores the same as one leaked 公园. **Counting violation tokens rather than replies
+is the better measure**, and it is what makes the whole trend legible.
 
-**Counting violation tokens rather than replies is the better measure, and it is what makes
-HSK 1 legible.** Tokens roughly halve in the `with-list` arm at *both* levels — 82 → 37 and
-74 → 38 — while the binary rate at HSK 1 sees nothing, because one leaked 每 scores the same
-as one leaked 公园. The list was helping at HSK 1 too; a per-reply threshold could not see it.
+At HSK 4 the entire effect is 11 violation tokens across 64 replies (p = 0.72). At HSK 6 it is
+5 tokens (p = 1.00), and see the contamination note below for why even those 5 are not real.
 
-**The two arms fail differently, which is the finding underneath the rates.** `without-list`
+**The two arms fail differently at low levels, and stop doing so.** At HSK 1 `without-list`
 reaches for a concept the level does not carry and writes the ordinary word for it — 公园,
-窗户, 心情, 散步, 树, 花 — so most violations are whole out-of-level content words (50 of 82
-tokens at HSK 1 are multi-character). `with-list` stays in the semantic neighbourhood of the
-list and trips instead on collocations that *extend* a listed word: 每 out of 每天, 汗 out of
-出汗, 通 out of 通常. Neither 每天 nor 出汗 nor 通常 is itself listed at either level. The one
-English leak in 256 replies was `without-list`.
+窗户, 心情, 散步 — so 61% of its violation tokens are multi-character whole words, while
+`with-list` stays near the list and trips on collocations that *extend* a listed word: 每 out
+of 每天, 汗 out of 出汗, 通 out of 通常. By HSK 4 that distinction is gone (21% vs 24%
+multi-character) and at HSK 6 it inverts (9% vs 27%). Both arms end up failing on rare
+characters inside compounds — 韭菜, 馅, 蔬菜, 中暑 — which appear at the same rate either way.
 
-**Ours, and unresolved: the cost runs the other way and gets worse where the quality gain is
-biggest.** `with-list` costs 2.7× at HSK 1 and 6.7× at HSK 3, entirely in input tokens — reply
-length is unchanged. Extrapolated to HSK 5–6 the allowlist is thousands of words, and the
-arm that helps most is the one that may not fit the context window at all. Nothing here
-measures that end of the range, so this result should not be read as "turn `with-list` on
-everywhere".
+**The mechanism this implies, and it explains the shape of the whole table:** the list helps
+when it *constrains*. At HSK 1 and 3 the model wants words the level does not carry, and
+showing it the list redirects it. By HSK 6 the model's natural register at short length
+already sits mostly inside 5,334 words, so 7,600 tokens of list buys the forbidding of things
+it was not going to say.
 
-Two caveats on the sampling. Eight seeds at temperature 0.7 repeat themselves — only 42 of 64
-HSK 1 `without-list` replies were distinct texts — so the samples are less independent than
-n = 64 suggests; the p-values above survive deflating for it, but a wider seed set would be
-better. And `[[NEED:]]` was used in **0 of 256 replies**, so this measurement says nothing
-about the escape hatch the prompt offers, at this model and this length setting.
+**A methodology finding that sharpens the existing namefree rule.** At HSK 6 the single
+largest violation in `without-list` was 杭×9 — every one of them `我家在杭州`, from the
+`你的家在哪儿？` seed. `with-list` produced no place names at all. Deleting that one character
+takes `without-list` from 24/64 to 19/64 and **reverses the sign** of the whole comparison
+(p = 0.454). The seeds were namefree, as this document requires — but the *model* volunteers
+place names, and disproportionately in the arm with no list to anchor it, and `validate()`'s
+`.name` filter does not catch 杭州. Namefree seeds are necessary and not sufficient; a
+measurement about out-of-level words has to check whether a place name is carrying the result.
+
+**Ours: the recommendation is level-dependent, which the current setting cannot express.** The
+list earns its tokens at HSK 1–3 and does not at HSK 4 and above. HSK 4 is the ambiguous
+boundary and this run does not resolve it; HSK 2, 5 and 7–9 are unmeasured, and on this trend
+there is no reason to expect 7–9 to pay. The app ships `without-list` as its default at every
+level, which is the wrong arm exactly where the difference is largest.
+
+Three caveats, stated because they cut against the numbers rather than for them. Eight seeds at
+temperature 0.7 is the weak point of the whole series: distinct-text counts look healthy but
+the violation contexts show near-duplicates, so distinctness overstates independence, and a
+wider seed set is worth more than more runs on these eight. One model, one length setting, one
+temperature — a 30B model may lean on an in-context list more than a larger one would. And
+**`[[NEED:]]` was used in 0 of 512 replies across all four levels**, so this series says nothing
+about the escape hatch the prompt offers; at this model and `length=short`, that path never
+fires at all.
 
 ### Earlier measurements
 
