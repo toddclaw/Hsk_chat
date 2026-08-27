@@ -112,6 +112,28 @@
                     "最后问学生一个问题。不要只说一两句。" }
   };
 
+  /* Which arm of the prompt-mode A/B a level actually wants.
+   *
+   * The measurement says there is no single answer: the allowlist helps where it
+   * CONSTRAINS and stops once it does not. At HSK 1-3 the model reaches for words
+   * the level does not carry and the list redirects it -- violation tokens more
+   * than halve. By HSK 4 the whole effect is 11 tokens in 64 replies (p = 0.72)
+   * and by HSK 6 it is nothing (p = 1.00), because the model's natural register at
+   * short length already sits inside 5,334 words. Cost meanwhile runs 2.7x to 33x.
+   * Full table in RESEARCH.md, "Whether the allowlist belongs in the prompt".
+   *
+   * So `auto` is the default and resolves per level, and the two explicit values
+   * still pin an arm -- the counters in Settings exist to be run, and pinning is
+   * how you run them. HSK 4 is the ambiguous boundary and sits on the cheap side
+   * deliberately: the evidence there is a non-result, and a non-result should not
+   * buy a 12x bill. */
+  var AUTO_LIST_MAX_LEVEL = 3;
+
+  function modeFor(mode, level) {
+    if (mode === "with-list" || mode === "without-list") return mode;
+    return (level || 1) <= AUTO_LIST_MAX_LEVEL ? "with-list" : "without-list";
+  }
+
   function styleFor(level) {
     return LEVEL_STYLE[level] || LEVEL_STYLE[1];
   }
@@ -469,6 +491,7 @@
   }
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
+              AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor, build: build,
               translate: translate, explain: explain, grade: grade,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };

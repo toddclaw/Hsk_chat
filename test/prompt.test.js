@@ -415,5 +415,37 @@ check(!/The conversation so far/.test(
 check(P.grade({ label: "HSK 5", text: SENT }).includes("HSK 5"),
   "grade is told the level, which bounds the correction it offers");
 
+/* modeFor: "auto" is a rule for picking an arm, not an arm. The boundary is a
+ * measured one (RESEARCH.md, "Whether the allowlist belongs in the prompt"), so
+ * it is pinned here -- moving it silently would move the app's cost by an order
+ * of magnitude at the top of the syllabus. */
+check(P.modeFor("auto", 1) === "with-list", "auto puts the list in at HSK 1");
+check(P.modeFor("auto", 3) === "with-list", "auto puts the list in at HSK 3");
+check(P.modeFor("auto", 4) === "without-list", "auto drops the list at HSK 4");
+check(P.modeFor("auto", 7) === "without-list", "auto drops the list at HSK 7-9");
+check(P.AUTO_LIST_MAX_LEVEL === 3, "the measured boundary is 3");
+for (const n of levels) {
+  const m = P.modeFor("auto", n);
+  check(m === "with-list" || m === "without-list",
+    `L${n}: auto resolves to a real arm`, "got " + m);
+}
+// Pinning still pins: the Settings counters are only meaningful if it does.
+for (const n of [1, 4, 7]) {
+  check(P.modeFor("with-list", n) === "with-list", `L${n}: with-list stays pinned`);
+  check(P.modeFor("without-list", n) === "without-list", `L${n}: without-list stays pinned`);
+}
+// An unknown or missing value must not silently become the expensive arm.
+check(P.modeFor(undefined, 6) === "without-list", "a missing mode falls to the cheap arm at HSK 6");
+check(P.modeFor("", 1) === "with-list", "an empty mode still resolves by level");
+
+/* The arm has to reach the prompt: build() takes `words`, and the caller decides
+ * whether to pass it. This asserts the two halves agree about what "with-list"
+ * means -- that the allowlist genuinely appears only in that arm. */
+const modeArmOn = P.build({ level: 1, label: "HSK 1", length: "short", words: "我 你 好" });
+const modeArmOff = P.build({ level: 1, label: "HSK 1", length: "short", words: "" });
+check(modeArmOn.includes("我 你 好"), "build puts the allowlist in when given one");
+check(!modeArmOff.includes("我 你 好"), "and leaves it out when not");
+check(modeArmOn.length > modeArmOff.length, "with-list is the longer prompt");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -615,10 +615,14 @@ footer{
 
     <label for="promptMode">Prompt mode (A/B)</label>
       <select id="promptMode">
+        <option value="auto">auto — list at HSK 1-3, rules only above</option>
         <option value="without-list">without-list — rules only</option>
         <option value="with-list">with-list — full allowlist in the prompt</option>
       </select>
-      <div class="note">HSKStory reports that including the wordlist makes output worse. The counters below measure it: mean retries per turn, lower is better.</div>
+      <div class="note">Measured across four levels: the allowlist cuts out-of-level words at
+      HSK 1-3 and stops helping by HSK 4, while costing 2.7× to 33× more as it grows. auto
+      follows that. Pin an arm to run the counters below yourself — mean retries per turn,
+      lower is better.</div>
       <div class="stats" id="stats"></div>
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button id="resetStats">Reset A/B counters</button>
@@ -871,7 +875,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v57 — 2026-08-25";
+const VERSION   = "v58 — 2026-08-26";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -940,7 +944,7 @@ const S = {
   cost: store.get(K.cost, {}),
   // Per-prompt overrides, keyed by TEACH_PROMPTS[].key. Absent = use the default.
   teachPrompts: store.get(K.teachPrompts, {}),
-  mode:    store.get(K.mode, "without-list"),
+  mode:    store.get(K.mode, "auto"),
   pinyin:  store.get(K.pinyin, "extra"),      // off | extra | all
   autoAdd: store.get(K.autoAdd, true),        // learn the words the user types
   replyLength: store.get(K.length, "short"),  // short | medium | long
@@ -1148,13 +1152,18 @@ function levelLabel() {
 
 function wordList() { return S.lex ? [...S.lex.words.keys()].join(" ") : ""; }
 
+/* S.mode may be "auto", which is not an arm -- it is a rule for picking one.
+ * Everything that asks "is the list in the prompt" must ask through here, the
+ * counters included, or "auto" becomes a third bucket averaging two behaviours. */
+function effectiveMode() { return HSKPrompt.modeFor(S.mode, S.level); }
+
 /* The prompt actually sent. A custom one is used verbatim apart from the two
  * placeholders, so the level and length selectors stop rewriting it -- they
  * still drive validation and the token ceiling, which is where they matter. */
 function systemPrompt(offer, reuse, required) {
   if (S.prompt) {
     let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
-    if (S.mode === "with-list" && S.prompt.indexOf("{words}") === -1) {
+    if (effectiveMode() === "with-list" && S.prompt.indexOf("{words}") === -1) {
       out += "\n\n你只可以用这些词：\n" + wordList();
     }
     // A custom prompt still gets the pacing lines; they are mechanism, not style.
@@ -1180,7 +1189,7 @@ function defaultPrompt(offer, reuse, required) {
     script: S.script,
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
-    words: S.mode === "with-list" ? wordList() : "",
+    words: effectiveMode() === "with-list" ? wordList() : "",
     convert: toScript
   });
   return p;
@@ -1518,7 +1527,8 @@ async function turn() {
 /* ------------------------------------------------------------------ metrics */
 
 function recordTurn(attempts, failed) {
-  const s = S.stats[S.mode] || (S.stats[S.mode] = { turns: 0, retries: 0, fallbacks: 0 });
+  const m = effectiveMode();
+  const s = S.stats[m] || (S.stats[m] = { turns: 0, retries: 0, fallbacks: 0 });
   s.turns++;
   s.retries += attempts - 1;
   if (failed) s.fallbacks++;
