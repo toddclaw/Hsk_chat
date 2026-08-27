@@ -67,18 +67,88 @@ should probably avoid inviting *place* names too until the validator handles the
 
 ---
 
-## `[[NEED:]]` never fires
+## `[[NEED:]]` never fires *on a cheap model* — answered
 
 **Found:** 0 uses in 512 replies across four levels, `qwen3-30b-a3b`,
-`length=short`.
+`length=short`. **Answered** 2026-08-27 while measuring story time.
 
-The prompt offers the model an escape hatch for requesting a word it needs but
-the level does not carry. At this model and this length setting it is never
-taken. The whole extraction, validation-with-needs and glossing path is therefore
-unexercised by the A/B series, and possibly by normal use.
+It is not that the rule does not work. It is that this model never reaches for
+it. On `claude-sonnet-4.5` the same prompt used `[[NEED:]]` in **12 of 20 story
+segments**, and `qwen` itself used it 4 times at HSK 6 — where the level is wide
+enough that the model notices a gap rather than simply writing something else.
 
-**What would settle it:** check whether it fires at longer reply lengths or on a
-larger model before concluding anything. If it genuinely never fires, the
-question is whether the rule is earning its tokens in every prompt — but that is
-a measurement, not an assumption, and the rule may be doing useful work by
-existing even when unused.
+So the extraction, validation-with-needs and glossing path is exercised in normal
+use, on a capable model, and the rule is earning its tokens. Nothing to fix. The
+methodological point stands and is worth remembering: **"the model never does X"
+is a statement about the model, not about the prompt**, and the A/B series had
+been reading one as the other.
+
+---
+
+## Story time is unverified end to end on the shipped configuration
+
+**Found:** finishing the story-time model work, 2026-08-27.
+
+Everything measured about story time ran through `tools/story-ab.js`, which
+*mirrors* `turn()` and `runStory()` rather than being them — it has its own copy
+of `repairPrompt()` and its own pacing settle. `test/browser.test.js` covers the
+real code but stubs the model, so it proves the story model reaches the request
+and that an empty completion is retried; it cannot prove the app produces a
+readable story.
+
+**What would settle it:** generate one story on the branch preview with a real
+key and read it. That is genuinely new information, and it is the last thing that
+should happen before this branch merges.
+
+---
+
+## Story segments run short of the 90 characters the prompt asks for
+
+**Found:** every story measurement, all models. 55–83 characters typical on
+`qwen`, 112–168 on capable models where the *clean* segments are measured.
+
+The pacing case for segmenting at all is arithmetic on 90: it is two credits at
+`DEFAULT_RATE = 45` and stays under `CREDIT_CAP = 3`, so no segment discards
+earnings (RESEARCH.md). At 55 it is one credit. The design still beats one long
+turn, but by less than the arithmetic claims, and `test/pace.test.js` pins the
+arithmetic against a number the model does not actually hit.
+
+**What would settle it:** decide whether the target should move to what models
+actually produce, or whether the instruction should be enforced the way the
+required-word rule is (reject and re-ask). Changing 90 means updating
+RESEARCH.md's justification with it — see CLAUDE.md.
+
+---
+
+## One completion in eight comes back empty, cause unknown
+
+**Found:** across every arm of every story run, at concurrency 1 as well as 6, on
+`qwen3-30b-a3b`.
+
+`turn()` now retries once, which stops a story dying mid-narrative on an error
+card — but that is a workaround, not a diagnosis. Ruled out: the message shape
+(20/20 fine in a direct probe), concurrency, and the system-role problem that
+affects `deepseek-v4-pro` (`qwen` is unaffected by it, 24/24).
+
+**What would settle it:** log `finish_reason`, `native_finish_reason` and the
+provider on an empty reply. OpenRouter routes one id to several providers and
+names them in the response, so the first question is whether the empties
+concentrate in one.
+
+---
+
+## Focused chat has never been measured
+
+**Found:** it shipped with the activity framework and no A/B at all.
+
+CLAUDE.md requires a counted run against a real model before a prompt edit
+ships, and focused chat is a prompt edit. Its claim is specifically **that words
+move from taught to used** — how many of the offered `readiness().unused` words
+the learner actually produces per session, against plain chat as the control.
+Out-of-level rate is *not* that measurement and would say nothing about it.
+
+**What would settle it:** an arm in a harness that counts learner production of
+offered words. `tools/story-ab.js` is the wrong shape (it has no learner); this
+needs a simulated learner or a real session, which is why it has not been done.
+
+---
