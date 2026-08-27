@@ -209,59 +209,75 @@ almost no name characters, and `王` is HSK 4 (see [The validator](#the-validato
 noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
 must be namefree, or the thing being measured is the name.
 
-### Worked example: does the story-time position rule do anything?
+### Worked example: story time's position rule, and its names
 
 Story time generates five segments back to back, and the only thing stopping segment 4 from
 being another segment 0 is one rule — `接着上面的故事往下讲，不要从头开始` in the middle,
 with a different line at each end. `tools/story-ab.js` is the harness. The control arm is a
 **wrong** position rule (every segment told it is the first) rather than no rule, so exactly
-one line differs and the rest of the prompt — the story rules, the suppressed turn-taking
-rules, the suppressed `LENGTHS` rule, the ninety-character instruction — is held identical.
-Deleting the line instead would renumber every rule after it, which is a second change.
+one line differs and the rest of the prompt is held identical; deleting the line instead
+would renumber every rule after it, which is a second change.
 
 Two counters, because one would have been trusted too easily: a judge model
 (`claude-sonnet-4.5`) labelling each segment CONTINUES / RESTARTS / UNRELATED against
 everything before it, and character-trigram overlap with the nearest earlier segment, which
-needs no model at all. Measured on `qwen3-30b-a3b`, HSK 1, 20 stories per arm:
+needs no model at all. `qwen3-30b-a3b`, HSK 1, 20 stories per arm, **pooled over three runs**
+for the shipped arm and two for the control:
 
-| | segments judged | RESTARTS | stories with no restart | trigram overlap ≥ .25 |
+| | segments | RESTARTS | stories with no restart | trigram overlap ≥ .25 |
 | --- | --- | --- | --- | --- |
-| position rule correct | 60 | 12 (20%) | **5/15** | 8/60 (13%) |
-| every segment told it is the first | 36 | 10 (28%) | 0/9 | 16/36 (44%) |
+| position rule correct | 208 | 20 (10%) | 34/52 (65%) | 9/208 (4%) |
+| every segment told it is the first | 100 | 33 (33%) | 5/25 (20%) | 42/100 (42%) |
 
-**The rule works, and it is not enough.** 20% against 28% is not a difference sixty samples
-can resolve, and taken alone it would have said the rule does nothing. The two measures that
-do separate are the mechanical one — repetition roughly triples without the rule — and the
-only unit a learner actually experiences, a whole story: a third of them survive with the
-rule and none survive without it. **Two thirds of stories still contain a restarted segment.**
-Context alone carries a good deal of the continuity, which is why the naive per-segment
-counter is nearly flat; the rule earns its place at the level of the story, not the segment.
+The rule earns its place three times over, and about a third of stories still contain a
+restarted segment.
 
-Three things the same run turned up that were not what it was looking for:
+**The pooling is the point, and the first run nearly published the opposite conclusion.**
+The shipped arm alone read **20%, 4% and 7% restarts across three sessions** — the first run
+put it at 20% against the control's 28% and would have said, with a straight face and sixty
+samples, that the rule does nothing. Nothing about the prompt changed between those runs;
+OpenRouter routes a model id to whichever provider is serving it. So:
 
-- **Out-of-level rate per reply is not comparable across activities.** Story segments came
-  back 100% out-of-level against chat's 50%, which sounds catastrophic and mostly is not: a
-  55-character segment has four times a 13-character chat turn's chances to trip. Per hundred
-  Han characters the gap is real but smaller — **27 against chat's 4–8** — and that is the
-  number to quote. Any future activity comparison must normalise by length or it is measuring
-  reply length.
-- **Names are a third of the violations, and the activity's own rule invites them.**
-  `明` alone was 94 of 654; `明`, `白` and `红` together — 小明, 小白, 小红 — are 23–33%
-  depending on the run. `validate()` forgives a name only where `叫` or `姓` introduces it,
-  and a character named once in segment 0 is bare in all four segments after. The rule
-  `介绍一两个人和一个地方` asks for exactly what the validator cannot forgive. This is the
-  same trap as the `王明` seeds above, except here it is in shipped prompt text rather than
-  in a measurement.
-- **Segments run short of the ninety they are asked for** — 55 to 83 characters across runs.
-  The pacing argument for segmenting assumes 90, which is two credits at `DEFAULT_RATE`; 55
-  is one. The design still beats one long turn, but by less than `RESEARCH.md`'s arithmetic
-  suggests.
+- **Compare arms only within a run.** They interleave, so a provider-side change lands on
+  both. The harness has always done this; the mistake was reading an absolute level off one
+  run rather than a contrast.
+- **Pool across runs before believing a level.** One 20-story run resolves a threefold
+  difference and does not resolve a 1.4× one.
+
+### The same run: names were a quarter of story time's out-of-level words
+
+`明` alone was 283 of 1686 violations in one run — 小明, 小红, 小白. `validate()` forgives a
+name only where `叫` or `姓` introduces it (see [The validator](#the-validator)), so a
+character named in segment 0 is bare in all four segments after, and the obvious fix — tell
+the model to introduce people with `叫` — repairs only the first mention. The rule
+`介绍一两个人和一个地方` was asking for exactly what the validator cannot forgive.
+
+`ACTIVITIES.story.rules` now carries `故事里的人不要起名字`, with pronouns and role words
+offered instead. Measured against the same prompt without that rule, interleaved, 20 stories
+per arm:
+
+| | violations per 100 han | name characters in top ten | RESTARTS | stories with no restart |
+| --- | --- | --- | --- | --- |
+| names allowed | 28.4 | `明×283 红×84 白×79` | 3/72 (4%) | 15/18 |
+| `不要起名字` | **22.6** | none | 5/80 (6%) | 16/20 |
+
+A fifth fewer out-of-level words per character, and **continuity is untouched** — which was
+the risk worth measuring, since pronouns are more ambiguous than names and a flatter story
+could have been the price. It was not.
+
+Two things this did not fix. Segments still come in at **55–83 characters against the 90 they
+are asked for**, so the pacing case for segmenting — 90 characters is two credits at
+`DEFAULT_RATE`, 55 is one — is weaker than `RESEARCH.md`'s arithmetic assumes. And the
+out-of-level rate per *reply* stays at 100%, because at 60-odd characters a reply almost
+always contains something: **out-of-level rate per reply is not comparable across activities
+of different lengths.** Story's 100% against chat's 50% is mostly the four-fold length
+difference. Per hundred Han characters the gap is real and smaller — 23–28 against chat's
+4–8 — and that is the number to quote. Normalise by length or you are measuring reply length.
 
 Separately, and not a prompt question at all: **about one call in eight came back with an
-empty completion**, at concurrency 1 as well as 4, across both arms. `callModel` throws on
-an empty reply and nothing retries it, so a story that hits one dies mid-narrative on a
-notice card. The harness retries once and counts, which is the only reason the table above
-has any complete stories in it.
+empty completion**, at concurrency 1 as well as 4, across every arm. `callModel` throws on an
+empty reply and nothing retries it, so a story that hits one dies mid-narrative on a notice
+card. The harness retries once and counts; the app does not, and should.
 
 ### A cheaper model is not a cheaper conversation
 

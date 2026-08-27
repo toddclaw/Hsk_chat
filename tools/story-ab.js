@@ -13,6 +13,14 @@
  *
  *   arm "positioned"   what shipped -- the rule tracks the real segment index
  *   arm "always-first" every segment is told it is the first one
+ *   arm "with-names"   the shipped no-names rule removed, which is how that
+ *                      rule's own measurement is reproduced now that it ships
+ *
+ * Pick with --arms a,b. Run-to-run variance is large enough that one 20-story
+ * run can mislead badly: the "positioned" arm alone read 20%, 4% and 7%
+ * restarts across three sessions. Compare arms only WITHIN a run -- they
+ * interleave, so a provider-side change hits both -- and pool across runs
+ * before believing an absolute level.
  *
  * The control is a WRONG position rule rather than no rule at all, so exactly
  * one line of the prompt differs between the arms and the rest -- the story
@@ -80,8 +88,12 @@ const baseLex = HSK.buildLexicon(entries, []);
 
 /* The same call defaultPrompt() makes for a story segment. `index` is the arm:
  * the real one for "positioned", a fixed 0 for "always-first". */
-function systemPrompt(index) {
-  return HSKPrompt.build({
+function systemPrompt(index, rules) {
+  /* Mutated around the call rather than passed in: build() reads the activity
+   * table, so this is the only way to test a rule in the position it would
+   * actually ship in. Restored immediately -- the arms interleave. */
+  HSKPrompt.ACTIVITIES.story.rules = rules(STORY_RULES);
+  const out = HSKPrompt.build({
     offer: [], reuse: [], require: "",
     level: LEVEL, label: LEVELS[LEVEL] || ("HSK " + LEVEL),
     length: "short", script: "simp",
@@ -89,6 +101,8 @@ function systemPrompt(index) {
     storySegment: { index: index, of: SEGMENTS },
     words: ""
   });
+  HSKPrompt.ACTIVITIES.story.rules = STORY_RULES;
+  return out;
 }
 
 const NEED_RE = /\[\[NEED:([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]]*))?\]\]/g;
@@ -156,8 +170,8 @@ async function runStory(arm) {
   const segs = [];
   let cost = 0, emptyRetries = 0;
   for (let i = 0; i < SEGMENTS; i++) {
-    const index = arm === "always-first" ? 0 : i;
-    const messages = [{ role: "system", content: systemPrompt(index) }]
+    const def = ARM_DEFS[arm];
+    const messages = [{ role: "system", content: systemPrompt(def.index(i), def.rules) }]
       .concat(segs.map(s => ({ role: "assistant", content: s.text })));
     /* An empty completion is retried once and counted. index.html does NOT
      * retry -- callModel throws "empty" and the story ends on a notice card --
@@ -235,7 +249,42 @@ async function pool(tasks, n) {
   return out;
 }
 
-const ARMS = ["positioned", "always-first"];
+/* An arm is a position rule and, optionally, an extra story rule appended to
+ * ACTIVITIES.story.rules -- which is exactly where such a rule would ship, so
+ * the arm under test is the shipped prompt and not an approximation of it.
+ *
+ * "no-names" is the candidate fix for the finding that names are roughly a
+ * third of story time's out-of-level words. Introducing a character with 叫
+ * does NOT solve it: validate() forgives only the span 叫 or 姓 actually
+ * introduces, so a name established in segment 0 is bare in all four segments
+ * after. Not naming anyone is the only version that survives the whole story.
+ *
+ * The risk it is here to measure is that pronouns are more ambiguous than
+ * names, so the fix could buy a lower out-of-level rate with a worse story --
+ * which is why this arm is judged for continuity like every other. */
+const ARM_DEFS = {
+  "positioned":   { index: i => i,  rules: r => r },
+  "always-first": { index: () => 0, rules: r => r },
+  /* The no-names rule shipped, so reproducing its measurement means REMOVING it
+   * rather than adding one. Matched on its opening clause so a reworded rule
+   * fails loudly here instead of silently making this arm identical to the
+   * control it is supposed to differ from. */
+  "with-names":   { index: i => i,
+    rules: r => {
+      const out = r.filter(x => x.indexOf("故事里的人不要起名字") === -1);
+      if (out.length === r.length) {
+        console.error("with-names: no name rule found to remove -- was it reworded?");
+        process.exit(1);
+      }
+      return out;
+    } }
+};
+const ARMS = String(arg("arms", "positioned,with-names")).split(",");
+ARMS.forEach(a => {
+  if (!ARM_DEFS[a]) { console.error("unknown arm: " + a); process.exit(1); }
+});
+
+const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
 
 (async function main() {
   /* Interleaved, like tools/prompt-ab.js: a rate limit or a provider-side

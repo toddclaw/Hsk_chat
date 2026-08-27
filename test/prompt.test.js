@@ -519,5 +519,17 @@ const qNums = q.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m 
 check(JSON.stringify(qNums) === JSON.stringify(qNums.map((_, i) => i + 1)),
   "and its rule numbering is still gap-free", JSON.stringify(qNums));
 
+/* Names are the single largest source of out-of-level words in a story, and
+ * the rule that suppresses them has to reach the segments -- not just the
+ * first one, where 叫 would have covered it anyway. */
+const nameRule = "\u6545\u4e8b\u91cc\u7684\u4eba\u4e0d\u8981\u8d77\u540d\u5b57";
+for (const idx of [0, 2, 4]) {
+  const out = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                        storySegment: { index: idx, of: 5 } });
+  check(out.includes(nameRule), `segment ${idx} is told not to name anyone`);
+}
+check(!P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
+        .includes(nameRule), "while chat is not -- it is story time's problem");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
