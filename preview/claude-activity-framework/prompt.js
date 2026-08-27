@@ -144,10 +144,34 @@
    *
    * Rule text is not held to the level allowlist; the existing rules already use
    * 英文 and 语法, both above HSK 1. Samples and starters are, and still are. */
+  /* A story needs characters, and the syllabus will not give it any: 明, 王 and
+   * 李 are absent from all 10,896 words of the 7-9 band, and 红 and 白 do not
+   * arrive until HSK 5. So there is no level at which story time earns a named
+   * character -- this is not a beginner constraint a learner grows out of.
+   *
+   * validate() forgives a name only where 叫 or 姓 introduces it, which repairs
+   * the first mention and leaves it bare in every segment after. So instead
+   * these three are named in the prompt and made legal for the turn, the same
+   * bargain turn() already strikes for [[NEED:]] words and pacing offers.
+   *
+   * These three because they are what the model reaches for unprompted: 明, 红
+   * and 白 were 283, 84 and 79 of 1686 violations in one measured run. Naming
+   * what it was going to say anyway is why the list can be this short.
+   *
+   * No `t` field: the caller converts these with the same toScript() that
+   * converts the rule text, so the prompt and the lexicon cannot disagree about
+   * what 小红 looks like in traditional. */
+  var STORY_NAMES = [
+    { w: "小明", p: "Xiǎo Míng", d: "Xiao Ming, a name" },
+    { w: "小红", p: "Xiǎo Hóng", d: "Xiao Hong, a name" },
+    { w: "小白", p: "Xiǎo Bái",  d: "Xiao Bai, a name" }
+  ];
+
   var ACTIVITIES = {
     chat: {
       label: "Chat",
       rules: null,
+      names: null,
       reuse: null,
       gen: "turn",
       converse: true
@@ -162,6 +186,7 @@
         "学生学过下面这些词，可是一次也没有自己用过。请你带着话题往这些词的方向走，" +
         "问一些必须用到这些词才好回答的问题，让学生自己说出来。"
       ],
+      names: null,
       reuse: "unused",
       gen: "turn",
       converse: true
@@ -170,18 +195,9 @@
       label: "Story time",
       rules: [
         "你在给学生讲一个故事。故事要简单、有意思，每一段都要接得上。",
-        "只讲故事，不要问学生问题，也不要在故事里跟学生说话。",
-        /* Names were a quarter of story time's out-of-level words -- 明 alone
-         * was 283 of 1686 in one run, from 小明, 小红 and 小白. validate()
-         * forgives a name only where 叫 or 姓 introduces it, so a character
-         * named in the first segment is bare in every segment after, and
-         * telling the model to introduce people with 叫 fixes only the first
-         * mention. Not naming anyone is the version that survives a whole
-         * story. Measured: -20% violations per character, and continuity
-         * unchanged -- see DEVELOPING.md. */
-        "故事里的人不要起名字。用「他」「她」「他们」「我的朋友」「老师」" +
-        "「妈妈」这样的说法来说他们是谁。"
+        "只讲故事，不要问学生问题，也不要在故事里跟学生说话。"
       ],
+      names: STORY_NAMES,
       reuse: null,
       gen: "segments",
       converse: false
@@ -269,6 +285,14 @@
       rules.push(convert("故事讲完了。现在问学生一个关于这个故事的问题，一次只问一个。"));
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    }
+    /* Deliberately outside the storyQuestion branch above: phase two asks about
+     * the characters the story just introduced, and 「小明去了哪儿？」 must not
+     * fail validation for the name it is asking about. */
+    if (act.names && act.names.length) {
+      rules.push(convert("故事里的人可以叫") +
+        act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
+        convert("。别的名字不要用。"));
     }
     if (seg) {
       if (seg.index === 0) {
@@ -585,6 +609,7 @@
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
               ACTIVITIES: ACTIVITIES, activityFor: activityFor,
+              STORY_NAMES: STORY_NAMES,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor, build: build,
               translate: translate, explain: explain, grade: grade,
