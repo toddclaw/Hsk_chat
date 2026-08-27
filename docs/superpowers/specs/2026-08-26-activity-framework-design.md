@@ -113,13 +113,14 @@ extends.
 
 ```js
 var ACTIVITIES = {
-  chat:    { label: "Chat",         rules: null,  reuse: null,     gen: "turn" },
-  focused: { label: "Focused chat", rules: [...], reuse: "unused", gen: "turn" },
-  story:   { label: "Story time",   rules: [...], reuse: null,     gen: "segments" }
+  chat:    { label: "Chat",         rules: null,  reuse: null,     gen: "turn",     converse: true },
+  focused: { label: "Focused chat", rules: [...], reuse: "unused", gen: "turn",     converse: true },
+  story:   { label: "Story time",   rules: [...], reuse: null,     gen: "segments", converse: false }
 };
 ```
 
-Three fields, because three is what actually varies.
+Four fields, because four is what actually varies. This said three when it was
+approved; implementation found the fourth.
 
 - `rules` — extra entries appended to the existing `rules` array in `build()`.
   Numbering is by array position already, so insertion cannot collide.
@@ -127,6 +128,22 @@ Three fields, because three is what actually varies.
   today's behaviour (`S.learning.filter(isNew).slice(-6)`); `"unused"` swaps in
   `readiness().unused`.
 - `gen` — the generation strategy. `"segments"` is the only new turn-loop code in A.
+- `converse` — whether the conversational turn-taking rules apply at all.
+
+`converse` is the correction. Three fields let an activity **add** rules and
+nothing more, and that is not enough: `build()` pushes three turn-taking rules —
+answer the student, do not repeat them, correct then carry on — and inside a
+story every one of them is wrong. With only `rules` to work with, each segment
+would end by asking the learner a question, which is the opposite of listening to
+a story. An activity has to be able to *suppress* rules, not only add them.
+
+The same need turns up twice more once you have the field. A story segment also
+has to suppress the `LENGTHS` rule — `每次说一到两句话。不要长。` contradicts the
+segment's own "write about ninety characters" outright — and story time's phase-two
+question has to suppress story time's *own* `只讲故事，不要问学生问题`, which is
+stated absolutely and is exactly the rule a model obeys in preference to a later
+one contradicting it. Suppression is not an edge case; it is half of what an
+activity does.
 
 ---
 

@@ -158,8 +158,9 @@ fine.
 
 # What the app does
 
-**Levels.** The picker in the header switches the whole allowlist between **HSK 1** and the
-combined 7–9 band, mid-conversation. The bands are the official **HSK 3.0** syllabus
+**Levels.** The picker in Settings switches the whole allowlist between **HSK 1** and the
+combined 7–9 band, mid-conversation; a read-only chip in the header says which one you are
+under. The bands are the official **HSK 3.0** syllabus
 (《国际中文教育中文水平等级标准》, 2021), parsed from
 [hsk-syllabus-vocabulary-parser](https://github.com/Punpuf/hsk-syllabus-vocabulary-parser):
 **300 / 497 / 988 / 1,978 / 3,557 / 5,334 / 10,896** words, cumulative.
@@ -317,7 +318,7 @@ key you had just pasted.)
 | **Time chatting** | today and all-time, summed across every device you sync |
 | **Spend** | today, the last ten days, and all-time — what OpenRouter actually charged |
 | **API key** | OpenRouter key, stored on this device only |
-| **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
+| **Chat model** | picker, in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
 | **Browse and star models** | the catalogue as a searchable sheet: tap a row to choose it, tap ★ to keep it at hand |
@@ -743,6 +744,45 @@ measure word   3    我有三个书。 → 我有三本书。
 
 Scanned from the stored grades rather than kept as a running tally, which would be a second
 source of truth to drift out of step.
+
+# Activities
+
+The header's first control is what kind of session this is. Three of them:
+
+| | What it is | Who speaks first |
+|---|---|---|
+| **Chat** | open conversation, the app as it always was | you |
+| **Focused chat** | the partner steers toward words you were taught and have never once written | the partner |
+| **Story time** | a five-part story at your level, then questions about it | the partner |
+
+**Choosing an activity starts a new conversation.** It is not a mode switch on the one you
+are in — an activity is fixed when a conversation is created, so a transcript never mixes a
+story with a chat, and the chat you left is one tap away under 💬. The chat list labels every
+row with its activity, because a list of mixed session types is unreadable without it.
+
+Conversation starters only appear in **Chat**. They are openers for the *learner*, and the
+other two open with the partner speaking first — offering one there would invite you to talk
+over a story that has not started.
+
+**Focused chat** draws its words from the same list the progress panel calls *never used*:
+words the app introduced through pacing that you have not yet written yourself. That list
+already existed, already sorted commonest-first, so the activity is one extra rule and a
+different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
+maintaining per level and would fight the word goal whenever the two disagreed. The words pull
+the conversation somewhere on their own.
+
+**Story time** generates **five segments of about ninety characters**, each as its own turn,
+and then asks you about what it just told you. The segment size is not a stylistic choice and
+not arbitrary: `RESEARCH.md` explains why new words are metered per *turn* at one per 45
+characters read, capped at three, with the remainder **discarded**. A 450-character story told
+as a single turn therefore earns three new words and throws the other ten away — so the one
+activity most entitled to graded-reader density is exactly where the cap silently removes it.
+Ninety characters is two credits and stays under the cap, so no segment loses anything, and
+five of them carry roughly ten new words. `test/pace.test.js` pins that arithmetic against the
+constants rather than against the number, so changing either one fails the suite.
+
+A segment the model cannot get down to level keeps its best attempt and the story carries on.
+The canned fallback is survivable in a chat turn and nonsense in the middle of a narrative.
 
 # Conversations
 
@@ -1273,8 +1313,9 @@ it.
 The page must not scroll sideways, and one trap made it: flex items default to
 `min-width: auto`, so a `<select>` cannot shrink below its longest option — a model id like
 `qwen/qwen3-30b-a3b-instruct-2507` pushed the header buttons past the right edge and took
-the document with them. The level select keeps its natural width; the model select absorbs
-the shrinking.
+the document with them. That select has since moved into Settings; the activity select is
+the header's one flexible control now and absorbs the shrinking, and the level chip beside it
+is a short button rather than a picker.
 
 Message size is a `--msg` custom property (16–34px). The pinyin ruby is sized in `em` so it
 scales with the text, and is **CSS generated content** rather than a DOM node so that
