@@ -77,7 +77,12 @@ const CONCURRENCY = Number(arg("concurrency", 3));
 
 // index.html: STORY_SEGMENTS, STORY_MAX_TOKENS.
 const SEGMENTS = 5;
-const MAX_TOKENS = 400;
+/* index.html's STORY_MAX_TOKENS. Overridable because a REASONING model spends
+ * this budget on reasoning before it writes anything: deepseek-v4-pro returns an
+ * empty completion 3 times in 5 at 400 and 0 times in 5 at 800, with ~400
+ * characters of reasoning in between. Any per-activity model setting has to
+ * carry a token floor with it or a reasoning model silently returns nothing. */
+const MAX_TOKENS = Number(arg("maxtokens", 400));
 
 const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
 if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
@@ -146,6 +151,14 @@ async function callModel(model, messages, maxTokens, temperature) {
     })
   });
   const body = await r.json().catch(() => ({}));
+  if (process.env.STORY_AB_DEBUG) {
+    const ch = (body.choices || [])[0] || {};
+    console.error("[dbg] model=" + model + " maxTok=" + maxTokens +
+      " roles=" + messages.map(m => m.role).join(",") +
+      " http=" + r.status + " finish=" + ch.finish_reason +
+      " len=" + (((ch.message || {}).content) || "").length +
+      " err=" + JSON.stringify(body.error || null).slice(0, 160));
+  }
   if (!r.ok) {
     throw new Error((body.error && body.error.message) || ("HTTP " + r.status));
   }
@@ -279,7 +292,8 @@ async function runStory(arm) {
       } catch (e) { /* a failed plan degrades to the ordinary one-shot path */ }
     }
 
-    const scratch = [{ role: "system", content: sys }].concat(prior);
+    const scratch = [{ role: def.sysAsUser ? "user" : "system", content: sys }]
+      .concat(prior);
     if (plan) scratch.push({ role: "user", content:
       "请把下面这件事写成这一段，大概九十个汉字，只用学生会的词：\n" + plan });
 
@@ -295,12 +309,19 @@ async function runStory(arm) {
         try { res = await callModel(MODEL, scratch, MAX_TOKENS, 0.7); break; }
         catch (e) {
           if (a >= 1 || !/empty reply/.test(e.message)) {
+            /* An empty reply on a REPAIR turn must not kill the story when we
+             * already hold a draft: that would score a model down for failing
+             * to improve a segment it had already written. Only an empty first
+             * attempt, with nothing to fall back on, ends the story -- which is
+             * what index.html does on every empty reply. */
+            if (best) { res = null; break; }
             e.message = "segment " + i + ": " + e.message;
             throw e;
           }
           empties++;
         }
       }
+      if (!res) break;
       cost += res.cost;
       const ex = extractNeeds(HSK.stripScaffold(res.text));
       /* The cast and the offered words join the per-turn lexicon the way turn()
@@ -326,7 +347,7 @@ async function runStory(arm) {
            * rejected draft never enters context, so attempt 3 is not reading
            * attempts 1 and 2 back. */
           scratch.length = 0;
-          scratch.push({ role: "system", content: sys });
+          scratch.push({ role: def.sysAsUser ? "user" : "system", content: sys });
           prior.forEach(m => scratch.push(m));
           if (plan) scratch.push({ role: "user", content:
             "请把下面这件事写成这一段，大概九十个汉字，只用学生会的词：\n" + plan });
@@ -453,6 +474,12 @@ const ARM_DEFS = {
    * segments run about 25 characters. The target may be the bug, not the
    * strategy. Rewritten in the built prompt rather than parameterised in
    * prompt.js: if one of these wins, THAT is the change worth designing. */
+  /* Some models will not take the story prompt in the system role at all.
+   * deepseek-v4-pro returns an empty completion 8 times out of 8 that way and 8
+   * out of 8 when the identical text is a user message -- plausibly because the
+   * story rules tell it not to address the student, and with no user turn it
+   * concludes there is nothing to say. qwen is unaffected either way. */
+  "as-user":      { index: i => i, sysAsUser: true },
   "chars30":      { index: i => i, chars: "三十" },
   "chars50":      { index: i => i, chars: "五十" },
   "chars30-fresh":{ index: i => i, chars: "三十", fresh: true },
