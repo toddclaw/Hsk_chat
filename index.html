@@ -2007,6 +2007,10 @@ function newChat(activity) {
 function startActivity(id) {
   const c = newChat(HSKPrompt.ACTIVITIES[id] ? id : "chat");
   renderStarters();
+  const act = HSKPrompt.activityFor(currentActivity());
+  // runStory arrives with story time itself, a task later than this one.
+  if (act.gen === "segments") { if (typeof runStory === "function") runStory(); }
+  else if (id !== "chat") openingTurn();
   return c;
 }
 
@@ -2872,6 +2876,16 @@ async function retryLast() {
   S.busy = true; renderBusy();
   persist(); renderAll();
   return runTurn([], text);
+}
+
+/* The partner speaks first. Everything generating a reply until now ran from
+ * send(), so turn() had always had a user message behind it -- windowed()
+ * returns [] here and the echo check compares against "", both harmless, but
+ * neither had ever happened. */
+async function openingTurn() {
+  if (S.busy) return;
+  S.busy = true; renderBusy();
+  return runTurn([], "");
 }
 
 async function runTurn(toGloss, text) {

@@ -1560,6 +1560,29 @@ return true;
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
       "and neither does focused chat");
 
+
+    /* ------------------------------------------- the partner opening a turn */
+
+    /* The model is stubbed in-page, the same way this file already stubs
+     * supabase. callModel is a top-level function declaration, so it is a
+     * writable window property and reassigning it changes what turn() resolves
+     * at call time. \u4eca\u5929\u5f88\u597d is HSK 1 and carries no name --
+     * a name would fail validation and land every turn on the canned fallback,
+     * which would prove nothing about the opening path. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4eca\\u5929\\u5f88\\u597d\\u3002'); };");
+    await exec("window.newChat('focused');");
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg').length > 0", "the opening reply");
+
+    const cls = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#log .msg')," +
+      "function (m) { return m.className; });");
+    check(cls.length > 0, "an opening turn produced a message");
+    check(/bot/.test(cls[0]), "and the first message is the partner's", JSON.stringify(cls));
+    check(!cls.some(c => /\buser\b/.test(c)),
+      "with no learner turn invented to justify it", JSON.stringify(cls));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
