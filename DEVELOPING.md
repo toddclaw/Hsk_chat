@@ -211,7 +211,8 @@ must be namefree, or the thing being measured is the name.
 
 ### Worked example: story time's position rule, and its names
 
-Story time generates five segments back to back, and the only thing stopping segment 4 from
+Story time generates five segments in sequence — one per tap since v63, back to back before
+that — and the only thing stopping segment 4 from
 being another segment 0 is one rule — `接着上面的故事往下讲，不要从头开始` in the middle,
 with a different line at each end. `tools/story-ab.js` is the harness. The control arm is a
 **wrong** position rule (every segment told it is the first) rather than no rule, so exactly

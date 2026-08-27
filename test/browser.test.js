@@ -1525,14 +1525,38 @@ return true;
     check(await exec("return window.currentActivity();") === "focused",
       "choosing an activity opens a conversation in it");
 
-    /* S.busy is not reachable from here, so assert the invariant renderBusy()
-     * exists to maintain: the selector and the send button are never in
-     * disagreement about whether a turn is running. */
-    check(await exec(
-      "window.renderBusy();" +
-      "return document.querySelector('#activity').disabled ===" +
-      "       document.querySelector('#send').disabled;") === true,
-      "the activity selector shares the send button's busy state");
+    /* The activity change above started an opening turn against the seeded
+     * key, and everything below is about the busy state, so wait for that one
+     * to finish first or it is the turn being observed. */
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the focused-chat opening turn to settle", 30000);
+
+    /* S.busy is not reachable from here, so the only way to observe the busy
+     * state is to be in it: a stub that never resolves on its own holds the app
+     * there until the test lets it go. \u505c is the stop button, \u9001 send. */
+    await exec(
+      "window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};");
+    await exec("window.newChat('story'); window.storyStep();");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "the send button becomes a stop button while a turn is running");
+    check(await exec("return document.querySelector('#activity').disabled;") === true,
+      "and the activity selector is locked for as long as it runs");
+    check(/Writing part 1 of 5/.test(await exec(
+      "return document.querySelector('#log').textContent;")),
+      "a story segment says what it is generating rather than showing a bare ellipsis");
+
+    /* Stopping is a decision, not a failure: busy clears, the composer comes
+     * back, and nothing is written to the log. */
+    await exec("window.__rej({ kind: 'stopped' });");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "stopping a turn clears the busy state");
+    check(await exec("return document.querySelectorAll('#log .notice').length;") === 0,
+      "a stopped turn leaves no error card behind");
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") === 0,
+      "and no half-written segment");
 
 
     /* --------------------------------- the chat list, and who gets starters */
@@ -1554,8 +1578,13 @@ return true;
     check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
       "chat offers starters");
     await exec("window.newChat('story'); window.renderStarters();");
-    check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
+    check(await exec(
+      "return document.querySelectorAll('#starters button:not(.story)').length;") === 0,
       "story time does not -- the partner speaks first");
+    check(await exec(
+      "var b = document.querySelector('#starters button.story');" +
+      "return b ? b.textContent : '';") === "Start the story",
+      "it gets a control instead, so the story advances on a tap and not on a timer");
     await exec("window.newChat('focused'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
       "and neither does focused chat");
@@ -1627,7 +1656,7 @@ return true;
     await exec(
       "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
     await exec("window.newChat('story');");
-    await exec("window.runStory();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "five story segments");
 
@@ -1655,7 +1684,7 @@ return true;
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
     await exec("window.newChat('story');");
-    await exec("window.runStory();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 6",
       "five segments and a question");
 
@@ -1677,7 +1706,7 @@ return true;
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
     await exec("window.newChat('story');");
-    await exec("window.runStory();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "the story survived a bad segment");
     check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
@@ -1695,7 +1724,7 @@ return true;
     await exec(
       "window.callModel = function () { return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
     await exec("window.newChat('story');");
-    await exec("window.runStory();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "a story about a named character");
 
@@ -1705,6 +1734,65 @@ return true;
     check(named.slice(0, 5).every(t => t.indexOf("\u5c0f\u660e") !== -1),
       "a named character survives validation instead of falling back",
       JSON.stringify(named.slice(0, 5)));
+
+    /* ------------------------- a story is a conversation you can come back to */
+
+    /* The bug this replaced the loop for: a five-segment loop wrote nothing to
+     * storage until its first segment landed, so backgrounding the tab during
+     * the slowest call in the app lost the whole story. Stepping persists as it
+     * goes, and what is in storage is what survives a reload. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    const storyId = await exec("return window.currentChat().id;");
+    await exec("(async function () { for (var i = 0; i < 2; i++) await window.storyStep(); })();");
+    await waitFor("window.storyTold() === 2", "two segments told");
+    check(await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs'))[arguments[0]];" +
+      "return m.filter(function (t) { return t.role === 'assistant'; }).length;",
+      [storyId]) === 2,
+      "each segment is in storage the moment it is told, not when the story ends");
+
+    /* The position is derived from the transcript, so an unfinished story picked
+     * up on any device knows where it was without a stored counter -- which is
+     * as well, since db/schema.sql has no column to sync one in. */
+    await exec("window.newChat('chat');");
+    await exec("window.openChat(arguments[0]);", [storyId]);
+    check(await exec("return window.storyTold();") === 2,
+      "reopening a half-told story knows how far it got");
+    check(await exec(
+      "var b = document.querySelector('#starters button.story'); return b ? b.textContent : '';")
+      === "Read on (3 of 5)",
+      "and offers to read on from there");
+    check(await exec("return document.querySelector('#input').disabled;") === true,
+      "the composer stays shut while the story is still being told");
+    check(await exec("return document.querySelector('#input').placeholder;") === "",
+      "and does not ask for a sentence there is nowhere to put");
+
+    /* The chat list is how you get back to it, so it has to be nameable. A story
+     * has no learner turn, and titleFrom used to look only at those. */
+    await exec("window.renderChats();");
+    check(await exec(
+      "var rows = document.querySelectorAll('#chatList .chatrow');" +
+      "for (var i = 0; i < rows.length; i++)" +
+      "  if (/Story time/.test(rows[i].querySelector('.cmeta').textContent))" +
+      "    return rows[i].querySelector('.ctitle').textContent;" +
+      "return '';") !== "New chat",
+      "a saved story is named after its own first line, not left as \"New chat\"");
+
+    // Finish it: after the question, phase two is ordinary chat and reopens the composer.
+    await exec("(async function () { for (var i = 0; i < 4; i++) await window.storyStep(); })();");
+    await waitFor("window.storyTold() === 6", "the story runs out at five segments and a question");
+    await exec("window.renderStarters();");
+    check(await exec(
+      "return document.querySelectorAll('#starters button.story').length;") === 0,
+      "a finished story stops offering to continue");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "and hands the composer back so the question can be answered");
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "\u7528\u4e2d\u6587\u5199\u2026",
+      "with the prompt to write in Chinese back where it belongs");
+
 
     /* The cast is legal for the activity that was told about it, not globally.
      * The identical reply in a chat must still be rejected -- three attempts,
@@ -1751,7 +1839,8 @@ return true;
       "  window.__models.push(model || null);" +
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
-    await exec("window.newChat('story'); window.runStory();");
+    await exec("window.newChat('story');" +
+      "(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5", "a story");
     check(await exec(
       "return window.__models.length > 0 && window.__models.every(function (m) {" +

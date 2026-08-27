@@ -88,17 +88,21 @@ been reading one as the other.
 ## Story time is unverified end to end on the shipped configuration
 
 **Found:** finishing the story-time model work, 2026-08-27.
+**Partly answered** 2026-08-27 by reading one on the preview.
 
 Everything measured about story time ran through `tools/story-ab.js`, which
-*mirrors* `turn()` and `runStory()` rather than being them — it has its own copy
+*mirrors* `turn()` and `storyStep()` rather than being them — it has its own copy
 of `repairPrompt()` and its own pacing settle. `test/browser.test.js` covers the
 real code but stubs the model, so it proves the story model reaches the request
 and that an empty completion is retried; it cannot prove the app produces a
 readable story.
 
-**What would settle it:** generate one story on the branch preview with a real
-key and read it. That is genuinely new information, and it is the last thing that
-should happen before this branch merges.
+One story read by hand on the preview found nothing wrong with the *prose* and
+six things wrong with the *shape* of the activity — no way to stop it, no sign
+it was working, a five-segment loop that lost the story when the tab went away.
+v63 answers those (see the git log for this branch). Whether the stories are
+worth reading over a run of them is still open, and still only readable, not
+measurable.
 
 ---
 
