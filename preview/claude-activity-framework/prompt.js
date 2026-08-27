@@ -170,7 +170,17 @@
       label: "Story time",
       rules: [
         "你在给学生讲一个故事。故事要简单、有意思，每一段都要接得上。",
-        "只讲故事，不要问学生问题，也不要在故事里跟学生说话。"
+        "只讲故事，不要问学生问题，也不要在故事里跟学生说话。",
+        /* Names were a quarter of story time's out-of-level words -- 明 alone
+         * was 283 of 1686 in one run, from 小明, 小红 and 小白. validate()
+         * forgives a name only where 叫 or 姓 introduces it, so a character
+         * named in the first segment is bare in every segment after, and
+         * telling the model to introduce people with 叫 fixes only the first
+         * mention. Not naming anyone is the version that survives a whole
+         * story. Measured: -20% violations per character, and continuity
+         * unchanged -- see DEVELOPING.md. */
+        "故事里的人不要起名字。用「他」「她」「他们」「我的朋友」「老师」" +
+        "「妈妈」这样的说法来说他们是谁。"
       ],
       reuse: null,
       gen: "segments",
