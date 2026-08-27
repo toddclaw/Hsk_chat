@@ -262,5 +262,45 @@ check(local.model === "old/model" && local.replyLength === "short" && local.atte
   "an adopted snapshot overwrites model, reply length and tries -- the reported symptom");
 check(local.key === "keep", "though never the API key");
 
+/* activity is the third optional column. NULL means "chat", so conversations
+ * written before the column existed read back correctly with no migration. */
+const convA = { id: "c1", title: "T", activity: "story",
+                created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
+const rowA = Sync.conversationToRow(convA, "u1");
+check(rowA.activity === "story", "conversationToRow carries the activity");
+check(Sync.rowToConversation(rowA).activity === "story", "and it survives the round trip");
+
+check(Sync.rowToConversation({ id: "c2", created_at: "x", updated_at: "x" }).activity === "chat",
+  "a row with no activity column reads back as chat");
+check(Sync.rowToConversation({ id: "c3", activity: null, created_at: "x", updated_at: "x" })
+  .activity === "chat", "and so does an explicit NULL");
+
+/* The merge trap: mergeConversations rebuilds its object field by field, so a
+ * column not added there is dropped on every sync. */
+const mergedKeep = Sync.mergeConversations(
+  [{ id: "c4", title: "local", activity: "story", updated_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "c4", title: "remote", activity: "story", updated_at: "2026-01-03T00:00:00Z" }]);
+check(mergedKeep[0].activity === "story", "activity survives a merge -- it is not dropped");
+check(mergedKeep[0].title === "remote", "while title is still newest-wins");
+
+/* Not newest-wins. An activity is fixed at creation; a remote row that lost its
+ * activity (older client, un-migrated database) must not erase a local one. */
+const mergedNull = Sync.mergeConversations(
+  [{ id: "c5", activity: "focused", updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "c5", activity: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedNull[0].activity === "focused",
+  "a newer row with no activity does not erase the one we have");
+
+const mergedNew = Sync.mergeConversations(
+  [], [{ id: "c6", activity: "story", created_at: "x", updated_at: "x" }]);
+check(mergedNew[0].activity === "story", "a remote-only conversation keeps its activity");
+
+// Deletion stays monotonic regardless of activity.
+const mergedDel = Sync.mergeConversations(
+  [{ id: "c7", activity: "story", deleted: true, deleted_at: "2026-01-01T00:00:00Z",
+     updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "c7", activity: "story", updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedDel[0].deleted === true, "a deleted conversation stays deleted, activity or not");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -80,6 +80,14 @@ create index if not exists messages_conversation_idx
 
 alter table public.messages add column if not exists grade jsonb;
 
+-- Which activity a conversation was created in: chat, focused chat or story
+-- time. Nullable, and NULL means "chat" -- conversations written before
+-- activities existed are chats, and an un-migrated database degrades to
+-- activity-less conversations rather than failing every push. See the note on
+-- conversation_id above for why the app tolerates this column being absent.
+
+alter table public.conversations add column if not exists activity text;
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.

@@ -119,6 +119,7 @@
       id: c.id,
       user_id: userId,
       title: c.title || null,
+      activity: c.activity || "chat",
       created_at: c.created_at,
       updated_at: c.updated_at || new Date().toISOString(),
       deleted_at: c.deleted ? (c.deleted_at || new Date().toISOString()) : null
@@ -129,6 +130,7 @@
     return {
       id: row.id,
       title: row.title || "",
+      activity: row.activity || "chat",
       created_at: row.created_at,
       updated_at: row.updated_at,
       deleted: !!row.deleted_at,
@@ -156,6 +158,12 @@
       // Copied, never mutated in place: `existing` is the caller's own object.
       var merged = {
         id: newer.id, title: newer.title,
+        /* Not newest-wins, unlike title. An activity is fixed when the
+         * conversation is created and never changes, so the question is never
+         * "which is newer" but "which side actually has one" -- a remote row
+         * from an un-migrated database carries none, and a recency rule would
+         * let it erase ours. */
+        activity: existing.activity || incoming.activity || "chat",
         created_at: existing.created_at || incoming.created_at,
         updated_at: newer.updated_at,
         deleted: !!(existing.deleted || incoming.deleted),
@@ -371,9 +379,11 @@
    * runs the deployment may not be the person reading the screen. */
   var schemaHasConversations = null;   // null = not probed yet
   var schemaHasGrade = null;
+  var schemaHasActivity = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }
+  function activitySupported() { return schemaHasActivity !== false; }
 
   /* Asked once per session, before anything is pushed.
    *
@@ -388,7 +398,12 @@
       var r = await client.from("messages").select("grade").limit(1);
       schemaHasGrade = !(r.error && isMissingSchema(r.error));
     }
-    return { conversations: conversationsSupported(), grade: gradesSupported() };
+    if (schemaHasActivity === null) {
+      var a = await client.from("conversations").select("activity").limit(1);
+      schemaHasActivity = !(a.error && isMissingSchema(a.error));
+    }
+    return { conversations: conversationsSupported(), grade: gradesSupported(),
+             activity: activitySupported() };
   }
 
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
@@ -414,8 +429,28 @@
 
   async function pushConversations(rows) {
     if (!rows.length || schemaHasConversations === false) return;
-    var r = await client.from("conversations").upsert(rows);
+    /* Same bargain pushMessages strikes over conversation_id: an un-migrated
+     * database has no activity column, and upserting one fails the whole batch
+     * -- which would take conversation sync down entirely rather than losing
+     * the one field. Drop the column, keep the conversations, and the labels
+     * come back for free once the ALTER has run. */
+    var payload = schemaHasActivity === false
+      ? rows.map(function (r) {
+          var copy = {};
+          Object.keys(r).forEach(function (k) { if (k !== "activity") copy[k] = r[k]; });
+          return copy;
+        })
+      : rows;
+    var r = await client.from("conversations").upsert(payload);
     if (r.error) {
+      /* A push that got past the probe -- a column dropped mid-session, or a
+       * probe that never ran. Try without activity once before concluding the
+       * whole table is missing; with it already false there is nothing left to
+       * strip, so this cannot recurse. */
+      if (isMissingSchema(r.error) && schemaHasActivity !== false) {
+        schemaHasActivity = false;
+        return pushConversations(rows);
+      }
       if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
       throw r.error;
     }
@@ -477,6 +512,7 @@
     deleteConversationMessages: deleteConversationMessages,
     conversationsSupported: conversationsSupported,
     gradesSupported: gradesSupported,
+    activitySupported: activitySupported,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
