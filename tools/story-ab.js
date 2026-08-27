@@ -116,7 +116,7 @@ function systemPrompt(index, def, offer, required) {
   });
   HSKPrompt.ACTIVITIES.story.rules = STORY_RULES;
   HSKPrompt.ACTIVITIES.story.names = STORY_NAMES;
-  return out;
+  return def.chars ? out.replace("九十", def.chars) : out;
 }
 
 const NEED_RE = /\[\[NEED:([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]]*))?\]\]/g;
@@ -157,6 +157,28 @@ async function callModel(model, messages, maxTokens, temperature) {
     finish: choice.finish_reason || "",
     cost: (body.usage && body.usage.cost) || 0
   };
+}
+
+/* The redirect. index.html's repair loop assumes the CONTENT is fixed and only
+ * the wording was wrong -- true of a chat reply answering a question, false of a
+ * story, where the content is entirely negotiable. Rewording asks the model to
+ * say an inexpressible plot beat again; this asks it to go somewhere it can say.
+ *
+ * The banned words are still named, because "that did not work" without saying
+ * what did not work leaves the model free to try the same thing again. */
+function redirectPrompt(violations) {
+  const words = violations.filter(v => v.kind === "bad");
+  const parts = [];
+  if (violations.some(v => v.kind === "latin")) {
+    parts.push("不要用英文，不要用拼音。只写汉字。");
+  }
+  if (words.length) {
+    parts.push("你用了" + words.map(v => "「" + v.text + "」").join("、") +
+      "。这些词太难，学生不认识。");
+  }
+  parts.push("这件事说不清楚就别说了。让故事往别的方向走，" +
+             "说一件用学生会的词就能说清楚的事。只说中文，不要解释。");
+  return parts.join("");
 }
 
 /* A mirror of index.html's repairPrompt(), not a paraphrase of it: what the
@@ -232,12 +254,37 @@ async function runStory(arm) {
     const required = (offer.length && HSKPace.shouldForce(budget.declines))
       ? offer[0].w : "";
 
-    const scratch = [{ role: "system",
-                       content: systemPrompt(def.index(i), def, offer, required) }]
-      .concat(segs.map(s => ({ role: "assistant", content: s.text })));
+    const sys = systemPrompt(def.index(i), def, offer, required);
+    const prior = segs.map(s => ({ role: "assistant", content: s.text }));
+    const budgetAttempts = def.attempts || ATTEMPTS;
+
+    /* Plan first, render second: ask what happens next in English, where the
+     * level cannot get in the way, then ask for that beat in Chinese at level.
+     * The plan is English on purpose -- a Chinese plan is already a draft, and
+     * would be judged by the same constraint it is meant to be free of. */
+    let plan = "";
+    if (def.plan) {
+      try {
+        const p = await callModel(MODEL, [{ role: "user", content:
+          "Here is a simple Chinese story for a beginner, so far:\n\n" +
+          (segs.map(s => s.text).join("\n") || "(nothing yet)") +
+          "\n\nSay what should happen next, in English, in 2-3 sentences -- enough " +
+          "to fill about 90 Chinese characters when written out, not a single beat. " +
+          "It must be expressible with a tiny beginner vocabulary: concrete, " +
+          "everyday, physical actions, no abstractions, no proper nouns. " +
+          "Reply with the sentences only." }],
+          160, 0.7);
+        plan = p.text;
+        cost += p.cost;
+      } catch (e) { /* a failed plan degrades to the ordinary one-shot path */ }
+    }
+
+    const scratch = [{ role: "system", content: sys }].concat(prior);
+    if (plan) scratch.push({ role: "user", content:
+      "请把下面这件事写成这一段，大概九十个汉字，只用学生会的词：\n" + plan });
 
     let attempt = 0, best = null, empties = 0;
-    while (attempt < ATTEMPTS) {
+    while (attempt < budgetAttempts) {
       attempt++;
       let res;
       /* An empty completion is retried once and counted. index.html does NOT
@@ -268,9 +315,26 @@ async function runStory(arm) {
         best = { text: ex.text, viols: [], lex: lex, needs: ex.needs, clean: true };
         break;
       }
-      if (attempt < ATTEMPTS) {
-        scratch.push({ role: "assistant", content: res.text });
-        scratch.push({ role: "user", content: repairPrompt(viols, attempt + 1, lex) });
+      if (attempt < budgetAttempts) {
+        const last = attempt + 1 >= budgetAttempts;
+        const useRedirect = def.repair === "redirect" ||
+                            (def.repair === "redirect-last" && last);
+        const ask = useRedirect ? redirectPrompt(viols)
+                                : repairPrompt(viols, attempt + 1, lex);
+        if (def.fresh) {
+          /* Rebuild from the system prompt and the accepted segments only. The
+           * rejected draft never enters context, so attempt 3 is not reading
+           * attempts 1 and 2 back. */
+          scratch.length = 0;
+          scratch.push({ role: "system", content: sys });
+          prior.forEach(m => scratch.push(m));
+          if (plan) scratch.push({ role: "user", content:
+            "请把下面这件事写成这一段，大概九十个汉字，只用学生会的词：\n" + plan });
+          scratch.push({ role: "user", content: ask });
+        } else {
+          scratch.push({ role: "assistant", content: res.text });
+          scratch.push({ role: "user", content: ask });
+        }
       }
     }
 
@@ -370,8 +434,41 @@ async function pool(tasks, n) {
  * .names as well as adding a suppression rule -- the names also feed the
  * validation lexicon, and an arm that forbade them in the prompt while still
  * accepting them would score its own violations away. */
+/* Beyond the position and the cast, an arm may vary how a rejected segment is
+ * asked for again:
+ *   repair "reword"        what ships -- say the same thing in easier words
+ *   repair "redirect"      go somewhere sayable instead, from the first failure
+ *   repair "redirect-last" reword first, redirect on the final attempt
+ *   fresh                  drop the failed attempts from context rather than
+ *                          accumulating them, which by attempt 3 has the model
+ *                          reading its own rejected output twice
+ *   plan                   ask for the next beat in English first, then ask for
+ *                          it at level -- content and form as separate calls
+ *   attempts               override the attempt budget for this arm
+ */
 const ARM_DEFS = {
   "positioned":   { index: i => i },
+  /* Ask for less. Every arm above fails at HSK 1 because a 90-character segment
+   * that is 100% in-list is not a thing this model can write there -- its CLEAN
+   * segments run about 25 characters. The target may be the bug, not the
+   * strategy. Rewritten in the built prompt rather than parameterised in
+   * prompt.js: if one of these wins, THAT is the change worth designing. */
+  "chars30":      { index: i => i, chars: "三十" },
+  "chars50":      { index: i => i, chars: "五十" },
+  "chars30-fresh":{ index: i => i, chars: "三十", fresh: true },
+  "redirect":      { index: i => i, repair: "redirect" },
+  "redirect-last": { index: i => i, repair: "redirect-last" },
+  "fresh":         { index: i => i, fresh: true },
+  "fresh-redirect":{ index: i => i, fresh: true, repair: "redirect" },
+  "six":           { index: i => i, attempts: 6 },
+  "plan":          { index: i => i, plan: true },
+  "plan-redirect": { index: i => i, plan: true, repair: "redirect" },
+  /* Fresh context alone scores well and cheats: with the rejected draft gone the
+   * model no longer knows what it was trying to say, so it writes 他很好。 and
+   * passes. Pairing it with a plan puts the CONTENT back without putting the
+   * failed wording back, which is the combination worth testing. */
+  "plan-fresh":    { index: i => i, plan: true, fresh: true },
+  "plan-fresh-rd": { index: i => i, plan: true, fresh: true, repair: "redirect" },
   "always-first": { index: () => 0 },
   "no-names":     { index: i => i, names: [], extraRules: [
     "故事里的人不要起名字。用「他」「她」「他们」「我的朋友」「老师」" +
@@ -450,11 +547,26 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
        * of a story, which is the failure that actually matters. */
       attempts: (() => {
         const all = mine.flatMap(s => s.segs);
-        const d = [0, 0, 0, 0, 0, 0, 0];
+        const d = [0, 0, 0, 0, 0, 0, 0, 0];
         all.forEach(s => { if (!s.failed) d[s.attempts] = (d[s.attempts] || 0) + 1; });
         return d;
       })(),
       failedSegs: mine.flatMap(s => s.segs).filter(s => s.failed).length,
+      /* The metric that cannot be gamed. Every arm that beat the control on
+       * clean rate did it by writing 他很好。 -- clean, in level, and useless as
+       * a story. USABLE means clean AND at least 40 Han characters: well under
+       * the 90 asked for, but past the point where it is a real beat. */
+      usable: mine.flatMap(s => s.segs).filter(s => !s.failed && s.han >= 40).length,
+      usableStories: mine.filter(s =>
+        s.segs.filter(g => !g.failed && g.han >= 40).length >= 3).length,
+      /* Length of the segments that PASSED, not of all of them. Without this an
+       * arm can win the clean rate by writing four-character segments, which is
+       * the degenerate solution to "say something at HSK 1" and no use as a
+       * story. The fallback would drag a mean over all segments down anyway. */
+      cleanHan: (() => {
+        const ok = mine.flatMap(s => s.segs).filter(s => !s.failed);
+        return ok.length ? ok.reduce((a, s) => a + s.han, 0) / ok.length : 0;
+      })(),
       storiesWithFallback: mine.filter(s => s.segs.some(g => g.failed)).length,
       offeredSegs: mine.flatMap(s => s.segs).filter(s => s.offered > 0).length,
       introduced: mine.reduce((a, s) => a + s.introduced, 0),
@@ -516,17 +628,18 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
   });
 
   console.log("");
-  console.log(pad("", 14) + pad("clean on try 1/2/3+", 21) + pad("never clean", 13) +
-    pad("stories hit", 13) + pad("offered", 9) + pad("introduced", 12) + "[[NEED:]]");
+  console.log(pad("", 15) + pad("USABLE", 9) + pad("3+ usable", 11) +
+    pad("clean 1/2/3+", 14) + pad("never clean", 13) +
+    pad("introduced", 12) + pad("clean chars", 12) + "[[NEED:]]");
   ARMS.forEach(arm => {
     const r = rows[arm];
     const a = r.attempts, later = a.slice(3).reduce((x, y) => x + y, 0);
-    console.log(pad(arm, 14) +
-      pad((a[1] || 0) + " / " + (a[2] || 0) + " / " + later, 21) +
+    console.log(pad(arm, 15) +
+      pad(r.usable + "/" + r.allSegs, 9) +
+      pad(r.usableStories + "/" + r.stories, 11) +
+      pad((a[1] || 0) + "/" + (a[2] || 0) + "/" + later, 14) +
       pad(r.failedSegs + "/" + r.allSegs, 13) +
-      pad(r.storiesWithFallback + "/" + r.stories, 13) +
-      pad(r.offeredSegs + "/" + r.allSegs, 9) +
-      pad(String(r.introduced), 12) + r.needSegs);
+      pad(String(r.introduced), 12) + pad(r.cleanHan.toFixed(0), 12) + r.needSegs);
   });
 
   const jc = judgeCosts.filter(c => typeof c === "number").reduce((a, c) => a + c, 0);
