@@ -302,5 +302,12 @@ const mergedDel = Sync.mergeConversations(
   [{ id: "c7", activity: "story", updated_at: "2026-01-09T00:00:00Z" }]);
 check(mergedDel[0].deleted === true, "a deleted conversation stays deleted, activity or not");
 
+/* Story time runs on its own model, so that choice has to reach the other
+ * device like the chat and teaching model ids do. */
+check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,
+  "storyModel syncs with the other model settings");
+check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
+  "and adding it did not smuggle the key or the history in");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

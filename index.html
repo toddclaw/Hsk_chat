@@ -447,6 +447,14 @@ footer{
     grammar</b>, so it can be better than the chat model without costing much. Cheap models
     will tell you a wrong sentence is correct.</div>
 
+    <label for="storyModel">Model for story time</label>
+    <select id="storyModel"></select>
+    <button id="browseStoryModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
+    <div class="note">Story time is the one activity a cheap model cannot do. Measured at
+    HSK 1: 2 usable segments in 55 on the default chat model, against 33 in 40 here. It costs
+    roughly <b>$0.10 a story</b> — about 170&times; a chat turn — and <b>Spend</b> above shows
+    what you actually paid.</div>
+
     <label class="toggle" for="freeOnly">
       <input type="checkbox" id="freeOnly">
       <span>Display free models only</span>
@@ -861,6 +869,12 @@ const MODELS = [
  * ever withdrawn and you would rather not pick a new one.
  */
 const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
+/* Story time is the one activity that does not work on a cheap model, so its
+ * default is capable rather than matching the chat model. Measured at HSK 1:
+ * 2 usable segments in 55 on qwen3-30b-a3b against 33 in 40 here, and 0 stories
+ * out of 11 usable against 8 out of 8. It costs about $0.10 a story, roughly
+ * 170x a chat turn, which the Settings note says out loud. See DEVELOPING.md. */
+const STORY_MODEL = "anthropic/claude-sonnet-4.5";
 
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
@@ -880,7 +894,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v61 — 2026-08-27";
+const VERSION   = "v62 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -901,7 +915,18 @@ const FALLBACKS = ["我不知道。", "我不会说。"];
  * prompt.js, and test/pace.test.js pins that number against DEFAULT_RATE and
  * CREDIT_CAP. A second copy on this side would only be free to drift. */
 const STORY_SEGMENTS = 5;
-const STORY_MAX_TOKENS = 400;
+/* 1200, not 400. max_tokens is a ceiling and not a charge -- you pay for what is
+ * generated -- so this costs nothing for an ordinary model and stops a REASONING
+ * model returning silence: its reasoning is billed against this budget before it
+ * writes a character. deepseek-v4-pro returns nothing 3 times in 5 at 400 and 0
+ * times in 5 at 800. Anyone choosing such a model in Settings would otherwise
+ * see empty segments and read it as a bug in the app. */
+const STORY_MAX_TOKENS = 1200;
+/* More tries than a chat turn, and its own constant rather than S.attempts: a
+ * segment is longer and harder than a reply, and half of all successful segments
+ * at HSK 6 arrived on the third and last attempt a chat turn allows. A user who
+ * set attempts low to save money on chat should not thereby break stories. */
+const STORY_ATTEMPTS = 5;
 
 /* Cloud sync (optional, off by default -- see sync.js). The publishable key
  * is not a secret: it is meant to ship in client-side code, same as these
@@ -915,7 +940,8 @@ const SUPABASE_JS_URL   = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.
 const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
-  key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel", extra:"hsk1chat.extraVocab",
+  key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel",
+  storyModel:"hsk1chat.storyModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId", cost:"hsk1chat.cost",
@@ -953,6 +979,7 @@ const S = {
   level:   Math.max(1, store.get(K.level, 1)),
   model:   store.get(K.model, MODELS[0].id),
   teachModel: store.get(K.teachModel, TEACH_MODEL),
+  storyModel: store.get(K.storyModel, STORY_MODEL),
   /* Per-device chat time, summed for display. See time.js for why it is not
    * one number: a counter under last-write-wins loses whichever device synced
    * first, without saying so. */
@@ -1344,6 +1371,9 @@ async function callModel(messages, maxTokens, model) {
  * with", which is both the escape hatch and what happens if the default id is
  * ever withdrawn. */
 function teachingModel() { return S.teachModel || S.model; }
+/* Empty means "whatever I am chatting with", the same escape hatch the teaching
+ * model has -- and the same thing that happens if this default id is withdrawn. */
+function storyModel() { return S.storyModel || S.model; }
 
 /* The four prompts behind the two buttons. Four rather than two because `own`
  * changes what each one should ask for: the partner's reply is known-good
@@ -1469,10 +1499,23 @@ async function turn(ctx) {
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
   let attempt = 0, last = null, missed = null, echoed = null;
+  const tries = (ctx && ctx.attempts) || S.attempts;
 
-  while (attempt < S.attempts) {
+  while (attempt < tries) {
     attempt++;
-    const raw = await callModel(scratch, ctx && ctx.maxTokens);
+    /* An empty completion is about one call in eight on some routes and is not
+     * a vocabulary problem, so it must not spend a repair attempt -- and it used
+     * to end a story mid-narrative on an error card. Retried once, here rather
+     * than inside callModel, so translation and the explain sheet keep failing
+     * loudly instead of silently doubling their cost. */
+    let raw;
+    try {
+      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+    } catch (err) {
+      if (err.kind !== "empty") throw err;
+      console.warn("[empty completion] retrying once");
+      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+    }
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
     const ex = extractNeeds(HSK.stripScaffold(raw));
@@ -1515,7 +1558,7 @@ async function turn(ctx) {
        * answer; keep this one in case the second attempt is no better. */
       if (!required && HSK.echoesQuestion(ex.text, saidNow, lex)) {
         echoed = echoed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
-        if (attempt < S.attempts) {
+        if (attempt < tries) {
           scratch.push({ role: "assistant", content: raw });
           scratch.push({ role: "user", content:
             "你把我刚才的问题又问了一次。请先回答我说的话，再说一点你自己的事，" +
@@ -1526,7 +1569,7 @@ async function turn(ctx) {
       }
       if (required && HSKPace.spot(HSK.segment(ex.text, lex), [required]).length === 0) {
         missed = missed || { text: ex.text, needs: ex.needs, attempts: attempt, lex: lex };
-        if (attempt < S.attempts) {
+        if (attempt < tries) {
           scratch.push({ role: "assistant", content: raw });
           scratch.push({ role: "user", content:
             "请一定要用「" + required + "」这个词，放在一句话里，再说一次。其他的规则不变。" });
@@ -2339,7 +2382,8 @@ async function pullAndMerge() {
     if (prefsRow && (!S.prefsPushedAt || prefsRow.updated_at > S.prefsPushedAt)) {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
-      store.set(K.model, S.model); store.set(K.teachModel, S.teachModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.model, S.model); store.set(K.teachModel, S.teachModel);
+      store.set(K.storyModel, S.storyModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
@@ -2935,7 +2979,9 @@ async function runStory() {
     for (let i = 0; i < STORY_SEGMENTS; i++) {
       const res = await turn({
         storySegment: { index: i, of: STORY_SEGMENTS },
-        maxTokens: STORY_MAX_TOKENS
+        maxTokens: STORY_MAX_TOKENS,
+        attempts: STORY_ATTEMPTS,
+        model: storyModel()
       });
       S.history.push({
         role: "assistant", text: res.text, needs: res.needs,
@@ -2950,7 +2996,7 @@ async function runStory() {
     /* Phase two is the ordinary chat loop. The story is now in windowed()'s
      * context, so a question about it needs no new machinery -- and the answers
      * are graded by the grader that already runs on every message. */
-    const res = await turn({ storyQuestion: true });
+    const res = await turn({ storyQuestion: true, model: storyModel() });
     S.history.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
@@ -3201,6 +3247,17 @@ function fillModels() {
     tList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
       (m.id === S.teachModel ? " selected" : "") + ">" +
       escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+  /* Story time draws on the same unfiltered list, for the same reason: the free
+   * tier is exactly where it fails. */
+  let sList = tList;
+  if (S.storyModel && !sList.some(m => m.id === S.storyModel)) {
+    sList = [{ id: S.storyModel, label: S.storyModel }].concat(sList);
+  }
+  $("#storyModel").innerHTML =
+    '<option value=""' + (S.storyModel ? "" : " selected") + ">Same as the chat model</option>" +
+    sList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
+      (m.id === S.storyModel ? " selected" : "") + ">" +
+      escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
   /* Which of the two states the section is in. Loading the catalogue is setup;
    * once it is done the button that did it has no business outranking the
    * pickers, and the known-good list it sat with is strictly worse than the
@@ -3220,7 +3277,29 @@ function fillModels() {
  * reads S.freeOnly, S.favOnly and S.modelSort rather than carrying its own
  * copies -- one answer to "what am I looking at", not two that drift apart.
  */
-let modelPickFor = "chat";      // which of the two pickers opened this
+/* One row per picker. This was a "teach" / else conditional in four places, and
+ * a third picker would have made all four ternaries. `free` is whether the
+ * free-models-only filter applies: it deliberately does not reach the teaching
+ * or story pickers, because the capability both exist to buy is exactly what
+ * the free tier does not have. */
+const MODEL_PICKERS = {
+  chat: {
+    title: "Chat model", free: true,
+    get: () => S.model,
+    set: id => setChatModel(id)
+  },
+  teach: {
+    title: "Model for translation and grammar checks", free: false,
+    get: () => S.teachModel,
+    set: id => { S.teachModel = id; store.set(K.teachModel, id); queueSync("prefs"); fillModels(); }
+  },
+  story: {
+    title: "Model for story time", free: false,
+    get: () => S.storyModel,
+    set: id => { S.storyModel = id; store.set(K.storyModel, id); queueSync("prefs"); fillModels(); }
+  }
+};
+let modelPickFor = "chat";      // which picker opened the sheet
 
 function renderModelList() {
   const box = $("#modelPickList");
@@ -3230,14 +3309,15 @@ function renderModelList() {
   /* The teaching picker is never narrowed to free models -- the accuracy
    * problem that setting exists to solve lives in the free tier, so hiding
    * paid models there hides the fix. favorites still apply to both. */
-  let list = modelPickFor === "teach"
-    ? (S.favOnly && all.some(m => isFav(m.id)) ? all.filter(m => isFav(m.id)) : all)
-    : filterModels(all);
+  const picker = MODEL_PICKERS[modelPickFor] || MODEL_PICKERS.chat;
+  let list = picker.free
+    ? filterModels(all)
+    : (S.favOnly && all.some(m => isFav(m.id)) ? all.filter(m => isFav(m.id)) : all);
   const q = $("#modelSearch").value.trim().toLowerCase();
   if (q) list = list.filter(m =>
     m.id.toLowerCase().includes(q) || String(m.label || "").toLowerCase().includes(q));
 
-  const current = modelPickFor === "teach" ? S.teachModel : S.model;
+  const current = picker.get();
   /* The model in use is always listed, even when a filter or the catalogue
    * would drop it -- the same rule fillModels() follows for the dropdowns. A
    * picker that cannot show you what you are currently talking to is worse
@@ -3248,7 +3328,7 @@ function renderModelList() {
     list = [known || { id: current, label: current }].concat(list);
   }
   $("#modelPickNote").textContent = list.length + " model" + (list.length === 1 ? "" : "s") +
-    (S.favOnly ? ", favorites only" : "") + (S.freeOnly && modelPickFor === "chat" ? ", free only" : "") +
+    (S.favOnly ? ", favorites only" : "") + (S.freeOnly && picker.free ? ", free only" : "") +
     ". Tap a row to choose it; tap ★ to keep it at hand.";
   box.innerHTML = "";
   if (!list.length) {
@@ -3273,14 +3353,7 @@ function renderModelList() {
      * and leaving it open after a choice means the next tap is "close" every
      * time. Starring deliberately does not close -- that one is a batch job. */
     row.onclick = () => {
-      if (modelPickFor === "teach") {
-        S.teachModel = m.id;
-        store.set(K.teachModel, S.teachModel);
-        queueSync("prefs");
-        fillModels();
-      } else {
-        setChatModel(m.id);
-      }
+      picker.set(m.id);
       closeSheet("#modelSheet");
     };
     box.appendChild(row);
@@ -3294,7 +3367,7 @@ function renderModelList() {
 function openModelPicker(which) {
   modelPickFor = which;
   $("#modelPickTitle").textContent =
-    which === "teach" ? "Model for translation and grammar checks" : "Chat model";
+    (MODEL_PICKERS[which] || MODEL_PICKERS.chat).title;
   $("#modelSearch").value = "";
   openSheet("#modelSheet");
   renderModelList();
@@ -3887,6 +3960,10 @@ $("#modelChat").onchange = e => setChatModel(e.target.value);
  * keystroke each half-typed prefix would briefly become the selected model and
  * get carried into both pickers. */
 $("#modelId").onchange = e => setChatModel(e.target.value);
+$("#storyModel").onchange = e => {
+  S.storyModel = e.target.value; store.set(K.storyModel, S.storyModel); queueSync("prefs");
+};
+$("#browseStoryModel").onclick = () => openModelPicker("story");
 $("#teachModel").onchange = e => {
   S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
 };

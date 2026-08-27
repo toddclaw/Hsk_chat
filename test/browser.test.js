@@ -1731,6 +1731,62 @@ return true;
       "and it cost the repair attempts, which is what rejection means",
       String(await exec("return window.__msgs.length;")));
 
+
+    /* ------------------------------------------ the story-time model setting */
+
+    /* Measured: story time produces nothing usable on the cheap chat model at
+     * HSK 1 -- 2 usable segments in 55 against 33 in 40 on Sonnet. So it gets
+     * its own model, and the default is capable rather than cheap. */
+    check(await exec("return !!document.querySelector('#storyModel');") === true,
+      "Settings has a story-time model picker");
+    check(await exec("return window.storyModel();") === "anthropic/claude-sonnet-4.5",
+      "and defaults to a model that can actually do it",
+      await exec("return window.storyModel();"));
+
+    /* The model has to reach the request, not just the setting. callModel's
+     * third argument is what turn() passes through. */
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (msgs, maxTok, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story'); window.runStory();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5", "a story");
+    check(await exec(
+      "return window.__models.length > 0 && window.__models.every(function (m) {" +
+      "  return m === 'anthropic/claude-sonnet-4.5'; });") === true,
+      "story turns request the story model",
+      JSON.stringify(await exec("return window.__models;")));
+
+    // A chat turn must not, or every conversation silently costs story money.
+    await exec("window.__models = []; window.newChat('chat');");
+    await exec("window.openingTurn();");
+    await waitFor("window.__models.length > 0", "a chat turn");
+    check(await exec(
+      "return window.__models.every(function (m) { return !m; });") === true,
+      "while a chat turn does not -- it uses the chat model",
+      JSON.stringify(await exec("return window.__models;")));
+
+    /* An empty completion is one call in eight and used to end a story on a
+     * notice card. One retry, inside turn(), so every activity gets it. */
+    await exec(
+      "window.__n = 0;" +
+      "window.callModel = function () {" +
+      "  window.__n++;" +
+      "  if (window.__n === 1) { var e = new Error(''); e.kind = 'empty'; return Promise.reject(e); }" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('chat'); window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "a reply after one empty completion");
+    check(await exec(
+      "var b = document.querySelectorAll('#log .msg.bot');" +
+      "return b.length && b[b.length - 1].textContent.indexOf('\\u5b66\\u6821') !== -1;") === true,
+      "an empty completion is retried rather than ending the turn");
+    check(await exec("return document.querySelectorAll('#log .msg.notice').length;") === 0,
+      "and no error card is shown for it");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
