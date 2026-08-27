@@ -889,6 +889,20 @@ const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs i
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
+/* Story segments. 90 Han characters is two credits at DEFAULT_RATE = 45 and stays
+ * under CREDIT_CAP = 3, so no segment throws earnings away; five of them is a
+ * ~450-character story carrying roughly ten new words, which is graded-reader
+ * density reached without changing a researched constant. See RESEARCH.md.
+ *
+ * STORY_MAX_TOKENS is generous against 90 characters on purpose: a segment cut
+ * off by the ceiling is a broken story, not a short one.
+ *
+ * The 90 itself is not a constant here: it is written into the segment rule in
+ * prompt.js, and test/pace.test.js pins that number against DEFAULT_RATE and
+ * CREDIT_CAP. A second copy on this side would only be free to drift. */
+const STORY_SEGMENTS = 5;
+const STORY_MAX_TOKENS = 400;
+
 /* Cloud sync (optional, off by default -- see sync.js). The publishable key
  * is not a secret: it is meant to ship in client-side code, same as these
  * OpenRouter URLs above. Row Level Security in the Supabase project is what
@@ -1165,7 +1179,7 @@ function effectiveMode() { return HSKPrompt.modeFor(S.mode, S.level); }
 /* The prompt actually sent. A custom one is used verbatim apart from the two
  * placeholders, so the level and length selectors stop rewriting it -- they
  * still drive validation and the token ceiling, which is where they matter. */
-function systemPrompt(offer, reuse, required) {
+function systemPrompt(offer, reuse, required, ctx) {
   if (S.prompt) {
     let out = S.prompt.replace(/\{level\}/g, levelLabel()).replace(/\{words\}/g, wordList());
     if (effectiveMode() === "with-list" && S.prompt.indexOf("{words}") === -1) {
@@ -1180,10 +1194,10 @@ function systemPrompt(offer, reuse, required) {
     }
     return out;
   }
-  return defaultPrompt(offer, reuse, required);
+  return defaultPrompt(offer, reuse, required, ctx);
 }
 
-function defaultPrompt(offer, reuse, required) {
+function defaultPrompt(offer, reuse, required, ctx) {
   const p = HSKPrompt.build({
     offer: offer || [],
     reuse: reuse || [],
@@ -1193,6 +1207,7 @@ function defaultPrompt(offer, reuse, required) {
     length: S.replyLength,
     script: S.script,
     activity: currentActivity(),
+    storySegment: (ctx && ctx.storySegment) || null,
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -1436,7 +1451,7 @@ function reuseFor(activity) {
   return S.learning.filter(HSKPace.isNew).slice(-6);
 }
 
-async function turn() {
+async function turn(ctx) {
   /* Offer next-level words only when a credit has been earned. The same slate
    * is re-offered across repair attempts: a reply rejected for other reasons
    * should not cost the introduction. */
@@ -1448,7 +1463,7 @@ async function turn() {
   // After enough declined offers the top word becomes a condition of the reply.
   const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
 
-  const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required) }]
+  const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
     .concat(windowed());
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
@@ -1456,7 +1471,7 @@ async function turn() {
 
   while (attempt < S.attempts) {
     attempt++;
-    const raw = await callModel(scratch);
+    const raw = await callModel(scratch, ctx && ctx.maxTokens);
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
     const ex = extractNeeds(HSK.stripScaffold(raw));
@@ -2024,8 +2039,7 @@ function startActivity(id) {
   const c = newChat(HSKPrompt.ACTIVITIES[id] ? id : "chat");
   renderStarters();
   const act = HSKPrompt.activityFor(currentActivity());
-  // runStory arrives with story time itself, a task later than this one.
-  if (act.gen === "segments") { if (typeof runStory === "function") runStory(); }
+  if (act.gen === "segments") runStory();
   else if (id !== "chat") openingTurn();
   return c;
 }
@@ -2892,6 +2906,48 @@ async function retryLast() {
   S.busy = true; renderBusy();
   persist(); renderAll();
   return runTurn([], text);
+}
+
+/* A story, one segment at a time.
+ *
+ * Not one long turn, and the reason is pacing rather than validation cost.
+ * earn(), CREDIT_CAP and SLATE are per-TURN quantities derived from graded-reader
+ * research; a 450-character story as a single turn earns three credits and
+ * discards the rest, so the activity most entitled to graded-reader density is
+ * the one place the cap silently removes it. Segmenting gives each part its own
+ * credits and its own slate without touching a researched constant.
+ *
+ * A segment that exhausts its attempts keeps its best answer and the story
+ * continues: turn() returns its give-up reply rather than throwing, so the loop
+ * needs no guard of its own. */
+async function runStory() {
+  if (S.busy) return;
+  S.busy = true; renderBusy();
+  try {
+    for (let i = 0; i < STORY_SEGMENTS; i++) {
+      const res = await turn({
+        storySegment: { index: i, of: STORY_SEGMENTS },
+        maxTokens: STORY_MAX_TOKENS
+      });
+      S.history.push({
+        role: "assistant", text: res.text, needs: res.needs,
+        attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
+        id: newMessageId(), created_at: new Date().toISOString()
+      });
+      const introduced = settlePace(res);
+      if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
+      recordTurn(res.attempts, res.failed);
+      persist(); renderAll();
+    }
+  } catch (err) {
+    console.error(err);
+    S.history.push({ role: "notice", kind: err.kind || "http",
+                     detail: (err && err.message) || "", model: S.model });
+    persist();
+  } finally {
+    S.busy = false; renderBusy();
+    renderAll();
+  }
 }
 
 /* The partner speaks first. Everything generating a reply until now ran from

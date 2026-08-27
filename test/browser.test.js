@@ -1616,6 +1616,30 @@ return true;
     check(/\u5fc5\u987b\u7528\u5230\u8fd9\u4e9b\u8bcd/.test(fp),
       "the focused-chat rule asks the partner to build openings, not merely to use the words");
 
+
+    /* --------------------------------------------------- story time, part 1 */
+
+    /* \u4ed6\u53bb\u4e86\u5b66\u6821 rather than \u5c0f\u738b\u53bb\u4e86\u5b66\u6821:
+     * \u738b arrives at HSK 4, so a stub carrying it would fail validation on
+     * every segment and land the whole story on the canned fallback, proving
+     * nothing about segment generation. Same rule CLAUDE.md states for
+     * measurement -- run name-free. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    await exec("window.runStory();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "five story segments");
+
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
+      "a story is five segments");
+    check(await exec("return document.querySelectorAll('#log .msg.user').length;") === 0,
+      "generated without inventing a learner turn");
+    check(await exec(
+      "return Array.prototype.every.call(document.querySelectorAll('#log .msg.bot')," +
+      "function (m) { return m.textContent.trim().length > 0; });") === true,
+      "and every segment has text");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

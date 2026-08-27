@@ -207,5 +207,34 @@ check(P.toTarget(h2, h1w, P.READY_AT) === 58,
   "and 58 words reach the mark, the number the panel shows a beginner",
   `actually ${P.toTarget(h2, h1w, P.READY_AT)}`);
 
+/* Story segments exist so the per-turn pacing constants keep meaning what
+ * RESEARCH.md says. A segment above 3*DEFAULT_RATE crosses CREDIT_CAP and the
+ * remainder is discarded; far below DEFAULT_RATE it earns nothing. */
+const SEG = 90, SEGS = 5;
+check(SEG <= 3 * P.DEFAULT_RATE,
+  "a segment cannot cross CREDIT_CAP in one turn", SEG + " vs " + 3 * P.DEFAULT_RATE);
+check(SEG >= P.DEFAULT_RATE, "and is large enough to earn at least one credit");
+
+let segSt = { chars: 0, credits: 0 };
+let earned = 0;
+for (let i = 0; i < SEGS; i++) {
+  const before = segSt.credits;
+  segSt = P.earn(segSt, "\u5b57".repeat(SEG), P.DEFAULT_RATE);
+  earned += segSt.credits - before;
+  segSt = { chars: segSt.chars, credits: 0 };   // spent on the next segment's slate
+}
+check(earned >= SEGS,
+  `${SEGS} segments of ${SEG} chars earn at least one credit each`, "earned " + earned);
+check(earned >= 10,
+  "and a whole story earns roughly graded-reader density", "earned " + earned);
+
+// The failure this replaces: the same text as one turn.
+const oneShot = P.earn({ chars: 0, credits: 0 }, "\u5b57".repeat(SEG * SEGS), P.DEFAULT_RATE);
+check(oneShot.credits === P.CREDIT_CAP,
+  "as a single turn the same story caps out", String(oneShot.credits));
+check(oneShot.credits < earned,
+  "which is strictly fewer new words than segmenting yields",
+  oneShot.credits + " vs " + earned);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
