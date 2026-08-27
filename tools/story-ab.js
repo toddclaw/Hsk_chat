@@ -13,8 +13,8 @@
  *
  *   arm "positioned"   what shipped -- the rule tracks the real segment index
  *   arm "always-first" every segment is told it is the first one
- *   arm "with-names"   the shipped no-names rule removed, which is how that
- *                      rule's own measurement is reproduced now that it ships
+ *   arm "no-names"     the shipped cast removed and forbidden instead, which
+ *                      is how the whitelist's own measurement is reproduced
  *
  * Pick with --arms a,b. Run-to-run variance is large enough that one 20-story
  * run can mislead badly: the "positioned" arm alone read 20%, 4% and 7%
@@ -88,11 +88,12 @@ const baseLex = HSK.buildLexicon(entries, []);
 
 /* The same call defaultPrompt() makes for a story segment. `index` is the arm:
  * the real one for "positioned", a fixed 0 for "always-first". */
-function systemPrompt(index, rules) {
+function systemPrompt(index, def) {
   /* Mutated around the call rather than passed in: build() reads the activity
    * table, so this is the only way to test a rule in the position it would
    * actually ship in. Restored immediately -- the arms interleave. */
-  HSKPrompt.ACTIVITIES.story.rules = rules(STORY_RULES);
+  HSKPrompt.ACTIVITIES.story.rules = STORY_RULES.concat(def.extraRules || []);
+  if (def.names) HSKPrompt.ACTIVITIES.story.names = def.names;
   const out = HSKPrompt.build({
     offer: [], reuse: [], require: "",
     level: LEVEL, label: LEVELS[LEVEL] || ("HSK " + LEVEL),
@@ -102,6 +103,7 @@ function systemPrompt(index, rules) {
     words: ""
   });
   HSKPrompt.ACTIVITIES.story.rules = STORY_RULES;
+  HSKPrompt.ACTIVITIES.story.names = STORY_NAMES;
   return out;
 }
 
@@ -167,11 +169,11 @@ function jaccard(a, b) {
  * until phase two, so that array really is system-plus-assistants, which is an
  * unusual shape to send an API and worth exercising for real. */
 async function runStory(arm) {
+  const def = ARM_DEFS[arm];
   const segs = [];
   let cost = 0, emptyRetries = 0;
   for (let i = 0; i < SEGMENTS; i++) {
-    const def = ARM_DEFS[arm];
-    const messages = [{ role: "system", content: systemPrompt(def.index(i), def.rules) }]
+    const messages = [{ role: "system", content: systemPrompt(def.index(i), def) }]
       .concat(segs.map(s => ({ role: "assistant", content: s.text })));
     /* An empty completion is retried once and counted. index.html does NOT
      * retry -- callModel throws "empty" and the story ends on a notice card --
@@ -190,9 +192,13 @@ async function runStory(arm) {
     }
     emptyRetries += empties;
     const ex = extractNeeds(HSK.stripScaffold(res.text));
-    const lex = ex.needs.length
-      ? HSK.buildLexicon(entries, ex.needs.map(w => ({ w: w })))
-      : baseLex;
+    /* The arm's names join the per-turn lexicon the way turn() adds offered and
+     * [[NEED:]] words: legal this turn because the prompt asked for them. Score
+     * them as violations and the candidate arm is measuring its own premise. */
+    const cast = def.names || STORY_NAMES;
+    const extra = cast.map(e => ({ w: e.w }))
+      .concat(ex.needs.map(w => ({ w: w })));
+    const lex = extra.length ? HSK.buildLexicon(entries, extra) : baseLex;
     const viols = HSK.validate(ex.text, lex).filter(v => !v.name);
     const tri = trigrams(ex.text);
     segs.push({
@@ -232,6 +238,27 @@ async function judge(prior, next) {
   return { label: m ? m[0] : "UNPARSED", cost: res.cost };
 }
 
+/* The counter the first name experiment lacked. Restarts are about structure;
+ * this is about reference -- two characters both called 他 can read perfectly as
+ * one continuous story and still leave you unable to tell who did what. That is
+ * the harm forbidding names might cause, and nothing so far would have seen it. */
+const CLARITY_PROMPT =
+  "Below is a short Chinese story for a beginner, in five segments.\n\n" +
+  "Question: throughout the story, is it always clear WHO is doing what?\n\n" +
+  "Answer with exactly one of these words and nothing else:\n" +
+  "CLEAR - you can always tell which character is meant\n" +
+  "CONFUSING - at some point you cannot tell which character a pronoun or " +
+  "description refers to\n";
+
+async function clarity(segs) {
+  const res = await callModel(JUDGE, [
+    { role: "user", content: CLARITY_PROMPT + "\n=== STORY ===\n" +
+      segs.map(s => s.text).join("\n") + "\n\nOne word:" }
+  ], 8, 0);
+  const m = /CONFUSING|CLEAR/.exec(res.text.toUpperCase());
+  return { label: m ? m[0] : "UNPARSED", cost: res.cost };
+}
+
 async function pool(tasks, n) {
   const out = [];
   let i = 0, done = 0;
@@ -262,29 +289,29 @@ async function pool(tasks, n) {
  * The risk it is here to measure is that pronouns are more ambiguous than
  * names, so the fix could buy a lower out-of-level rate with a worse story --
  * which is why this arm is judged for continuity like every other. */
+/* An arm is a position rule plus an optional override of the activity's own
+ * data. The overrides are applied to ACTIVITIES.story itself around the build()
+ * call, so what an arm tests is the shipped prompt rather than a replica of it.
+ *
+ * "no-names" is the control for the cast, and it has to strip ACTIVITIES.story
+ * .names as well as adding a suppression rule -- the names also feed the
+ * validation lexicon, and an arm that forbade them in the prompt while still
+ * accepting them would score its own violations away. */
 const ARM_DEFS = {
-  "positioned":   { index: i => i,  rules: r => r },
-  "always-first": { index: () => 0, rules: r => r },
-  /* The no-names rule shipped, so reproducing its measurement means REMOVING it
-   * rather than adding one. Matched on its opening clause so a reworded rule
-   * fails loudly here instead of silently making this arm identical to the
-   * control it is supposed to differ from. */
-  "with-names":   { index: i => i,
-    rules: r => {
-      const out = r.filter(x => x.indexOf("故事里的人不要起名字") === -1);
-      if (out.length === r.length) {
-        console.error("with-names: no name rule found to remove -- was it reworded?");
-        process.exit(1);
-      }
-      return out;
-    } }
+  "positioned":   { index: i => i },
+  "always-first": { index: () => 0 },
+  "no-names":     { index: i => i, names: [], extraRules: [
+    "故事里的人不要起名字。用「他」「她」「他们」「我的朋友」「老师」" +
+    "「妈妈」这样的说法来说他们是谁。"
+  ] }
 };
-const ARMS = String(arg("arms", "positioned,with-names")).split(",");
+const ARMS = String(arg("arms", "positioned,no-names")).split(",");
 ARMS.forEach(a => {
   if (!ARM_DEFS[a]) { console.error("unknown arm: " + a); process.exit(1); }
 });
 
 const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
+const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
 
 (async function main() {
   /* Interleaved, like tools/prompt-ab.js: a rate limit or a provider-side
@@ -306,7 +333,12 @@ const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
   if (!NOJUDGE) console.error("judging…");
   const jtasks = [];
   if (NOJUDGE) jtasks.length = 0;
+  // One clarity call per STORY, not per segment: reference is a whole-story
+  // property and asking per segment would just re-ask the continuity question.
   if (!NOJUDGE) stories.filter(s => !s.error).forEach(s => {
+    jtasks.push(() => clarity(s.segs)
+      .then(r => { s.clarity = r.label; return r.cost; })
+      .catch(e => { s.clarity = "ERROR"; return 0; }));
     for (let i = 1; i < s.segs.length; i++) {
       jtasks.push(() => judge(s.segs.slice(0, i).map(p => p.text), s.segs[i].text)
         .then(r => { s.segs[i].label = r.label; return r.cost; })
@@ -344,6 +376,8 @@ const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
         const all = mine.flatMap(s => s.segs);
         return all.length ? all.reduce((a, s) => a + s.han, 0) / all.length : 0;
       })(),
+      clear: mine.filter(s => s.clarity === "CLEAR").length,
+      confusing: mine.filter(s => s.clarity === "CONFUSING").length,
       cost: mine.reduce((a, s) => a + s.cost, 0)
     };
   });
@@ -351,7 +385,7 @@ const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
   console.log("");
   console.log(pad("", 14) + pad("stories", 9) + pad("segs", 6) + pad("CONT", 6) +
     pad("RESTART", 9) + pad("UNREL", 7) + pad("clean stories", 15) +
-    pad("mean dup", 10) + pad("dup>=.25", 10));
+    pad("mean dup", 10) + pad("dup>=.25", 10) + pad("clear", 10));
   ARMS.forEach(arm => {
     const r = rows[arm];
     console.log(pad(arm, 14) + pad(r.stories, 9) + pad(r.segs, 6) +
@@ -359,7 +393,8 @@ const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
       pad(r.restarts + " (" + (r.segs ? r.restarts / r.segs * 100 : 0).toFixed(0) + "%)", 9) +
       pad(r.unrelated, 7) +
       pad(r.cleanStories + "/" + r.stories, 15) +
-      pad(r.dup.toFixed(3), 10) + pad(r.dupHigh, 10));
+      pad(r.dup.toFixed(3), 10) + pad(r.dupHigh, 10) +
+      pad(r.clear + "/" + (r.clear + r.confusing), 10));
   });
 
   console.log("");

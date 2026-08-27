@@ -1683,6 +1683,54 @@ return true;
     check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
       "a segment that exhausts its attempts does not stop the story");
 
+
+    /* ------------------------------------------- story time names its cast */
+
+    /* The node suite can prove the names reach the prompt; only here can it be
+     * shown they reach the LEXICON, which is what decides whether the app
+     * rejects a reply for using the name it just asked for. \u5c0f\u660e is
+     * the case the whole whitelist exists for: \u660e is absent from every
+     * band the app offers, including 7-9, so without the injection this reply
+     * fails validation three times and lands on the canned fallback. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    await exec("window.runStory();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "a story about a named character");
+
+    const named = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#log .msg.bot')," +
+      "function (m) { return m.textContent; });");
+    check(named.slice(0, 5).every(t => t.indexOf("\u5c0f\u660e") !== -1),
+      "a named character survives validation instead of falling back",
+      JSON.stringify(named.slice(0, 5)));
+
+    /* The cast is legal for the activity that was told about it, not globally.
+     * The identical reply in a chat must still be rejected -- three attempts,
+     * then the canned fallback -- or the whitelist has quietly widened the
+     * allowlist for every conversation. */
+    await exec("window.newChat('chat');");
+    await exec(
+      "window.__msgs = [];" +
+      "document.querySelector('#composer') || 0;" +
+      "window.callModel = function () {" +
+      "  window.__msgs.push(1);" +
+      "  return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the chat reply");
+    const chatReply = await exec(
+      "var b = document.querySelectorAll('#log .msg.bot');" +
+      "return b[b.length - 1].textContent;");
+    check(chatReply.indexOf("\u5c0f\u660e") === -1,
+      "the same named reply is still rejected in a chat -- the cast does not leak",
+      chatReply);
+    check(await exec("return window.__msgs.length;") > 1,
+      "and it cost the repair attempts, which is what rejection means",
+      String(await exec("return window.__msgs.length;")));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

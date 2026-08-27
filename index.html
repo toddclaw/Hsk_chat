@@ -880,7 +880,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v60 — 2026-08-27";
+const VERSION   = "v61 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1481,9 +1481,16 @@ async function turn(ctx) {
      * validation, the bare word is by definition not in the allowlist, and the
      * request the model was told to make is rejected as a violation. */
     // The offered words are legal this turn, exactly like a [[NEED:]] request.
-    const lex = (ex.needs.length || offer.length)
+    /* An activity's cast is legal for the turn, exactly as offered and
+     * [[NEED:]] words are: the prompt named them, so rejecting them would be
+     * the app failing its own instruction. Converted with toScript rather than
+     * inScript so the lexicon and the rule text that lists these names go
+     * through the one conversion and cannot disagree. */
+    const names = (HSKPrompt.activityFor(currentActivity()).names || [])
+      .map(e => ({ w: toScript(e.w), p: e.p, d: e.d }));
+    const lex = (ex.needs.length || offer.length || names.length)
       ? HSK.buildLexicon(inScript(S.base),
-          inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer)))
+          inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer), names))
       : S.lex;
     /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
      * first one any list carries, at HSK 3 -- so asking for a different one just

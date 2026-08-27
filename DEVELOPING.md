@@ -244,40 +244,63 @@ OpenRouter routes a model id to whichever provider is serving it. So:
 - **Pool across runs before believing a level.** One 20-story run resolves a threefold
   difference and does not resolve a 1.4× one.
 
-### The same run: names were a quarter of story time's out-of-level words
+### Story time has to be given a cast, because the syllabus never will
 
-`明` alone was 283 of 1686 violations in one run — 小明, 小红, 小白. `validate()` forgives a
-name only where `叫` or `姓` introduces it (see [The validator](#the-validator)), so a
-character named in segment 0 is bare in all four segments after, and the obvious fix — tell
-the model to introduce people with `叫` — repairs only the first mention. The rule
-`介绍一两个人和一个地方` was asking for exactly what the validator cannot forgive.
+`明` alone was 283 of 1686 violations in one run — 小明, 小红, 小白. The reflex fix is to tell
+the model not to name anyone, and that measured well: violations per 100 Han characters
+28.4 → 22.6, continuity untouched. It shipped for about an hour.
 
-`ACTIVITIES.story.rules` now carries `故事里的人不要起名字`, with pronouns and role words
-offered instead. Measured against the same prompt without that rule, interleaved, 20 stories
-per arm:
+Then a better question: **at what level does story time earn a named character?** Never.
+`明`, `王` and `李` are absent from all 10,896 words of the 7-9 band; `红` and `白` do not
+arrive until HSK 5. `validate()` forgives a name only where `叫` or `姓` introduces it (see
+[The validator](#the-validator)), which repairs the first mention and leaves it bare in
+every segment after. So "no names in stories" was not a beginner constraint a learner grows
+out of — it was permanent.
 
-| | violations per 100 han | name characters in top ten | RESTARTS | stories with no restart |
+`ACTIVITIES.story.names` now carries three, listed in the prompt and added to the turn's
+validation lexicon, the same bargain `turn()` already strikes for `[[NEED:]]` words and
+pacing offers: legal because the prompt asked for them. Measured against the no-names rule,
+interleaved, 20 stories per arm:
+
+| | violations per 100 han | RESTARTS | stories with no restart | stories judged CLEAR |
 | --- | --- | --- | --- | --- |
-| names allowed | 28.4 | `明×283 红×84 白×79` | 3/72 (4%) | 15/18 |
-| `不要起名字` | **22.6** | none | 5/80 (6%) | 16/20 |
+| `不要起名字` | 22.6 | 6/72 (8%) | 14/18 | 16/18 |
+| named cast | **20.5** | 2/64 (3%) | 14/16 | **32/32** |
 
-A fifth fewer out-of-level words per character, and **continuity is untouched** — which was
-the risk worth measuring, since pronouns are more ambiguous than names and a flatter story
-could have been the price. It was not.
+The whitelist is at worst neutral on every existing counter and **better on the one that had
+to be added for it**. Restarts measure structure; they cannot see two characters both called
+`他`. `CLEAR / CONFUSING` over the whole story is that counter, and 2 of 18 no-names stories
+were confusing against none of the named ones — suggestive rather than proven at that n, but
+it is the only measure pointing anywhere, and the whitelist costs nothing on the others.
 
-Two things this did not fix. Segments still come in at **55–83 characters against the 90 they
-are asked for**, so the pacing case for segmenting — 90 characters is two credits at
-`DEFAULT_RATE`, 55 is one — is weaker than `RESEARCH.md`'s arithmetic assumes. And the
-out-of-level rate per *reply* stays at 100%, because at 60-odd characters a reply almost
-always contains something: **out-of-level rate per reply is not comparable across activities
-of different lengths.** Story's 100% against chat's 50% is mostly the four-fold length
-difference. Per hundred Han characters the gap is real and smaller — 23–28 against chat's
-4–8 — and that is the number to quote. Normalise by length or you are measuring reply length.
+Three points of method worth keeping:
 
-Separately, and not a prompt question at all: **about one call in eight came back with an
-empty completion**, at concurrency 1 as well as 4, across every arm. `callModel` throws on an
-empty reply and nothing retries it, so a story that hits one dies mid-narrative on a notice
-card. The harness retries once and counts; the app does not, and should.
+- **Three names is enough because the model's choices are concentrated.** `明`, `红` and `白`
+  were essentially all of it. Naming what it was going to say anyway is why the list does not
+  need to be a name corpus.
+- **An arm that changes a prompt must change the lexicon with it.** The `no-names` control
+  strips `ACTIVITIES.story.names` as well as adding the suppression rule; leaving the names
+  in the lexicon would have scored its own violations away and handed the control a win.
+- **The cast is scoped to the activity, and the browser suite is where that is provable.**
+  The node suite can show the names reach the prompt; only a real page can show they reach
+  the lexicon, and that the identical reply is still rejected in a chat.
+
+### What this did not fix
+
+Segments still come in at **55–83 characters against the 90 they are asked for**, so the
+pacing case for segmenting — 90 characters is two credits at `DEFAULT_RATE`, 55 is one — is
+weaker than `RESEARCH.md`'s arithmetic assumes.
+
+**Out-of-level rate per reply is not comparable across activities of different lengths.**
+Story's 100% against chat's 50% is mostly the four-fold length difference: at 60-odd
+characters a reply almost always contains something. Per hundred Han characters the gap is
+real and smaller — 20–28 against chat's 4–8 — and that is the number to quote. Normalise by
+length or you are measuring reply length.
+
+And, not a prompt question at all: **about one call in eight comes back with an empty
+completion**, at concurrency 1 as well as 4, across every arm. `callModel` throws on an empty
+reply and nothing retries it, so a story that hits one dies mid-narrative on a notice card.
+The harness retries once and counts; the app does not, and should.
 
 ### A cheaper model is not a cheaper conversation
 

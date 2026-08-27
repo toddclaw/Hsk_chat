@@ -784,6 +784,15 @@ constants rather than against the number, so changing either one fails the suite
 A segment the model cannot get down to level keeps its best attempt and the story carries on.
 The canned fallback is survivable in a chat turn and nonsense in the middle of a narrative.
 
+Its characters are called **小明, 小红 and 小白**, and that is not laziness — it is the only
+way story time gets named characters at all. No name character is legal at any level the app
+offers: `明`, `王` and `李` are absent from all 10,896 words of the combined 7–9 band, and
+`红` and `白` do not arrive until HSK 5. So the three are named in the prompt and allowed for
+those turns, the same way a `[[NEED:]]` word or a newly offered word is allowed — and they
+stay illegal everywhere else, including in an ordinary chat. Measured against the alternative
+of banning names outright: fewer out-of-level words per character, and stories you can
+actually follow. See DEVELOPING.md.
+
 # Conversations
 
 The 💬 button in the header lists every chat: **New chat** at the top, then each conversation

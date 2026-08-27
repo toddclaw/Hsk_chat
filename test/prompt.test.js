@@ -519,17 +519,35 @@ const qNums = q.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m 
 check(JSON.stringify(qNums) === JSON.stringify(qNums.map((_, i) => i + 1)),
   "and its rule numbering is still gap-free", JSON.stringify(qNums));
 
-/* Names are the single largest source of out-of-level words in a story, and
- * the rule that suppresses them has to reach the segments -- not just the
- * first one, where 叫 would have covered it anyway. */
-const nameRule = "\u6545\u4e8b\u91cc\u7684\u4eba\u4e0d\u8981\u8d77\u540d\u5b57";
+/* Names are the single largest source of out-of-level words in a story, and the
+ * whitelist has to reach every segment -- not just the first, where 叫 would
+ * have covered it anyway -- and the question phase, which asks about the
+ * characters by name. */
+const nameRule = "\u6545\u4e8b\u91cc\u7684\u4eba\u53ef\u4ee5\u53eb";
 for (const idx of [0, 2, 4]) {
   const out = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
                         storySegment: { index: idx, of: 5 } });
-  check(out.includes(nameRule), `segment ${idx} is told not to name anyone`);
+  check(out.includes(nameRule), `segment ${idx} is given the cast`);
+  for (const e of P.STORY_NAMES) {
+    check(out.includes(e.w), `segment ${idx} lists ${e.w}`);
+  }
 }
+check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                storyQuestion: true }).includes(nameRule),
+  "and so is the question phase -- it asks about the characters by name");
+
+/* Every name needs pinyin and a gloss or the popover is blank, and none may
+ * carry a `t`: the caller runs these through the same toScript() as the rule
+ * text, and a second conversion path is a second answer. */
+for (const e of P.STORY_NAMES) {
+  check(!!e.p && !!e.d, `${e.w} has pinyin and a gloss`);
+  check(e.t === undefined, `${e.w} carries no separate traditional form`);
+}
+
 check(!P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
         .includes(nameRule), "while chat is not -- it is story time's problem");
+check(P.ACTIVITIES.chat.names === null && P.ACTIVITIES.focused.names === null,
+  "and neither dialogue activity has a cast");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

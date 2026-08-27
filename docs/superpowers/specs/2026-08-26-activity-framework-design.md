@@ -113,14 +113,14 @@ extends.
 
 ```js
 var ACTIVITIES = {
-  chat:    { label: "Chat",         rules: null,  reuse: null,     gen: "turn",     converse: true },
-  focused: { label: "Focused chat", rules: [...], reuse: "unused", gen: "turn",     converse: true },
-  story:   { label: "Story time",   rules: [...], reuse: null,     gen: "segments", converse: false }
+  chat:    { label: "Chat",         rules: null,  names: null,  reuse: null,     gen: "turn",     converse: true },
+  focused: { label: "Focused chat", rules: [...], names: null,  reuse: "unused", gen: "turn",     converse: true },
+  story:   { label: "Story time",   rules: [...], names: [...], reuse: null,     gen: "segments", converse: false }
 };
 ```
 
-Four fields, because four is what actually varies. This said three when it was
-approved; implementation found the fourth.
+Five fields. This said three when it was approved; implementation found the fourth,
+and measuring against a real model found the fifth.
 
 - `rules` — extra entries appended to the existing `rules` array in `build()`.
   Numbering is by array position already, so insertion cannot collide.
@@ -129,6 +129,8 @@ approved; implementation found the fourth.
   `readiness().unused`.
 - `gen` — the generation strategy. `"segments"` is the only new turn-loop code in A.
 - `converse` — whether the conversational turn-taking rules apply at all.
+- `names` — vocabulary the activity legalises for its own turns. Only story time has
+  any, and it needs them because no name character is legal at any level the app offers.
 
 `converse` is the correction. Three fields let an activity **add** rules and
 nothing more, and that is not enough: `build()` pushes three turn-taking rules —
