@@ -134,6 +134,54 @@
     return (level || 1) <= AUTO_LIST_MAX_LEVEL ? "with-list" : "without-list";
   }
 
+  /* What varies between the dialogue activities, as data.
+   *
+   * Four fields, because four is what actually differs. `converse` is the one
+   * that is not obvious: build() pushes three conversational turn-taking rules
+   * (answer the student, do not repeat them, correct then carry on), and those
+   * are wrong inside a story -- every segment would end by asking the learner a
+   * question. An activity has to be able to suppress rules, not only add them.
+   *
+   * Rule text is not held to the level allowlist; the existing rules already use
+   * 英文 and 语法, both above HSK 1. Samples and starters are, and still are. */
+  var ACTIVITIES = {
+    chat: {
+      label: "Chat",
+      rules: null,
+      reuse: null,
+      gen: "turn",
+      converse: true
+    },
+    focused: {
+      label: "Focused chat",
+      /* The reuse rule already says "please use these a lot". This one asks for
+       * something stronger and different -- build the conversation so the words
+       * have somewhere to go -- because a partner that merely uses them when they
+       * fit is what the unused list is evidence of not working. */
+      rules: [
+        "学生学过下面这些词，可是一次也没有自己用过。请你带着话题往这些词的方向走，" +
+        "问一些必须用到这些词才好回答的问题，让学生自己说出来。"
+      ],
+      reuse: "unused",
+      gen: "turn",
+      converse: true
+    },
+    story: {
+      label: "Story time",
+      rules: [
+        "你在给学生讲一个故事。故事要简单、有意思，每一段都要接得上。",
+        "只讲故事，不要问学生问题，也不要在故事里跟学生说话。"
+      ],
+      reuse: null,
+      gen: "segments",
+      converse: false
+    }
+  };
+
+  function activityFor(id) {
+    return ACTIVITIES[id] || ACTIVITIES.chat;
+  }
+
   function styleFor(level) {
     return LEVEL_STYLE[level] || LEVEL_STYLE[1];
   }
@@ -148,6 +196,8 @@
     var style = styleFor(opts.level);
     var len = LENGTHS[opts.length] || LENGTHS.short;
     var convert = opts.convert || function (t) { return t; };
+    var act = activityFor(opts.activity);
+    var seg = opts.storySegment || null;
 
     /* Each entry is one rule's finished text; numbering is assigned by
      * position when the list is assembled below. Inserting, removing or
@@ -164,7 +214,9 @@
      * shifts whenever a rule is added above it. */
     rules.push(convert(style.vocab) +
       ((opts.offer && opts.offer.length) ? convert("（后面提到的新词除外。）") : ""));
-    rules.push(convert(len.rule));
+    /* A story segment sets its own length below; LENGTHS is the conversational
+     * axis and its "one or two sentences" contradicts it outright. */
+    if (!seg) rules.push(convert(len.rule));
     rules.push(convert(style.grammar));
     rules.push(convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，") +
                "\n   " + convert("不要用英文，不要用拼音，不要用汉字注音。"));
@@ -172,21 +224,41 @@
      * reply. Under a tight vocabulary the cheapest way to obey every other
      * rule is to hand the student's own sentence back, which reads as not
      * having understood. */
-    rules.push(convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"));
-    rules.push(convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"));
-    /* Correcting is not the same failure mode as echoing: an echo hands back
-     * the student's own sentence unchanged, while a correction restates it
-     * fixed, in words the student already has, and then the conversation
-     * continues -- rule 5 above still applies to what comes after it. */
-    rules.push(convert("如果学生的话语法或者用词不对，先用正确、简单的说法说一次你觉得他想说的意思") +
-               "（" + convert("只能用学生已经会的词，需要的话可以更简单") + "），" +
-               convert("然后再继续说下去，回答他，别只纠正不回答。"));
+    /* Turn-taking. Suppressed for an activity that is not a conversation --
+     * inside a story these would make every segment end by questioning the
+     * learner, which is the opposite of listening to a story. */
+    if (act.converse) {
+      rules.push(convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"));
+      rules.push(convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"));
+      /* Correcting is not the same failure mode as echoing: an echo hands back
+       * the student's own sentence unchanged, while a correction restates it
+       * fixed, in words the student already has, and then the conversation
+       * continues -- rule 5 above still applies to what comes after it. */
+      rules.push(convert("如果学生的话语法或者用词不对，先用正确、简单的说法说一次你觉得他想说的意思") +
+                 "（" + convert("只能用学生已经会的词，需要的话可以更简单") + "），" +
+                 convert("然后再继续说下去，回答他，别只纠正不回答。"));
+    }
     rules.push(convert("如果你真的需要一个学生不会的词，写") + " [[NEED:" + convert("词") +
                "|pīn yīn|english]]" + convert("，一句话最多一个。"));
     rules.push(convert("学生问「…怎么说」的时候，一定用") + " [[NEED:" + convert("词") +
                "|pīn yīn|english]] " + convert("回答，") + "\n   " +
                convert("这样他可以看到拼音和意思。不要用英文解释。"));
     rules.push(convert("只写句子本身。不要写时间（比如 [0.0:]），不要写方括号、星号或者标题。"));
+
+    /* The activity's own rules, then its position in the story if it has one.
+     * Position after the activity's own rules so it reads as the more immediate
+     * instruction of the two. */
+    (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    if (seg) {
+      if (seg.index === 0) {
+        rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
+      } else if (seg.index >= seg.of - 1) {
+        rules.push(convert("这是故事的最后一段。把故事讲完，给它一个结尾。"));
+      } else {
+        rules.push(convert("接着上面的故事往下讲，不要从头开始，也不要现在就结束。"));
+      }
+      rules.push(convert("这一段写大概九十个汉字。"));
+    }
 
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
@@ -491,6 +563,7 @@
   }
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
+              ACTIVITIES: ACTIVITIES, activityFor: activityFor,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor, build: build,
               translate: translate, explain: explain, grade: grade,

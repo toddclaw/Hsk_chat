@@ -447,5 +447,59 @@ check(modeArmOn.includes("我 你 好"), "build puts the allowlist in when given
 check(!modeArmOff.includes("我 你 好"), "and leaves it out when not");
 check(modeArmOn.length > modeArmOff.length, "with-list is the longer prompt");
 
+/* Activities. The contract is four fields because four is what varies: extra
+ * rules, where the reuse list comes from, how generation is driven, and whether
+ * the conversational turn-taking rules apply at all. */
+const ACT_IDS = ["chat", "focused", "story"];
+for (const id of ACT_IDS) {
+  const a = P.activityFor(id);
+  check(!!a, `activity ${id} exists`);
+  check(typeof a.label === "string" && a.label.length > 0, `activity ${id} has a label`);
+  check(a.gen === "turn" || a.gen === "segments", `activity ${id} has a real gen`, a.gen);
+  check(typeof a.converse === "boolean", `activity ${id} says whether it converses`);
+}
+check(P.activityFor("nope") === P.ACTIVITIES.chat, "an unknown activity falls back to chat");
+check(P.activityFor(undefined) === P.ACTIVITIES.chat, "so does a missing one");
+check(P.ACTIVITIES.chat.converse === true, "chat converses");
+check(P.ACTIVITIES.story.converse === false, "story does not converse mid-narrative");
+check(P.ACTIVITIES.story.gen === "segments", "story generates in segments");
+check(P.ACTIVITIES.focused.reuse === "unused", "focused chat draws reuse from the unused list");
+
+// The conversational rules must actually leave the prompt for story time.
+const ASK_RULE = "\u6700\u540e\u95ee\u4e00\u4e2a\u65b0\u95ee\u9898";
+const chatPrompt = P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" });
+const storyPrompt = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                              storySegment: { index: 0, of: 5 } });
+check(chatPrompt.includes(ASK_RULE), "chat keeps the ask-a-question rule");
+check(!storyPrompt.includes(ASK_RULE), "story drops it -- a segment must not end by asking");
+check(!storyPrompt.includes("\u4e0d\u8981\u628a\u5b66\u751f\u7684\u8bdd\u91cd\u590d\u4e00\u904d"),
+  "story drops the echo rule too");
+check(storyPrompt !== chatPrompt, "the two activities produce different prompts");
+
+// Segment position has to reach the model, or every segment restarts the story.
+const seg0 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 0, of: 5 } });
+const seg3 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 3, of: 5 } });
+const seg4 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 4, of: 5 } });
+check(seg0 !== seg3, "the first segment reads differently from a middle one");
+check(seg3.includes("\u63a5\u7740"), "a middle segment is told to continue, not restart");
+check(seg4.includes("\u6700\u540e"), "the last segment is told to finish the story");
+check(!seg0.includes(P.LENGTHS.short.rule),
+  "a segment does not also get the conversational length rule -- it contradicts it");
+check(chatPrompt.includes(P.LENGTHS.short.rule), "while chat still does");
+
+// Rule numbering must survive activity rules, the same way it survives the others.
+for (const id of ACT_IDS) {
+  const out = P.build({ level: 3, label: "HSK 3", length: "medium", activity: id,
+                        storySegment: id === "story" ? { index: 1, of: 5 } : null,
+                        offer: [{ w: "\u82f9\u679c" }], reuse: [{ w: "\u559c\u6b22" }], script: "trad" });
+  const nums = out.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m => Number(m[1]));
+  const expected = nums.map((_, i) => i + 1);
+  check(JSON.stringify(nums) === JSON.stringify(expected),
+    `activity ${id}: rule numbering is gap-free and in order`, JSON.stringify(nums));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
