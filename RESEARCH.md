@@ -370,6 +370,60 @@ temperature — a 30B model may lean on an in-context list more than a larger on
 about the escape hatch the prompt offers; at this model and `length=short`, that path never
 fires at all.
 
+### Prior art: what HSKStory does, and why most of it does not transfer
+
+HSKStory is cited above as the source of the allowlist claim that did not replicate. Since
+story time now generates long-form graded text, its published method is worth recording
+properly — including the parts that argue against our design.
+
+**They abandoned strict compliance on purpose.** *"The list is a grading target, but 300
+entries cannot express every detail in a coherent story."* HSK 1 stories are claimed at
+**over 96% compliance, not 100%**; above-level words stay in the text and are supported by
+toggleable pinyin and tap-to-translate rather than removed. A human edits every story —
+*"no raw writer output... was ready to publish as-is"* — and the pipeline is deterministic
+checks plus *"editorial judgment."*
+
+**Their vocabulary numbers are as bad as ours.** On a deliberately constrained HSK 1 task,
+unique-type error rates were Qwen 3.5 Plus 30.9%, GLM-5 33.0%, DeepSeek V3.2 36.3%, Doubao
+Seed 2.0 Pro 67.6%. Their own summary: *"Every route therefore had a high unique-type error
+rate."* This is the most useful thing in it. Our story segments come back **100%
+out-of-level on the first attempt at HSK 1** (DEVELOPING.md), and it would be easy to read
+that as something wrong with our prompt. It is not: long-form HSK 1 generation is hard for
+every model measured by anyone, including one with an offline pipeline and an editor behind
+it.
+
+**They route a different model per level** — DeepSeek V4 Pro for HSK 1–3 where vocabulary
+control matters most, GPT-5.6 Sol for HSK 4–5, Kimi K2.6 for HSK 6–9 — while disclaiming it
+as *"a dated routing snapshot, not a claim that one route is the best."* This app ships one
+model for every level and every activity, and has never tested whether that costs story time
+anything. `tools/story-ab.js --model` makes it a one-run question.
+
+**They document structural failures and no remedy for them.** Kimi leaking English planning
+text, GLM ignoring the requested concept, StepFun leaking English, models falling into
+repetition. Nothing about empty completions or retries — so the one-call-in-eight empty rate
+measured here has no prior art to borrow from.
+
+**They say nothing about names anywhere we could find.** The problem that cost the most
+effort here — no name character is legal at any level, since 明, 王 and 李 are absent from
+all 10,896 words of the 7–9 band — appears to be unaddressed publicly.
+
+**The structural difference, which is why the headline lesson does not transfer.** HSKStory
+is a publishing pipeline; this is a live conversation. They can spend unlimited offline
+retries and an editor per story. We generate in front of the learner on a three-attempt
+budget, and there is nobody to review the output before it is read. So *"have a human check
+it"* is unavailable, and *"relax the gate and annotate what leaks"* is not — this app already
+owns every piece of that machinery: the popover, toggleable pinyin, the `[[NEED:]]` channel
+and a `validate()` that already marks names without repairing them.
+
+**Treat their numbers as directional.** Their one claim this project tested — that including
+the allowlist makes output worse — is contradicted above at HSK 1 and HSK 3, and their
+benchmark page disclaims itself in the same terms.
+
+Sources: [How We Built AI-Generated Graded Chinese
+Stories](https://hskstory.com/guides/ai-graded-chinese-stories), [Chinese LLM
+Benchmark](https://hskstory.com/guides/chinese-llm-benchmark), [HSK 1 Reading
+Practice](https://hskstory.com/guides/hsk-1-reading-practice). Retrieved 2026-08-27.
+
 ### Earlier measurements
 
 Recorded in DEVELOPING.md with their working, and summarized here because they set the
