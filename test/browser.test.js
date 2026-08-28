@@ -2145,12 +2145,20 @@ return true;
     /* A needed word is legal for the rest of the story, not only the reply that
      * asked for it -- otherwise a recurring name is a violation in every later
      * segment. Scoped to messages up to the one being rendered, so a word first
-     * needed in segment 2 is still flagged in segment 1. */
+     * needed in segment 2 is still flagged in segment 1. The leading segment
+     * below uses the same word *before* any need declares it, unglossed --
+     * proving the carry-forward does not leak backward and retroactively
+     * un-flag an earlier, still-illegal use (the v67 bug one layer up: what
+     * renders must agree with what validation actually allowed at that point,
+     * not with the conversation's eventual total). */
     await exec(`
       localStorage.setItem("hsk1chat.chats", "[]");
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       localStorage.setItem("hsk1chat.learning", "[]");
       localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "e0000000-0000-4000-8000-000000000000", role: "assistant",
+          text: "\\u81ea\\u5df1\\u5f88\\u597d\\u3002", attempts: 1, needs: [],
+          created_at: "2025-12-31T23:59:59.000Z" },
         { id: "e1111111-1111-4111-8111-111111111111", role: "assistant",
           text: "\\u4ed6\\u5f88\\u597d\\u3002", attempts: 1, needs: [],
           created_at: "2026-01-01T00:00:00.000Z" },
@@ -2164,15 +2172,18 @@ return true;
       ]));
       return true;`);
     await go(base);
-    await waitFor("document.querySelectorAll('#log .msg.bot .bubble').length >= 3",
-      "three seeded replies");
+    await waitFor("document.querySelectorAll('#log .msg.bot .bubble').length >= 4",
+      "four seeded replies");
     const carried = await exec(`
       var b = document.querySelectorAll('#log .msg.bot .bubble');
       function red(el) {
         return Array.prototype.map.call(el.querySelectorAll('.w.bad'),
           function (e) { return e.textContent; }).join(" ");
       }
-      return { first: red(b[0]), second: red(b[1]), third: red(b[2]) };`);
+      return { leading: red(b[0]), first: red(b[1]), second: red(b[2]), third: red(b[3]) };`);
+    check(carried.leading !== "",
+      "a word only needed later does not retroactively legalize an earlier, unglossed use of it",
+      JSON.stringify(carried));
     check(carried.third === "",
       "a word needed in an earlier segment is still legal in a later one",
       JSON.stringify(carried));
