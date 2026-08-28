@@ -902,7 +902,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v67 — 2026-08-27";
+const VERSION   = "v68 — 2026-08-28";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1906,7 +1906,13 @@ function renderMessage(turnObj, shownExtra) {
     el.appendChild(box);
   });
 
-  (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w)).forEach(n => {
+  /* A word pacing offered and the model then also wrapped in [[NEED:]] -- 12 of
+   * 17 needs in one real run -- was glossed twice: once as "new word from HSK 3"
+   * and again as "the model asked for a word outside the list". The model is
+   * obeying both rules correctly, so this is filtered here rather than argued
+   * with in the prompt. `learned` also covers a word introduced turns ago. */
+  (turnObj.needs || []).filter(n => n.state === undefined && !isExtra(n.w) && !learned(n.w))
+    .forEach(n => {
     const box = document.createElement("div");
     box.className = "pending";
     box.innerHTML = "The model asked for a word outside the list:<div class=\"row\">" +
@@ -3062,9 +3068,26 @@ async function send() {
  * The failed reply or error card is dropped first so history stays honest. */
 async function retryLast() {
   if (S.busy) return;
-  while (S.history.length && S.history[S.history.length - 1].role !== "user") S.history.pop();
-  if (!S.history.length) return;
-  const text = S.history[S.history.length - 1].text;
+  /* A story's segments have no user turn behind them, so popping back to one
+   * emptied the whole story -- silently, because the early return below skipped
+   * both persist() and renderAll(): the screen still showed a story the app had
+   * already discarded, and the next tap started a new one over the top.
+   * Retrying a segment means dropping the failed reply and asking storyStep()
+   * for it again, which is also the only path that uses the story model, the
+   * story token ceiling and the story prompt phase. */
+  if (currentActivity() === "story") {
+    const last = S.history[S.history.length - 1];
+    if (last && (last.failed || last.role === "notice")) S.history.pop();
+    persist(); renderAll();
+    return storyStep();
+  }
+  /* Find the turn to retry before touching anything. The old loop popped as it
+   * searched and then gave up, leaving the history it had already eaten. */
+  let i = S.history.length - 1;
+  while (i >= 0 && S.history[i].role !== "user") i--;
+  if (i < 0) return;
+  S.history.length = i + 1;
+  const text = S.history[i].text;
   S.busy = true; renderBusy();
   persist(); renderAll();
   return runTurn([], text);
@@ -3115,6 +3138,7 @@ async function storyStep() {
   const bubble = thinkingBubble(asking
     ? "Thinking of a question about the story\u2026"
     : "Writing part " + (told + 1) + " of " + STORY_SEGMENTS + "\u2026 this takes a moment.");
+  const hist = S.history;
   try {
     /* Phase two is the ordinary chat loop. The story is now in windowed()'s
      * context, so a question about it needs no new machinery -- and the answers
@@ -3123,7 +3147,13 @@ async function storyStep() {
       ? { storyQuestion: true, model: storyModel() }
       : { storySegment: { index: told, of: STORY_SEGMENTS },
           maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() });
-    S.history.push({
+    /* Pushed into the conversation this was asked for, not into whichever one
+     * S.history points at when the reply lands: a segment takes most of a
+     * minute, and switching chats in that window used to drop it into the
+     * conversation the learner had moved to -- which reads as a story turning
+     * into a chat. The array is S.chatMsgs[cid], so mutating it in place is
+     * what saveChats() then writes. */
+    hist.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
       id: newMessageId(), created_at: new Date().toISOString()
@@ -3131,15 +3161,15 @@ async function storyStep() {
     // The question is not a segment and earns no slate of its own, as before.
     if (!asking) {
       const introduced = settlePace(res);
-      if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
+      if (introduced.length) hist[hist.length - 1].introduced = introduced;
     }
     recordTurn(res.attempts, res.failed);
     persist();
   } catch (err) {
     if (err.kind !== "stopped") {
       console.error(err);
-      S.history.push({ role: "notice", kind: err.kind || "http",
-                       detail: (err && err.message) || "", model: S.model });
+      hist.push({ role: "notice", kind: err.kind || "http",
+                  detail: (err && err.message) || "", model: S.model });
       persist();
     }
   } finally {
@@ -3175,16 +3205,23 @@ function thinkingBubble(label) {
 async function runTurn(toGloss, text) {
 
   const thinking = thinkingBubble("");
+  const hist = S.history;
 
   try {
     const res = await turn();
-    S.history.push({
+    /* Pushed into the conversation this was asked for, not into whichever one
+     * S.history points at when the reply lands: a segment takes most of a
+     * minute, and switching chats in that window used to drop it into the
+     * conversation the learner had moved to -- which reads as a story turning
+     * into a chat. The array is S.chatMsgs[cid], so mutating it in place is
+     * what saveChats() then writes. */
+    hist.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
       id: newMessageId(), created_at: new Date().toISOString()
     });
     const introduced = settlePace(res);
-    if (introduced.length) S.history[S.history.length - 1].introduced = introduced;
+    if (introduced.length) hist[hist.length - 1].introduced = introduced;
     recordTurn(res.attempts, res.failed);
     persist();
   } catch (err) {
@@ -3193,8 +3230,8 @@ async function runTurn(toGloss, text) {
       console.error(err);
       // err.message is empty when the API gave no reason; String(err) would turn
       // that into the word "Error", which reads as a detail and is not one.
-      S.history.push({ role: "notice", kind: err.kind || "http",
-                       detail: (err && err.message) || "", model: S.model });
+      hist.push({ role: "notice", kind: err.kind || "http",
+                  detail: (err && err.message) || "", model: S.model });
       persist();
     }
   } finally {

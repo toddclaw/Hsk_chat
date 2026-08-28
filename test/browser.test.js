@@ -2046,6 +2046,102 @@ return true;
       "while a short message keeps the explanation ceiling that was tuned for it",
       JSON.stringify(toks));
 
+    /* A reply belongs to the conversation it was asked for. A segment takes
+     * most of a minute, and storyStep() used to push into whichever S.history
+     * pointed at when the reply landed -- so switching chats mid-generation
+     * dropped the segment into the conversation the learner had moved to, which
+     * reads as a story turning into a chat. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
+    await exec(
+      "window.__resolve = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__resolve = r; }); };" +
+      "window.newChat('story'); window.storyStep();");
+    await waitFor("window.__resolve", "a segment request in flight");
+    // The learner navigates away while the segment is still being written.
+    await exec("window.newChat('chat');");
+    await exec("window.__resolve('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
+    await waitFor(
+      "Object.keys(JSON.parse(localStorage['hsk1chat.chatMsgs'] || '{}'))" +
+      ".some(function (k) { return JSON.parse(localStorage['hsk1chat.chatMsgs'])[k].length; })",
+      "the segment to be stored");
+    const placed = await exec(`
+      var chats = JSON.parse(localStorage["hsk1chat.chats"] || "[]");
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      return chats.map(function (c) { return c.activity + ":" + ((msgs[c.id] || []).length); });`);
+    check(placed.indexOf("story:1") !== -1 && placed.indexOf("chat:0") !== -1,
+      "a segment lands in the story it was asked for, not the chat navigated to",
+      JSON.stringify(placed));
+
+    /* "try again" on a failed segment used to pop every message looking for a
+     * user turn a story does not have, then return before persist() and
+     * renderAll() -- so the button looked dead and the story was gone. */
+    await exec(`
+      var cid = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa": [
+        { id: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", role: "assistant",
+          text: "\u4ed6\u5f88\u597d\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "cccccccc-1111-4111-8111-cccccccccccc", role: "assistant",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')", "the seeded story");
+    await exec(
+      "window.callModel = function () {" +
+      "  return Promise.resolve('\u5979\u53bb\u4e86\u5546\u5e97\u3002'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("document.querySelector('#log').textContent.indexOf('\u5546\u5e97') !== -1",
+      "a retried segment");
+    const kept = await exec(`
+      return { text: document.querySelector('#log').textContent,
+               bots: document.querySelectorAll('#log .msg.bot').length };`);
+    check(kept.text.indexOf("\u4ed6\u5f88\u597d") !== -1,
+      "retrying a failed segment keeps the story that came before it",
+      JSON.stringify(kept).slice(0, 160));
+    check(kept.text.indexOf("\u6211\u4e0d\u77e5\u9053") === -1,
+      "and drops the failed reply rather than leaving it above the new one",
+      JSON.stringify(kept).slice(0, 160));
+
+    /* One card per word. Pacing offers a word, the model uses it AND wraps it in
+     * [[NEED:]] because from its side the learner does not know it -- 12 of 17
+     * needs in one real run -- and it was glossed twice. */
+    await exec(`
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "\u7403", p: "qi\u00fa", d: "ball", seen: 1, from: 2 }
+      ]));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "dddddddd-1111-4111-8111-dddddddddddd", role: "assistant",
+          text: "\u4ed6\u6709\u4e00\u4e2a\u7403\u3002", attempts: 1,
+          needs: [{ w: "\u7403", p: "qi\u00fa", d: "ball", start: 4, end: 5 }],
+          introduced: ["\u7403"], created_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "the seeded reply");
+    const cards = await exec(`
+      return { newword: document.querySelectorAll('#log .newword').length,
+               pending: document.querySelectorAll('#log .pending').length };`);
+    check(cards.newword === 1 && cards.pending === 0,
+      "a word pacing introduced is glossed once, not also offered as an unknown word",
+      JSON.stringify(cards));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

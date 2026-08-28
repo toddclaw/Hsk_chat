@@ -21,10 +21,17 @@ segments predates v67, where `turn()` was dropping `S.known` from the validation
 any turn carrying a need, an offer or a cast. A story turn always carries a cast, so every
 segment was validated as if the learner's 222 ticked words were out of level.
 
-**What would settle it:** read the `attempts` values off story messages generated on v67 and
-recompute. If the mean falls to ~1.5 the figure becomes ~$0.13 and the budget is comfortable;
-if it stays near 3.0 the note should say $0.25 and story time needs a cost look of its own.
-Do not rewrite the number from either estimate — take it from real messages.
+**Measured on v67, 2026-08-28:** still **3.00**, across 19 segments in three stories. The
+v67 hypothesis was wrong — the learner is at HSK 2 now, so the words they had ticked as known
+ahead are inside `S.base` already and the fixed bug had little left to break. The note should
+say **$0.25**, and story time needs a cost look of its own.
+
+**What would settle the cost:** the repair loop re-sends the whole scratch on every attempt,
+and the scratch grows with each repair exchange, so a 3-attempt segment costs far more than
+three times a 1-attempt one. The levers, none of them measured: what the repairs are actually
+being spent on (log the violation kinds across a run), whether `WINDOW = 20` needs to send
+every prior segment in full or could send fewer, and whether `STORY_ATTEMPTS = 5` earns its
+last two attempts. Take the replacement figure from real messages, never from an estimate.
 
 ---
 

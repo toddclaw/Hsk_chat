@@ -70,6 +70,8 @@ measured in this app.
 | D8 | Every new per-level table is written for **all seven levels** at once, and the question ladder is **checked against the wordlists by test** | The existing convention: `LEVEL_STYLE` and `STARTERS` are both complete 1–7, and their `\|\| [1]` fallbacks are safety nets rather than working paths. A ladder filled in only to HSK 2 would leave HSK 3–7 on yes/no questions with nothing reporting it. |
 | D9 | The **asking** and **discussing** turns run on the **teaching model**, not the story model | A comprehension question about a story already written is a far easier job than writing graded narrative, and `qwen3-235b` is ~37x cheaper per call. Conditional on the cheap question experiment: if it cannot ask in-level, ladder-conformant questions, it moves back. |
 | D10 | The expensive topic A/B is **trimmed and deferred** until a post-v67 attempt-rate baseline exists | Three arms of 8 stories at the real price is ~$6, more than a month's whole budget, and the pre-v67 attempt rate is known to be inflated by a fixed bug. |
+| D11 | **Empty conversations are deleted automatically** when the learner leaves them | Selecting an activity creates a conversation before anything is generated (section 1), so the chooser makes empty conversations routine rather than accidental. Deletion writes a `deleted_at` tombstone, because an empty conversation may already have synced. |
+| D12 | A **short title is written by the teaching model** when the last segment lands | The derived title is the first sentence of segment 1, which is unreadably long in a list — and rereading is part of the expected use, so finding a story again matters. ~$0.0002 a story. Skipped where `renamed` is set, so a hand-typed title is never overwritten. |
 
 ## Approaches considered
 
@@ -337,11 +339,11 @@ has been re-observed on v67:
 
 | Mean attempts | 20 stories x 5 segments | Fits $5? |
 |---|---|---|
-| 3.0 (pre-v67, measured) | ~$5.10 | no |
+| 3.0 — measured pre-v67 **and again on v67** | ~$5.10 | no |
 | 1.5 | ~$2.55 | yes, with room |
 
-That number costs nothing to produce — it is read out of the learner's own `attempts` values
-after a few stories on v67.
+That number has now been produced, and it is 3.0 on v67 as well as before it (see Open
+questions). The budget does **not** come right on its own.
 
 ### The measurement
 
@@ -376,9 +378,14 @@ together. No new file the page loads, so `sw.js`'s `SHELL` is unchanged.
 
 ## Open questions
 
-- **What is the mean attempt count per story segment on v67?** Everything about the budget
-  hangs on it (section 4), and it is free to obtain: read the `attempts` values off the
-  learner's own messages after a few stories. Nothing here should be optimised until it exists.
+- ~~What is the mean attempt count per story segment on v67?~~ **Answered 2026-08-28, and the
+  answer is no better than before: 3.00**, across 19 segments in three stories
+  (`3,4,3,5,2,2,3,2,3 / 2,4,3,3,3 / 2,3,3,4,3`). The hypothesis that v67's `S.known` fix would
+  cut repairs was **wrong** — most likely because the learner is at HSK 2 now, so the words
+  they had ticked as known ahead are inside `S.base` already and the bug had little left to
+  break. So story time really is ~$0.25 a story and 20 a month really is the entire $5 budget.
+  D10's deferral no longer has a better baseline to wait for: the topic experiment can be
+  costed at the real price, and story-segment cost needs a look of its own — see BACKLOG.md.
 - Does a free-text topic drag the model toward vocabulary the level cannot carry? The trimmed
   topic experiment answers it, and a bad answer revisits D4.
 - Can the teaching model ask in-level, ladder-conformant questions? The cheap question
