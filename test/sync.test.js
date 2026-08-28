@@ -164,6 +164,30 @@ check(declared.every(t => listed.includes(t)) && listed.every(t => declared.incl
 check(listed.includes("messages") && listed.includes("prefs"),
   "USER_TABLES covers the conversation and the preferences row, not just vocabulary");
 
+// kind distinguishes a story segment from a comprehension question. It has to
+// survive the round trip, or another device miscounts "part 3 of 5".
+var kindRow = Sync.messageToRow(
+  { id: "11111111-1111-4111-8111-111111111111", role: "assistant",
+    text: "他去了。", kind: "segment", created_at: "2026-01-01T00:00:00.000Z" },
+  "user-1", "conv-1");
+check(kindRow.kind === "segment", "messageToRow carries kind", JSON.stringify(kindRow));
+
+var kindBack = Sync.rowToMessage(
+  { id: "11111111-1111-4111-8111-111111111111", role: "assistant",
+    text: "他去了。", kind: "question", conversation_id: "conv-1",
+    created_at: "2026-01-01T00:00:00.000Z" });
+check(kindBack.kind === "question", "rowToMessage restores kind", JSON.stringify(kindBack));
+
+var noKind = Sync.messageToRow(
+  { id: "22222222-2222-4222-8222-222222222222", role: "user", text: "你好",
+    created_at: "2026-01-01T00:00:00.000Z" }, "user-1", "conv-1");
+check(noKind.kind === null, "and is null rather than absent when there is none",
+  JSON.stringify(noKind));
+
+// The schema file must actually declare it, or the push fails against a real db.
+check(/add column if not exists kind text/.test(schema),
+  "db/schema.sql adds the kind column");
+
 /* ---------------------------------------------------------- conversations */
 
 const A = { id: "a", title: "chat A", created_at: "2026-01-01T00:00:00Z",

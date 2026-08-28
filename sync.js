@@ -47,6 +47,7 @@
       show_translation: !!turnObj.showTranslation,
       explain_chat: turnObj.explainChat && turnObj.explainChat.length ? turnObj.explainChat : null,
       grade: turnObj.grade || null,
+      kind: turnObj.kind || null,
       created_at: turnObj.created_at,
       updated_at: new Date().toISOString()
     };
@@ -67,6 +68,7 @@
     if (row.show_translation) t.showTranslation = true;
     if (row.explain_chat) t.explainChat = row.explain_chat;
     if (row.grade) t.grade = row.grade;
+    if (row.kind) t.kind = row.kind;
     return t;
   }
 
@@ -329,6 +331,7 @@
     var drop = [];
     if (schemaHasConvId === false) drop.push("conversation_id");
     if (schemaHasGrade === false) drop.push("grade");
+    if (schemaHasKind === false) drop.push("kind");
     var payload = drop.length
       ? rows.map(function (r) {
           var copy = {};
@@ -345,9 +348,11 @@
        * rather than guessing which one failed, and retries once: with both
        * already false there is nothing left to strip, so this cannot recurse. */
       if (isMissingSchema(r.error) &&
-          (schemaHasConvId !== false || schemaHasGrade !== false)) {
+          (schemaHasConvId !== false || schemaHasGrade !== false ||
+           schemaHasKind !== false)) {
         schemaHasConvId = false;
         schemaHasGrade = false;
+        schemaHasKind = false;
         return pushMessages(rows);
       }
       throw r.error;
@@ -399,6 +404,7 @@
   var schemaHasGrade = null;
   var schemaHasActivity = null;
   var schemaHasLevel = null;
+  var schemaHasKind = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }

@@ -88,6 +88,12 @@ alter table public.messages add column if not exists grade jsonb;
 
 alter table public.conversations add column if not exists activity text;
 
+-- Which kind of assistant turn this is inside a story: "segment" or "question".
+-- Story time interleaves them, and both are assistant turns, so nothing else
+-- stored tells them apart -- `introduced` is absent on plenty of real segments.
+-- Without it "part 3 of 5" miscounts on any device that pulled the story.
+alter table public.messages add column if not exists kind text;
+
 -- The vocabulary level a conversation was held at. Fixed at creation like
 -- activity, and for the same reason: a transcript written under HSK 1 rules
 -- does not become an HSK 3 transcript when the learner moves up. Nullable --
