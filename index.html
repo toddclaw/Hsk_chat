@@ -1123,6 +1123,25 @@ function castNames() {
   return (HSKPrompt.activityFor(currentActivity()).names || [])
     .map(e => ({ w: toScript(e.w), p: e.p, d: e.d }));
 }
+
+/* Every [[NEED:]] word this conversation has already announced, up to and
+ * including `upTo` (null means the whole conversation).
+ *
+ * A need used to be legal only in the reply that requested it, so a name the
+ * story keeps using was a fresh violation in every later segment and spent
+ * repair attempts on a word the app had already glossed. Scoped rather than
+ * global: a word first needed in segment 2 must still be flagged in segment 1,
+ * or rendering would once again disagree with what validation allowed. */
+function needsSoFar(upTo) {
+  const out = [];
+  for (const t of S.history) {
+    (t.needs || []).forEach(n => {
+      if (!out.some(e => e.w === n.w)) out.push({ w: n.w, p: n.p, d: n.d });
+    });
+    if (upTo && t === upTo) break;
+  }
+  return out;
+}
 const isKnownAhead = w => S.known.some(e => e.w === w);
 
 const learned = w => S.learning.find(e => e.w === w);
@@ -1591,7 +1610,7 @@ async function turn(ctx) {
     /* The offered words are legal this turn, exactly like a [[NEED:]] request,
      * and so is the activity's cast: the prompt named them, so rejecting them
      * would be the app failing its own instruction. */
-    const lex = lexWith(ex.needs.concat(inScript(offer), castNames()));
+    const lex = lexWith(needsSoFar(null).concat(ex.needs, inScript(offer), castNames()));
     /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
      * first one any list carries, at HSK 3 -- so asking for a different one just
      * spends the attempts and lands on the fallback, which is what the app's own
@@ -1796,7 +1815,7 @@ function renderMessage(turnObj, shownExtra) {
   /* Segment with this message's [[NEED:]] words and the activity's cast in
    * scope. They passed validation, so rendering them as violations would
    * contradict the badge and the offer sitting right below the bubble. */
-  const lex = lexWith((turnObj.needs || []).concat(castNames()));
+  const lex = lexWith(needsSoFar(turnObj).concat(castNames()));
   const toks = HSK.segment(turnObj.text, lex);
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);

@@ -2142,6 +2142,43 @@ return true;
       "a word pacing introduced is glossed once, not also offered as an unknown word",
       JSON.stringify(cards));
 
+    /* A needed word is legal for the rest of the story, not only the reply that
+     * asked for it -- otherwise a recurring name is a violation in every later
+     * segment. Scoped to messages up to the one being rendered, so a word first
+     * needed in segment 2 is still flagged in segment 1. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.learning", "[]");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "e1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4ed6\\u5f88\\u597d\\u3002", attempts: 1, needs: [],
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "e2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u81ea\\u5df1\\u5f88\\u597d\\u3002", attempts: 1,
+          needs: [{ w: "\\u81ea\\u5df1", p: "z\\u00ec j\\u01d0", d: "oneself", start: 0, end: 2 }],
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "e3333333-3333-4333-8333-333333333333", role: "assistant",
+          text: "\\u81ea\\u5df1\\u53bb\\u4e86\\u3002", attempts: 1, needs: [],
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelectorAll('#log .msg.bot .bubble').length >= 3",
+      "three seeded replies");
+    const carried = await exec(`
+      var b = document.querySelectorAll('#log .msg.bot .bubble');
+      function red(el) {
+        return Array.prototype.map.call(el.querySelectorAll('.w.bad'),
+          function (e) { return e.textContent; }).join(" ");
+      }
+      return { first: red(b[0]), second: red(b[1]), third: red(b[2]) };`);
+    check(carried.third === "",
+      "a word needed in an earlier segment is still legal in a later one",
+      JSON.stringify(carried));
+    check(carried.second === "",
+      "and legal in the segment that asked for it", JSON.stringify(carried));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
