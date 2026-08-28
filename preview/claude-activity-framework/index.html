@@ -902,7 +902,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v64 — 2026-08-27";
+const VERSION   = "v65 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2333,7 +2333,7 @@ async function flushSync() {
     renderSyncStatus("Synced just now");
   } catch (e) {
     console.warn("sync push failed", e);
-    syncLastError = (e && e.message) || String(e);
+    syncLastError = syncErrText(e);
     // Put back whatever this attempt was carrying, and try again shortly --
     // a dropped connection should not silently lose an edit.
     Object.keys(q).forEach(k => { if (q[k]) syncQueue[k] = true; });
@@ -2357,6 +2357,20 @@ async function deleteSyncedWord(table, word) {
  * the merge added locally that the server did not have (the first sign-in
  * on a device that already has local history seeds the server; a second
  * device signing in later pulls that history down instead). */
+/* What a sync error actually says. Supabase carries the identifying part of a
+ * failure OUTSIDE `message` -- a PostgREST code like PGRST204, the Postgres
+ * detail, the hint that names the column -- so a status line built from
+ * `message` alone reduces every distinct failure to the same unactionable
+ * sentence. The one line on screen is the only diagnostic a phone has. */
+function syncErrText(e) {
+  if (!e) return "";
+  let out = e.message || String(e);
+  if (e.code) out += " [" + e.code + "]";
+  if (e.details) out += " \u2014 " + e.details;
+  if (e.hint) out += " \u2014 " + e.hint;
+  return out;
+}
+
 async function pullAndMerge() {
   // Also guards against a redundant concurrent call -- boot() checks for an
   // existing session explicitly, and the onAuthChange listener below can
@@ -2454,7 +2468,7 @@ async function pullAndMerge() {
     queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
   } catch (e) {
     console.warn("sync pull failed", e);
-    syncLastError = (e && e.message) || String(e);
+    syncLastError = syncErrText(e);
     renderSyncStatus("Couldn't sync — " + syncLastError);
   } finally {
     syncBusy = false;
@@ -2477,7 +2491,7 @@ async function signInForSync() {
     // in this load. onAuthChange + boot()'s own session check pick it up
     // on the way back.
   } catch (e) {
-    syncLastError = (e && e.message) || String(e);
+    syncLastError = syncErrText(e);
     // No redirect happened, so the error needs the sheet commitSettings() just
     // closed. Reopened rather than never closed: committing is the point.
     openSheet("#setSheet");
@@ -4562,7 +4576,7 @@ $("#syncOn").onchange = async e => {
     syncUser = (session && session.user) || null;
     if (syncUser) await pullAndMerge();
   } catch (err) {
-    syncLastError = (err && err.message) || String(err);
+    syncLastError = syncErrText(err);
     renderSyncStatus("Couldn't reach sync — " + syncLastError);
   }
   renderSyncSection();
@@ -4803,7 +4817,7 @@ $("#setSheet").addEventListener("click", e => {
         renderSyncSection();
       } catch (e) {
         console.warn("sync init failed", e);
-        syncLastError = (e && e.message) || String(e);
+        syncLastError = syncErrText(e);
       }
     })();
   }
