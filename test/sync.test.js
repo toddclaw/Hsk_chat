@@ -1,7 +1,8 @@
 /* Cloud sync's pure data-shaping and merge logic. Run: node test/sync.test.js
- * The Supabase glue half of sync.js (everything after "Supabase glue" in
- * the file) has no network calls to test here -- it is exercised by the
- * Playwright suite against a mocked Supabase endpoint instead. */
+ * The Supabase glue half of sync.js is mostly exercised by the browser suite
+ * against a mocked endpoint; the one block at the bottom of this file is here
+ * because it is about which module-level flag a FAILED push sets, and the
+ * browser mock never fails. */
 const fs = require("fs");
 const path = require("path");
 const Sync = require("../sync.js");
@@ -333,5 +334,66 @@ check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "and adding it did not smuggle the key or the history in");
 
+/* --- the glue half: one failed push must not disable a different table -----
+ *
+ * configure() reads window.supabase at call time, so a stub client is enough to
+ * drive the push paths here. The bug this pins is invisible from the pure half
+ * and invisible to the browser suite: a messages push that hit a missing column
+ * used to set the flag standing for the conversations TABLE, after which
+ * pushConversations returned silently -- no error, nothing retried, and the app
+ * reporting "Synced just now" while no conversation ever left the device. */
+const seen = [];
+let failMessagesOnce = true;
+global.window = {
+  supabase: {
+    createClient: function () {
+      return {
+        from: function (table) {
+          const q = {};
+          q.upsert = function (rows) { q._rows = rows; return q; };
+          q.select = function () { return q; };
+          q.eq = function () { return q; };
+          q.limit = function () { return q; };
+          // Thenable, so `await client.from(t).upsert(rows)` resolves.
+          q.then = function (resolve) {
+            seen.push({ table: table, keys: Object.keys((q._rows || [])[0] || {}) });
+            let error = null;
+            if (table === "messages" && failMessagesOnce) {
+              failMessagesOnce = false;
+              error = { code: "PGRST204", message: "conversation_id not found" };
+            }
+            resolve({ data: [], error: error });
+            return Promise.resolve();
+          };
+          return q;
+        }
+      };
+    }
+  }
+};
+
+(async () => {
+  Sync.configure("https://example.invalid", "publishable");
+
+  await Sync.pushMessages([Sync.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls = seen.filter(c => c.table === "messages");
+  check(msgCalls.length === 2, "a messages push that hits a missing column retries once",
+    JSON.stringify(msgCalls.map(c => c.keys.length)));
+  check(msgCalls[1] && msgCalls[1].keys.indexOf("conversation_id") === -1 &&
+        msgCalls[1].keys.indexOf("grade") === -1,
+    "and the retry drops the two optional columns rather than the messages");
+
+  await Sync.pushConversations([Sync.conversationToRow(
+    { id: "cccccccc-0000-0000-0000-000000000001", activity: "story", level: 1,
+      created_at: "2026-08-27T00:00:00.000Z", updated_at: "2026-08-27T00:00:00.000Z" }, USER)]);
+  const convCalls = seen.filter(c => c.table === "conversations");
+  check(convCalls.length === 1,
+    "a degraded messages push does not silently switch off conversation pushing",
+    "conversations upserts: " + convCalls.length);
+  check(convCalls[0] && convCalls[0].keys.indexOf("activity") !== -1 &&
+        convCalls[0].keys.indexOf("level") !== -1,
+    "and it still carries the columns messages knows nothing about");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
+})();

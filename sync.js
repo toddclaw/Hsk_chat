@@ -323,9 +323,11 @@
      * fails the whole batch -- so the conversation grouping is dropped rather
      * than the messages. Backing up the conversation matters more than
      * remembering which chat it was in, and the grouping comes back for free
-     * once the column exists. */
+     * once the column exists. What is dropped here is this column, never the
+     * conversations table's own flag: a message the server will not take says
+     * nothing about whether conversations can be written. */
     var drop = [];
-    if (schemaHasConversations === false) drop.push("conversation_id");
+    if (schemaHasConvId === false) drop.push("conversation_id");
     if (schemaHasGrade === false) drop.push("grade");
     var payload = drop.length
       ? rows.map(function (r) {
@@ -343,8 +345,8 @@
        * rather than guessing which one failed, and retries once: with both
        * already false there is nothing left to strip, so this cannot recurse. */
       if (isMissingSchema(r.error) &&
-          (schemaHasConversations !== false || schemaHasGrade !== false)) {
-        schemaHasConversations = false;
+          (schemaHasConvId !== false || schemaHasGrade !== false)) {
+        schemaHasConvId = false;
         schemaHasGrade = false;
         return pushMessages(rows);
       }
@@ -382,7 +384,18 @@
    * once per session by pullConversations() below, because the app has to keep
    * working against a database whose owner has not run the SQL yet -- whoever
    * runs the deployment may not be the person reading the screen. */
+  /* Four independent migrations, four flags, and they must stay independent.
+   *
+   * `schemaHasConversations` is the conversations TABLE. `schemaHasConvId` is
+   * the conversation_id COLUMN on messages. They arrived together in one SQL
+   * file, which is exactly why one flag used to stand for both -- and why a
+   * failed messages push could switch off conversation pushing entirely for the
+   * rest of the session. `pushConversations` returns silently when the table is
+   * gone, so nothing raised, nothing retried, and flushSync still reported
+   * "Synced just now" while no conversation ever left the device. Two names,
+   * because they are two facts. */
   var schemaHasConversations = null;   // null = not probed yet
+  var schemaHasConvId = null;
   var schemaHasGrade = null;
   var schemaHasActivity = null;
   var schemaHasLevel = null;
