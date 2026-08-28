@@ -5,6 +5,29 @@ Each entry says what it is, how it was found, and what would settle it.
 
 ---
 
+## The "$0.10 a story" figure is wrong, and the right one is not known yet
+
+**Found:** costing the story-time chooser design against a $5/month whole-app budget,
+2026-08-28, by reading the learner's own `cost` and `attempts` rows off the server.
+
+`index.html`'s `STORY_MODEL` comment and the Settings note both say a story costs about
+$0.10. Measured from real use: 9 story segments at a mean of **3.00 attempts each** came to
+$0.4663, which is ~$0.017 a model call, ~$0.05 a segment and **~$0.25 for a five-segment
+story** — two and a half times the published figure. At the expected 20 stories a month that
+is the entire budget before anything else runs.
+
+Two thirds of it is repair traffic, and the repair rate is suspect: every one of those
+segments predates v67, where `turn()` was dropping `S.known` from the validation lexicon on
+any turn carrying a need, an offer or a cast. A story turn always carries a cast, so every
+segment was validated as if the learner's 222 ticked words were out of level.
+
+**What would settle it:** read the `attempts` values off story messages generated on v67 and
+recompute. If the mean falls to ~1.5 the figure becomes ~$0.13 and the budget is comfortable;
+if it stays near 3.0 the note should say $0.25 and story time needs a cost look of its own.
+Do not rewrite the number from either estimate — take it from real messages.
+
+---
+
 ## Place names slip past the validator's name filter
 
 **Found:** measuring the prompt-mode A/B at HSK 6 (RESEARCH.md, "Whether the
