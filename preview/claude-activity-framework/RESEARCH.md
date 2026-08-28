@@ -17,6 +17,7 @@ support it is worse than one labelled a guess, because nobody re-examines it.
 - [How many encounters a word needs](#how-many-encounters-a-word-needs)
 - [Knowing when to change level](#knowing-when-to-change-level)
 - [Production](#production)
+- [Choosing a story, and being asked about it](#choosing-a-story-and-being-asked-about-it)
 - [Measurements we ran](#measurements-we-ran)
 - [Things that did not work](#things-that-did-not-work)
 - [Where the evidence is thin](#where-the-evidence-is-thin)
@@ -199,6 +200,88 @@ you have never once written, commonest first, three at a time. Three characters 
 next message is a prompt; "5 unused" is a statistic.
 
 Moving up is **not** gated on production, for reason 1 above.
+
+## Choosing a story, and being asked about it
+
+Story time began as one thing the partner did to you: five segments, then a single question,
+then the activity quietly became ordinary chat. Three separate literatures say that shape is
+leaving most of the value on the table. This section records what they say and which parts of
+the redesign follow from them; the design itself is in
+`docs/superpowers/specs/2026-08-28-story-time-chooser-design.md`.
+
+### Letting the learner choose the story
+
+**Informed by it, and the direction is not the obvious one.** Self-Determination Theory is the
+usual grounding for self-selected texts in extensive reading — autonomy raises intrinsic
+motivation, which in Krashen's terms lowers the affective filter and makes input more likely
+to be used. That argues for letting you ask for a story about whatever you like.
+
+The 2025 meta-analysis complicates it. Across extensive-reading interventions the effects were
+**larger** where learners' text choice was *limited* and where some form of accountability was
+present. Unlimited choice is the motivating condition; constrained choice is the one that
+measures well.
+
+So the chooser is a short curated menu **and** a free-text box, not one or the other. The menu
+is the constrained condition and carries the level guarantee for free, because its options are
+written per level and tested. The box is the autonomy valve for the story you actually want,
+and the comprehension questions are the accountability half — which makes them a benefit of
+the design rather than a tax on it.
+
+### Asking questions between the segments, not only at the end
+
+**Follows from the literature, with one caveat that bites at HSK 1.** In the adjunct-question
+study, narrative passages with elaborative questions embedded *mid-text* scored 45.85 against
+36.81 for the no-question control on written recall (p < 0.01). Expository passages showed
+nothing, which matters here: story time is the narrative case, and it is the case where the
+effect was found.
+
+The caveat is that the significant effect was specifically for **why** questions, which are
+the highest-output kind there is — and at HSK 1 they are unanswerable, since 因为 is an HSK 2
+word. The placement finding transfers; the question type does not, and has to be gated by
+level (below).
+
+The questions are offered at every pause rather than imposed, which is the same bargain
+`storyStep()` already strikes for segments: driven by the learner, not looped.
+
+### Which questions, at which level
+
+**Informed by it.** TPRS — Teaching Proficiency through Reading and Storytelling — runs a
+story as continuous easy questioning, "circling", and its question ladder is explicit:
+Yes/No first, then Either/Or, then Who / What / Where / When / How many, and only then Why
+and How. The ordering is by how much *production* the answer demands, not by how hard the
+question is to understand: a yes/no question asks almost nothing of the learner, which is
+exactly why it comes first.
+
+That ladder maps onto the HSK levels directly, and it is the justification for gating question
+type per level in `prompt.js` the way `LEVEL_STYLE` already gates grammar. At HSK 1 the
+partner may ask yes/no and either/or; wh- questions arrive with the vocabulary to answer them.
+
+TPRS's own evidence base is mostly practitioner literature rather than controlled trials, so
+this is *informed by*, not *follows from*. What it contributes is a defensible ordering, which
+is more than we had.
+
+### Staying on one topic and one cast
+
+**Follows from the literature.** Krashen's case for narrow reading is that reading several
+texts on one topic, or by one author, recycles the same vocabulary across varied contexts, and
+that acquirers should specialise **early rather than late** — the opposite of the intuition
+that beginners need variety.
+
+Two things follow. The fixed cast — 小明, 小红, 小白 — was chosen in `prompt.js` for a purely
+mechanical reason, that the syllabus carries no usable name characters at any level. Narrow
+reading says it was also the right pedagogical choice, and that it should not be traded away
+for variety. And the chooser should offer *more about a topic you have already read* beside
+its fresh ideas, because that is the condition the evidence favours.
+
+### Where this is thin
+
+- The adjunct-question study is not on beginners, and its texts are far above HSK 1. The
+  placement effect is assumed to transfer; nobody has shown that it does at this level.
+- None of this has been measured **in this app**. Story time is the expensive activity, about
+  $0.10 a story, so a counted A/B on the question phase is real money and has not been run.
+  Until it is, the whole section is imported evidence rather than local evidence.
+- Whether stories are *enjoyable* over a run of them is still only readable, not measurable —
+  see the backlog entry on story time being unverified end to end.
 
 ## Measurements we ran
 
@@ -536,6 +619,27 @@ Stated plainly so nobody cites this file for more than it holds.
   distribution](https://www.researchgate.net/publication/253040075_On_the_Applicability_of_Zipf's_Law_in_Chinese_Word_Frequency_Distribution).
 - [Rank-frequency relation for Chinese
   characters](https://www.researchgate.net/publication/256459976_Rank-frequency_relation_for_Chinese_characters) — the two-layer structure.
+
+**Choice, questions and narrow reading**
+
+- Krashen, S. (1981/2004). [The case for narrow
+  reading](https://www.sdkrashen.com/content/articles/narrow.pdf) — same topic or same author
+  recycles vocabulary; specialise early rather than late.
+- [Learning a language through reading: a meta-analysis of studies on the effects of extensive
+  reading](https://link.springer.com/article/10.1007/s10648-025-10068-6). *Educational
+  Psychology Review* (2025) — effects larger where text choice was limited and some
+  accountability was present.
+- [Text difficulty in extensive reading: reading comprehension and reading
+  motivation](https://scholarspace.manoa.hawaii.edu/server/api/core/bitstreams/0a2204be-8d78-4316-9d46-441aaf86275e/content)
+  — Self-Determination Theory, autonomy and the affective filter.
+- [Effects of adjunct questions on L2 reading comprehension with texts of different
+  types](https://pmc.ncbi.nlm.nih.gov/articles/PMC10886187/) — mid-text elaborative questions,
+  narrative vs expository.
+- Ray, B. [TPRS workshop handout](https://mena.northwestern.edu/documents/TPRS-workshop-handout.pdf)
+  and [TPR Storytelling](https://en.wikipedia.org/wiki/TPR_Storytelling) — circling, and the
+  question ladder.
+- [Questioning levels](https://magisterp.com/2020/07/19/questioning-levels-goodbye-yes-and-no/),
+  Magister P. — the ladder argued by output demand rather than difficulty.
 
 **HSK 3.0**
 
