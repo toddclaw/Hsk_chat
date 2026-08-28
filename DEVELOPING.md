@@ -625,6 +625,16 @@ Project setup lives in README.md. What is easy to get wrong:
 
 ## The validator
 
+- **What is rendered must be validated against the same lexicon.** A turn makes
+  extra words legal for itself — its `[[NEED:]]` words, the pacing offer, the
+  activity's cast — and `renderMessage()` has to know all of them or a reply that
+  passed is painted as a violation. Both sites once assembled `S.lex` plus extras
+  by hand and each forgot a different part: `turn()` dropped `S.known`, so a
+  ticked word spent the attempts and landed on the fallback; the renderer dropped
+  `S.learning` and the cast, so words pacing had *taught* came back red with no
+  card explaining them, and only in the messages that carried a need. One bug hid
+  the other — a single fixture could not see both. `lexWith()` is now the only way
+  to say it.
 - **`validate()` output does double duty.** It drives the repair loop *and* the
   learner's "new words" list. Dropping a violation therefore also removes the word
   from the UI — which is why out-of-level names are **marked** (`name: true`) and

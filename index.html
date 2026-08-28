@@ -902,7 +902,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v66 — 2026-08-27";
+const VERSION   = "v67 — 2026-08-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1095,6 +1095,33 @@ function rebuildLexicon() {
   // A word once introduced stays usable, whether it is still "new" or promoted.
   S.lex = HSK.buildLexicon(inScript(S.base),
     inScript(S.extra).concat(inScript(S.learning), inScript(S.known)));
+}
+
+/* S.lex plus what one turn additionally made legal -- its [[NEED:]] words, the
+ * pacing offer, the activity's cast.
+ *
+ * Both callers used to assemble this by hand from S.base, and each forgot a
+ * different part of what S.lex already holds. turn() dropped S.known, so a
+ * ticked word inside a reply that also carried a need was repaired as a
+ * violation and spent attempts on nothing. renderMessage() dropped S.learning
+ * as well, so every word pacing had introduced painted red in exactly those
+ * messages that carried a need -- validated clean, then displayed as a
+ * violation, with no new-word card to explain it. Neither knew the cast.
+ *
+ * What is rendered has to agree with what was validated, so there is one way
+ * to say it and both go through here. */
+function lexWith(extra) {
+  if (!extra.length) return S.lex;
+  return HSK.buildLexicon(inScript(S.base),
+    inScript(S.extra).concat(inScript(S.learning), inScript(S.known), extra));
+}
+
+/* The activity's cast, in the active script. Converted with toScript rather
+ * than inScript so the lexicon and the rule text that lists these names go
+ * through the one conversion and cannot disagree. */
+function castNames() {
+  return (HSKPrompt.activityFor(currentActivity()).names || [])
+    .map(e => ({ w: toScript(e.w), p: e.p, d: e.d }));
 }
 const isKnownAhead = w => S.known.some(e => e.w === w);
 
@@ -1477,7 +1504,15 @@ function teachPromptFor(key, vars) {
 async function translateText(text, own) {
   const content = teachPromptFor(own ? "transMine" : "transReply",
     { text: text, level: levelLabel(), recent: recentWords() });
-  const raw = await callModel([{ role: "user", content: content }], 200, teachingModel());
+  /* The ceiling scales with what is being translated. A flat 200 was set when
+   * every reply was a sentence or two -- chat replies here run 23 Han
+   * characters at the median -- and a story segment is a paragraph: 185 at the
+   * median and 225 at the longest, whose English runs past 200 tokens and
+   * arrived with its last sentence missing. max_tokens is a cap and not a
+   * reservation, so a generous one costs nothing on the calls that never reach
+   * it. */
+  const raw = await callModel([{ role: "user", content: content }],
+    Math.max(200, text.length * 3), teachingModel());
   return raw.trim();
 }
 
@@ -1553,18 +1588,10 @@ async function turn(ctx) {
      * Without it the channel defeats itself: the wrapper is stripped before
      * validation, the bare word is by definition not in the allowlist, and the
      * request the model was told to make is rejected as a violation. */
-    // The offered words are legal this turn, exactly like a [[NEED:]] request.
-    /* An activity's cast is legal for the turn, exactly as offered and
-     * [[NEED:]] words are: the prompt named them, so rejecting them would be
-     * the app failing its own instruction. Converted with toScript rather than
-     * inScript so the lexicon and the rule text that lists these names go
-     * through the one conversion and cannot disagree. */
-    const names = (HSKPrompt.activityFor(currentActivity()).names || [])
-      .map(e => ({ w: toScript(e.w), p: e.p, d: e.d }));
-    const lex = (ex.needs.length || offer.length || names.length)
-      ? HSK.buildLexicon(inScript(S.base),
-          inScript(S.extra).concat(inScript(S.learning), ex.needs, inScript(offer), names))
-      : S.lex;
+    /* The offered words are legal this turn, exactly like a [[NEED:]] request,
+     * and so is the activity's cast: the prompt named them, so rejecting them
+     * would be the app failing its own instruction. */
+    const lex = lexWith(ex.needs.concat(inScript(offer), castNames()));
     /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
      * first one any list carries, at HSK 3 -- so asking for a different one just
      * spends the attempts and lands on the fallback, which is what the app's own
@@ -1766,11 +1793,10 @@ function renderMessage(turnObj, shownExtra) {
   const bubble = document.createElement("div");
   bubble.className = "bubble pinyin-" + S.pinyin;
   bubble.dataset.src = turnObj.text;
-  /* Segment with this message's [[NEED:]] words in scope. They passed
-   * validation, so rendering them as violations would contradict the badge and
-   * the offer sitting right below the bubble. */
-  const lex = (turnObj.needs && turnObj.needs.length)
-    ? HSK.buildLexicon(S.base, S.extra.concat(turnObj.needs)) : S.lex;
+  /* Segment with this message's [[NEED:]] words and the activity's cast in
+   * scope. They passed validation, so rendering them as violations would
+   * contradict the badge and the offer sitting right below the bubble. */
+  const lex = lexWith((turnObj.needs || []).concat(castNames()));
   const toks = HSK.segment(turnObj.text, lex);
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);
@@ -2189,9 +2215,24 @@ function settlePace(res) {
   const b = levelBudget();
   const toks = HSK.segment(res.text, res.lex || S.lex);
 
+  /* Banked whatever the model used, credit or not. The slate is three words
+   * and the prompt asks for one; a model that works in two or three has
+   * already put them in front of the learner, and the reading happened
+   * whether or not a credit was there to pay for it. Refusing the surplus
+   * does not take the word back -- it withholds the card that explains it and
+   * leaves the word above level in every later render, which is the same
+   * thing a learner reports as "this word got through".
+   *
+   * The overspend becomes debt rather than being forgiven. Credits go
+   * negative, no further offer is made until reading has paid it back (`offer`
+   * needs credits > 0) and earn() climbs from below zero, so DEFAULT_RATE
+   * still bounds new words per character read over the long run -- which is
+   * the whole of what it is for. Clamping at zero would make every overspend
+   * free and let a model that ignores 只用一个 run at three times the
+   * researched rate for as long as it liked. */
   const introduced = [];
   HSKPace.spot(toks, offered.map(e => e.w)).forEach(w => {
-    if (learned(w) || b.credits <= 0) return;
+    if (learned(w)) return;
     const e = offered.find(o => o.w === w);
     S.learning.push({ w: w, p: e.p, d: e.d, seen: 1, from: S.level + 1 });
     b.credits--;
@@ -2765,8 +2806,20 @@ async function explainAsk(turnObj, question) {
      * runs past it and the sheet shows an explanation that stops mid-sentence.
      * There is no truncation badge here the way there is on a reply, so a cut
      * off explanation just looks like the model trailing away. Cheap to fix --
-     * this is one call per message, not one per turn. */
-    const reply = await callModel(messages, 1000, teachingModel());
+     * this is one call per message, not one per turn.
+     *
+     * Nor was 1000, once story time existed: a flat ceiling is sized against
+     * whatever was on screen when it was picked, and that was chat replies, 23
+     * Han characters at the median. A story segment is a paragraph of 185 to
+     * 225, and the same four paragraphs then have several times as much
+     * grammar and vocabulary to get through.
+     *
+     * Base plus the text's own, not a multiple of it: the four-part shape
+     * costs about the same whatever it is explaining, so only the material
+     * grows. The slope is above translateText's because an explanation quotes
+     * the sentence and then comments on it. */
+    const reply = await callModel(messages, 1000 + turnObj.text.length * 4,
+                                  teachingModel());
     if (question) turnObj.explainChat.push({ role: "user", text: question });
     turnObj.explainChat.push({ role: "assistant", text: reply });
   } catch (e) {
@@ -4032,7 +4085,9 @@ function renderPaceNote() {
       "</td></tr>" : "") +
     "<tr><td>still new</td><td>" + still + " word" + (still === 1 ? "" : "s") +
       " being reused</td></tr>" +
-    "<tr><td>credit</td><td>" + b.credits + " ready, " + b.chars + "/" + S.pace.rate +
+    "<tr><td>credit</td><td>" +
+      (b.credits < 0 ? -b.credits + " borrowed back" : b.credits + " ready") +
+      ", " + b.chars + "/" + S.pace.rate +
       " characters toward the next</td></tr></table>";
 }
 

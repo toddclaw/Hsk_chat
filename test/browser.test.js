@@ -1894,6 +1894,158 @@ return true;
     check(await exec("return document.querySelectorAll('#log .msg.notice').length;") === 0,
       "and no error card is shown for it");
 
+    /* A bubble is rendered against the lexicon its reply was validated
+     * against. Those two used to be assembled by hand in two places and each
+     * forgot a different part of S.lex, so they need separate replies: one
+     * bug masks the other. renderMessage() dropped the introduced words and
+     * the cast, so a reply that validated clean was displayed as a violation
+     * -- red, with no new-word card to explain it. turn() dropped the ticked
+     * words, so a reply using one was repaired until it gave up, which
+     * replaces the text with a fallback and leaves nothing red to find.
+     *
+     * Seeded through localStorage and reloaded rather than set at runtime:
+     * the vocabulary lists are read into S at boot, and this sandbox cannot
+     * reach S by name. Story time throughout, because an activity with a cast
+     * is what puts turn() on the extended-lexicon path at all. */
+    await exec(`
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "\u7403", p: "qi\u00fa", d: "ball", seen: 2, from: 2 }
+      ]));
+      localStorage.setItem("hsk1chat.knownAhead", JSON.stringify([
+        { w: "\u8d70", p: "z\u01d2u", d: "to walk" }
+      ]));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
+
+    const lastBubble = `
+      var all = document.querySelectorAll('#log .msg.bot .bubble');
+      var last = all[all.length - 1];
+      return {
+        red: Array.prototype.map.call(last.querySelectorAll('.w.bad'),
+          function (e) { return e.textContent; }).join(" "),
+        text: last.textContent,
+        retried: !!document.querySelector('#log .msg.bot .meta .badge.warn')
+      };`;
+
+    /* A cast name, an introduced word and a [[NEED:]] word, none of them
+     * HSK 1 and all three legal for the turn. No ticked word, so this reply
+     * reaches the screen intact either way and the only thing under test is
+     * how it is painted. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u6709\u4e00\u4e2a\u7403\u3002\u4ed6\u5f88\u559c\u6b22" +
+      "[[NEED:\u81ea\u5df1|z\u00ec j\u01d0|oneself]]\u7684\u7403\u3002'); };" +
+      "window.newChat('story'); window.storyStep();");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a story segment");
+    const painted = await exec(lastBubble);
+    check(painted.red === "",
+      "nothing in a validated reply renders as above level", JSON.stringify(painted));
+    check(painted.text.indexOf("\u7403") !== -1,
+      "and that reply is the one that was generated", JSON.stringify(painted));
+
+    // A word the learner ticked as already known is not a violation to repair.
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u8d70\u4e86\u3002\u4ed6\u5f88\u597d\u3002'); };" +
+      "window.newChat('story'); window.storyStep();");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a second story segment");
+    const ticked = await exec(lastBubble);
+    check(ticked.text.indexOf("\u8d70") !== -1,
+      "a reply using a ticked word survives rather than falling back",
+      JSON.stringify(ticked));
+    check(ticked.retried === false,
+      "and costs no repair attempt", JSON.stringify(ticked));
+
+    /* Pacing offers three words and the prompt asks for one. A model that
+     * works in two or three has already put them in front of the learner, so
+     * every one of them is banked and the budget goes into debt -- the reading
+     * happened whether or not a credit was there to pay for it. Banking only
+     * what the credits covered left the surplus above level for good: no card,
+     * and red in every later render.
+     *
+     * The nine ticked words push the slate past 就/着/让/但/得/过/从/等/出 onto
+     * 自己、已经、这样, which are stable, absent from the sense registry, and
+     * easy to use in one HSK 1 sentence. */
+    await exec(`
+      localStorage.setItem("hsk1chat.pace", JSON.stringify({ on: true, rate: 45 }));
+      localStorage.setItem("hsk1chat.paceState", JSON.stringify({ "1": { chars: 0, credits: 1 } }));
+      localStorage.setItem("hsk1chat.learning", "[]");
+      localStorage.setItem("hsk1chat.knownAhead", JSON.stringify(
+        ["\u5c31", "\u7740", "\u8ba9", "\u4f46", "\u5f97", "\u8fc7", "\u4ece", "\u7b49", "\u51fa"]
+          .map(function (w) { return { w: w, p: "", d: "" }; })));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    // The offering row names the slate, so this waits for the pool as well.
+    await waitFor("document.querySelector('#paceNote') && " +
+      "document.querySelector('#paceNote').textContent.indexOf('\u81ea\u5df1') !== -1",
+      "the pacing slate");
+
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u6709\u81ea\u5df1\u7684\u4e66\u3002\u4ed6\u5df2\u7ecf\u770b\u4e86\u3002" +
+      "\u8fd9\u6837\u5f88\u597d\u3002'); };" +
+      "window.newChat('story'); window.storyStep();");
+    await waitFor("document.querySelectorAll('#log .newword').length > 0", "a new-word card");
+    const paced = await exec(`
+      var msg = document.querySelectorAll('#log .msg.bot');
+      var last = msg[msg.length - 1];
+      return {
+        cards: Array.prototype.map.call(last.querySelectorAll('.newword b'),
+          function (e) { return e.textContent; }),
+        red: Array.prototype.map.call(last.querySelectorAll('.bubble .w.bad'),
+          function (e) { return e.textContent; }).join(" "),
+        note: document.querySelector('#paceNote').textContent
+      };`);
+    check(paced.cards.length === 3,
+      "every offered word the model used is banked, not only what the credits covered",
+      JSON.stringify(paced.cards));
+    check(paced.red === "",
+      "so none of them is left rendering as above level", JSON.stringify(paced));
+    check(/2 borrowed back/.test(paced.note),
+      "and the overspend is carried as debt rather than forgiven",
+      JSON.stringify(paced.note));
+
+    /* The translation ceiling has to fit what is being translated. A flat 200
+     * tokens was set against chat replies of a sentence or two and silently
+     * truncated a story segment's English -- and the result is cached, so the
+     * missing last sentence stayed missing until the learner redid it. */
+    await exec(
+      "window.__tok = [];" +
+      "window.callModel = function (m, maxTok) { window.__tok.push(maxTok);" +
+      "  return Promise.resolve('ok'); };" +
+      "window.translateText(new Array(101).join('\u5c0f\u660e'), false);");
+    await waitFor("window.__tok.length > 0", "a translation request");
+    await exec("window.translateText('\u4f60\u597d', false);");
+    await waitFor("window.__tok.length > 1", "a second translation request");
+    /* The explanation ceiling was raised once already, from 600 to 1000, for
+     * this same reason -- and 1000 was picked against chat replies too. */
+    await exec(
+      "window.explainAsk({ role: 'assistant', explainChat: [],"
+      + " text: new Array(101).join('\u5c0f\u660e') }, null);");
+    await waitFor("window.__tok.length > 2", "an explanation request");
+    await exec(
+      "window.explainAsk({ role: 'assistant', explainChat: [],"
+      + " text: '\u4f60\u597d' }, null);");
+    await waitFor("window.__tok.length > 3", "a second explanation request");
+    const toks = await exec("return window.__tok;");
+    check(toks[0] >= 600,
+      "a story-length segment is given room to be translated whole",
+      JSON.stringify(toks));
+    check(toks[1] === 200,
+      "while a short message keeps the original translation ceiling",
+      JSON.stringify(toks));
+    check(toks[2] >= 1800,
+      "and room to be explained whole", JSON.stringify(toks));
+    check(toks[3] >= 1000 && toks[3] < 1100,
+      "while a short message keeps the explanation ceiling that was tuned for it",
+      JSON.stringify(toks));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
