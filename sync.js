@@ -344,9 +344,11 @@
     var r = await client.from("messages").upsert(payload);
     if (r.error) {
       /* A last resort for a push that got past the probe -- a column dropped
-       * mid-session, or a probe that never ran. Drops both optional columns
-       * rather than guessing which one failed, and retries once: with both
-       * already false there is nothing left to strip, so this cannot recurse. */
+       * mid-session, or (for backwards compat with databases lacking the probes)
+       * a probe that never ran. Drops all three optional message columns rather
+       * than parsing the error text to guess which one failed, and retries once:
+       * with all three already false there is nothing left to strip, so this
+       * cannot recurse. */
       if (isMissingSchema(r.error) &&
           (schemaHasConvId !== false || schemaHasGrade !== false ||
            schemaHasKind !== false)) {
@@ -423,6 +425,10 @@
     if (schemaHasGrade === null) {
       var r = await client.from("messages").select("grade").limit(1);
       schemaHasGrade = !(r.error && isMissingSchema(r.error));
+    }
+    if (schemaHasKind === null) {
+      var k = await client.from("messages").select("kind").limit(1);
+      schemaHasKind = !(k.error && isMissingSchema(k.error));
     }
     if (schemaHasActivity === null) {
       var a = await client.from("conversations").select("activity").limit(1);

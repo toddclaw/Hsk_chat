@@ -368,23 +368,38 @@ check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history"
  * reporting "Synced just now" while no conversation ever left the device. */
 const seen = [];
 let failMessagesOnce = true;
+let failKindOnce = false;
 global.window = {
   supabase: {
     createClient: function () {
       return {
         from: function (table) {
           const q = {};
+          q._selectCol = null;
           q.upsert = function (rows) { q._rows = rows; return q; };
-          q.select = function () { return q; };
+          q.select = function (col) { q._selectCol = col; return q; };
           q.eq = function () { return q; };
           q.limit = function () { return q; };
           // Thenable, so `await client.from(t).upsert(rows)` resolves.
           q.then = function (resolve) {
-            seen.push({ table: table, keys: Object.keys((q._rows || [])[0] || {}) });
             let error = null;
-            if (table === "messages" && failMessagesOnce) {
-              failMessagesOnce = false;
-              error = { code: "PGRST204", message: "conversation_id not found" };
+            if (q._rows) {
+              // upsert call
+              seen.push({ table: table, keys: Object.keys((q._rows || [])[0] || {}) });
+              if (table === "messages" && failMessagesOnce) {
+                failMessagesOnce = false;
+                error = { code: "PGRST204", message: "conversation_id not found" };
+              }
+              if (table === "messages" && failKindOnce) {
+                failKindOnce = false;
+                error = { code: "PGRST204", message: "kind not found" };
+              }
+            } else if (q._selectCol) {
+              // select call (for probing)
+              // Simulate that grade exists but kind doesn't (yet)
+              if (table === "messages" && q._selectCol === "kind") {
+                error = { code: "PGRST204", message: "column kind does not exist" };
+              }
             }
             resolve({ data: [], error: error });
             return Promise.resolve();
@@ -398,6 +413,7 @@ global.window = {
 
 (async () => {
   Sync.configure("https://example.invalid", "publishable");
+  await Sync.probeSchema();
 
   await Sync.pushMessages([Sync.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
   const msgCalls = seen.filter(c => c.table === "messages");
@@ -417,6 +433,16 @@ global.window = {
   check(convCalls[0] && convCalls[0].keys.indexOf("activity") !== -1 &&
         convCalls[0].keys.indexOf("level") !== -1,
     "and it still carries the columns messages knows nothing about");
+
+  // Test the degrade path when kind is missing but grade is not.
+  // With the probe fix, kind is known to not exist from the start (via probeSchema),
+  // so it's dropped proactively. Grade should remain in the first push, confirming
+  // that we don't lose support for different optional columns just because one is missing.
+  const firstCallKeys = msgCalls[0].keys;
+  check(firstCallKeys.indexOf("kind") === -1,
+    "probeSchema learned that kind doesn't exist, so first push drops it proactively");
+  check(firstCallKeys.indexOf("grade") !== -1,
+    "but grade is still present -- learning about kind doesn't lose grade support");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
