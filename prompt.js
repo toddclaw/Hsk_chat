@@ -261,6 +261,28 @@
     { w: "小白", p: "Xiǎo Bái",  d: "Xiao Bai, a name" }
   ];
 
+  /* One example per question type, so the rule shows the shape rather than
+   * naming a category the model has to guess at. Filtered by the level's
+   * ladder, so HSK 1 never sees a 为什么 example it cannot legally use. */
+  var QUESTION_SHAPES = [
+    { type: "yesno",    shape: "「他高兴吗？」" },
+    { type: "who",      shape: "「谁去了？」" },
+    { type: "what",     shape: "「他买了什么？」" },
+    { type: "where",    shape: "「他们在哪儿？」" },
+    { type: "howmany",  shape: "「有几个？」" },
+    { type: "when",     shape: "「什么时候的事？」" },
+    { type: "howabout", shape: "「今天怎么样？」" },
+    { type: "eitheror", shape: "「他去学校还是去商店？」" },
+    { type: "why",      shape: "「他为什么很高兴？」" },
+    { type: "reason",   shape: "「虽然下雨，他还是去了，为什么？」" },
+    { type: "retell",   shape: "「用你自己的话说一说刚才那一段。」" },
+    { type: "compare",  shape: "「这一段和上一段比，有什么不一样？」" },
+    { type: "predict",  shape: "「你觉得下面会怎么样？」" },
+    { type: "infer",    shape: "「他没说，可是你觉得他心里想什么？」" },
+    { type: "opinion",  shape: "「你觉得他做得对不对？为什么？」" },
+    { type: "evaluate", shape: "「这个故事想说明什么？你同意吗？」" }
+  ];
+
   var ACTIVITIES = {
     chat: {
       label: "Chat",
@@ -368,21 +390,32 @@
     /* The activity's own rules, then its position in the story if it has one.
      * Position after the activity's own rules so it reads as the more immediate
      * instruction of the two. */
-    if (opts.storyQuestion) {
-      /* The story's own rules are suppressed here, not merely followed by this
-       * one. Rule 2 of story time is "只讲故事，不要问学生问题" -- stated
-       * absolutely -- and build() already knows what a model does with a later
-       * rule contradicting an earlier absolute one: it obeys the first. The
-       * same reasoning as the offer rule's exception clause above. This rule
-       * carries its own context ("故事讲完了"), so nothing is lost by dropping
-       * them. */
-      rules.push(convert("故事讲完了。现在问学生一个关于这个故事的问题，一次只问一个。"));
+    /* Story time has three phases, and each suppresses the rules that would
+     * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
+     * absolutely, and build() already knows what a model does with a later rule
+     * contradicting an earlier absolute one: it obeys the first. So asking and
+     * discussing replace those rules rather than following them.
+     *
+     * `discussing` fixes a defect rather than adding a feature: before it, a
+     * learner answering the partner's own question was met by the telling
+     * rules, which forbid talking to them. */
+    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
+    if (phase === "asking") {
+      var ladder = questionTypesFor(opts.level);
+      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
+        convert("问题要短，用简单的话。") +
+        convert("可以问这样的问题：") + QUESTION_SHAPES
+          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
+          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
+    } else if (phase === "discussing") {
+      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
+        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
     }
-    /* Deliberately outside the storyQuestion branch above: phase two asks about
-     * the characters the story just introduced, and 「小明去了哪儿？」 must not
-     * fail validation for the name it is asking about. */
+    /* Deliberately outside the phase branch above: asking and discussing both
+     * refer to the characters the story just introduced, and 「小明去了哪儿？」
+     * must not fail validation for the name it is asking about. */
     if (act.names && act.names.length) {
       rules.push(convert("故事里的人可以叫") +
         act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +

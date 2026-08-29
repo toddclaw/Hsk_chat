@@ -506,18 +506,54 @@ for (const id of ACT_IDS) {
  * "只讲故事，不要问学生问题", which is stated absolutely and is exactly the
  * rule a model obeys in preference to a later one contradicting it. */
 const q = P.build({ level: 1, label: "HSK 1", length: "short",
-                    activity: "story", storyQuestion: true });
-check(q.includes("\u95ee\u5b66\u751f\u4e00\u4e2a\u5173\u4e8e\u8fd9\u4e2a\u6545\u4e8b\u7684\u95ee\u9898"),
-  "the question phase asks about the story");
+                    activity: "story", storyPhase: "asking" });
+check(q.includes("\u95ee\u5b66\u751f\u4e00\u4e2a\u5173\u4e8e\u4ed6\u521a\u624d\u8bfb\u7684\u90a3\u4e00\u6bb5\u7684\u95ee\u9898"),
+  "the question phase asks about the part just read");
 check(!q.includes("\u8fd9\u4e00\u6bb5\u5199\u5927\u6982\u4e5d\u5341\u4e2a\u6c49\u5b57"),
   "and is not told to write another segment");
 check(!q.includes("\u4e0d\u8981\u95ee\u5b66\u751f\u95ee\u9898"),
-  "and is not still under the segment rule forbidding questions");
+  "and is not still under the telling rule forbidding questions");
 check(q.includes(P.LENGTHS.short.rule),
   "it is a conversational turn again, so the length rule is back");
 const qNums = q.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m => Number(m[1]));
 check(JSON.stringify(qNums) === JSON.stringify(qNums.map((_, i) => i + 1)),
   "and its rule numbering is still gap-free", JSON.stringify(qNums));
+
+/* Task 9: the three story phases, the level-filtered question ladder, and
+ * the defect fix in `discussing` (a learner answering the partner's own
+ * question used to be met with story time's do-not-talk-to-them rules). */
+var asking = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "asking"
+});
+check(asking.indexOf("\u53ea\u8bb2\u6545\u4e8b") === -1,
+  "asking suppresses the do-not-question rule that would contradict it");
+check(asking.indexOf("\u521a\u624d\u8bfb\u7684") !== -1,
+  "and asks about the part just read, which is what circling does");
+check(asking.indexOf("\u4e3a\u4ec0\u4e48") !== -1,
+  "at HSK 2 the partner may ask why", asking.slice(0, 300));
+
+var askingOne = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyPhase: "asking"
+});
+check(askingOne.indexOf("\u4e3a\u4ec0\u4e48") === -1,
+  "at HSK 1 it may not -- \u4e3a is above the level");
+
+var discussing = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "discussing"
+});
+check(discussing.indexOf("\u53ea\u8bb2\u6545\u4e8b") === -1,
+  "discussing does not tell the partner to keep telling the story");
+check(discussing.indexOf("\u4e0d\u8981\u518d\u95ee") !== -1,
+  "and stops after reacting, because the button asks the next question");
+
+var telling = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "telling", storySegment: { index: 1, of: 5 }
+});
+check(telling.indexOf("\u53ea\u8bb2\u6545\u4e8b") !== -1, "telling keeps story time's own rules");
 
 /* Names are the single largest source of out-of-level words in a story, and the
  * whitelist has to reach every segment -- not just the first, where 叫 would
@@ -533,7 +569,7 @@ for (const idx of [0, 2, 4]) {
   }
 }
 check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
-                storyQuestion: true }).includes(nameRule),
+                storyPhase: "asking" }).includes(nameRule),
   "and so is the question phase -- it asks about the characters by name");
 
 /* Every name needs pinyin and a gloss or the popover is blank, and none may

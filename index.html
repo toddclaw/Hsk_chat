@@ -1294,7 +1294,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     script: S.script,
     activity: currentActivity(),
     storySegment: (ctx && ctx.storySegment) || null,
-    storyQuestion: !!(ctx && ctx.storyQuestion),
+    storyPhase: (ctx && ctx.storyPhase) || null,
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
@@ -3280,7 +3280,7 @@ async function storyStep() {
      * context, so a question about it needs no new machinery -- and the answers
      * are graded by the grader that already runs on every message. */
     const res = await turn(asking
-      ? { storyQuestion: true, model: storyModel() }
+      ? { storyPhase: "asking", model: storyModel() }
       : { storySegment: { index: told, of: STORY_SEGMENTS },
           maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() });
     /* Pushed into the conversation this was asked for, not into whichever one
