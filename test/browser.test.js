@@ -1606,6 +1606,21 @@ return true;
       "var b = document.querySelector('#starters button.story');" +
       "return b ? b.textContent : '';") === "Make something up",
       "which includes a way in that names no topic, the .story class marking it as the control");
+
+    /* Ruling 2 (Task 5 review): the empty-state hint in the log used to point
+     * at a "Start the story" button that no longer exists once the strip is
+     * the chooser -- the learner has not picked a topic yet, so there is
+     * nothing to tap. */
+    await exec("window.renderAll();");
+    check(await exec(
+      "var h = document.querySelector('#log .hint');" +
+      "return h ? /pick what the story is about/i.test(h.innerHTML) : false;") === true,
+      "a fresh story conversation's hint tells the learner to pick a topic",
+      await exec("var h = document.querySelector('#log .hint'); return h ? h.innerHTML : '(no hint)';"));
+    check(await exec(
+      "var h = document.querySelector('#log .hint');" +
+      "return h ? /start the story/i.test(h.innerHTML) : true;") === false,
+      "and does not point at a \"Start the story\" button that is not on screen");
     await exec("window.newChat('focused'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
       "and neither does focused chat");

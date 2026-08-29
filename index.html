@@ -228,7 +228,10 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* Story time's control is the action that moves the story on, not one
    suggestion among several, so it does not look like a starter. */
 #starters button.story{background:var(--accent); color:#08111d; font-weight:600}
-#starters input{background:var(--bg2); color:inherit; border:1px solid var(--line);
+/* --panel2, not --bg: #starters itself is --panel, so the box needs the
+   lighter panel tone for contrast against the bar it sits on, the same
+   pairing header select already uses against header's --panel. */
+#starters input{background:var(--panel2); color:inherit; border:1px solid var(--line);
   border-radius:8px; padding:8px 10px; font:inherit; min-width:220px}
 
 footer{
@@ -1966,8 +1969,14 @@ function renderAll() {
    * 1, but renderMessage() returns null for that role, so a raw-length check
    * would suppress this hint over an empty-looking log instead of showing it. */
   if (!S.history.some(t => t.role !== "topic")) {
+    /* Two sub-states share this branch for story time: no topic yet (the
+     * chooser is on screen, nothing to tap) and a topic just picked but the
+     * request for segment 1 was interrupted before it landed (the "Start the
+     * story" button is back on screen, same as before this hint existed). */
     log.innerHTML = '<div class="hint">' + (currentActivity() === "story"
-      ? 'Tap <b>Start the story</b> below.<br>' + STORY_SEGMENTS +
+      ? (storyTopic() ? 'Tap <b>Start the story</b> below.'
+                       : 'Pick what the story is about below.') +
+        '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.'
       : 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
         'Replies are checked against the ' + levelLabel() +
