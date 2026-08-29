@@ -3097,7 +3097,13 @@ async function send() {
    * verdict about what you already said would be the wrong thing to slow down.
    * The badge fills in whenever it lands. */
   gradeTurn(justSent);
-  return runTurn(toGloss, text);
+  /* Answering the partner's own question is a different job from being told a
+   * story, and before the discussing phase existed it was met by the telling
+   * rules -- which forbid talking to the learner at all. */
+  const answering = currentActivity() === "story" &&
+    (S.history.filter(t => t.role === "assistant").pop() || {}).kind === "question";
+  return runTurn(toGloss, text, answering
+    ? { storyPhase: "discussing", model: teachingModel() } : null);
 }
 
 /* Re-run the last exchange. A turn can end badly for reasons that have nothing
@@ -3183,6 +3189,12 @@ function storyTold() {
   return n;
 }
 
+// Whether the partner has asked about this story yet, at any pause -- not
+// only the last one. Drives both the button label and the composer.
+function anyStoryQuestion() {
+  return S.history.some(t => t.kind === "question");
+}
+
 /* The story's subject, and the cast the model declared for it.
  *
  * A `role: "topic"` message rather than a column on the conversation: sync.js
@@ -3261,15 +3273,15 @@ async function startStoryWith(topic) {
   }
   setStoryTopic(topic, cast);
   renderAll(); renderStarters();
-  return storyStep();
+  return storyStep(false);
 }
 
-async function storyStep() {
+async function storyStep(asking) {
   if (S.busy) return;
   const told = storyTold();
-  // Past the question, phase two is ordinary chat and has nothing to step.
-  if (told > STORY_SEGMENTS) return;
-  const asking = told === STORY_SEGMENTS;
+  /* Asking is always available, at any pause, and can be repeated ("Ask me
+   * another"); telling stops once every segment is out. */
+  if (!asking && told >= STORY_SEGMENTS) return;
   S.busy = true; renderBusy(); renderStarters();
   const bubble = thinkingBubble(asking
     ? "Thinking of a question about the story\u2026"
@@ -3278,9 +3290,11 @@ async function storyStep() {
   try {
     /* Phase two is the ordinary chat loop. The story is now in windowed()'s
      * context, so a question about it needs no new machinery -- and the answers
-     * are graded by the grader that already runs on every message. */
+     * are graded by the grader that already runs on every message. Asking runs
+     * on the teaching model: a question about a story already written is a far
+     * easier job than writing graded narrative, and ~37x cheaper. */
     const res = await turn(asking
-      ? { storyPhase: "asking", model: storyModel() }
+      ? { storyPhase: "asking", model: teachingModel() }
       : { storySegment: { index: told, of: STORY_SEGMENTS },
           maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() });
     /* Pushed into the conversation this was asked for, not into whichever one
@@ -3339,13 +3353,13 @@ function thinkingBubble(label) {
   return el;
 }
 
-async function runTurn(toGloss, text) {
+async function runTurn(toGloss, text, ctx) {
 
   const thinking = thinkingBubble("");
   const hist = S.history;
 
   try {
-    const res = await turn();
+    const res = await turn(ctx || undefined);
     /* Pushed into the conversation this was asked for, not into whichever one
      * S.history points at when the reply lands: a segment takes most of a
      * minute, and switching chats in that window used to drop it into the
@@ -4012,11 +4026,15 @@ async function checkUpdate() {
   }
 }
 
-/* Phase one of a story is listening, not writing. The composer invites a
- * sentence -- 用中文写 -- that has nowhere to go until the partner has finished
- * and asked its question, so until then it invites nothing. */
+/* A story is listening, not writing, until the partner has asked something --
+ * the composer invites a sentence -- 用中文写 -- that has nowhere to go until
+ * then, so it invites nothing. Questions now land at every pause rather than
+ * only at the end, so the gate is not "every segment is told" but "has a
+ * question been asked yet": Choosing and Telling stay shut, Talking opens and
+ * stays open from the first question onward, no matter how much more of the
+ * story follows it. */
 function renderComposer() {
-  const listening = currentActivity() === "story" && storyTold() <= STORY_SEGMENTS;
+  const listening = currentActivity() === "story" && !anyStoryQuestion();
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -4092,14 +4110,24 @@ function renderStoryControl(box) {
   if (S.busy) return;
   if (!storyTopic() && !S.history.length) return renderStoryChooser(box);
   const told = storyTold();
-  if (told > STORY_SEGMENTS) return;
-  const b = document.createElement("button");
-  b.className = "story";
-  b.textContent = told === 0 ? "Start the story"
-    : told < STORY_SEGMENTS ? "Read on (" + (told + 1) + " of " + STORY_SEGMENTS + ")"
-    : "Ask me about the story";
-  b.onclick = storyStep;
-  box.appendChild(b);
+  if (told < STORY_SEGMENTS) {
+    const on = document.createElement("button");
+    on.className = "story";
+    on.textContent = told === 0 ? "Start the story"
+      : "Read on (" + (told + 1) + " of " + STORY_SEGMENTS + ")";
+    on.onclick = () => storyStep(false);
+    box.appendChild(on);
+  }
+  /* Available at every pause rather than only at the end. Mid-text questions
+   * measurably help recall on narrative -- RESEARCH.md, "Asking questions
+   * between the segments" -- but offered, never imposed: the learner can read
+   * straight through. */
+  if (told > 0) {
+    const ask = document.createElement("button");
+    ask.textContent = anyStoryQuestion() ? "Ask me another" : "Ask me about it";
+    ask.onclick = () => storyStep(true);
+    box.appendChild(ask);
+  }
 }
 
 /* Tapping a starter fills the composer instead of sending: the learner sees the

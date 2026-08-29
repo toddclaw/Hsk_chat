@@ -1539,7 +1539,7 @@ return true;
       "window.callModel = function () {" +
       "  return new Promise(function (_, rej) { window.__rej = rej; });" +
       "};");
-    await exec("window.newChat('story'); window.storyStep();");
+    await exec("window.newChat('story'); window.storyStep(false);");
     await waitFor("document.querySelector('#send').textContent === '\\u505c'",
       "the send button becomes a stop button while a turn is running");
     check(await exec("return document.querySelector('#activity').disabled;") === true,
@@ -1770,7 +1770,7 @@ return true;
     await exec(
       "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
     await exec("window.newChat('story');");
-    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "five story segments");
 
@@ -1798,7 +1798,9 @@ return true;
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
     await exec("window.newChat('story');");
-    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
+    // Five segments told, then the sixth call asks about them.
+    await exec("(async function () { for (var i = 0; i < 6; i++)" +
+      " await window.storyStep(i === 5); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 6",
       "five segments and a question");
 
@@ -1820,7 +1822,7 @@ return true;
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
     await exec("window.newChat('story');");
-    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "the story survived a bad segment");
     check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
@@ -1838,7 +1840,7 @@ return true;
     await exec(
       "window.callModel = function () { return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
     await exec("window.newChat('story');");
-    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
       "a story about a named character");
 
@@ -1859,7 +1861,7 @@ return true;
       "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
     await exec("window.newChat('story');");
     const storyId = await exec("return window.currentChat().id;");
-    await exec("(async function () { for (var i = 0; i < 2; i++) await window.storyStep(); })();");
+    await exec("(async function () { for (var i = 0; i < 2; i++) await window.storyStep(false); })();");
     await waitFor("window.storyTold() === 2", "two segments told");
     check(await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs'))[arguments[0]];" +
@@ -1894,23 +1896,23 @@ return true;
       "return '';") !== "New chat",
       "a saved story is named after its own first line, not left as \"New chat\"");
 
-    /* Finish it: five segments, then the question. storyTold() now counts only
-     * `kind === "segment"` messages, so it plateaus at STORY_SEGMENTS once the
-     * question is asked rather than passing it -- the composer-reopening and
-     * "stop offering" guards below still compare against the old inclusive
-     * count and so do not yet fire on the question. That reopening is Task
-     * 10's job (it turns `asking` into an explicit parameter); until it lands,
-     * these three checks describe what the app actually does. */
-    await exec("(async function () { for (var i = 0; i < 4; i++) await window.storyStep(); })();");
+    /* Finish it: three more segments, then the question. storyTold() counts
+     * only `kind === "segment"` messages, so it plateaus at STORY_SEGMENTS
+     * once the question is asked -- the composer must reopen and the "Read
+     * on" button must stop offering, both keyed off the question having
+     * happened rather than off a segment count that no longer moves. */
+    await exec("(async function () { for (var i = 0; i < 4; i++)" +
+      " await window.storyStep(i === 3); })();");
     await waitFor("window.storyTold() === 5", "the story runs out at five segments and a question");
     await exec("window.renderStarters();");
     check(await exec(
-      "return document.querySelectorAll('#starters button.story').length;") === 1,
-      "a finished story still offers to continue until a later task teaches the guard about kind");
-    check(await exec("return document.querySelector('#input').disabled;") === true,
-      "and the composer stays shut for the same reason");
-    check(await exec("return document.querySelector('#input').placeholder;") === "",
-      "not yet inviting a sentence there is nowhere to put");
+      "return document.querySelectorAll('#starters button.story').length;") === 0,
+      "a finished, asked story offers nothing to read on to");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "and the composer reopens now that a question has been asked");
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "inviting the sentence that answers it");
 
 
     /* --------------------------------- storyTold() counts segments by kind */
@@ -2076,7 +2078,7 @@ return true;
       "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
       "};");
     await exec("window.newChat('story');" +
-      "(async function () { for (var i = 0; i < 6; i++) await window.storyStep(); })();");
+      "(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5", "a story");
     check(await exec(
       "return window.__models.length > 0 && window.__models.every(function (m) {" +
@@ -2092,6 +2094,43 @@ return true;
       "return window.__models.every(function (m) { return !m; });") === true,
       "while a chat turn does not -- it uses the chat model",
       JSON.stringify(await exec("return window.__models;")));
+
+    /* Questions are available at every pause, not only after the last segment,
+     * and they run on the teaching model: a question about a story already
+     * written is a far easier job than writing graded narrative, and ~37x
+     * cheaper. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u5417\\uff1f'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "window.storyStep(false);");
+    await waitFor("window.__models.length > 0", "a segment");
+    const midStory = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#starters button'),
+        function (b) { return b.textContent; });`);
+    check(midStory.some(t => /ask me about it/i.test(t)),
+      "a question is offered mid-story, not only at the end", JSON.stringify(midStory));
+
+    await exec("window.__models = []; window.storyStep(true);");
+    await waitFor("window.__models.length > 0", "a question");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "and it is asked by the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec(
+      "var m = JSON.parse(localStorage['hsk1chat.chatMsgs']);" +
+      "var all = [].concat.apply([], Object.keys(m).map(function (k) { return m[k]; }));" +
+      "return all.filter(function (x) { return x.kind === 'question'; }).length;") === 1,
+      "and stored as a question rather than a segment");
 
     /* An empty completion is one call in eight and used to end a story on a
      * notice card. One retry, inside turn(), so every activity gets it. */
@@ -2157,7 +2196,7 @@ return true;
       "window.callModel = function () { return Promise.resolve(" +
       "'\u5c0f\u660e\u6709\u4e00\u4e2a\u7403\u3002\u4ed6\u5f88\u559c\u6b22" +
       "[[NEED:\u81ea\u5df1|z\u00ec j\u01d0|oneself]]\u7684\u7403\u3002'); };" +
-      "window.newChat('story'); window.storyStep();");
+      "window.newChat('story'); window.storyStep(false);");
     await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a story segment");
     const painted = await exec(lastBubble);
     check(painted.red === "",
@@ -2169,7 +2208,7 @@ return true;
     await exec(
       "window.callModel = function () { return Promise.resolve(" +
       "'\u5c0f\u660e\u8d70\u4e86\u3002\u4ed6\u5f88\u597d\u3002'); };" +
-      "window.newChat('story'); window.storyStep();");
+      "window.newChat('story'); window.storyStep(false);");
     await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a second story segment");
     const ticked = await exec(lastBubble);
     check(ticked.text.indexOf("\u8d70") !== -1,
@@ -2208,7 +2247,7 @@ return true;
       "window.callModel = function () { return Promise.resolve(" +
       "'\u5c0f\u660e\u6709\u81ea\u5df1\u7684\u4e66\u3002\u4ed6\u5df2\u7ecf\u770b\u4e86\u3002" +
       "\u8fd9\u6837\u5f88\u597d\u3002'); };" +
-      "window.newChat('story'); window.storyStep();");
+      "window.newChat('story'); window.storyStep(false);");
     await waitFor("document.querySelectorAll('#log .newword').length > 0", "a new-word card");
     const paced = await exec(`
       var msg = document.querySelectorAll('#log .msg.bot');
@@ -2279,7 +2318,7 @@ return true;
       "window.__resolve = null;" +
       "window.callModel = function () {" +
       "  return new Promise(function (r) { window.__resolve = r; }); };" +
-      "window.newChat('story'); window.storyStep();");
+      "window.newChat('story'); window.storyStep(false);");
     await waitFor("window.__resolve", "a segment request in flight");
     // The learner navigates away while the segment is still being written.
     await exec("window.newChat('chat');");
