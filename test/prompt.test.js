@@ -577,8 +577,18 @@ check(noTopic.indexOf("学生想听一个关于") === -1,
   check(new Set(ideas).size === ideas.length,
     "HSK " + lv + "'s ideas are distinct", JSON.stringify(ideas));
 });
-check(P.storyIdeasFor(1).join("|") !== P.storyIdeasFor(4).join("|"),
-  "and the levels do not share one list");
+// storyIdeasFor falls back to STORY_IDEAS[1] for any level with no row of its
+// own, so a per-level length/non-empty/distinct check alone cannot tell a real
+// row from a silently-missing one that fell back to HSK 1's -- it would pass
+// either way. This is the D8 failure mode by name: compare every other level's
+// list against HSK 1's fallback target so a deleted row is caught, not just
+// HSK 4's.
+var hsk1Ideas = P.storyIdeasFor(1).join("|");
+[2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  check(P.storyIdeasFor(lv).join("|") !== hsk1Ideas,
+    "HSK " + lv + "'s ideas are not just HSK 1's (would mean a missing row)",
+    JSON.stringify(P.storyIdeasFor(lv)));
+});
 
 // The ladder is checked against the data, not against the author's taste: a type
 // is permitted only where the level carries the words its asking form needs.
