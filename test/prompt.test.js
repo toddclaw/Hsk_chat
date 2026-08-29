@@ -580,5 +580,44 @@ check(noTopic.indexOf("学生想听一个关于") === -1,
 check(P.storyIdeasFor(1).join("|") !== P.storyIdeasFor(4).join("|"),
   "and the levels do not share one list");
 
+// The ladder is checked against the data, not against the author's taste: a type
+// is permitted only where the level carries the words its asking form needs.
+// This is what catches 还是 at HSK 1, which validate() lets through as 还 + 是.
+var LEVEL_WORDS = {};
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  LEVEL_WORDS[lv] = new Set(JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "data", "hsk" + lv + ".json"), "utf8")
+  ).map(function (e) { return e.w; }));
+});
+
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ladder = P.questionTypesFor(lv);
+  check(ladder.types.length > 0, "HSK " + lv + " permits at least one question type",
+    JSON.stringify(ladder));
+  ladder.needs.forEach(function (w) {
+    check(LEVEL_WORDS[lv].has(w),
+      "HSK " + lv + " carries 「" + w + "」, which its questions need", w);
+  });
+});
+
+// Cumulative: a level never loses a type it had below.
+[2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var below = P.questionTypesFor(lv - 1).types;
+  var here = P.questionTypesFor(lv).types;
+  check(below.every(function (t) { return here.indexOf(t) !== -1; }),
+    "HSK " + lv + " keeps every question type HSK " + (lv - 1) + " had");
+});
+
+// The findings that shaped the order, pinned so a well-meaning edit cannot undo them.
+check(P.questionTypesFor(1).types.indexOf("eitheror") === -1,
+  "either/or is NOT offered at HSK 1 -- 还是 is HSK 2, and validate() cannot see it " +
+  "because 还 and 是 are separately legal");
+check(P.questionTypesFor(1).types.indexOf("what") !== -1,
+  "but wh- questions are, because 什么 and 谁 are HSK 1 -- the English ladder inverts here");
+check(P.questionTypesFor(1).types.indexOf("why") === -1,
+  "and why is not, because 为 is above HSK 1");
+check(P.questionTypesFor(2).types.indexOf("why") !== -1,
+  "why arrives at HSK 2 with 为什么 and 因为");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

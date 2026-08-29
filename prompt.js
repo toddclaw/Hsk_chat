@@ -146,6 +146,54 @@
     return STORY_IDEAS[level] || STORY_IDEAS[1];
   }
 
+  /* Which comprehension questions the partner may ask, per level.
+   *
+   * Ordered by the OUTPUT an answer demands, which is TPRS's circling ladder --
+   * yes/no asks almost nothing, wh- more, why most. But which rungs are
+   * AVAILABLE comes from this language's data, and it inverts the English
+   * order: 谁/什么/哪儿/几/多少/怎么样 are all HSK 1 while 还是 is HSK 2, because
+   * Chinese wh- questions are in-situ and the question words are among the
+   * commonest in the language.
+   *
+   * `needs` is the vocabulary an asking form requires, and test/prompt.test.js
+   * asserts every word is an ENTRY in that level's list -- not merely
+   * segmentable. That is what keeps 还是 out of HSK 1: validate() accepts it as
+   * 还 + 是, so the ladder has to be stricter than the validator. Where a form
+   * is genuinely compositional (什么 + 时候) the pieces are listed instead, so
+   * the judgment is explicit rather than hidden.
+   *
+   * Cumulative, and complete for all seven levels per D8: a table filled in
+   * only to HSK 2 would leave HSK 3-7 asking yes/no questions forever with
+   * nothing reporting it. See RESEARCH.md, "Which questions, at which level". */
+  var QUESTION_LADDER = {
+    1: { types: ["yesno", "who", "what", "where", "howmany", "when", "howabout"],
+         needs: ["吗", "谁", "什么", "哪儿", "几", "多少", "时候", "怎么样"] },
+    2: { types: ["eitheror", "why"], needs: ["还是", "为什么", "因为"] },
+    3: { types: ["reason", "retell"], needs: ["虽然", "但是", "所以"] },
+    /* 越来越 dropped from the design doc's needs list: it is not an entry in
+     * data/hsk4.json or any other level -- only 越 is, from HSK 3 up. Neither
+     * question shape HSK 4 unlocks uses it (compare: 这一段和上一段比，有什么不
+     * 一样？ / predict: 你觉得下面会怎么样？). Fix the ladder, not the wordlist. */
+    4: { types: ["compare", "predict"], needs: ["比", "觉得"] },
+    5: { types: ["infer"], needs: [] },
+    6: { types: ["opinion"], needs: [] },
+    7: { types: ["evaluate"], needs: [] }
+  };
+
+  /* Levels 5-7 add no new asking vocabulary because what they add is depth, not
+   * new question words -- an inference question is asked with the same 为什么 as
+   * a why question. They are thin on purpose and grown on arrival. */
+  function questionTypesFor(level) {
+    var types = [], needs = [];
+    for (var lv = 1; lv <= (level || 1); lv++) {
+      var row = QUESTION_LADDER[lv];
+      if (!row) continue;
+      row.types.forEach(function (t) { if (types.indexOf(t) === -1) types.push(t); });
+      row.needs.forEach(function (w) { if (needs.indexOf(w) === -1) needs.push(w); });
+    }
+    return { types: types, needs: needs };
+  }
+
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
   var LENGTHS = {
@@ -667,7 +715,8 @@
               STORY_NAMES: STORY_NAMES,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor,
-              storyIdeasFor: storyIdeasFor, build: build,
+              storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
+              build: build,
               translate: translate, explain: explain, grade: grade,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
