@@ -2417,11 +2417,20 @@ return true;
       return true;`);
     await go(base);
     await waitFor("window.startStoryWith", "the app");
+    /* Dispatch on what the call actually asks for, not on call order -- a
+     * mock keyed by count cannot tell "the cast call never happened" from
+     * "the cast call happened first", which is exactly the distinction this
+     * check exists to make. The cast call is recognisable by its own prompt
+     * text (HSKPrompt.castPrompt's "Name the people or creatures..." line);
+     * anything else is the segment, and it gets a plain reply with no
+     * [[NEED:]] of its own, so a red word here can only mean the declared
+     * cast failed to reach the segment's lexicon. */
     await exec(
-      "window.__n = 0;" +
-      "window.callModel = function () {" +
-      "  window.__n++;" +
-      "  if (window.__n === 1) return Promise.resolve(" +
+      "window.callModel = function (messages) {" +
+      "  var isCast = (messages || []).some(function (m) {" +
+      "    return typeof m.content === 'string' &&" +
+      "      m.content.indexOf('Name the people or creatures the story needs') !== -1; });" +
+      "  if (isCast) return Promise.resolve(" +
       "    '[[NEED:\\u5b59\\u609f\\u7a7a|S\\u016bn W\\u00f9k\\u014dng|the Monkey King]]');" +
       "  return Promise.resolve('\\u5b59\\u609f\\u7a7a\\u5f88\\u597d\\u3002'); };" +
       "window.newChat('story'); window.startStoryWith('the Monkey King');");
@@ -2432,11 +2441,20 @@ return true;
       var topic = all.filter(function (m) { return m.role === "topic"; })[0];
       var b = document.querySelectorAll('#log .msg.bot .bubble');
       return { cast: topic ? (topic.needs || []).map(function (n) { return n.w; }) : null,
+               text: b[b.length - 1].textContent,
                red: Array.prototype.map.call(b[b.length - 1].querySelectorAll('.w.bad'),
                  function (e) { return e.textContent; }).join(" ") };`);
     check(JSON.stringify(casted.cast) === JSON.stringify(["孙悟空"]),
       "the declared cast is stored on the topic message", JSON.stringify(casted));
-    check(casted.red === "",
+    /* Checking only for a red word is not enough: a name the segment fails to
+     * validate does not render red, it disappears -- five rejected attempts
+     * exhaust the repair loop and the canned FALLBACKS text ("我不知道。", no
+     * 孙悟空 in it at all) is shown instead, which also has no red word. So the
+     * text itself is asserted too: only a reply that still says 孙悟空 and is
+     * not flagged proves the declared cast actually reached the segment's
+     * lexicon through needsSoFar(), rather than the name having been silently
+     * rejected into a fallback that happens to contain nothing to flag. */
+    check(casted.text.indexOf("孙悟空") !== -1 && casted.red === "",
       "and the name it declared is not flagged in the story", JSON.stringify(casted));
 
   } catch (e) {
