@@ -3099,9 +3099,16 @@ async function send() {
   gradeTurn(justSent);
   /* Answering the partner's own question is a different job from being told a
    * story, and before the discussing phase existed it was met by the telling
-   * rules -- which forbid talking to the learner at all. */
-  const answering = currentActivity() === "story" &&
-    (S.history.filter(t => t.role === "assistant").pop() || {}).kind === "question";
+   * rules -- which forbid talking to the learner at all.
+   *
+   * Reading `kind` off only the LAST assistant turn broke on the SECOND
+   * consecutive learner turn: the first discussing reply carries no `kind`
+   * of its own, so it became the "last assistant turn" and read as false,
+   * falling back to the telling rules for every reply after the first one.
+   * `anyStoryQuestion()` is the same predicate `renderComposer()` already
+   * gates the composer on, so the two can never disagree about whether the
+   * learner is in a position to answer. */
+  const answering = currentActivity() === "story" && anyStoryQuestion();
   return runTurn(toGloss, text, answering
     ? { storyPhase: "discussing", model: teachingModel() } : null);
 }
@@ -3120,21 +3127,41 @@ async function retryLast() {
    * for it again, which is also the only path that uses the story model, the
    * story token ceiling and the story prompt phase.
    *
-   * Which phase failed has to be read off the message before it is dropped.
-   * asking is a parameter now, not self-derived, so this bare call cannot
-   * fall back to recomputing it -- and it is genuinely ambiguous: a question
-   * can now fail at any pause, not only the last one. A soft give-up carries
-   * it in `kind` (segment/question), exactly like a clean turn. An outright
-   * error has no phase of its own to read -- its `kind` is the error class,
-   * not the story phase, and overloading it a second time is exactly the
-   * collision storyTold() already had to be guarded against (Task 3) -- so
-   * storyStep() stamps a separate `asking` flag on the notice instead. A
-   * notice from before that existed, or one runTurn() left behind answering
-   * a question, has neither field and defaults to a segment retry, which is
-   * what every notice meant before this. */
+   * A story turn can fail three ways, and each has to retry through the path
+   * it actually failed on:
+   *
+   * A soft give-up or an outright error FROM storyStep() always carries a
+   * positive signal of its own -- `kind` (segment/question) on the push
+   * itself, exactly like a clean turn, or `asking` stamped on the notice --
+   * checked with `!== undefined` rather than `=== true` because a failed
+   * SEGMENT stamps `asking: false`, a real signal, not an absent one.
+   *
+   * Neither is present for the other two: a legacy transcript (written
+   * before `kind` existed) or a failed ANSWER -- runTurn()'s own failure
+   * paths, reached from send() during the discussing phase, which stamp
+   * neither field, because runTurn() has no `asking` concept to stamp. Only
+   * here is "the turn right before this one was the learner's" a safe way
+   * to tell them apart: a legacy story has no interleaved questions by
+   * construction, so nothing but a just-failed answer can put a user turn
+   * directly before a failed one. Get this wrong and a failed answer either
+   * retries as a brand-new segment on the story model -- discarding what the
+   * learner said and spending the expensive call -- or, at the end of the
+   * story, "try again" silently does nothing. */
   if (currentActivity() === "story") {
     const last = S.history[S.history.length - 1];
-    const asking = !!(last && (last.kind === "question" || last.asking === true));
+    const prev = S.history[S.history.length - 2];
+    const fromStoryStep = !!(last &&
+      (last.kind === "segment" || last.kind === "question" || last.asking !== undefined));
+    const failedAnswer = !fromStoryStep && last && (last.failed || last.role === "notice") &&
+      prev && prev.role === "user";
+    if (failedAnswer) {
+      const text = prev.text;
+      S.history.pop();
+      S.busy = true; renderBusy();
+      persist(); renderAll();
+      return runTurn([], text, { storyPhase: "discussing", model: teachingModel() });
+    }
+    const asking = fromStoryStep && (last.kind === "question" || last.asking === true);
     if (last && (last.failed || last.role === "notice")) S.history.pop();
     persist(); renderAll();
     return storyStep(asking);
@@ -4048,9 +4075,20 @@ async function checkUpdate() {
  * only at the end, so the gate is not "every segment is told" but "has a
  * question been asked yet": Choosing and Telling stay shut, Talking opens and
  * stays open from the first question onward, no matter how much more of the
- * story follows it. */
+ * story follows it.
+ *
+ * `anyStoryQuestion()` alone regressed every story the app had already
+ * written: it looks for `kind === "question"`, a field that does not exist
+ * on a transcript from before this plan, so it reads as false forever there
+ * and the composer stays shut in the middle of a conversation the learner
+ * was already having. `!S.history.some(t => t.role === "user")` closes that
+ * -- inert on a new story, since the composer is the only way to produce a
+ * learner turn in a story, so one existing already implies a question was
+ * asked to unlock it -- and it reopens a legacy one, since a learner turn
+ * there could only have followed the old single end-of-story question. */
 function renderComposer() {
-  const listening = currentActivity() === "story" && !anyStoryQuestion();
+  const listening = currentActivity() === "story" && !anyStoryQuestion() &&
+    !S.history.some(t => t.role === "user");
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }

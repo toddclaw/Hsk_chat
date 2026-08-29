@@ -1959,6 +1959,50 @@ return true;
       "and a story written before kind existed still counts",
       String(await exec("return window.storyTold();")));
 
+    /* Finding 1 (task 10 review, round 3): a v67 story already in phase two,
+     * written before `kind` existed -- so anyStoryQuestion() finds nothing on
+     * it -- must not have the new gate shut its composer forever. The learner
+     * was already mid-conversation (a user turn is already in the transcript);
+     * losing the composer there is data damage, not a fresh-story edge case.
+     * The legacy fallback above already proves storyTold() still counts these
+     * turns; this proves the composer stays usable too. */
+    await exec(`
+      var cid = "99999999-4444-4444-8444-999999999999";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-4444-4444-8444-999999999999": [
+        { id: "aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa", role: "assistant",
+          text: "他去了学校。", attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "bbbbbbbb-4444-4444-8444-bbbbbbbbbbbb", role: "assistant",
+          text: "他去了哪儿？", attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "cccccccc-4444-4444-8444-cccccccccccc", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    /* storyTold() alone is not enough to wait on: S.history is wired up to
+     * the reopened chat early in boot(), well before the async loadLevel()
+     * that gates the FINAL renderStarters()/renderComposer() call -- so
+     * storyTold() can already read correctly while the composer's disabled
+     * state still reflects an earlier, unrelated render. #starters getting
+     * its content is downstream of that same renderStarters() call, so
+     * waiting on it too guarantees renderComposer() has already run. */
+    await waitFor("window.storyTold && window.storyTold() === 2 && " +
+      "document.querySelector('#starters').children.length > 0",
+      "the reopened legacy story to finish rendering");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "a legacy story already answered keeps its composer open, not shut forever",
+      String(await exec("return document.querySelector('#input').disabled;")));
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "and still invites a sentence rather than showing a blank prompt",
+      await exec("return document.querySelector('#input').placeholder;"));
+
     /* Neither fixture above actually distinguishes the wholesale fallback from
      * a naive per-message one -- one history is all-kind, the other has none,
      * and a per-message rule like `t.kind ? t.kind === "segment" : t.role ===
@@ -2131,6 +2175,57 @@ return true;
       "var all = [].concat.apply([], Object.keys(m).map(function (k) { return m[k]; }));" +
       "return all.filter(function (x) { return x.kind === 'question'; }).length;") === 1,
       "and stored as a question rather than a segment");
+    // The check above only proves the callModel stub was invoked, not that
+    // storyStep()'s own persist()/renderAll() cleanup has finished -- wait
+    // for the busy state to actually clear before driving the composer.
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the question turn to finish settling");
+
+    /* Finding 2 (task 10 review, round 3): `answering` used to be derived
+     * from the LAST assistant turn's `kind`, so only the FIRST reply after a
+     * question reached the discussing phase. Continuing this same story (a
+     * question was just asked, above): the learner's first answer leaves a
+     * kind-less discussing reply as the last assistant turn, so a SECOND
+     * consecutive learner turn used to compute `answering === false` and
+     * fall back to the telling rules that forbid talking to the learner at
+     * all -- exactly the defect the discussing phase exists to fix.
+     *
+     * Two harness notes for this one: gradeTurn() also calls callModel,
+     * unawaited and concurrent with the reply, but its first message is role
+     * "user" (the grade prompt), never "system" (systemPrompt()'s own role),
+     * so filtering on that keeps the grader's call out of __sys regardless of
+     * which one lands first. And window.callModel resolves instantly here
+     * (no real network latency), so the busy ("停") state can come and go
+     * inside a single poll interval -- unlike the deliberately-hung stub the
+     * busy-button test above uses, this cannot be waited on reliably; wait on
+     * the effect (a system prompt captured) instead, matching every other
+     * model-routing check in this file. */
+    await exec(
+      "window.__sys = [];" +
+      "window.callModel = function (msgs) {" +
+      "  if (msgs[0] && msgs[0].role === 'system') window.__sys.push(msgs[0].content);" +
+      "  return Promise.resolve('好。'); };" +
+      "document.querySelector('#input').value = '好';" +
+      "window.send();");
+    await waitFor("window.__sys.length > 0", "the first discussing reply");
+    check(await exec("return window.__sys.length;") === 1,
+      "the first learner turn after a question reaches the discussing phase");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the first discussing reply to finish settling");
+    await exec(
+      "document.querySelector('#input').value = '也好';" +
+      "window.send();");
+    await waitFor("window.__sys.length > 1", "the second discussing reply");
+    check(await exec("return window.__sys.length;") === 2,
+      "and a second learner turn is sent too");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the second discussing reply to finish settling");
+    check((await exec("return window.__sys[1];")).indexOf("先说他答得对不对") !== -1,
+      "the second consecutive learner turn also reaches the discussing phase",
+      await exec("return window.__sys[1];"));
+    check((await exec("return window.__sys[1];")).indexOf("只讲故事，不要问学生问题") === -1,
+      "and does not fall back to the telling rules that forbid talking to the learner",
+      await exec("return window.__sys[1];"));
 
     /* An empty completion is one call in eight and used to end a story on a
      * notice card. One retry, inside turn(), so every activity gets it. */
@@ -2471,6 +2566,116 @@ return true;
     check(askedAgain && await exec("return window.__models[0];") === "teaching/model",
       "and that retry still asks on the teaching model",
       JSON.stringify(askedAgain ? await exec("return window.__models;") : []));
+
+    /* Finding 3 (task 10 review, round 3): the fix round above handled the
+     * two ways a storyStep() turn can fail, but not the third way a story
+     * turn can fail -- runTurn()'s own failure paths, reached when a
+     * learner's ANSWER (not a segment or a question) does not come back
+     * clean. Neither failure shape carries `kind` or `asking`, so a bare
+     * `storyStep(false)` retried it as a brand-new segment, discarding the
+     * answer and spending the story model, or (at the end) silently no-op'd.
+     * This one uses the soft give-up shape: a normal `role: "assistant"`
+     * push with `failed: true` and no `kind` at all. */
+    await exec(`
+      var cid = "22222222-5555-4555-8555-222222222222";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "22222222-5555-4555-8555-222222222222": [
+        { id: "33333333-5555-4555-8555-333333333333", role: "assistant", kind: "segment",
+          text: "他去了学校。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "44444444-5555-4555-8555-444444444444", role: "assistant", kind: "question",
+          text: "他去了哪儿？", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "55555555-5555-4555-8555-555555555555", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "66666666-5555-4555-8555-666666666666", role: "assistant",
+          text: "我不知道。", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:03.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed answer mid-story");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('对，是学校。'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("window.__models.length > 0", "a retried answer");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "retrying a failed answer mid-story replies again on the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec("return window.storyTold();") === 1,
+      "and no new segment is generated in its place",
+      String(await exec("return window.storyTold();")));
+
+    /* Same failure, at the end of the story, and the notice shape (an
+     * outright error) rather than the soft-give-up shape -- covering both
+     * of the failure shapes the finding names. Must retry, not no-op. */
+    await exec(`
+      var cid = "77777777-6666-4666-8666-777777777777";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "77777777-6666-4666-8666-777777777777": [
+        { id: "88888888-6666-4666-8666-888888888888", role: "assistant", kind: "segment",
+          text: "他去了学校。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "99999999-6666-4666-8666-999999999999", role: "assistant", kind: "segment",
+          text: "他看书。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "aaaaaaaa-6666-4666-8666-aaaaaaaaaaaa", role: "assistant", kind: "segment",
+          text: "他回家。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "bbbbbbbb-6666-4666-8666-bbbbbbbbbbbb", role: "assistant", kind: "segment",
+          text: "他吃饭。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "cccccccc-6666-4666-8666-cccccccccccc", role: "assistant", kind: "segment",
+          text: "他睡觉。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "dddddddd-6666-4666-8666-dddddddddddd", role: "assistant", kind: "question",
+          text: "他去了哪儿？", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" },
+        { id: "eeeeeeee-6666-4666-8666-eeeeeeeeeeee", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:06.000Z" },
+        { id: "ffffffff-6666-4666-8666-ffffffffffff", role: "notice",
+          kind: "http", detail: "network hiccup",
+          created_at: "2026-01-01T00:00:07.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed answer at the end");
+    // A notice (this is one -- an outright error, not a soft give-up) puts
+    // its "Try again" button in a ".row", not the ".meta" a failed assistant
+    // reply uses -- search both, matching either capitalisation.
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('对，是学校。'); };" +
+      "var bs = document.querySelectorAll('#log button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (/^try again$/i.test(bs[i].textContent)) { bs[i].click(); break; } }");
+    let answerRetried = true;
+    try {
+      await waitFor("window.__models.length > 0",
+        "a retried answer at the end of the story", 3000);
+    } catch (e) { answerRetried = false; }
+    check(answerRetried,
+      "retrying a failed answer at the end of the story replies again rather than doing nothing");
+    check(answerRetried && await exec("return window.__models[0];") === "teaching/model",
+      "and that retry replies on the teaching model",
+      JSON.stringify(answerRetried ? await exec("return window.__models;") : []));
 
     /* One card per word. Pacing offers a word, the model uses it AND wraps it in
      * [[NEED:]] because from its side the learner does not know it -- 12 of 17
