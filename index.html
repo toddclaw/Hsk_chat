@@ -3133,12 +3133,22 @@ async function retryLast() {
  * continues: turn() returns its give-up reply rather than throwing, so the step
  * needs no guard of its own.
  *
- * How far the story has got is derived, never stored. Phase one is the
- * assistant turns before the learner has said anything, so counting them needs
- * no new field on a message -- which matters, because sync.js only round-trips
- * the columns db/schema.sql names, and a stored position would come back from
- * another device missing. */
+ * How far the story has got is derived, never stored -- which matters, because
+ * sync.js only round-trips the columns db/schema.sql names, and a stored
+ * position would come back from another device missing.
+ *
+ * Counted from `kind` rather than derived from turn order. The old derivation
+ * -- assistant turns before the first learner turn -- worked only while the
+ * single question came last; questions now interleave, so the learner answers
+ * mid-story and the count stopped at the first answer.
+ *
+ * A conversation written before `kind` existed has none on any message, so it
+ * falls back to the old rule wholesale rather than per message: a mix would
+ * count a legacy question as a segment. */
 function storyTold() {
+  if (S.history.some(t => t.kind)) {
+    return S.history.filter(t => t.kind === "segment").length;
+  }
   let n = 0;
   for (const t of S.history) {
     if (t.role === "user") break;
@@ -3175,6 +3185,7 @@ async function storyStep() {
     hist.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
+      kind: asking ? "question" : "segment",
       id: newMessageId(), created_at: new Date().toISOString()
     });
     // The question is not a segment and earns no slate of its own, as before.

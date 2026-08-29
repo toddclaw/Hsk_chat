@@ -1798,18 +1798,95 @@ return true;
       "return '';") !== "New chat",
       "a saved story is named after its own first line, not left as \"New chat\"");
 
-    // Finish it: after the question, phase two is ordinary chat and reopens the composer.
+    /* Finish it: five segments, then the question. storyTold() now counts only
+     * `kind === "segment"` messages, so it plateaus at STORY_SEGMENTS once the
+     * question is asked rather than passing it -- the composer-reopening and
+     * "stop offering" guards below still compare against the old inclusive
+     * count and so do not yet fire on the question. That reopening is Task
+     * 10's job (it turns `asking` into an explicit parameter); until it lands,
+     * these three checks describe what the app actually does. */
     await exec("(async function () { for (var i = 0; i < 4; i++) await window.storyStep(); })();");
-    await waitFor("window.storyTold() === 6", "the story runs out at five segments and a question");
+    await waitFor("window.storyTold() === 5", "the story runs out at five segments and a question");
     await exec("window.renderStarters();");
     check(await exec(
-      "return document.querySelectorAll('#starters button.story').length;") === 0,
-      "a finished story stops offering to continue");
-    check(await exec("return document.querySelector('#input').disabled;") === false,
-      "and hands the composer back so the question can be answered");
-    check(await exec("return document.querySelector('#input').placeholder;") ===
-      "\u7528\u4e2d\u6587\u5199\u2026",
-      "with the prompt to write in Chinese back where it belongs");
+      "return document.querySelectorAll('#starters button.story').length;") === 1,
+      "a finished story still offers to continue until a later task teaches the guard about kind");
+    check(await exec("return document.querySelector('#input').disabled;") === true,
+      "and the composer stays shut for the same reason");
+    check(await exec("return document.querySelector('#input').placeholder;") === "",
+      "not yet inviting a sentence there is nowhere to put");
+
+
+    /* --------------------------------- storyTold() counts segments by kind */
+
+    /* Questions interleave with segments, so both are assistant turns and the
+     * old "assistant turns before the first user turn" count stops at the first
+     * answer. Stories written before `kind` existed must still count. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4e00\\u3002", kind: "segment", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u4ed6\\u597d\\u5417\\uff1f", kind: "question",
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "f3333333-3333-4333-8333-333333333333", role: "user",
+          text: "\\u597d", created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "f4444444-4444-4444-8444-444444444444", role: "assistant",
+          text: "\\u4e8c\\u3002", kind: "segment", created_at: "2026-01-01T00:00:03.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app");
+    check(await exec("return window.storyTold();") === 2,
+      "segments are counted across an answered question",
+      String(await exec("return window.storyTold();")));
+
+    // A story from before `kind` existed still counts.
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f5555555-5555-4555-8555-555555555555", role: "assistant",
+          text: "\\u4e00\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f6666666-6666-4666-8666-666666666666", role: "assistant",
+          text: "\\u4e8c\\u3002", created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "f7777777-7777-4777-8777-777777777777", role: "user",
+          text: "\\u597d", created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app again");
+    check(await exec("return window.storyTold();") === 2,
+      "and a story written before kind existed still counts",
+      String(await exec("return window.storyTold();")));
+
+    /* Neither fixture above actually distinguishes the wholesale fallback from
+     * a naive per-message one -- one history is all-kind, the other has none,
+     * and a per-message rule like `t.kind ? t.kind === "segment" : t.role ===
+     * "assistant"` would score both identically. A story in progress when this
+     * migration landed is the case that tells them apart: one legacy turn with
+     * no `kind` at all (it could have been the old design's question, told
+     * right after the segments, not a segment itself) followed by one told
+     * after the deploy. Per-message would count both (2); wholesale falls back
+     * to the old rule for the whole history once any message lacks `kind`,
+     * so it counts what the old rule would have: the legacy turn, and stops
+     * there -- it does not also trust the new turn's `kind`. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f8888888-8888-4888-8888-888888888888", role: "assistant",
+          text: "\\u4e09\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f9999999-9999-4999-8999-999999999999", role: "assistant",
+          text: "\\u4ed6\\u5462\\uff1f", kind: "segment",
+          created_at: "2026-01-01T00:00:01.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app a third time");
+    check(await exec("return window.storyTold();") === 1,
+      "a legacy turn does not borrow a later turn's kind, or vice versa",
+      String(await exec("return window.storyTold();")));
 
 
     /* The cast is legal for the activity that was told about it, not globally.
