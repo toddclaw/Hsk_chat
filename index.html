@@ -4010,11 +4010,16 @@ function renderStoryChooser(box) {
   box.appendChild(any);
 }
 
-/* Topics this learner has read before, commonest use first. Narrow reading says
- * beginners gain more from staying on one topic and cast, so a topic already
- * read is worth offering again -- see RESEARCH.md, "Staying on one topic and one
- * cast". Read off the stored conversations, so it costs no new storage and is
- * simply empty on a fresh device. */
+/* Topics this learner has read before, most recently talked about first --
+ * not frequency: S.chats is newest-updated-first (unshift on creation,
+ * re-sorted by updated_at on every sync merge, see mergeConversations() in
+ * sync.js), and this walk keeps only the first S.chats entry it meets for
+ * each topic text, so a repeated topic surfaces once, at its most recent
+ * conversation. Narrow reading says beginners gain more from staying on one
+ * topic and cast, so a topic already read is worth offering again -- see
+ * RESEARCH.md, "Staying on one topic and one cast". Read off the stored
+ * conversations, so it costs no new storage and is simply empty on a fresh
+ * device. */
 function pastStoryTopics() {
   const out = [];
   S.chats.forEach(c => {
