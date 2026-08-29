@@ -549,5 +549,22 @@ check(!P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
 check(P.ACTIVITIES.chat.names === null && P.ACTIVITIES.focused.names === null,
   "and neither dialogue activity has a cast");
 
+// The topic reaches the model as a rule, not as a conversation turn.
+var topicPrompt = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyTopic: "the Monkey King", storySegment: { index: 0, of: 5 }
+});
+check(topicPrompt.indexOf("the Monkey King") !== -1,
+  "the topic is named in the story prompt", topicPrompt.slice(0, 200));
+check(topicPrompt.indexOf("学生想听一个关于") !== -1,
+  "and introduced in Chinese, like every other rule");
+
+var noTopic = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyTopic: "", storySegment: { index: 0, of: 5 }
+});
+check(noTopic.indexOf("学生想听一个关于") === -1,
+  "make-something-up adds no topic rule at all");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

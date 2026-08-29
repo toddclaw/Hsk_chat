@@ -1290,6 +1290,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     activity: currentActivity(),
     storySegment: (ctx && ctx.storySegment) || null,
     storyQuestion: !!(ctx && ctx.storyQuestion),
+    storyTopic: currentActivity() === "story" ? storyTopic() : "",
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -1806,6 +1807,7 @@ function renderNotice(turnObj) {
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
+  if (turnObj.role === "topic") return null;
   const el = document.createElement("div");
   el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
 
@@ -3162,6 +3164,25 @@ function storyTold() {
     if (t.role === "assistant") n++;
   }
   return n;
+}
+
+/* The story's subject, and the cast the model declared for it.
+ *
+ * A `role: "topic"` message rather than a column on the conversation: sync.js
+ * passes every role except "notice" straight through, so it round-trips with no
+ * schema change, and windowed() already sends only user and assistant turns, so
+ * it reaches the model as a rule in the system prompt rather than as something
+ * the partner said. The declared cast rides in `needs`, which is the shape it
+ * already has and which needsSoFar() already feeds into every later lexicon. */
+function storyTopic() {
+  const t = S.history.find(m => m.role === "topic");
+  return (t && t.text) || "";
+}
+
+function setStoryTopic(text, cast) {
+  S.history.push({ role: "topic", text: text || "", needs: cast || [],
+                   id: newMessageId(), created_at: new Date().toISOString() });
+  persist();
 }
 
 async function storyStep() {

@@ -1915,6 +1915,24 @@ return true;
       "a notice's unrelated kind does not knock a legacy story's count to zero",
       String(await exec("return window.storyTold();")));
 
+    /* A topic message is not a conversation turn: it must not be sent to the
+     * model as one, and it must not be rendered as a bubble. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "a1111111-1111-4111-8111-111111111111", role: "topic",
+          text: "the Monkey King", needs: [],
+          created_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTopic", "the app");
+    check(await exec("return window.storyTopic();") === "the Monkey King",
+      "the topic is read back off the conversation");
+    check(await exec("return document.querySelectorAll('#log .msg').length;") === 0,
+      "and is not rendered as a message",
+      String(await exec("return document.querySelectorAll('#log .msg').length;")));
 
     /* The cast is legal for the activity that was told about it, not globally.
      * The identical reply in a chat must still be rejected -- three attempts,

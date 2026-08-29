@@ -294,6 +294,15 @@
         act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
         convert("。别的名字不要用。"));
     }
+    /* What the learner asked for. Placed before the segment's position so the
+     * model reads the subject first and the position as a qualifier of it.
+     * Passed through verbatim, in whatever language it was typed: a topic is
+     * the learner's own words, not app-authored Chinese, so `convert` does not
+     * touch it. */
+    if (opts.storyTopic) {
+      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
+                 convert("的故事。"));
+    }
     if (seg) {
       if (seg.index === 0) {
         rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
