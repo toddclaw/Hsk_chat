@@ -1595,17 +1595,98 @@ return true;
     await exec("window.newChat('chat'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
       "chat offers starters");
+    /* A fresh story chat has no topic yet, so this is the chooser rather than
+     * the starters strip a fresh chat gets -- it lands on the chooser instead
+     * of any sentence-starter buttons, Task 5's replacement for the old
+     * "Start the story" control that used to sit here. */
     await exec("window.newChat('story'); window.renderStarters();");
-    check(await exec(
-      "return document.querySelectorAll('#starters button:not(.story)').length;") === 0,
-      "story time does not -- the partner speaks first");
+    check(await exec("return !!document.querySelector('#storyTopicInput');") === true,
+      "story time does not offer sentence starters -- it lands on the chooser instead");
     check(await exec(
       "var b = document.querySelector('#starters button.story');" +
-      "return b ? b.textContent : '';") === "Start the story",
-      "it gets a control instead, so the story advances on a tap and not on a timer");
+      "return b ? b.textContent : '';") === "Make something up",
+      "which includes a way in that names no topic, the .story class marking it as the control");
     await exec("window.newChat('focused'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
       "and neither does focused chat");
+
+
+    /* ------------------------------------ the chooser replaces auto-start */
+
+    /* Picking Story time used to generate segment 1 immediately. It now lands
+     * on the chooser, and nothing is spent until a topic is picked. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    await exec("window.__calls = 0;" +
+      "window.callModel = function () { window.__calls++;" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u3002'); };" +
+      "window.startActivity('story');");
+    await waitFor("document.querySelector('#starters button')", "the chooser");
+    check(await exec("return window.__calls;") === 0,
+      "picking story time spends nothing until a topic is chosen",
+      String(await exec("return window.__calls;")));
+    check(await exec("return !!document.querySelector('#storyTopicInput');") === true,
+      "and the chooser offers a box to type a topic into");
+    check(await exec(
+      "return Array.prototype.some.call(document.querySelectorAll('#starters button')," +
+      "  function (b) { return /make something up/i.test(b.textContent); });") === true,
+      "and a make-something-up button");
+
+    /* The curated ideas are a sample, not a fixed slice -- HSK 1's pool has
+     * five and the chooser shows four, drawn through sampleOf() rather than
+     * .slice(0, 4), so which one is left out and the order of the rest both
+     * vary. Render the chooser 25 times over and check the four-of-five sets
+     * are not all identical -- with a true shuffle the odds of that are
+     * astronomical, and a plain .slice(0, 4) would fail this every time. */
+    const ideaDraws = await exec(
+      "var out = [];" +
+      "for (var i = 0; i < 25; i++) {" +
+      "  window.renderStarters();" +
+      "  out.push(Array.prototype.map.call(" +
+      "    document.querySelectorAll('#starters button:not(.story)')," +
+      "    function (b) { return b.textContent; }).join('|'));" +
+      "}" +
+      "return out;");
+    check(new Set(ideaDraws).size > 1,
+      "the four curated ideas offered are shuffled, not the same four in the same order every time",
+      JSON.stringify(ideaDraws));
+    check(ideaDraws.every(d => d.split("|").length === 4),
+      "and there are always exactly four of them", JSON.stringify(ideaDraws));
+
+    /* Ruling 2: a history holding only a topic message -- set but nothing
+     * generated yet, e.g. a request stopped right after picking a topic --
+     * must still show the empty-state hint rather than a blank log.
+     * renderMessage() returns null for role "topic", so a raw-length check on
+     * S.history would suppress the hint here. */
+    await exec("window.setStoryTopic('a topic with no segment yet', []); window.renderAll();");
+    check(await exec("return document.querySelectorAll('#log .hint').length;") === 1,
+      "a topic picked but nothing generated yet still shows the empty-state hint, not a blank log");
+
+    /* pastStoryTopics() reads S.chats and S.chatMsgs directly, so it has to
+     * survive a deleted conversation and a conversation with no messages (an
+     * empty array's find() is undefined, not a throw). Marking `.deleted`
+     * directly rather than calling deleteChat(), which also drops the chat's
+     * messages -- that alone would keep a deleted topic out of the list, so it
+     * would not prove the `c.deleted` check in pastStoryTopics is doing
+     * anything. */
+    await exec("window.newChat('story'); window.setStoryTopic('topic that stays', []);");
+    await exec("window.newChat('story'); window.setStoryTopic('topic that is deleted', []);" +
+      "window.currentChat().deleted = true;");
+    await exec("window.newChat('story');");   // no topic, no messages: the empty-conversation case
+    await exec("window.newChat('story'); window.renderStarters();");
+    const pastButtons = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#starters button')," +
+      "  function (b) { return b.textContent; });");
+    check(pastButtons.indexOf("More about topic that stays") !== -1,
+      "a topic from an earlier, undeleted story is offered again", JSON.stringify(pastButtons));
+    check(!pastButtons.some(t => /deleted/.test(t)),
+      "but a deleted conversation's topic is not, and neither it nor an empty " +
+      "conversation crashed the scan", JSON.stringify(pastButtons));
 
 
     /* ------------------------------------------- the partner opening a turn */

@@ -228,6 +228,8 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* Story time's control is the action that moves the story on, not one
    suggestion among several, so it does not look like a starter. */
 #starters button.story{background:var(--accent); color:#08111d; font-weight:600}
+#starters input{background:var(--bg2); color:inherit; border:1px solid var(--line);
+  border-radius:8px; padding:8px 10px; font:inherit; min-width:220px}
 
 footer{
   border-top:none; background:var(--panel);
@@ -1960,7 +1962,10 @@ function renderAll() {
    * level. */
   fillActivities(); renderLevelChip();
   log.innerHTML = "";
-  if (!S.history.length) {
+  /* Not raw length: a history holding only a `role: "topic"` message is length
+   * 1, but renderMessage() returns null for that role, so a raw-length check
+   * would suppress this hint over an empty-looking log instead of showing it. */
+  if (!S.history.some(t => t.role !== "topic")) {
     log.innerHTML = '<div class="hint">' + (currentActivity() === "story"
       ? 'Tap <b>Start the story</b> below.<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.'
@@ -2186,8 +2191,11 @@ function startActivity(id) {
   const c = newChat(HSKPrompt.ACTIVITIES[id] ? id : "chat");
   renderStarters();
   const act = HSKPrompt.activityFor(currentActivity());
-  if (act.gen === "segments") storyStep();
-  else if (id !== "chat") openingTurn();
+  /* A story no longer starts itself. The chooser is the first thing the learner
+   * sees, so nothing is generated -- and nothing is spent -- until they have
+   * said what the story should be about. Every other activity still opens with
+   * the partner speaking. */
+  if (act.gen !== "segments" && id !== "chat") openingTurn();
   return c;
 }
 
@@ -3185,6 +3193,13 @@ function setStoryTopic(text, cast) {
   persist();
 }
 
+// Stub -- Task 7 replaces this with the real version, which declares a cast first.
+async function startStoryWith(topic) {
+  setStoryTopic(topic, []);
+  renderStarters();
+  return storyStep();
+}
+
 async function storyStep() {
   if (S.busy) return;
   const told = storyTold();
@@ -3942,11 +3957,71 @@ function renderComposer() {
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
 
+// Four of the level's pool, shuffled, so the chooser is not identical every
+// visit. Fisher-Yates over a copy -- sort(() => Math.random() - 0.5) is biased.
+function sampleOf(list, n) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a.slice(0, n);
+}
+
+/* The chooser. Curated ideas, topics already read, a box, and make-something-up
+ * -- four entry points onto one mechanism, because a topic is only ever a
+ * string. Make-something-up passes "", which emits no topic rule at all and is
+ * exactly what story time did before this existed. */
+function renderStoryChooser(box) {
+  const pick = text => { startStoryWith(text); };
+  sampleOf(HSKPrompt.storyIdeasFor(S.level), 4).forEach(idea => {
+    const b = document.createElement("button");
+    b.textContent = idea;
+    b.onclick = () => pick(idea);
+    box.appendChild(b);
+  });
+  pastStoryTopics().slice(0, 2).forEach(t => {
+    const b = document.createElement("button");
+    b.textContent = "More about " + t;
+    b.onclick = () => pick(t);
+    box.appendChild(b);
+  });
+  const input = document.createElement("input");
+  input.id = "storyTopicInput";
+  input.type = "text";
+  input.placeholder = "…or a story about anything you like";
+  input.onkeydown = e => {
+    if (e.key === "Enter" && input.value.trim()) pick(input.value.trim());
+  };
+  box.appendChild(input);
+  const any = document.createElement("button");
+  any.className = "story";
+  any.textContent = "Make something up";
+  any.onclick = () => pick("");
+  box.appendChild(any);
+}
+
+/* Topics this learner has read before, commonest use first. Narrow reading says
+ * beginners gain more from staying on one topic and cast, so a topic already
+ * read is worth offering again -- see RESEARCH.md, "Staying on one topic and one
+ * cast". Read off the stored conversations, so it costs no new storage and is
+ * simply empty on a fresh device. */
+function pastStoryTopics() {
+  const out = [];
+  S.chats.forEach(c => {
+    if (c.activity !== "story" || c.deleted) return;
+    const t = (S.chatMsgs[c.id] || []).find(m => m.role === "topic");
+    if (t && t.text && out.indexOf(t.text) === -1) out.push(t.text);
+  });
+  return out;
+}
+
 /* One tap per segment, and the label is the only place the story says where it
  * has got to -- five bubbles in the log all look alike. Not gated on the
  * starters preference below: this is a control, not an opener. */
 function renderStoryControl(box) {
   if (S.busy) return;
+  if (!storyTopic() && !S.history.length) return renderStoryChooser(box);
   const told = storyTold();
   if (told > STORY_SEGMENTS) return;
   const b = document.createElement("button");
