@@ -566,5 +566,19 @@ var noTopic = P.build({
 check(noTopic.indexOf("学生想听一个关于") === -1,
   "make-something-up adds no topic rule at all");
 
+// Every level has ideas of its own, per D8: a table filled in only to HSK 2
+// would leave every level above it on HSK 1's suggestions with nothing saying so.
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ideas = P.storyIdeasFor(lv);
+  check(ideas.length >= 4, "HSK " + lv + " has at least four story ideas",
+    JSON.stringify(ideas));
+  check(ideas.every(function (s) { return s && s.trim().length; }),
+    "HSK " + lv + "'s ideas are all non-empty");
+  check(new Set(ideas).size === ideas.length,
+    "HSK " + lv + "'s ideas are distinct", JSON.stringify(ideas));
+});
+check(P.storyIdeasFor(1).join("|") !== P.storyIdeasFor(4).join("|"),
+  "and the levels do not share one list");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -100,6 +100,52 @@
     return STARTERS[level] || STARTERS[1];
   }
 
+  /* What a story could be about, per level.
+   *
+   * English, and deliberately: this is a menu for CHOOSING, not something the
+   * learner will say, so holding it to the level's vocabulary would buy nothing
+   * and cost expressiveness. The topic reaches the model verbatim (build()'s
+   * topic rule), and the level guarantee comes from the validator downstream as
+   * it always does.
+   *
+   * What no test can check is whether an idea suits its level -- that is
+   * judgment, and a badly judged one produces a dull story rather than an
+   * illegal one. What the tests do check is that every level has its own pool,
+   * per D8 in the design doc.
+   *
+   * The evidence for offering a menu at all rather than only a free-text box:
+   * extensive-reading effects measured LARGER where text choice was limited and
+   * some accountability was present. See RESEARCH.md, "Letting the learner
+   * choose the story". */
+  var STORY_IDEAS = {
+    1: ["A day at the market", "A lost cat comes home",
+        "Two friends and one umbrella", "Breakfast with the family",
+        "A very slow bus"],
+    2: ["A running race at school", "Buying a birthday present",
+        "The first day at a new job", "A weekend at the beach",
+        "A dog that will not sit down"],
+    3: ["Getting lost in a big city", "A cooking contest between neighbours",
+        "The night the power went out", "An old photograph nobody recognises",
+        "Moving into a new apartment"],
+    4: ["A misunderstanding between two coworkers", "A journey by night train",
+        "The shop that never closes", "Someone returns after ten years away",
+        "A promise that is hard to keep"],
+    5: ["A small town keeps a secret", "Two versions of the same afternoon",
+        "An apprentice outgrows the master",
+        "A letter that arrives twenty years late"],
+    6: ["A negotiation where both sides are wrong",
+        "The last day of an old factory", "A translator who changes one word",
+        "An argument about what really happened"],
+    7: ["A rumour that reshapes a neighbourhood",
+        "The Monkey King borrows something he should not",
+        "A scholar who refuses an appointment",
+        "Two accounts of the same reform"]
+  };
+
+  function storyIdeasFor(level) {
+    return STORY_IDEAS[level] || STORY_IDEAS[1];
+  }
+
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
   var LENGTHS = {
@@ -620,7 +666,8 @@
               ACTIVITIES: ACTIVITIES, activityFor: activityFor,
               STORY_NAMES: STORY_NAMES,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
-              styleFor: styleFor, startersFor: startersFor, build: build,
+              styleFor: styleFor, startersFor: startersFor,
+              storyIdeasFor: storyIdeasFor, build: build,
               translate: translate, explain: explain, grade: grade,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
