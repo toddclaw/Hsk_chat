@@ -343,19 +343,32 @@
       : rows;
     var r = await client.from("messages").upsert(payload);
     if (r.error) {
-      /* A last resort for a push that got past the probe -- a column dropped
-       * mid-session, or (for backwards compat with databases lacking the probes)
-       * a probe that never ran. Drops all three optional message columns rather
-       * than parsing the error text to guess which one failed, and retries once:
-       * with all three already false there is nothing left to strip, so this
-       * cannot recurse. */
-      if (isMissingSchema(r.error) &&
-          (schemaHasConvId !== false || schemaHasGrade !== false ||
-           schemaHasKind !== false)) {
-        schemaHasConvId = false;
-        schemaHasGrade = false;
-        schemaHasKind = false;
-        return pushMessages(rows);
+      /* index.html never calls probeSchema() (only conversationsSupported()
+       * is used) -- this retry is the only degrade mechanism that actually
+       * runs in production, so which column it blames first matters. `kind`
+       * is the column this change adds and the one certain to be unmigrated
+       * -- a hand-run SQL-editor statement, newer than conversation_id and
+       * grade -- so it is the cheapest and likeliest culprit. Dropping it
+       * alone first means the overwhelmingly common case (kind missing,
+       * everything else fine) doesn't take two working columns down with it.
+       *
+       * Only if a kind-only retry still fails on a missing column do we fall
+       * back to the blunt drop-everything retry. That is at most two retries:
+       * the first only fires while schemaHasKind isn't already false, the
+       * second only fires while schemaHasConvId or schemaHasGrade isn't
+       * already false, and both branches set the flag(s) they check before
+       * recursing -- so the same branch can never fire twice, and with all
+       * three flags false there is nothing left for either branch to strip. */
+      if (isMissingSchema(r.error)) {
+        if (schemaHasKind !== false) {
+          schemaHasKind = false;
+          return pushMessages(rows);
+        }
+        if (schemaHasConvId !== false || schemaHasGrade !== false) {
+          schemaHasConvId = false;
+          schemaHasGrade = false;
+          return pushMessages(rows);
+        }
       }
       throw r.error;
     }

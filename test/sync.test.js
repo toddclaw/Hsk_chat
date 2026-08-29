@@ -361,16 +361,23 @@ check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history"
 /* --- the glue half: one failed push must not disable a different table -----
  *
  * configure() reads window.supabase at call time, so a stub client is enough to
- * drive the push paths here. The bug this pins is invisible from the pure half
- * and invisible to the browser suite: a messages push that hit a missing column
- * used to set the flag standing for the conversations TABLE, after which
- * pushConversations returned silently -- no error, nothing retried, and the app
- * reporting "Synced just now" while no conversation ever left the device. */
-const seen = [];
-let failMessagesOnce = true;
-let failKindOnce = false;
-global.window = {
-  supabase: {
+ * drive the push paths here. mockSupabase below decides whether an upsert or a
+ * probe select fails purely from which columns are actually absent from the
+ * simulated database -- the same thing real PostgREST decides from -- rather
+ * than a one-shot "fail the Nth call" counter, so the mock stays faithful as
+ * the retry logic around it changes and never has an error-injection branch
+ * that isn't reachable from a scenario below.
+ *
+ * index.html never calls probeSchema() (only conversationsSupported() is used,
+ * at index.html:4777) -- the retry inside pushMessages is the only degrade
+ * mechanism that actually runs in production. Scenario 1 below is that path:
+ * no probe, a database missing only `kind` (today's real state, since `kind`
+ * is a hand-run migration and the newest one). Scenario 2 is the case the
+ * incremental retry has to fall back from. Scenario 3 keeps probeSchema()
+ * itself covered -- it is real, exported code, just not wired up by this
+ * task. */
+function mockSupabase(missingCols, seen) {
+  return {
     createClient: function () {
       return {
         from: function (table) {
@@ -384,21 +391,16 @@ global.window = {
           q.then = function (resolve) {
             let error = null;
             if (q._rows) {
-              // upsert call
-              seen.push({ table: table, keys: Object.keys((q._rows || [])[0] || {}) });
-              if (table === "messages" && failMessagesOnce) {
-                failMessagesOnce = false;
-                error = { code: "PGRST204", message: "conversation_id not found" };
-              }
-              if (table === "messages" && failKindOnce) {
-                failKindOnce = false;
-                error = { code: "PGRST204", message: "kind not found" };
-              }
+              // upsert call: fails if any row carries a column the simulated
+              // database doesn't have, exactly like a real un-migrated table.
+              const keys = Object.keys(q._rows[0] || {});
+              seen.push({ table: table, keys: keys });
+              const missingKey = keys.find(k => missingCols.indexOf(k) !== -1);
+              if (missingKey) error = { code: "PGRST204", message: missingKey + " not found" };
             } else if (q._selectCol) {
-              // select call (for probing)
-              // Simulate that grade exists but kind doesn't (yet)
-              if (table === "messages" && q._selectCol === "kind") {
-                error = { code: "PGRST204", message: "column kind does not exist" };
+              // select call (probeSchema)
+              if (missingCols.indexOf(q._selectCol) !== -1) {
+                error = { code: "PGRST204", message: "column " + q._selectCol + " does not exist" };
               }
             }
             resolve({ data: [], error: error });
@@ -408,41 +410,94 @@ global.window = {
         }
       };
     }
-  }
-};
+  };
+}
+
+// A fresh module instance per scenario: schemaHasKind/ConvId/Grade are
+// module-level flags that persist for a session, so each scenario needs its
+// own un-probed session rather than leftover state from the last one.
+function freshSync() {
+  delete require.cache[require.resolve("../sync.js")];
+  return require("../sync.js");
+}
 
 (async () => {
+  // --- Scenario 1: the production path -- no probe, kind alone is missing --
+  const seen1 = [];
+  global.window = { supabase: mockSupabase(["kind"], seen1) };
   Sync.configure("https://example.invalid", "publishable");
-  await Sync.probeSchema();
 
   await Sync.pushMessages([Sync.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
-  const msgCalls = seen.filter(c => c.table === "messages");
-  check(msgCalls.length === 2, "a messages push that hits a missing column retries once",
-    JSON.stringify(msgCalls.map(c => c.keys.length)));
-  check(msgCalls[1] && msgCalls[1].keys.indexOf("conversation_id") === -1 &&
-        msgCalls[1].keys.indexOf("grade") === -1,
-    "and the retry drops the two optional columns rather than the messages");
+  const msgCalls1 = seen1.filter(c => c.table === "messages");
+  check(msgCalls1.length === 2,
+    "a push that fails only on kind retries exactly once", JSON.stringify(msgCalls1));
+  check(msgCalls1[0] && msgCalls1[0].keys.indexOf("kind") !== -1,
+    "the first attempt still tried to send kind -- nothing was probed in advance");
+  check(msgCalls1[1] && msgCalls1[1].keys.indexOf("kind") === -1,
+    "the retry drops kind alone");
+  check(msgCalls1[1] && msgCalls1[1].keys.indexOf("conversation_id") !== -1 &&
+        msgCalls1[1].keys.indexOf("grade") !== -1,
+    "...but keeps conversation_id and grade -- they were never the problem");
+  check(Sync.gradesSupported() === true,
+    "gradesSupported still reports true after a kind-only failure");
+
+  await Sync.pushMessages([Sync.messageToRow(
+    { id: "bbbbbbbb-0000-0000-0000-000000000002", role: "assistant", text: "还好",
+      created_at: "2026-08-21T10:05:00.000Z" }, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls1After = seen1.filter(c => c.table === "messages").slice(2);
+  check(msgCalls1After.length === 1,
+    "once kind is known missing, a later push in the same session does not need to fail first");
+  check(msgCalls1After[0].keys.indexOf("conversation_id") !== -1 &&
+        msgCalls1After[0].keys.indexOf("grade") !== -1 &&
+        msgCalls1After[0].keys.indexOf("kind") === -1,
+    "and that push still carries grade and conversation_id");
 
   await Sync.pushConversations([Sync.conversationToRow(
     { id: "cccccccc-0000-0000-0000-000000000001", activity: "story", level: 1,
       created_at: "2026-08-27T00:00:00.000Z", updated_at: "2026-08-27T00:00:00.000Z" }, USER)]);
-  const convCalls = seen.filter(c => c.table === "conversations");
-  check(convCalls.length === 1,
+  const convCalls1 = seen1.filter(c => c.table === "conversations");
+  check(convCalls1.length === 1,
     "a degraded messages push does not silently switch off conversation pushing",
-    "conversations upserts: " + convCalls.length);
-  check(convCalls[0] && convCalls[0].keys.indexOf("activity") !== -1 &&
-        convCalls[0].keys.indexOf("level") !== -1,
+    "conversations upserts: " + convCalls1.length);
+  check(convCalls1[0] && convCalls1[0].keys.indexOf("activity") !== -1 &&
+        convCalls1[0].keys.indexOf("level") !== -1,
     "and it still carries the columns messages knows nothing about");
 
-  // Test the degrade path when kind is missing but grade is not.
-  // With the probe fix, kind is known to not exist from the start (via probeSchema),
-  // so it's dropped proactively. Grade should remain in the first push, confirming
-  // that we don't lose support for different optional columns just because one is missing.
-  const firstCallKeys = msgCalls[0].keys;
-  check(firstCallKeys.indexOf("kind") === -1,
-    "probeSchema learned that kind doesn't exist, so first push drops it proactively");
-  check(firstCallKeys.indexOf("grade") !== -1,
-    "but grade is still present -- learning about kind doesn't lose grade support");
+  // --- Scenario 2: kind alone isn't enough -- conversation_id is missing too
+  const seen2 = [];
+  const Sync2 = freshSync();
+  global.window = { supabase: mockSupabase(["kind", "conversation_id"], seen2) };
+  Sync2.configure("https://example.invalid", "publishable");
+
+  await Sync2.pushMessages([Sync2.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls2 = seen2.filter(c => c.table === "messages");
+  check(msgCalls2.length === 3,
+    "when dropping kind alone isn't enough, the retry escalates once more and then stops",
+    JSON.stringify(msgCalls2));
+  check(msgCalls2[1] && msgCalls2[1].keys.indexOf("kind") === -1 &&
+        msgCalls2[1].keys.indexOf("conversation_id") !== -1,
+    "the second attempt tried dropping only kind, and still had conversation_id");
+  check(msgCalls2[2] && msgCalls2[2].keys.indexOf("kind") === -1 &&
+        msgCalls2[2].keys.indexOf("conversation_id") === -1 &&
+        msgCalls2[2].keys.indexOf("grade") === -1,
+    "the third attempt drops all three -- the blunt fallback -- and succeeds");
+  check(Sync2.gradesSupported() === false,
+    "grade is the acknowledged collateral cost of the blunt fallback, only once kind alone did not fix it");
+
+  // --- Scenario 3: probeSchema() itself, still real code, just not wired up
+  const seen3 = [];
+  const Sync3 = freshSync();
+  global.window = { supabase: mockSupabase(["kind"], seen3) };
+  Sync3.configure("https://example.invalid", "publishable");
+  await Sync3.probeSchema();
+  check(Sync3.gradesSupported() === true, "probeSchema finds grade present");
+
+  await Sync3.pushMessages([Sync3.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls3 = seen3.filter(c => c.table === "messages");
+  check(msgCalls3.length === 1,
+    "once probeSchema has already learned kind is missing, the push needs no retry at all");
+  check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
+    "and the single push still carries grade");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
