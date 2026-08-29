@@ -629,5 +629,14 @@ check(P.questionTypesFor(1).types.indexOf("why") === -1,
 check(P.questionTypesFor(2).types.indexOf("why") !== -1,
   "why arrives at HSK 2 with 为什么 and 因为");
 
+// The declared cast is asked for before the story is written, in the
+// [[NEED:]] shape extractNeeds() already parses -- no format, storage or
+// lexicon plumbing of its own.
+var cast = P.castPrompt("the Monkey King", "HSK 1", 3);
+check(cast.indexOf("the Monkey King") !== -1, "the cast prompt names the topic");
+check(cast.indexOf("[[NEED:") !== -1,
+  "and asks for the answer in the channel extractNeeds already parses");
+check(/\b3\b/.test(cast), "and states the cap");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

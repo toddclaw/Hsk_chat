@@ -2408,6 +2408,37 @@ return true;
     check(carried.second === "",
       "and legal in the segment that asked for it", JSON.stringify(carried));
 
+    /* The declared cast is stored as the topic message's own needs, so it is
+     * glossed before reading and legal in every segment through needsSoFar(). */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startStoryWith", "the app");
+    await exec(
+      "window.__n = 0;" +
+      "window.callModel = function () {" +
+      "  window.__n++;" +
+      "  if (window.__n === 1) return Promise.resolve(" +
+      "    '[[NEED:\\u5b59\\u609f\\u7a7a|S\\u016bn W\\u00f9k\\u014dng|the Monkey King]]');" +
+      "  return Promise.resolve('\\u5b59\\u609f\\u7a7a\\u5f88\\u597d\\u3002'); };" +
+      "window.newChat('story'); window.startStoryWith('the Monkey King');");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a first segment");
+    const casted = await exec(`
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      var all = [].concat.apply([], Object.keys(msgs).map(function (k) { return msgs[k]; }));
+      var topic = all.filter(function (m) { return m.role === "topic"; })[0];
+      var b = document.querySelectorAll('#log .msg.bot .bubble');
+      return { cast: topic ? (topic.needs || []).map(function (n) { return n.w; }) : null,
+               red: Array.prototype.map.call(b[b.length - 1].querySelectorAll('.w.bad'),
+                 function (e) { return e.textContent; }).join(" ") };`);
+    check(JSON.stringify(casted.cast) === JSON.stringify(["孙悟空"]),
+      "the declared cast is stored on the topic message", JSON.stringify(casted));
+    check(casted.red === "",
+      "and the name it declared is not flagged in the story", JSON.stringify(casted));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

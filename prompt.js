@@ -614,6 +614,26 @@
       contextBlock(opts.context) + "The student wrote: " + opts.text;
   }
 
+  /* Who is in this story, asked before it is written.
+   *
+   * Answered in the [[NEED:]] shape on purpose: extractNeeds() already parses
+   * it, the app already glosses it, and needsSoFar() already carries it into
+   * every later segment -- so the declared cast needs no format, no storage and
+   * no lexicon plumbing of its own.
+   *
+   * The point is pre-teaching: the learner meets 孙悟空 with a gloss before
+   * reading rather than sprung on them mid-paragraph. The carry-forward, not
+   * this call, is what makes an out-of-level name possible at all. */
+  function castPrompt(topic, label, max) {
+    return "A student at " + label + " is about to read a short Chinese story " +
+      "about: " + topic + "\n\n" +
+      "Name the people or creatures the story needs, at most " + max + ", using " +
+      "the Chinese names a Chinese reader would expect. Reply with nothing but " +
+      "one line each in this exact form:\n" +
+      "[[NEED:名字|pīn yīn|who they are in English]]\n\n" +
+      "If the story needs no named character at all, reply with nothing.";
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -717,7 +737,7 @@
               styleFor: styleFor, startersFor: startersFor,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               build: build,
-              translate: translate, explain: explain, grade: grade,
+              translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;

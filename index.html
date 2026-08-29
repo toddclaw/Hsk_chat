@@ -3202,10 +3202,50 @@ function setStoryTopic(text, cast) {
   persist();
 }
 
-// Stub -- Task 7 replaces this with the real version, which declares a cast first.
+/* How many names a topic may bring in, per level. A topic must not be able to
+ * hand a beginner eight new words before segment 1; a higher level can carry a
+ * fuller cast. Per D8 the table is complete rather than partial. */
+const STORY_CAST_MAX = { 1: 3, 2: 3, 3: 4, 4: 4, 5: 5, 6: 5, 7: 6 };
+function castMaxFor(level) { return STORY_CAST_MAX[level] || 3; }
+
+/* Ask the story model who is in this story, before it writes any of it.
+ *
+ * The story model rather than the cheaper teaching one, and not for quality:
+ * the cast it declares is the cast it will reach for when writing. A cast
+ * declared by a different model is a guess about what a third party would name
+ * its characters, and where the two disagree the story is back to using names
+ * nobody announced. At ~$0.0023 the choice costs nothing to make.
+ *
+ * Best-effort: a failure returns no cast and the story is told anyway, with
+ * [[NEED:]] catching names as they arrive, exactly as it does today. */
+async function declareCast(topic) {
+  if (!topic) return [];
+  try {
+    const raw = await callModel(
+      [{ role: "user", content: HSKPrompt.castPrompt(topic, levelLabel(), castMaxFor(S.level)) }],
+      200, storyModel());
+    return extractNeeds(raw).needs
+      .map(n => ({ w: n.w, p: n.p, d: n.d }))
+      .slice(0, castMaxFor(S.level));
+  } catch (e) {
+    console.warn("cast declaration failed, carrying on without one", e);
+    return [];
+  }
+}
+
+/* Chosen a topic: declare the cast, record both, tell the first segment.
+ * "Make something up" passes "" and skips the call entirely, so the default
+ * path costs exactly what story time cost before the chooser existed. */
 async function startStoryWith(topic) {
-  setStoryTopic(topic, []);
-  renderStarters();
+  if (S.busy) return;
+  S.busy = true; renderBusy(); renderStarters();
+  const bubble = thinkingBubble(topic
+    ? "Working out who is in this story…" : "…");
+  let cast = [];
+  try { cast = await declareCast(topic); }
+  finally { bubble.remove(); S.busy = false; renderBusy(); }
+  setStoryTopic(topic, cast);
+  renderAll(); renderStarters();
   return storyStep();
 }
 
