@@ -2457,6 +2457,43 @@ return true;
     check(casted.text.indexOf("孙悟空") !== -1 && casted.red === "",
       "and the name it declared is not flagged in the story", JSON.stringify(casted));
 
+    /* A stop mid-cast-call must not turn into the app writing the story
+     * anyway on a second, new call -- that is spending money on a story the
+     * learner just tried to cancel, in the one feature whose entire point is
+     * spending nothing until asked. Same idiom as the stop test above: a
+     * stub that never resolves on its own until the test releases it, so the
+     * app is genuinely caught mid-flight rather than raced against a real
+     * network delay. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startStoryWith", "the app");
+    await exec(
+      "window.__calls = 0; window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  window.__calls++;" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};");
+    await exec("window.newChat('story'); window.startStoryWith('the Monkey King');");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "the send button becomes a stop button while the cast call is running");
+    check(await exec("return window.__calls;") === 1,
+      "exactly one call is in flight -- the cast call, nothing queued behind it");
+    await exec("window.__rej({ kind: 'stopped' });");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "stopping the cast call clears the busy state");
+    check(await exec("return window.storyTopic();") === "",
+      "no topic message was stored", await exec("return window.storyTopic();"));
+    check(await exec("return window.__calls;") === 1,
+      "and no second call went out to write the story anyway -- this is the one that pins the money",
+      String(await exec("return window.__calls;")));
+    check(await exec("return document.querySelectorAll('#storyTopicInput').length;") === 1,
+      "the chooser is back on screen so the learner can pick again");
+
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

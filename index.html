@@ -3217,7 +3217,12 @@ function castMaxFor(level) { return STORY_CAST_MAX[level] || 3; }
  * nobody announced. At ~$0.0023 the choice costs nothing to make.
  *
  * Best-effort: a failure returns no cast and the story is told anyway, with
- * [[NEED:]] catching names as they arrive, exactly as it does today. */
+ * [[NEED:]] catching names as they arrive, exactly as it does today -- except
+ * a stop, which is the learner's decision rather than a failure to swallow.
+ * Left to propagate, exactly like every other callModel() caller in this
+ * file, so startStoryWith() below does not read a stopped cast call as "no
+ * cast" and turn around and spend a second, new call writing the story
+ * anyway. */
 async function declareCast(topic) {
   if (!topic) return [];
   try {
@@ -3228,6 +3233,7 @@ async function declareCast(topic) {
       .map(n => ({ w: n.w, p: n.p, d: n.d }))
       .slice(0, castMaxFor(S.level));
   } catch (e) {
+    if (e.kind === "stopped") throw e;
     console.warn("cast declaration failed, carrying on without one", e);
     return [];
   }
@@ -3242,8 +3248,17 @@ async function startStoryWith(topic) {
   const bubble = thinkingBubble(topic
     ? "Working out who is in this story…" : "…");
   let cast = [];
-  try { cast = await declareCast(topic); }
-  finally { bubble.remove(); S.busy = false; renderBusy(); }
+  try {
+    cast = await declareCast(topic);
+  } catch (err) {
+    // A stop is the learner's decision, same as storyStep()/runTurn(): no
+    // topic gets recorded and no second call goes out to write a story they
+    // just tried to stop -- the chooser is what they see again.
+    if (err.kind !== "stopped") throw err;
+    return;
+  } finally {
+    bubble.remove(); S.busy = false; renderBusy(); renderStarters();
+  }
   setStoryTopic(topic, cast);
   renderAll(); renderStarters();
   return storyStep();
