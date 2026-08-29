@@ -2374,6 +2374,104 @@ return true;
       "and drops the failed reply rather than leaving it above the new one",
       JSON.stringify(kept).slice(0, 160));
 
+    /* retryLast() used to call storyStep() with no argument, which was safe
+     * only because the old self-derived `asking` recomputed to the same
+     * answer on a retry. Now that a question can fail at any pause, a bare
+     * retry cannot tell a question from a segment -- it has to read back
+     * which phase failed. Mid-story: retried as a question, on the cheap
+     * teaching model, not as a brand-new segment on the expensive one. */
+    await exec(`
+      var cid = "dddddddd-2222-4222-8222-dddddddddddd";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "dddddddd-2222-4222-8222-dddddddddddd": [
+        { id: "eeeeeeee-2222-4222-8222-eeeeeeeeeeee", role: "assistant", kind: "segment",
+          text: "\u4ed6\u53bb\u4e86\u5b66\u6821\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "ffffffff-2222-4222-8222-ffffffffffff", role: "assistant", kind: "question",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed question mid-story");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u5417\\uff1f'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("window.__models.length > 0", "a retried question");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "retrying a failed question mid-story asks again on the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec(
+      "var m = JSON.parse(localStorage['hsk1chat.chatMsgs']);" +
+      "var all = m['dddddddd-2222-4222-8222-dddddddddddd'];" +
+      "return all[all.length - 1].kind;") === "question",
+      "and stays a question rather than becoming a new segment");
+
+    /* And a failed question at the very end must not silently no-op: the
+     * guard is `!asking && told >= STORY_SEGMENTS`, and a bare retry call
+     * used to always pass "not asking". */
+    await exec(`
+      var cid = "11111111-3333-4333-8333-111111111111";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "11111111-3333-4333-8333-111111111111": [
+        { id: "22222222-3333-4333-8333-222222222222", role: "assistant", kind: "segment",
+          text: "\u4ed6\u53bb\u4e86\u5b66\u6821\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "33333333-3333-4333-8333-333333333333", role: "assistant", kind: "segment",
+          text: "\u4ed6\u770b\u4e66\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "44444444-3333-4333-8333-444444444444", role: "assistant", kind: "segment",
+          text: "\u4ed6\u56de\u5bb6\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "55555555-3333-4333-8333-555555555555", role: "assistant", kind: "segment",
+          text: "\u4ed6\u5403\u996d\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "66666666-3333-4333-8333-666666666666", role: "assistant", kind: "segment",
+          text: "\u4ed6\u7761\u89c9\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" },
+        { id: "77777777-3333-4333-8333-777777777777", role: "assistant", kind: "question",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:06.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded finished story with a failed question at the end");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u54ea\\u513f\\u4e86\\uff1f'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    // A silent no-op has nothing to wait for, so failure here is a timeout --
+    // caught rather than left to abort the rest of the suite.
+    let askedAgain = true;
+    try {
+      await waitFor("window.__models.length > 0",
+        "a retried question at the end of the story", 3000);
+    } catch (e) { askedAgain = false; }
+    check(askedAgain,
+      "retrying a failed question at the end of the story asks again rather than doing nothing");
+    check(askedAgain && await exec("return window.__models[0];") === "teaching/model",
+      "and that retry still asks on the teaching model",
+      JSON.stringify(askedAgain ? await exec("return window.__models;") : []));
+
     /* One card per word. Pacing offers a word, the model uses it AND wraps it in
      * [[NEED:]] because from its side the learner does not know it -- 12 of 17
      * needs in one real run -- and it was glossed twice. */

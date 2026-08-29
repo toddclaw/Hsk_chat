@@ -3118,12 +3118,26 @@ async function retryLast() {
    * already discarded, and the next tap started a new one over the top.
    * Retrying a segment means dropping the failed reply and asking storyStep()
    * for it again, which is also the only path that uses the story model, the
-   * story token ceiling and the story prompt phase. */
+   * story token ceiling and the story prompt phase.
+   *
+   * Which phase failed has to be read off the message before it is dropped.
+   * asking is a parameter now, not self-derived, so this bare call cannot
+   * fall back to recomputing it -- and it is genuinely ambiguous: a question
+   * can now fail at any pause, not only the last one. A soft give-up carries
+   * it in `kind` (segment/question), exactly like a clean turn. An outright
+   * error has no phase of its own to read -- its `kind` is the error class,
+   * not the story phase, and overloading it a second time is exactly the
+   * collision storyTold() already had to be guarded against (Task 3) -- so
+   * storyStep() stamps a separate `asking` flag on the notice instead. A
+   * notice from before that existed, or one runTurn() left behind answering
+   * a question, has neither field and defaults to a segment retry, which is
+   * what every notice meant before this. */
   if (currentActivity() === "story") {
     const last = S.history[S.history.length - 1];
+    const asking = !!(last && (last.kind === "question" || last.asking === true));
     if (last && (last.failed || last.role === "notice")) S.history.pop();
     persist(); renderAll();
-    return storyStep();
+    return storyStep(asking);
   }
   /* Find the turn to retry before touching anything. The old loop popped as it
    * searched and then gave up, leaving the history it had already eaten. */
@@ -3319,8 +3333,10 @@ async function storyStep(asking) {
   } catch (err) {
     if (err.kind !== "stopped") {
       console.error(err);
+      // `asking` (not `kind`, which is the error class) is what retryLast()
+      // reads to ask the same phase again instead of guessing "segment".
       hist.push({ role: "notice", kind: err.kind || "http",
-                  detail: (err && err.message) || "", model: S.model });
+                  detail: (err && err.message) || "", model: S.model, asking: asking });
       persist();
     }
   } finally {
