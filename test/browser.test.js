@@ -1868,10 +1868,12 @@ return true;
      * migration landed is the case that tells them apart: one legacy turn with
      * no `kind` at all (it could have been the old design's question, told
      * right after the segments, not a segment itself) followed by one told
-     * after the deploy. Per-message would count both (2); wholesale falls back
-     * to the old rule for the whole history once any message lacks `kind`,
-     * so it counts what the old rule would have: the legacy turn, and stops
-     * there -- it does not also trust the new turn's `kind`. */
+     * after the deploy, with `kind: "segment"`. Per-message would count both
+     * (2). Wholesale sees a `kind` on the second turn, puts the *whole*
+     * history on the filter branch, and the filter excludes the legacy turn
+     * outright (no `kind` on it at all, let alone "segment") -- 1, not 2. This
+     * fixture never exercises the fallback branch itself; the all-legacy
+     * fixture above it is what covers that. */
     await exec(`
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       localStorage.setItem("hsk1chat.history", JSON.stringify([
@@ -1886,6 +1888,31 @@ return true;
     await waitFor("window.storyTold", "the app a third time");
     check(await exec("return window.storyTold();") === 1,
       "a legacy turn does not borrow a later turn's kind, or vice versa",
+      String(await exec("return window.storyTold();")));
+
+    /* `kind` also lives on `role: "notice"` messages -- index.html pushes
+     * `{ role: "notice", kind: err.kind || "http", ... }` on a transient
+     * network error, and that field predates this diff and means something
+     * unrelated. A legacy story (no `kind` on any real turn) that hits one
+     * network hiccup mid-story must not have that notice's `kind` flip it onto
+     * the filter branch: two real legacy segments plus one notice must still
+     * count as two, not zero. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "faaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role: "assistant",
+          text: "\\u56db\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "fbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", role: "assistant",
+          text: "\\u4e94\\u3002", created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "fccccccc-cccc-4ccc-8ccc-cccccccccccc", role: "notice",
+          kind: "http", detail: "network hiccup",
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app a fourth time");
+    check(await exec("return window.storyTold();") === 2,
+      "a notice's unrelated kind does not knock a legacy story's count to zero",
       String(await exec("return window.storyTold();")));
 
 

@@ -3144,9 +3144,16 @@ async function retryLast() {
  *
  * A conversation written before `kind` existed has none on any message, so it
  * falls back to the old rule wholesale rather than per message: a mix would
- * count a legacy question as a segment. */
+ * count a legacy question as a segment.
+ *
+ * Scoped to assistant turns: `role: "notice"` messages carry their own,
+ * unrelated `kind` (the error kind a failed call left behind, predating this
+ * field) -- an unscoped `some()` would see that truthy `kind`, decide the
+ * whole history is kind-tagged, and then find no `kind === "segment"` on any
+ * of a legacy story's real segments, undercounting to zero. Do not drop the
+ * `role` check to simplify this. */
 function storyTold() {
-  if (S.history.some(t => t.kind)) {
+  if (S.history.some(t => t.role === "assistant" && t.kind)) {
     return S.history.filter(t => t.kind === "segment").length;
   }
   let n = 0;
