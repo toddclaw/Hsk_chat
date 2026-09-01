@@ -218,3 +218,49 @@ Either needs its own `tools/story-ab.js --questions` run against the new prompt 
 it ships.
 
 ---
+
+## The cast declares people, not content
+
+**Found:** measuring the story-topic arms for Task 13 (RESEARCH.md, "The topic arm, and
+whether D4 survives it").
+
+`castPrompt` in `prompt.js` asks the model only for the story's characters, and `castNames()`
+in `index.html` still tells the model that only 小明/小红/小白 (or whatever `declareCast()`
+returned) are permitted — so a topic's *content* vocabulary is never legalised, only its cast
+list is. The Monkey King needs 猴子, 山, 石 and 桃子; none of that rides in `needs`, so none of
+it is legal or glossed, and it shows up as a hard violation every time the story reaches for it.
+
+Measured at HSK 2, `anthropic/claude-sonnet-4.5`, against each topic's own paired control:
+a free-text topic ("the Monkey King") raised violation density ~15× (14.9×) and left 1 of 6
+stories with three or more usable segments; a curated pool topic ("A running race at school")
+raised it ~4× (4.0×) and left 4 of 6 usable. Full counts in RESEARCH.md.
+
+**What would settle it:** have the cast call declare the words the story needs alongside the
+people, so a content word rides in `needs` next to a name and becomes legal and glossed the
+same way. This is a new prompt — CLAUDE.md requires its own counted `tools/story-ab.js --topic`
+run before it ships, not an assumption that it fixes what the cast-only version measurably did
+not.
+
+---
+
+## `judge()` is undefined in `tools/story-ab.js`
+
+**Found:** reading the harness while writing up Task 13's topic arms.
+
+`runArm()` calls `judge(before, after)` per segment to label it CONTINUES / RESTARTS /
+UNRELATED, but no `judge` function exists in the file — only `clarity()` and `castCall()` are
+defined. The call throws a `ReferenceError`, is caught by the surrounding `.catch(e => {
+s.segs[i].label = "ERROR:" + e.message; return 0; })`, and the label never matches
+`"CONTINUES"`, `"RESTARTS"` or `"UNRELATED"` again. `CONT`, `RESTART` and `UNREL` print as zero
+for every arm, silently, since some commit after `1028a8a` — there is no error on the console
+naming the missing function, only rows that read as if nothing ever restarted.
+
+Any continuity number that harness has printed recently was zero by accident rather than by
+measurement. Task 13's topic arms were run with `--nojudge` to route around it, which is why
+those numbers are trustworthy despite this.
+
+**What would settle it:** restore or rewrite `judge()` — `clarity()` next to it is the template
+for the request shape — and re-run any measurement that reported continuity since the break to
+find out which of those zeros were real.
+
+---

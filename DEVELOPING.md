@@ -377,6 +377,20 @@ written successfully. Segment 0 was returning 84 good characters and the story w
 away regardless. Only an empty *first* attempt ends a story now, which is what `index.html`
 does.
 
+### The chooser's three phases, and how a legacy conversation is told apart
+
+- **Story time has three prompt phases, and each suppresses the others' rules.**
+  `telling` carries 只讲故事，不要问学生问题 as an absolute, so `asking` and
+  `discussing` replace it rather than following it — a model obeys the first
+  absolute rule it reads. `discussing` exists because a learner answering the
+  partner's own question used to be met by the telling rules, which forbid
+  talking to them.
+- **`messages.kind` is what tells a segment from a question.** Both are
+  assistant turns, and nothing else stored distinguishes them. A conversation
+  written before the column existed has it on no message, so `storyTold()` falls
+  back to the old turn-order rule wholesale rather than per message — a mix
+  would count a legacy question as a segment.
+
 ### A cheaper model is not a cheaper conversation
 
 Per-token price is the least important of the three things that set what a reply

@@ -1,8 +1,7 @@
 # Story time: choosing a story, and being asked about it
 
 **Date:** 2026-08-28
-**Status:** design complete — all four sections approved 2026-08-28. Ready for review,
-then for the writing-plans step. Not yet implemented.
+**Status:** implemented in v69. Plan: `docs/superpowers/plans/2026-08-28-story-time-chooser.md`
 **Scope:** the story-time activity only. Chat and focused chat are untouched.
 
 ---
