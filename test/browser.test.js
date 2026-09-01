@@ -2124,8 +2124,12 @@ return true;
     await exec("window.newChat('story');" +
       "(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5", "a story");
+    /* The 5 segments are window.__models[0..4], always in that order -- a
+     * finished story also fires a best-effort title call on the teaching
+     * model (Task 12), which may or may not have landed yet as a trailing
+     * 6th entry, so it is the first 5 that are checked here, not "every". */
     check(await exec(
-      "return window.__models.length > 0 && window.__models.every(function (m) {" +
+      "return window.__models.length >= 5 && window.__models.slice(0, 5).every(function (m) {" +
       "  return m === 'anthropic/claude-sonnet-4.5'; });") === true,
       "story turns request the story model",
       JSON.stringify(await exec("return window.__models;")));
@@ -2852,6 +2856,32 @@ return true;
       return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
         .some(function (c) { return c.deleted; });`) === true,
       "and tombstones it, because it may already have synced");
+
+    /* The derived title is the first sentence of segment 1, which is
+     * unreadably long in a list -- and rereading is part of the expected use. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app");
+    await exec(
+      "window.callModel = function () {" +
+      "  return Promise.resolve('\\u5c0f\\u660e\\u7684\\u7403'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats'])[0].title === '\\u5c0f\\u660e\\u7684\\u7403'",
+      "a written title", 30000);
+    check(true, "a finished story is retitled by the teaching model");
+
+    // A hand-typed title is never overwritten.
+    await exec(
+      "var c = window.currentChat(); c.renamed = true; c.title = 'mine';" +
+      "window.saveChats(); return window.titleStory();");
+    check(await exec("return window.currentChat().title;") === "mine",
+      "and a title the learner typed is left alone");
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

@@ -667,6 +667,15 @@
       "If the story needs no named character at all, reply with nothing.";
   }
 
+  /* A title for a finished story. The derived one is the first sentence of the
+   * first segment, which is unreadable in a list -- and rereading is part of
+   * how this app is used, so finding a story again matters. */
+  function titlePrompt(story) {
+    return "Here is a short Chinese story a learner has just read:\n\n" + story +
+      "\n\nGive it a title in Chinese, at most eight characters, using only " +
+      "words that appear in the story. Reply with the title and nothing else.";
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -771,6 +780,7 @@
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               build: build,
               translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
+              titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;

@@ -674,5 +674,12 @@ check(cast.indexOf("[[NEED:") !== -1,
   "and asks for the answer in the channel extractNeeds already parses");
 check(/\b3\b/.test(cast), "and states the cap");
 
+// A finished story's derived title (the first sentence of segment 1) is
+// unreadable in a chat list -- rereading is part of how this app is used, so
+// a short one worth finding again is asked for from the teaching model.
+var titleP = P.titlePrompt("小明去了商店。他买了一个球。");
+check(titleP.indexOf("小明去了商店") !== -1, "the title prompt carries the story");
+check(/\b(title|name)\b/i.test(titleP), "and asks for a title");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

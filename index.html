@@ -3281,6 +3281,43 @@ function setStoryTopic(text, cast) {
   persist();
 }
 
+/* Retitle a finished story. Best-effort and cheap -- the teaching model, one
+ * short call, about $0.0002 -- and skipped outright where the learner has typed
+ * their own title, which is what `renamed` has always meant.
+ *
+ * The filter is `t.kind ? t.kind === "segment" : t.role === "assistant"`, not
+ * `t.kind === "segment" || t.role === "assistant"`: every segment already has
+ * role "assistant", so the `||` form lets the comprehension questions through
+ * too and feeds them to the title prompt alongside the story. Trust `kind`
+ * when a message has one, fall back to role when it does not -- the same
+ * legacy shape storyTold() already uses for stories written before `kind`
+ * existed. A `role: "topic"` message has no `kind` and role !== "assistant",
+ * so it is excluded either way, which is correct: the topic is what the
+ * learner asked for, not part of what they read.
+ *
+ * `c` and `story` are read synchronously, before the only `await` in this
+ * function -- the part of an async function before its first await runs in
+ * the calling turn, not later. So they are captured exactly like `hist` in
+ * storyStep(), for the same reason: storyStep() calls this without awaiting
+ * it, and the learner is free to switch conversations while the call is in
+ * flight. `c` stays a reference to the chat this title is for regardless of
+ * what S.chatId points at when the reply lands. */
+async function titleStory() {
+  const c = currentChat();
+  if (!c || c.renamed) return;
+  const story = S.history.filter(t => t.kind ? t.kind === "segment" : t.role === "assistant")
+    .map(t => t.text).join("\n");
+  if (!story) return;
+  try {
+    const raw = await callModel(
+      [{ role: "user", content: HSKPrompt.titlePrompt(story) }], 40, teachingModel());
+    const title = HSK.stripScaffold(raw).split("\n")[0].trim();
+    if (title) { c.title = title; saveChats(); queueSync("conversations"); renderChats(); }
+  } catch (e) {
+    console.warn("could not title the story", e);   // the derived title stands
+  }
+}
+
 /* How many names a topic may bring in, per level. A topic must not be able to
  * hand a beginner eight new words before segment 1; a higher level can carry a
  * fuller cast. Per D8 the table is complete rather than partial. */
@@ -3383,6 +3420,10 @@ async function storyStep(asking) {
     }
     recordTurn(res.attempts, res.failed);
     persist();
+    /* The story is complete: give it a name worth reading in the chat list.
+     * Not awaited -- see titleStory()'s own comment on why that is safe here,
+     * the same reasoning as `hist` a few lines up. */
+    if (!asking && storyTold() >= STORY_SEGMENTS) titleStory();
   } catch (err) {
     if (err.kind !== "stopped") {
       console.error(err);
