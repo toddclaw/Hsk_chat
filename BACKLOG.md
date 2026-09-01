@@ -186,3 +186,35 @@ offered words. `tools/story-ab.js` is the wrong shape (it has no learner); this
 needs a simulated learner or a real session, which is why it has not been done.
 
 ---
+
+## The teaching model reaches for 为什么 at HSK 1
+
+**Found:** measuring question conformance for Task 13, `tools/story-ab.js --questions
+--model qwen/qwen3-235b-a22b-2507`, twenty `storyPhase: "asking"` questions per level against
+a fixed story, two runs.
+
+HSK 2–4 came back clean both times — every non-empty reply was in-level and on-ladder. HSK 1
+did not: pooled across both runs, 21/40 in-level and 28/40 on-ladder, and nearly every failure
+is the same word: 为什么 ("why"), an HSK 2+ form the HSK 1 ladder rule explicitly excludes.
+The model asks it anyway, in both runs, despite the rule. Full counts and the controller
+ruling (D9 stands, for now) are in RESEARCH.md, "Question conformance, and whether D9 survives
+it".
+
+This does not reach the learner broken — an asking turn goes through `turn()`'s ordinary
+repair loop, so an out-of-level or off-ladder question gets validated and re-asked rather than
+shipped raw. But it burns repair attempts every time it happens, at the one level where the
+whole pacing story is most fragile.
+
+**What would settle it:** two candidate fixes, neither measured yet, and CLAUDE.md requires a
+counted run before either ships:
+
+- A sharper HSK 1 asking rule that names 为什么 as forbidden explicitly, rather than relying on
+  the model to infer it from "the types listed below" — the same fix class as the grammar
+  check's "quote the words you want, do not describe them" finding above.
+- Routing HSK 1 questions only to the story model, which was never measured asking questions at
+  all and might simply not have this failure mode — or might have a different one.
+
+Either needs its own `tools/story-ab.js --questions` run against the new prompt or model before
+it ships.
+
+---

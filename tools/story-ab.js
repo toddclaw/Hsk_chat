@@ -74,6 +74,11 @@ const MODEL = arg("model", "qwen/qwen3-30b-a3b-instruct-2507");
  * model exists because small models are bad at -- see the note above MODELS. */
 const JUDGE = arg("judge", "anthropic/claude-sonnet-4.5");
 const CONCURRENCY = Number(arg("concurrency", 3));
+/* Task 13's topic arm: --topic "the Monkey King" turns the two default arms
+ * from positioned/no-names into no-topic/topic, so the same story pipeline
+ * below (segments, pacing, repair, out-of-level counting) measures the
+ * question the brief actually asks instead of a second copy of it. */
+const TOPIC = arg("topic", null);
 
 // index.html: STORY_SEGMENTS, STORY_MAX_TOKENS.
 const SEGMENTS = 5;
@@ -117,6 +122,14 @@ function systemPrompt(index, def, offer, required) {
     length: "short", script: "simp",
     activity: "story",
     storySegment: { index: index, of: SEGMENTS },
+    /* Left unset (not def.names) on purpose for the topic arm: index.html
+     * never overrides ACTIVITIES.story.names when a topic is chosen either --
+     * the "别的名字不要用" rule still names only STORY_NAMES, and the declared
+     * cast becomes legal through the lexicon (see cast, below), not through
+     * this rule. Measuring anything else would measure a prompt the app does
+     * not send. See test/prompt.test.js, "the topic is named in the story
+     * prompt" / "make-something-up adds no topic rule at all". */
+    storyTopic: def.topic || "",
     words: ""
   });
   HSKPrompt.ACTIVITIES.story.rules = STORY_RULES;
@@ -139,6 +152,58 @@ function extractNeeds(text) {
 function countHan(text) {
   const m = String(text || "").match(/[一-鿿]/g);
   return m ? m.length : 0;
+}
+
+/* A mirror of index.html's STORY_CAST_MAX / castMaxFor(), not a paraphrase of
+ * it, for the same reason repairPrompt() above is a mirror: index.html is a
+ * browser file, not a CommonJS module, so this table cannot be required --
+ * only reproduced, deliberately kept identical to what declareCast() caps
+ * against. */
+const STORY_CAST_MAX = { 1: 3, 2: 3, 3: 4, 4: 4, 5: 5, 6: 5, 7: 6 };
+function castMaxFor(level) { return STORY_CAST_MAX[level] || 3; }
+
+/* Which question-ladder type a reply used, if any. Not the validator's job --
+ * this is about the SHAPE of the question, not its vocabulary -- so it is a
+ * small hand-built marker table rather than a reuse of QUESTION_LADDER's
+ * `needs`, which is cumulative-per-level vocabulary, not a type-by-type map.
+ *
+ * Longest/most-specific markers are checked and stripped first so a `type`
+ * substring cannot false-trigger on a longer marker that contains it as text
+ * -- 为什么 ("why") contains 什么 ("what"), 什么时候 ("when") does too, and
+ * 你觉得...会怎么样 ("predict") contains 怎么样 ("howabout"). Consuming a match
+ * before testing the next, shorter marker is what keeps "why" from also
+ * reading as "what" in the same reply. A reply legitimately asking two
+ * different question types still reports both -- that is real, not noise. */
+const TYPE_MARKERS = [
+  ["when", /什么时候/g],
+  ["why", /为什么/g],
+  ["eitheror", /还是/g],
+  ["reason", /虽然|但是|所以/g],
+  ["retell", /自己的话|说一说|讲一讲/g],
+  ["compare", /不一样|相比|比较/g],
+  ["predict", /下面会|接下来|后来会/g],
+  ["howabout", /怎么样/g],
+  ["howmany", /多少|几/g],
+  ["where", /哪儿|哪里/g],
+  ["what", /什么/g],
+  ["who", /谁/g],
+  ["yesno", /吗/g]
+];
+// Shared by every mode's table printer, not only main()'s.
+const pad = (s, n) => String(s).padEnd(n);
+
+function questionMarkersIn(text) {
+  let remaining = String(text || "");
+  const found = [];
+  TYPE_MARKERS.forEach(([type, re]) => {
+    re.lastIndex = 0;
+    if (re.test(remaining)) {
+      found.push(type);
+      re.lastIndex = 0;
+      remaining = remaining.replace(re, "");
+    }
+  });
+  return found;
 }
 
 async function callModel(model, messages, maxTokens, temperature) {
@@ -256,7 +321,29 @@ async function runStory(arm) {
   // index.html: S.budget[level], and S.learning as it grows during the story.
   const budget = { chars: 0, credits: 0, declines: 0 };
   const learning = [];
-  const cast = def.names || STORY_NAMES;
+  /* The topic arm's cast, declared once per story exactly as declareCast()
+   * does it in index.html -- the same castPrompt(), the same 200-token cap,
+   * the same model (storyModel(), which here is MODEL, the model under test).
+   * Concatenated with STORY_NAMES rather than replacing it: castNames() in
+   * index.html is still ACTIVITIES.story.names (unchanged, see systemPrompt
+   * above), and the declared cast rides in on needsSoFar() instead -- both
+   * are legal in the real app, so both have to be legal for the lexicon this
+   * function validates against, or a name the app would accept scores as a
+   * violation here. Best-effort, matching declareCast(): a failed or empty
+   * cast call is not a story failure, it is a story with no declared cast. */
+  let cast = def.names || STORY_NAMES;
+  if (def.topic) {
+    try {
+      const cr = await callModel(MODEL,
+        [{ role: "user", content: HSKPrompt.castPrompt(
+            def.topic, LEVELS[LEVEL] || ("HSK " + LEVEL), castMaxFor(LEVEL)) }],
+        200, 0.7);
+      cost += cr.cost;
+      const declared = extractNeeds(cr.text).needs.slice(0, castMaxFor(LEVEL))
+        .map(w => ({ w: w }));
+      cast = STORY_NAMES.concat(declared);
+    } catch (e) { /* no cast declared; the story is told with STORY_NAMES only */ }
+  }
 
   for (let i = 0; i < SEGMENTS; i++) {
     /* Offer next-level words only once a credit is earned, and re-offer the same
@@ -500,9 +587,15 @@ const ARM_DEFS = {
   "no-names":     { index: i => i, names: [], extraRules: [
     "故事里的人不要起名字。用「他」「她」「他们」「我的朋友」「老师」" +
     "「妈妈」这样的说法来说他们是谁。"
-  ] }
+  ] },
+  /* Task 13's topic arm (brief Step 3): the control is an ordinary story with
+   * no topic message, exactly what shipped before the chooser existed --
+   * `def.topic` unset, so declareCast() is never called and the prompt gets
+   * no storyTopic rule, matching "make something up" in index.html exactly. */
+  "no-topic": { index: i => i },
+  "topic":    { index: i => i, topic: TOPIC }
 };
-const ARMS = String(arg("arms", "positioned,no-names")).split(",");
+const ARMS = String(arg("arms", TOPIC ? "no-topic,topic" : "positioned,no-names")).split(",");
 ARMS.forEach(a => {
   if (!ARM_DEFS[a]) { console.error("unknown arm: " + a); process.exit(1); }
 });
@@ -510,7 +603,242 @@ ARMS.forEach(a => {
 const STORY_RULES = HSKPrompt.ACTIVITIES.story.rules.slice();
 const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
 
-(async function main() {
+function loadEntries(lv) {
+  return JSON.parse(fs.readFileSync(path.join(ROOT, "data", "hsk" + lv + ".json"), "utf8"));
+}
+
+/* A story the --questions and --discussing modes both read but never write:
+ * "did the model ask/discuss well" has to be measured against a story that is
+ * not itself the thing under test, or a bad question could be scoring a bad
+ * STORY rather than a bad question. Namefree except for STORY_NAMES itself
+ * (CLAUDE.md's namefree rule is about accidental above-level names leaking
+ * into a measurement -- these are declared, in-lexicon, and the point). Every
+ * word is in data/hsk1.json, so the same five lines serve levels 1-4 without
+ * being a confound at any of them. */
+const FIXED_STORY = [
+  "小明是我的朋友。他今天很高兴。",
+  "他去了商店。",
+  "他在商店买了一本书。",
+  "小红和小白也在商店。他们说话。",
+  "小明很高兴。他们回家了。"
+];
+
+/* Task 13 item 1 (brief Step 1) -- decides D9. storyPhase:"asking" is routed
+ * to the TEACHING model, not the story model; this is the check for whether
+ * that model can ask an in-level, ladder-conformant question about a story it
+ * did not write itself. Twenty questions per level, levels 1-4, one call each
+ * against the fixed story above -- no repair loop, because the brief is
+ * measuring the first thing the model says, not what three attempts buys it. */
+async function runQuestions() {
+  const N = Number(arg("n", 20));
+  const levels = [1, 2, 3, 4];
+  console.error("questions mode model=" + MODEL + " n=" + N + "/level levels=" + levels.join(","));
+  let totalCost = 0;
+  const summary = [];
+  for (const lv of levels) {
+    const lvEntries = loadEntries(lv);
+    const ladder = HSKPrompt.questionTypesFor(lv);
+    const sys = HSKPrompt.build({
+      offer: [], reuse: [], require: "",
+      level: lv, label: LEVELS[lv] || ("HSK " + lv),
+      length: "short", script: "simp",
+      activity: "story", storyPhase: "asking",
+      words: ""
+    });
+    const messages = [{ role: "system", content: sys }]
+      .concat(FIXED_STORY.map(t => ({ role: "assistant", content: t })));
+    const tasks = Array.from({ length: N }, () => () => callModel(MODEL, messages, 300, 0.7));
+    const replies = await pool(tasks, CONCURRENCY);
+    const rows = replies.map(r => {
+      if (r.error) return { error: r.error, level: lv };
+      totalCost += r.cost;
+      const ex = extractNeeds(HSK.stripScaffold(r.text));
+      const vlex = HSK.buildLexicon(lvEntries, STORY_NAMES.concat(ex.needs.map(w => ({ w: w }))));
+      const viols = HSK.validate(ex.text, vlex).filter(v => !v.name);
+      const found = questionMarkersIn(ex.text);
+      const allowed = found.filter(t => ladder.types.indexOf(t) !== -1);
+      const disallowed = found.filter(t => ladder.types.indexOf(t) === -1);
+      return {
+        text: ex.text, inLevel: viols.length === 0, viols: viols.map(v => v.text),
+        found: found, disallowed: disallowed,
+        onLadder: allowed.length > 0 && disallowed.length === 0
+      };
+    });
+    const errorRows = rows.filter(r => r.error);
+    const ok = rows.filter(r => !r.error);
+    summary.push({
+      lv: lv, n: ok.length, errors: errorRows.length, errorRows: errorRows,
+      inLevel: ok.filter(r => r.inLevel).length,
+      onLadder: ok.filter(r => r.onLadder).length,
+      noMarker: ok.filter(r => r.found.length === 0).length,
+      disallowedRows: ok.filter(r => r.disallowed.length > 0),
+      badRows: ok.filter(r => !r.inLevel),
+      ok: ok
+    });
+  }
+
+  console.log("");
+  console.log(pad("level", 8) + pad("n", 5) + pad("errors", 8) +
+    pad("inLevel", 10) + pad("onLadder", 10) + pad("noMarker", 10));
+  summary.forEach(s => {
+    console.log(pad("HSK " + s.lv, 8) + pad(s.n, 5) + pad(s.errors, 8) +
+      pad(s.inLevel + "/" + s.n, 10) + pad(s.onLadder + "/" + s.n, 10) +
+      pad(s.noMarker + "/" + s.n, 10));
+  });
+  console.log("\nexamples of disallowed-marker questions:");
+  summary.forEach(s => s.disallowedRows.slice(0, 3).forEach(r =>
+    console.log("  HSK " + s.lv + " [" + r.disallowed.join(",") + "] " + r.text)));
+  console.log("\nexamples of out-of-level questions:");
+  summary.forEach(s => s.badRows.slice(0, 3).forEach(r =>
+    console.log("  HSK " + s.lv + " bad:" + r.viols.join(",") + " " + r.text)));
+  console.log("\nerrors:");
+  summary.forEach(s => s.errorRows.forEach(r => console.log("  HSK " + s.lv + ": " + r.error)));
+  console.log("\ncost $" + totalCost.toFixed(6));
+}
+
+/* Task 13 item 3 (controller addition) and item 4 (controller addition):
+ * castPrompt has no measurement anywhere on this branch. Run on the STORY
+ * model, because declareCast() calls storyModel() in index.html, not the
+ * teaching model. `SIX_TOPICS` exist only to stress item 4 -- HSK 7 allows
+ * six declared names (STORY_CAST_MAX[7]), each a full [[NEED:名字|pīn
+ * yīn|English]] line, against the 200-token cap declareCast() imposes, so
+ * these are picked to actually want six rather than hoping ordinary topics
+ * happen to. */
+async function runCast() {
+  const model = arg("model", "anthropic/claude-sonnet-4.5");
+  const TOPICS = [
+    { level: 1, topic: "Two friends and one umbrella", six: false },
+    { level: 2, topic: "Buying a birthday present", six: false },
+    { level: 3, topic: "Getting lost in a big city", six: false },
+    { level: 4, topic: "A misunderstanding between two coworkers", six: false },
+    { level: 5, topic: "An apprentice outgrows the master", six: false },
+    { level: 6, topic: "A negotiation where both sides are wrong", six: false },
+    { level: 7, topic: "The Monkey King borrows something he should not", six: false },
+    { level: 7, topic: "Six coworkers in a tense meeting, each with a different opinion", six: true },
+    { level: 7, topic: "A family of six siblings planning their parents' anniversary", six: true },
+    { level: 7, topic: "The six members of a heist crew, the night before the job", six: true }
+  ];
+  console.error("cast mode model=" + model + " calls=" + TOPICS.length);
+
+  const tasks = TOPICS.map(t => () => callModel(model,
+    [{ role: "user", content: HSKPrompt.castPrompt(
+        t.topic, LEVELS[t.level] || ("HSK " + t.level), castMaxFor(t.level)) }],
+    200, 0.7));
+  const replies = await pool(tasks, CONCURRENCY);
+
+  let cost = 0;
+  const rows = TOPICS.map((t, i) => {
+    const r = replies[i];
+    /* An empty completion is castPrompt's OWN "no character needed" case --
+     * "reply with nothing" -- and callModel(), here and in index.html alike,
+     * throws on an empty completion rather than returning one. declareCast()
+     * catches exactly this and returns [] without treating it as a failure;
+     * mirrored here rather than counted as an error. */
+    if (r.error) return Object.assign({}, t, {
+      error: r.error, noCast: /empty reply/.test(r.error)
+    });
+    cost += r.cost;
+    const needs = extractNeeds(r.text).needs;
+    const cap = castMaxFor(t.level);
+    return Object.assign({}, t, {
+      needs: needs, cap: cap, parsed: needs.length > 0,
+      overCap: needs.length > cap,
+      truncated: r.finish === "length",
+      chars: r.text.length
+    });
+  });
+
+  console.log("");
+  console.log(pad("level", 7) + pad("six?", 6) + pad("topic", 42) +
+    pad("needs", 7) + pad("cap", 5) + pad("truncated", 11) + "chars");
+  rows.forEach(r => {
+    if (r.error) {
+      console.log(pad("HSK " + r.level, 7) + pad(r.six ? "y" : "", 6) +
+        pad(r.topic.slice(0, 40), 42) +
+        (r.noCast ? "(no cast declared)" : "ERROR: " + r.error));
+      return;
+    }
+    console.log(pad("HSK " + r.level, 7) + pad(r.six ? "y" : "", 6) +
+      pad(r.topic.slice(0, 40), 42) +
+      pad(r.needs.length + (r.overCap ? "!" : ""), 7) + pad(r.cap, 5) +
+      pad(r.truncated ? "YES" : "no", 11) + r.chars);
+  });
+
+  const ok = rows.filter(r => !r.error);
+  const parsed = ok.filter(r => r.parsed).length;
+  const overCap = ok.filter(r => r.overCap).length;
+  const six = rows.filter(r => r.six);
+  const sixOk = six.filter(r => !r.error);
+  console.log("\nparsed into [[NEED:]] at all: " + parsed + "/" + ok.length +
+    " (" + (rows.length - ok.length) + " no-cast/error)");
+  console.log("respected the cap: " + (parsed - overCap) + "/" + parsed);
+  console.log("\nHSK 7, six-name topics (maxTokens: 200 sufficiency):");
+  sixOk.forEach(r => console.log("  needs=" + (r.needs ? r.needs.length : 0) + "/6  " +
+    "finish=" + (r.truncated ? "length(TRUNCATED)" : "stop") + "  chars=" + r.chars +
+    "  " + JSON.stringify(r.needs)));
+  console.log("\ncost $" + cost.toFixed(6));
+}
+
+/* Task 13 item 5 (controller addition): the discussing phase's rule is
+ * "say whether the answer was right, restate it correctly, then STOP -- do
+ * not ask another question", because asking again is the "Ask me another"
+ * button's job, not the model's. Measured on the teaching model, because
+ * that is where Task 10 routes storyPhase:"discussing". Cheap: one fixed
+ * question against FIXED_STORY, a correct and an incorrect learner answer,
+ * repeated across levels 1-4. */
+async function runDiscussing() {
+  const N = Number(arg("n", 5));
+  const levels = [1, 2, 3, 4];
+  const QUESTION = "小明去了哪儿？";
+  const ANSWERS = [
+    { label: "correct", text: "他去了商店。" },
+    { label: "incorrect", text: "他去了学校。" }
+  ];
+  console.error("discussing mode model=" + MODEL + " n=" + (N * 2) + "/level levels=" + levels.join(","));
+  let totalCost = 0;
+  const summary = [];
+  for (const lv of levels) {
+    const sys = HSKPrompt.build({
+      offer: [], reuse: [], require: "",
+      level: lv, label: LEVELS[lv] || ("HSK " + lv),
+      length: "short", script: "simp",
+      activity: "story", storyPhase: "discussing",
+      words: ""
+    });
+    const base = [{ role: "system", content: sys }]
+      .concat(FIXED_STORY.map(t => ({ role: "assistant", content: t })))
+      .concat([{ role: "assistant", content: QUESTION }]);
+
+    const jobs = [];
+    ANSWERS.forEach(a => {
+      for (let i = 0; i < N; i++) jobs.push(a);
+    });
+    const tasks = jobs.map(a => () => callModel(MODEL,
+      base.concat([{ role: "user", content: a.text }]), 300, 0.7)
+      .then(r => ({ answer: a.label, text: r.text, cost: r.cost }))
+      .catch(e => ({ answer: a.label, error: e.message })));
+    const replies = await pool(tasks, CONCURRENCY);
+
+    const ok = replies.filter(r => !r.error);
+    ok.forEach(r => { totalCost += r.cost; });
+    const failed = ok.filter(r => /[?？]/.test(r.text) || questionMarkersIn(r.text).length > 0);
+    summary.push({
+      lv: lv, n: ok.length, errors: replies.length - ok.length,
+      failed: failed.length, examples: failed.slice(0, 3)
+    });
+  }
+
+  console.log("");
+  console.log(pad("level", 8) + pad("n", 5) + pad("errors", 8) + "asked again (FAIL)");
+  summary.forEach(s => console.log(pad("HSK " + s.lv, 8) + pad(s.n, 5) + pad(s.errors, 8) +
+    s.failed + "/" + s.n));
+  console.log("\nexamples that asked again:");
+  summary.forEach(s => s.examples.forEach(r =>
+    console.log("  HSK " + s.lv + " (" + r.answer + " answer) " + r.text)));
+  console.log("\ncost $" + totalCost.toFixed(6));
+}
+
+async function main() {
   /* Interleaved, like tools/prompt-ab.js: a rate limit or a provider-side
    * change part way through would otherwise land on one arm and read as an
    * effect. */
@@ -544,7 +872,6 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
   });
   const judgeCosts = await pool(jtasks, CONCURRENCY * 2);
 
-  const pad = (s, n) => String(s).padEnd(n);
   const rows = {};
   ARMS.forEach(arm => {
     const mine = stories.filter(s => s && s.arm === arm && !s.error);
@@ -693,4 +1020,15 @@ const STORY_NAMES = HSKPrompt.ACTIVITIES.story.names;
         "]\n" + g.text));
     });
   }
-})();
+}
+
+/* Task 13's four new modes are dispatched here rather than folded into the
+ * position-rule A/B above: each measures a different prompt, against a
+ * different fixed setup, and none of them touch STORY_SEGMENTS or the
+ * position rule at all. --topic stays inside the ARM_DEFS/main() pipeline
+ * above instead, because it IS a position-rule-shaped story arm -- same
+ * segments, same repair loop, same pacing -- and belongs there. */
+if (args.indexOf("--questions") !== -1) runQuestions();
+else if (args.indexOf("--cast") !== -1) runCast();
+else if (args.indexOf("--discussing") !== -1) runDiscussing();
+else main();

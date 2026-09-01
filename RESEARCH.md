@@ -252,9 +252,15 @@ and How. The ordering is by how much *production* the answer demands, not by how
 question is to understand: a yes/no question asks almost nothing of the learner, which is
 exactly why it comes first.
 
-That ladder maps onto the HSK levels directly, and it is the justification for gating question
-type per level in `prompt.js` the way `LEVEL_STYLE` already gates grammar. At HSK 1 the
-partner may ask yes/no and either/or; wh- questions arrive with the vocabulary to answer them.
+That ladder is the justification for gating question type per level in `prompt.js` the way
+`LEVEL_STYLE` already gates grammar — but which rungs are *available* comes from this
+language's data, not from TPRS's English-ordered list, and it inverts part of that order. At
+HSK 1 the partner may ask yes/no **and** every wh- form — 谁/什么/哪儿/几/多少/怎么样 are all
+HSK 1 entries — while either/or waits for HSK 2, because 还是 is an HSK 2 word. Chinese wh-
+questions are in-situ (谁去了? asks exactly like 他去了, with 谁 dropped into the answer's own
+slot) and the question words themselves are among the commonest in the language, so they carry
+no vocabulary cost the ladder needs to wait on. `prompt.js`'s `QUESTION_LADDER` implements this
+corrected order, not TPRS's original one.
 
 TPRS's own evidence base is mostly practitioner literature rather than controlled trials, so
 this is *informed by*, not *follows from*. What it contributes is a defensible ordering, which
@@ -518,6 +524,146 @@ methodology:
   column.
 - **Naming decoration cut explain output 39%.** "Keep it concise" did nothing measurable;
   "no headings, no bullets, no bold, no emoji" did.
+
+### Question conformance, and whether D9 survives it
+
+**Measured, twice, because the first run alone would have misled.** `tools/story-ab.js
+--questions --model qwen/qwen3-235b-a22b-2507` — the teaching model, because D9 routes
+`storyPhase: "asking"` there — asked twenty questions per level at HSK 1–4 against one fixed,
+namefree pre-written story, with no repair loop: this measures the first thing the model says,
+not what three attempts buys it. Two counts per reply: `inLevel` (`HSK.validate` clean) and
+`onLadder` (uses a marker from `questionTypesFor(level).types` and no marker from a type the
+level does not permit).
+
+| level | run 1 inLevel | run 1 onLadder | run 2 inLevel | run 2 onLadder |
+| --- | --- | --- | --- | --- |
+| HSK 1 | 17/20 | 19/20 | **4/20** | **9/20** |
+| HSK 2 | 18/18 (2 empty replies) | 18/18 | 18/18 (2 empty replies) | 18/18 |
+| HSK 3 | 20/20 | 20/20 | 20/20 | 20/20 |
+| HSK 4 | 20/20 | 20/20 | 19/19 (1 empty reply) | 19/19 |
+
+HSK 2–4 are clean and stable across both runs — every non-empty reply passed both counts, both
+times. HSK 1 is not: it swung from 17/20 to 4/20 between two runs of the identical harness
+against the identical story, which is exactly the run-to-run variance DEVELOPING.md warns
+about elsewhere in this project — **one run here would have shipped a confident, wrong
+number.** Pooled across both runs, HSK 1 is 21/40 (53%) `inLevel` and 28/40 (70%) `onLadder`.
+Both runs fail the same way: the model reaches for 为什么 ("why") despite the HSK 1 ladder
+rule explicitly restricting it to yes/no and the wh- forms, and 为 is not an HSK 1 word —
+
+```
+HSK 1 [why] 小明为什么很高兴？
+HSK 1 bad:为 小明为什么高兴？
+```
+
+**Controller ruling: D9 stands.** Questions and discussing stay on the teaching model. The
+brief makes D9 conditional on the teaching model's ability to ask in-level, ladder-conformant
+questions, and at HSK 1 it plainly struggles — that is not being softened here. But reversing
+D9 means paying the story model's price on every question at every level (`storyStep()`'s own
+comment puts questions at "~37x cheaper" on the teaching model) to fix a weakness confined to
+one level of seven, and two more things argue against reversing on this evidence alone: an
+asking turn is not shipped raw — it goes through the ordinary `turn()` repair loop, so an
+out-of-level or off-ladder question is validated and re-asked rather than reaching the learner
+as-is, which costs attempts rather than correctness; and the story model was never measured
+asking HSK 1 questions, so "move it back" is not itself evidenced to fix anything. HSK 1's
+weakness is recorded in BACKLOG.md rather than acted on here.
+
+### The cast prompt, and whether `maxTokens: 200` is enough
+
+**Measured, twice.** `HSKPrompt.castPrompt` has no prior measurement on this branch. Run on
+the **story** model (`anthropic/claude-sonnet-4.5`), because `declareCast()` calls
+`storyModel()`, not the teaching model — `node tools/story-ab.js --cast`. Ten calls per run:
+one topic per level 1–7 from `storyIdeasFor()`, plus three HSK 7 topics chosen specifically to
+want a full cast — "six coworkers", "a family of six siblings", "a six-person heist crew" —
+against `castMaxFor(7) = 6` and the same 200-token cap `declareCast()` imposes.
+
+Across both runs (20 calls): **20/20 parsed into `[[NEED:]]` lines**, **20/20 respected the
+cap** (never over `castMaxFor`), and every one of the six HSK 7 six-name topics (6 calls)
+returned exactly 6/6 names, `finish_reason: "stop"` every time — none cut off — at reply
+lengths ranging 208–320 characters:
+
+```
+needs=6/6  finish=stop  chars=320  ["张伟","李娜","王强","刘敏","陈浩","赵雪"]
+needs=6/6  finish=stop  chars=208  ["李明","李芳","李伟","李娜","李强","李静"]
+needs=6/6  finish=stop  chars=223  ["老大","阿强","小林","阿美","老张","瘦猴"]
+```
+
+**Verdict: 200 tokens is sufficient for a full six-name cast, but the margin is not large.**
+Every six-name reply stopped naturally rather than being truncated, but 320 characters against
+a 200-token budget is not deep headroom — a topic that pushed a little further (longer English
+glosses, longer Chinese names) could still truncate. No change recommended on what was
+measured; worth re-checking if `castMaxFor` ever grows past 6.
+
+### The discussing phase: does it actually stop
+
+**Measured, twice.** Task 9 added `storyPhase: "discussing"` with no measurement of its own.
+Its rule: say whether the answer was right, restate it correctly, then **stop** — asking again
+is the "Ask me another" button's job, not the model's. Measured on the **teaching** model,
+where Task 10 routes it: `node tools/story-ab.js --discussing --model
+qwen/qwen3-235b-a22b-2507`. One fixed question against the same fixed story, a correct and an
+incorrect learner answer, five of each per level, HSK 1–4, two runs.
+
+80 replies total (10/level × 4 levels × 2 runs). **79/80 obeyed the stop.** One failure, HSK 2,
+correct-answer branch:
+
+```
+对，他去了商店。他买了什么？
+```
+
+— which restates the answer correctly and then asks a genuine follow-up, exactly the failure
+mode the rule exists to prevent.
+
+**Verdict: the rule is obeyed 98.75% of the time.** One lapse recorded rather than smoothed
+over; not enough on its own to argue for a change.
+
+### The topic arm, and whether D4 survives it
+
+**Measured once — the result did not need a second run.** D4's assumption is that the declared
+cast plus `validate()` is enough to keep a free-text topic in level. Two arms, six stories
+each, HSK 2, `anthropic/claude-sonnet-4.5` (the story model): `no-topic` (the control — no
+topic message, `declareCast()` never called, exactly what shipped before the chooser existed)
+against `topic` (`--topic "the Monkey King"`, a real `declareCast()` call per story). Real
+output, `node tools/story-ab.js --topic "the Monkey King" --stories 6 --level 2 --nojudge
+--model anthropic/claude-sonnet-4.5`:
+
+```
+              out-of-level    mean chars  truncated  err+retry  cost
+no-topic      10/30 (33%)     100 (asked 90)0          0+0r    $0.568305
+topic         24/30 (80%)     29 (asked 90)0          0+0r    $0.545235
+
+no-topic      violations/100 han: 3.2   total 95 over 3014 chars
+  top: 园×7, 心×6, 可×4, 然×4, 聊×4, 云×4, 公园×3, 以×2, 像×2, 继续×2
+topic         violations/100 han: 47.7   total 411 over 862 chars
+  top: 猴子×64, 山×49, 石×15, 桃子×14, 故×12, 久以×11, 厉害×10, 座×8, 讲×8, 老×8
+
+               USABLE   3+ usable  clean 1/2/3+  never clean  introduced  clean chars [[NEED:]]
+no-topic       20/30    4/6        0/5/15        10/30        6           149         13
+topic          6/30     1/6        0/2/4         24/30        1           128         20
+```
+
+Out-of-level rate goes from 33% to **80%** of segments, and the density goes from 3.2 to
+**47.7 violation tokens per 100 Han characters — roughly fifteen times the control.** The
+leaked words are exactly the vocabulary the story needs and the cast never declares: 猴子
+("monkey," 64 hits), 山 ("mountain," 49), 石 ("stone"), 桃子 ("peach") — the furniture of the
+Monkey King's birth from a stone and theft of the peaches of immortality, none of it a name and
+none of it covered by `castMaxFor`'s handful of `[[NEED:]]` lines. The declared cast solves
+*who is in the story*; it does nothing for *what the story is about*, and D4 only ever
+addressed the first.
+
+The repair loop cannot recover from this: 24/30 topic-arm segments were **never clean** inside
+the attempt budget (10/30 for the control), so most of them render as the canned fallback,
+"我不知道。" — visible in `mean chars` collapsing from 100 to 29 and `USABLE` from 20/30 to
+6/30. Only 1 of 6 topic-arm stories reached three or more usable segments, against 4 of 6 for
+the control. The high `mean dup` (0.758 vs 0.316) is partly this same collapse rather than a
+separate finding — several failed segments in the same story are all the identical fallback
+sentence, which reads as a near-duplicate to the trigram check regardless of the topic.
+
+**Verdict: the free-text topic raises the out-of-level rate materially, and D4's assumption
+does not hold as designed.** `castNames()` is unchanged by a topic (see `systemPrompt()`'s
+comment above) — the model is told "the student wants a story about the Monkey King" and, in
+the same prompt, "the story's people may only be called 小明/小红/小白, no other names" — and
+separately, the *content* vocabulary a mythological topic drags in was never in scope for the
+declared cast to cover. **This is reported, not acted on: D4 is in question and the fix is a
+design decision, not this task's to make.**
 
 ## Things that did not work
 
