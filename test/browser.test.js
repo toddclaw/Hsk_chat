@@ -2866,8 +2866,15 @@ return true;
       return true;`);
     await go(base);
     await waitFor("window.storyStep", "the app");
+    /* callModel's third argument records which model each of the 5 segment
+     * calls plus the trailing title call actually used -- a mock that
+     * ignores it cannot tell the title call from a segment call, which is
+     * exactly what happened before this check existed: the model argument
+     * could be dropped on the floor and nothing here would notice. */
     await exec(
-      "window.callModel = function () {" +
+      "window.__models = [];" +
+      "window.callModel = function (msgs, maxTok, model) {" +
+      "  window.__models.push(model || null);" +
       "  return Promise.resolve('\\u5c0f\\u660e\\u7684\\u7403'); };" +
       "window.newChat('story'); window.setStoryTopic('', []);" +
       "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
@@ -2875,13 +2882,96 @@ return true;
       "JSON.parse(localStorage['hsk1chat.chats'])[0].title === '\\u5c0f\\u660e\\u7684\\u7403'",
       "a written title", 30000);
     check(true, "a finished story is retitled by the teaching model");
+    check(await exec("return window.__models[window.__models.length - 1];") === "teaching/model",
+      "using the teaching model, not the story model",
+      JSON.stringify(await exec("return window.__models;")));
 
     // A hand-typed title is never overwritten.
     await exec(
       "var c = window.currentChat(); c.renamed = true; c.title = 'mine';" +
-      "window.saveChats(); return window.titleStory();");
+      "window.saveChats(); return window.titleStory(c.id);");
     check(await exec("return window.currentChat().title;") === "mine",
       "and a title the learner typed is left alone");
+
+    /* The title call binds to the story that finished, not to whichever chat
+     * is open when the reply lands -- the same hazard `hist` already guards
+     * the segment push itself against, one statement earlier in the same
+     * function. Seed a story with its first four segments already told, so
+     * the fifth (final) one is the only call in flight. */
+    await exec(`
+      var sid = "cccccccc-3333-4333-8333-cccccccccccc";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: sid, title: "old title", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z",
+          deleted: false }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(sid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "cccccccc-3333-4333-8333-cccccccccccc": [
+        { role: "topic", text: "", needs: [], id: "t0", created_at: "2026-01-01T00:00:00.000Z" },
+        { role: "assistant", text: "1", kind: "segment", id: "s1", created_at: "2026-01-01T00:00:01.000Z" },
+        { role: "assistant", text: "2", kind: "segment", id: "s2", created_at: "2026-01-01T00:00:02.000Z" },
+        { role: "assistant", text: "3", kind: "segment", id: "s3", created_at: "2026-01-01T00:00:03.000Z" },
+        { role: "assistant", text: "4", kind: "segment", id: "s4", created_at: "2026-01-01T00:00:04.000Z" }
+      ] }));
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app with the seeded story");
+    /* Two callModel calls happen in this flow -- the segment, then the title
+     * -- so resolvers queue up rather than a single variable, which only the
+     * first call would ever fill. */
+    await exec(
+      "window.__resolves = [];" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__resolves.push(r); }); };" +
+      "window.storyStep(false);");
+    await waitFor("window.__resolves.length > 0", "the fifth segment in flight");
+    // The learner switches to a different, ordinary conversation while it waits.
+    await exec("window.newChat('chat');");
+    await exec("window.__resolves[0]('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
+    await waitFor("window.__resolves.length > 1", "the title call in flight");
+    await exec("window.__resolves[1]('\u5c0f\u660e\u7684\u7403');");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats']).some(function (c) {" +
+      "  return c.id === 'cccccccc-3333-4333-8333-cccccccccccc' && " +
+      "    c.title === '\u5c0f\u660e\u7684\u7403'; })",
+      "the story is retitled although it is no longer on screen", 30000);
+    check(true, "a title lands on the story it was generated for");
+    check(await exec(
+      "return JSON.parse(localStorage['hsk1chat.chats'])" +
+      ".find(function (c) { return c.activity === 'chat'; }).title;") !== "\u5c0f\u660e\u7684\u7403",
+      "and not on the chat the learner switched to while it was in flight");
+
+    /* Stopping a generation for a conversation nobody is looking at anymore
+     * must not leave it behind empty: dropIfEmpty() skips it only while the
+     * call is actually in flight FOR that conversation, so storyStep()'s
+     * finally sweeps it once the call ends, in case it is still empty. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app once more");
+    await exec(
+      "window.__reject = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__reject = rej; }); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("window.__reject", "the segment request in flight");
+    // The learner switches away from the still-empty story before stopping it.
+    await exec("window.newChat('chat');");
+    const midFlight = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(midFlight === 2,
+      "the empty story is not dropped while its own call is still in flight",
+      String(midFlight));
+    await exec("window.__reject({ kind: 'stopped' });");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats'] || '[]')" +
+      ".filter(function (c) { return !c.deleted; }).length === 1",
+      "the stopped, still-empty story to be swept");
+    check(true, "stopping a generation for a chat no longer on screen still drops it if it stayed empty");
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

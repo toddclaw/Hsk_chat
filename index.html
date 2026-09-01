@@ -2173,6 +2173,13 @@ function currentActivity() {
   return (c && c.activity) || "chat";
 }
 
+/* The chat id storyStep() is generating a reply for right now, or null. Not
+ * S.busy: that is one flag for the whole app, and can't tell "this specific
+ * chat has a reply on the way" from "some unrelated chat is busy, this one
+ * really has been abandoned" -- which would block dropIfEmpty() from ever
+ * dropping anything while any generation, anywhere, was in flight. */
+let storyGenChatId = null;
+
 /* An activity is a new conversation, and the chooser now creates one before
  * anything is generated -- so backing out of story time, or switching activity
  * twice, leaves empty shells behind. Dropped on the way out rather than swept
@@ -2182,13 +2189,14 @@ function currentActivity() {
  * may already have been pushed, and deletion has to be expressible as a
  * tombstone or the next device to sync brings it back. */
 function dropIfEmpty(id) {
-  /* Also skips while a generation is in flight: at most one runs at a time,
-   * for whichever chat was open when it started, and it lands by pushing
-   * into a captured S.history reference rather than by going through this
-   * function again -- so a segment mid-flight for `id` reads as "empty" here
-   * even though a reply is on the way. Deleting it out from under that push
-   * would tombstone the chat while the reply is still mid-air. */
-  if (!id || S.busy) return;
+  /* Skipped only for the one conversation actually generating right now: it
+   * lands by pushing into a captured S.history reference rather than by
+   * going through this function again -- see `hist` in storyStep() -- so it
+   * reads as empty here even though a reply is on the way. Deleting it out
+   * from under that push would tombstone the chat while the reply is still
+   * mid-air. storyStep()'s own finally re-checks it once that call ends, in
+   * case it is still empty and no longer the conversation on screen. */
+  if (!id || id === storyGenChatId) return;
   const c = chatById(id);
   if (!c || c.deleted) return;
   if ((S.chatMsgs[id] || []).length) return;
@@ -3244,12 +3252,18 @@ async function retryLast() {
  * whole history is kind-tagged, and then find no `kind === "segment"` on any
  * of a legacy story's real segments, undercounting to zero. Do not drop the
  * `role` check to simplify this. */
-function storyTold() {
-  if (S.history.some(t => t.role === "assistant" && t.kind)) {
-    return S.history.filter(t => t.kind === "segment").length;
+/* Takes the messages to count, defaulting to S.history: storyStep() passes
+ * its own captured `hist` so the "is the story finished" check stays pinned
+ * to the conversation it is generating for, not to whatever S.history points
+ * at by the time a reply lands -- see `hist` a few lines below for why that
+ * can move mid-call. */
+function storyTold(msgs) {
+  msgs = msgs || S.history;
+  if (msgs.some(t => t.role === "assistant" && t.kind)) {
+    return msgs.filter(t => t.kind === "segment").length;
   }
   let n = 0;
-  for (const t of S.history) {
+  for (const t of msgs) {
     if (t.role === "user") break;
     if (t.role === "assistant") n++;
   }
@@ -3285,6 +3299,18 @@ function setStoryTopic(text, cast) {
  * short call, about $0.0002 -- and skipped outright where the learner has typed
  * their own title, which is what `renamed` has always meant.
  *
+ * Takes the target chat id explicitly rather than reading currentChat()/
+ * S.history: it is called, unawaited, from storyStep() after an `await`, and
+ * the learner is free to switch conversations in that window -- the same
+ * hazard `hist` guards the segment push against a few lines above it, in the
+ * same function. chatById(id) and S.chatMsgs[id] name the chat this title is
+ * for regardless of what S.chatId points at by the time the reply lands. An
+ * earlier version of this function read currentChat()/S.history instead: it
+ * looked safe because its own local `c` and `story` were captured before its
+ * one `await`, but that capture happens too late -- storyStep() had already
+ * let S.chatId move on before ever calling this function. Caught by a
+ * browser test that switches chats while the fifth segment is in flight.
+ *
  * The filter is `t.kind ? t.kind === "segment" : t.role === "assistant"`, not
  * `t.kind === "segment" || t.role === "assistant"`: every segment already has
  * role "assistant", so the `||` form lets the comprehension questions through
@@ -3295,17 +3321,15 @@ function setStoryTopic(text, cast) {
  * so it is excluded either way, which is correct: the topic is what the
  * learner asked for, not part of what they read.
  *
- * `c` and `story` are read synchronously, before the only `await` in this
- * function -- the part of an async function before its first await runs in
- * the calling turn, not later. So they are captured exactly like `hist` in
- * storyStep(), for the same reason: storyStep() calls this without awaiting
- * it, and the learner is free to switch conversations while the call is in
- * flight. `c` stays a reference to the chat this title is for regardless of
- * what S.chatId points at when the reply lands. */
-async function titleStory() {
-  const c = currentChat();
+ * Accepted gap: renaming the chat by hand in the round trip between this
+ * call starting and the reply landing can still be overwritten -- `renamed`
+ * is checked once, up front, not re-checked after the `await`. Narrow (one
+ * network round trip) and best-effort, so left as is. */
+async function titleStory(id) {
+  const c = chatById(id);
   if (!c || c.renamed) return;
-  const story = S.history.filter(t => t.kind ? t.kind === "segment" : t.role === "assistant")
+  const story = (S.chatMsgs[id] || [])
+    .filter(t => t.kind ? t.kind === "segment" : t.role === "assistant")
     .map(t => t.text).join("\n");
   if (!story) return;
   try {
@@ -3382,15 +3406,22 @@ async function startStoryWith(topic) {
 
 async function storyStep(asking) {
   if (S.busy) return;
-  const told = storyTold();
+  /* Captured now, before anything below can await: `cid`/`hist` name the
+   * conversation this call is for regardless of what S.chatId/S.history
+   * point at once the reply lands, exactly like every other turn-runner in
+   * this file (see runTurn()'s own `hist`, and the comment on the push
+   * below). storyTold() and titleStory() take them explicitly rather than
+   * reading the live S.history/currentChat() for the same reason. */
+  const cid = S.chatId;
+  const hist = S.history;
+  const told = storyTold(hist);
   /* Asking is always available, at any pause, and can be repeated ("Ask me
    * another"); telling stops once every segment is out. */
   if (!asking && told >= STORY_SEGMENTS) return;
-  S.busy = true; renderBusy(); renderStarters();
+  S.busy = true; storyGenChatId = cid; renderBusy(); renderStarters();
   const bubble = thinkingBubble(asking
     ? "Thinking of a question about the story\u2026"
     : "Writing part " + (told + 1) + " of " + STORY_SEGMENTS + "\u2026 this takes a moment.");
-  const hist = S.history;
   try {
     /* Phase two is the ordinary chat loop. The story is now in windowed()'s
      * context, so a question about it needs no new machinery -- and the answers
@@ -3421,9 +3452,10 @@ async function storyStep(asking) {
     recordTurn(res.attempts, res.failed);
     persist();
     /* The story is complete: give it a name worth reading in the chat list.
-     * Not awaited -- see titleStory()'s own comment on why that is safe here,
-     * the same reasoning as `hist` a few lines up. */
-    if (!asking && storyTold() >= STORY_SEGMENTS) titleStory();
+     * Not awaited -- see titleStory()'s own comment on why that is safe.
+     * Passed `cid`, not read off currentChat(): the learner may already have
+     * switched away in the `await turn(...)` above, same as `hist`. */
+    if (!asking && storyTold(hist) >= STORY_SEGMENTS) titleStory(cid);
   } catch (err) {
     if (err.kind !== "stopped") {
       console.error(err);
@@ -3435,8 +3467,15 @@ async function storyStep(asking) {
     }
   } finally {
     bubble.remove();
-    S.busy = false; renderBusy();
+    S.busy = false; storyGenChatId = null; renderBusy();
     renderAll(); renderStarters();
+    /* This call may have ended (finished, stopped, or failed) leaving `cid`
+     * still empty -- e.g. a stop before the first segment lands. dropIfEmpty()
+     * skipped it throughout the call above because it was the one generating;
+     * now that the call is over, only worth sweeping if the learner is not
+     * looking at it: dropping the conversation on screen out from under
+     * whoever is reading it would be a worse surprise than leaving it. */
+    if (cid !== S.chatId) dropIfEmpty(cid);
   }
 }
 
