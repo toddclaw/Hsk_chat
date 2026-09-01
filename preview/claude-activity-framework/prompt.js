@@ -100,6 +100,105 @@
     return STARTERS[level] || STARTERS[1];
   }
 
+  /* What a story could be about, per level.
+   *
+   * English, and deliberately: this is a menu for CHOOSING, not something the
+   * learner will say, so holding it to the level's vocabulary would buy nothing
+   * and cost expressiveness. The topic reaches the model verbatim (build()'s
+   * topic rule), and the level guarantee comes from the validator downstream as
+   * it always does.
+   *
+   * What no test can check is whether an idea suits its level -- that is
+   * judgment, and a badly judged one produces a dull story rather than an
+   * illegal one. What the tests do check is that every level has its own pool,
+   * per D8 in the design doc.
+   *
+   * The evidence for offering a menu at all rather than only a free-text box:
+   * extensive-reading effects measured LARGER where text choice was limited and
+   * some accountability was present. See RESEARCH.md, "Letting the learner
+   * choose the story". */
+  var STORY_IDEAS = {
+    1: ["A day at the market", "A lost cat comes home",
+        "Two friends and one umbrella", "Breakfast with the family",
+        "A very slow bus"],
+    2: ["A running race at school", "Buying a birthday present",
+        "The first day at a new job", "A weekend at the beach",
+        "A dog that will not sit down"],
+    3: ["Getting lost in a big city", "A cooking contest between neighbours",
+        "The night the power went out", "An old photograph nobody recognises",
+        "Moving into a new apartment"],
+    4: ["A misunderstanding between two coworkers", "A journey by night train",
+        "The shop that never closes", "Someone returns after ten years away",
+        "A promise that is hard to keep"],
+    5: ["A small town keeps a secret", "Two versions of the same afternoon",
+        "An apprentice outgrows the master",
+        "A letter that arrives twenty years late"],
+    6: ["A negotiation where both sides are wrong",
+        "The last day of an old factory", "A translator who changes one word",
+        "An argument about what really happened"],
+    7: ["A rumour that reshapes a neighbourhood",
+        "The Monkey King borrows something he should not",
+        "A scholar who refuses an appointment",
+        "Two accounts of the same reform"]
+  };
+
+  function storyIdeasFor(level) {
+    return STORY_IDEAS[level] || STORY_IDEAS[1];
+  }
+
+  /* Which comprehension questions the partner may ask, per level.
+   *
+   * Ordered by the OUTPUT an answer demands, which is TPRS's circling ladder --
+   * yes/no asks almost nothing, wh- more, why most. But which rungs are
+   * AVAILABLE comes from this language's data, and it inverts the English
+   * order: 谁/什么/哪儿/几/多少/怎么样 are all HSK 1 while 还是 is HSK 2, because
+   * Chinese wh- questions are in-situ and the question words are among the
+   * commonest in the language.
+   *
+   * `needs` is the vocabulary an asking form requires, and test/prompt.test.js
+   * asserts every word is an ENTRY in that level's list -- not merely
+   * segmentable. That is what keeps 还是 out of HSK 1: validate() accepts it as
+   * 还 + 是, so the ladder has to be stricter than the validator. Where a form
+   * is genuinely compositional (什么 + 时候) the pieces are listed instead, so
+   * the judgment is explicit rather than hidden.
+   *
+   * Cumulative, and complete for all seven levels per D8: a table filled in
+   * only to HSK 2 would leave HSK 3-7 asking yes/no questions forever with
+   * nothing reporting it. See RESEARCH.md, "Which questions, at which level". */
+  var QUESTION_LADDER = {
+    1: { types: ["yesno", "who", "what", "where", "howmany", "when", "howabout"],
+         needs: ["吗", "谁", "什么", "哪儿", "几", "多少", "时候", "怎么样"] },
+    2: { types: ["eitheror", "why"], needs: ["还是", "为什么", "因为"] },
+    /* 要是 dropped from the design doc's needs list, same reason as 越来越
+     * below: it is not an entry in data/hsk3.json, only from hsk4.json up.
+     * Neither question shape HSK 3 unlocks uses it (reason: 虽然下雨，他还是去
+     * 了，为什么？ / retell: 用你自己的话说一说刚才那一段。). Fix the ladder, not
+     * the wordlist. */
+    3: { types: ["reason", "retell"], needs: ["虽然", "但是", "所以"] },
+    /* 越来越 dropped from the design doc's needs list: it is not an entry in
+     * data/hsk4.json or any other level -- only 越 is, from HSK 3 up. Neither
+     * question shape HSK 4 unlocks uses it (compare: 这一段和上一段比，有什么不
+     * 一样？ / predict: 你觉得下面会怎么样？). Fix the ladder, not the wordlist. */
+    4: { types: ["compare", "predict"], needs: ["比", "觉得"] },
+    5: { types: ["infer"], needs: [] },
+    6: { types: ["opinion"], needs: [] },
+    7: { types: ["evaluate"], needs: [] }
+  };
+
+  /* Levels 5-7 add no new asking vocabulary because what they add is depth, not
+   * new question words -- an inference question is asked with the same 为什么 as
+   * a why question. They are thin on purpose and grown on arrival. */
+  function questionTypesFor(level) {
+    var types = [], needs = [];
+    for (var lv = 1; lv <= (level || 1); lv++) {
+      var row = QUESTION_LADDER[lv];
+      if (!row) continue;
+      row.types.forEach(function (t) { if (types.indexOf(t) === -1) types.push(t); });
+      row.needs.forEach(function (w) { if (needs.indexOf(w) === -1) needs.push(w); });
+    }
+    return { types: types, needs: needs };
+  }
+
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
   var LENGTHS = {
@@ -165,6 +264,28 @@
     { w: "小明", p: "Xiǎo Míng", d: "Xiao Ming, a name" },
     { w: "小红", p: "Xiǎo Hóng", d: "Xiao Hong, a name" },
     { w: "小白", p: "Xiǎo Bái",  d: "Xiao Bai, a name" }
+  ];
+
+  /* One example per question type, so the rule shows the shape rather than
+   * naming a category the model has to guess at. Filtered by the level's
+   * ladder, so HSK 1 never sees a 为什么 example it cannot legally use. */
+  var QUESTION_SHAPES = [
+    { type: "yesno",    shape: "「他高兴吗？」" },
+    { type: "who",      shape: "「谁去了？」" },
+    { type: "what",     shape: "「他买了什么？」" },
+    { type: "where",    shape: "「他们在哪儿？」" },
+    { type: "howmany",  shape: "「有几个？」" },
+    { type: "when",     shape: "「什么时候的事？」" },
+    { type: "howabout", shape: "「今天怎么样？」" },
+    { type: "eitheror", shape: "「他去学校还是去商店？」" },
+    { type: "why",      shape: "「他为什么很高兴？」" },
+    { type: "reason",   shape: "「虽然下雨，他还是去了，为什么？」" },
+    { type: "retell",   shape: "「用你自己的话说一说刚才那一段。」" },
+    { type: "compare",  shape: "「这一段和上一段比，有什么不一样？」" },
+    { type: "predict",  shape: "「你觉得下面会怎么样？」" },
+    { type: "infer",    shape: "「他没有说，可是你觉得他心里想什么？」" },
+    { type: "opinion",  shape: "「你觉得他做得对不对？为什么？」" },
+    { type: "evaluate", shape: "「这个故事想说明什么？你同意吗？」" }
   ];
 
   var ACTIVITIES = {
@@ -274,25 +395,45 @@
     /* The activity's own rules, then its position in the story if it has one.
      * Position after the activity's own rules so it reads as the more immediate
      * instruction of the two. */
-    if (opts.storyQuestion) {
-      /* The story's own rules are suppressed here, not merely followed by this
-       * one. Rule 2 of story time is "只讲故事，不要问学生问题" -- stated
-       * absolutely -- and build() already knows what a model does with a later
-       * rule contradicting an earlier absolute one: it obeys the first. The
-       * same reasoning as the offer rule's exception clause above. This rule
-       * carries its own context ("故事讲完了"), so nothing is lost by dropping
-       * them. */
-      rules.push(convert("故事讲完了。现在问学生一个关于这个故事的问题，一次只问一个。"));
+    /* Story time has three phases, and each suppresses the rules that would
+     * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
+     * absolutely, and build() already knows what a model does with a later rule
+     * contradicting an earlier absolute one: it obeys the first. So asking and
+     * discussing replace those rules rather than following them.
+     *
+     * `discussing` fixes a defect rather than adding a feature: before it, a
+     * learner answering the partner's own question was met by the telling
+     * rules, which forbid talking to them. */
+    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
+    if (phase === "asking") {
+      var ladder = questionTypesFor(opts.level);
+      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
+        convert("问题要短，用简单的话。") +
+        convert("可以问这样的问题：") + QUESTION_SHAPES
+          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
+          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
+    } else if (phase === "discussing") {
+      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
+        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
     }
-    /* Deliberately outside the storyQuestion branch above: phase two asks about
-     * the characters the story just introduced, and 「小明去了哪儿？」 must not
-     * fail validation for the name it is asking about. */
+    /* Deliberately outside the phase branch above: asking and discussing both
+     * refer to the characters the story just introduced, and 「小明去了哪儿？」
+     * must not fail validation for the name it is asking about. */
     if (act.names && act.names.length) {
       rules.push(convert("故事里的人可以叫") +
         act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
         convert("。别的名字不要用。"));
+    }
+    /* What the learner asked for. Placed before the segment's position so the
+     * model reads the subject first and the position as a qualifier of it.
+     * Passed through verbatim, in whatever language it was typed: a topic is
+     * the learner's own words, not app-authored Chinese, so `convert` does not
+     * touch it. */
+    if (opts.storyTopic) {
+      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
+                 convert("的故事。"));
     }
     if (seg) {
       if (seg.index === 0) {
@@ -511,6 +652,35 @@
       contextBlock(opts.context) + "The student wrote: " + opts.text;
   }
 
+  /* Who is in this story, asked before it is written.
+   *
+   * Answered in the [[NEED:]] shape on purpose: extractNeeds() already parses
+   * it, the app already glosses it, and needsSoFar() already carries it into
+   * every later segment -- so the declared cast needs no format, no storage and
+   * no lexicon plumbing of its own.
+   *
+   * The point is pre-teaching: the learner meets 孙悟空 with a gloss before
+   * reading rather than sprung on them mid-paragraph. The carry-forward, not
+   * this call, is what makes an out-of-level name possible at all. */
+  function castPrompt(topic, label, max) {
+    return "A student at " + label + " is about to read a short Chinese story " +
+      "about: " + topic + "\n\n" +
+      "Name the people or creatures the story needs, at most " + max + ", using " +
+      "the Chinese names a Chinese reader would expect. Reply with nothing but " +
+      "one line each in this exact form:\n" +
+      "[[NEED:名字|pīn yīn|who they are in English]]\n\n" +
+      "If the story needs no named character at all, reply with nothing.";
+  }
+
+  /* A title for a finished story. The derived one is the first sentence of the
+   * first segment, which is unreadable in a list -- and rereading is part of
+   * how this app is used, so finding a story again matters. */
+  function titlePrompt(story) {
+    return "Here is a short Chinese story a learner has just read:\n\n" + story +
+      "\n\nGive it a title in Chinese, at most eight characters, using only " +
+      "words that appear in the story. Reply with the title and nothing else.";
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -611,8 +781,12 @@
               ACTIVITIES: ACTIVITIES, activityFor: activityFor,
               STORY_NAMES: STORY_NAMES,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
-              styleFor: styleFor, startersFor: startersFor, build: build,
-              translate: translate, explain: explain, grade: grade,
+              styleFor: styleFor, startersFor: startersFor,
+              storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
+              QUESTION_SHAPES: QUESTION_SHAPES,
+              build: build,
+              translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
+              titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
