@@ -1,0 +1,16 @@
+discussing mode model=qwen/qwen3-235b-a22b-2507 n=10/level levels=1,2,3,4
+1/10 2/10 3/10 4/10 5/10 6/10 7/10 8/10 9/10 10/10 
+1/10 2/10 3/10 4/10 5/10 6/10 7/10 8/10 9/10 10/10 
+1/10 2/10 3/10 4/10 5/10 6/10 7/10 8/10 9/10 10/10 
+1/10 2/10 3/10 4/10 5/10 6/10 7/10 8/10 9/10 10/10 
+
+level   n    errors  asked again (FAIL)
+HSK 1   10   0       0/10
+HSK 2   10   0       1/10
+HSK 3   10   0       0/10
+HSK 4   10   0       0/10
+
+examples that asked again:
+  HSK 2 (correct answer) 对，他去了商店。他买了什么？
+
+cost $0.001633

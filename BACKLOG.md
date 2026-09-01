@@ -264,3 +264,63 @@ for the request shape — and re-run any measurement that reported continuity si
 find out which of those zeros were real.
 
 ---
+
+## Small things the v69 review found and deliberately left
+
+**Found:** the per-task and whole-branch reviews of the story-time chooser. Nineteen Minor
+findings were logged during execution and triaged at the end; two were promoted to blocking and
+fixed in `485adc8`, the rest are recorded here so they are not simply lost with the scratch
+directory they were written in.
+
+Two were **wrong to defer** and are already fixed — noted because the misjudgement is the
+useful part. A legacy story whose old end-of-story question was asked but never answered lost
+its composer entirely, which was logged as cosmetic and was in fact a regression against
+shipped conversations. And the model-written story title reached the chat list without going
+through `validate()` — the first Chinese in the UI ever to do so.
+
+Still open, in rough descending order of how much they would annoy someone:
+
+- **`storyTopic()` answers for two different states.** It returns `""` both when there is no
+  topic message at all (Choosing) and when "make something up" stored an empty topic (Telling).
+  `renderStoryControl()` disambiguates with an extra `!S.history.length` clause;
+  `renderAll()` does not. Stop the first segment of a make-something-up story and the log hint
+  reads "Pick what the story is about below" under a strip reading "Start the story". A
+  `hasStoryTopic()` that tests for the message rather than its text removes the whole class.
+- **`send()`'s `answering` never turns off.** Once any question exists it is true for the rest
+  of the conversation, so a free-form learner turn mid-story is met with the discussing framing
+  学生在回答你刚才的问题 — wrong for turns that are not answers. It matches the spec's Talking
+  state and it is on the cheap model, so it is a wording problem, not a cost one.
+- **`renderChats()`'s message count includes the topic message**, so a story reports one more
+  message than it shows; a make-something-up story with nothing generated reads "1 message"
+  over an empty log.
+- **A question that exhausted its repair attempts is still stored `kind: "question"`**, so
+  `anyStoryQuestion()` opens the composer for a question the partner never really managed to
+  ask.
+- **The composer stays enabled while a segment generates.** `send()` no-ops on `S.busy`, so a
+  sentence typed during generation is silently dropped rather than queued or refused.
+- **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand
+  during the round trip can still be clobbered. Narrow, and accepted in the function's own
+  comment.
+- **In the Told state the "Ask me another" button renders as a plain chip**, because `.story`
+  is what carries the accent colour and only the "Read on" button has it.
+- **`persist()` always touches `currentChat()`**, so a background write from a conversation the
+  learner has left bumps `updated_at` on whichever chat is on screen instead, reordering the
+  chat list. Pre-existing, shared with `storyStep()`'s own background push.
+- **`opts.storyPhase` wins in `build()` even when `activity !== "story"`.** No caller can do
+  that today — all three are gated on `currentActivity() === "story"` — but nothing enforces it.
+- **`questionTypesFor(-1)` returns no types at all.** Unreachable; levels come from a fixed list.
+
+Test-side, all minor: no fixture proves the legacy turn-order rule stops counting at the first
+learner turn; nothing asserts "Ask me another" is still offered in the Told state; there is no
+direct unit test of `castMaxFor()`'s per-level table; one hint assertion cannot distinguish
+"hint missing" from "hint has the wrong text"; and `test/sync.test.js` and `test/prompt.test.js`
+gained a few `var` locals in files that are otherwise ES6.
+
+One unexplained observation, kept because it may recur: a single `test/browser.test.js` timeout
+on a byte-identical tree that did not reproduce across a further twelve runs. Neither the
+implementer nor the reviewer found a code-level cause; both judged it environmental.
+
+**What would settle them:** nothing here needs a measurement — they are ordinary edits. The
+first two are the ones with a real chance of confusing a user.
+
+---

@@ -1,0 +1,24 @@
+cast mode model=anthropic/claude-sonnet-4.5 calls=10
+1/10 2/10 3/10 4/10 5/10 6/10 7/10 8/10 9/10 10/10 
+
+level  six?  topic                                     needs  cap  truncated  chars
+HSK 1        Two friends and one umbrella              2      3    no         61
+HSK 2        Buying a birthday present                 2      3    no         102
+HSK 3        Getting lost in a big city                2      4    no         87
+HSK 4        A misunderstanding between two coworkers  2      4    no         71
+HSK 5        An apprentice outgrows the master         2      5    no         83
+HSK 6        A negotiation where both sides are wrong  2      5    no         69
+HSK 7        The Monkey King borrows something he sho  6      6    no         225
+HSK 7  y     Six coworkers in a tense meeting, each w  6      6    no         320
+HSK 7  y     A family of six siblings planning their   6      6    no         208
+HSK 7  y     The six members of a heist crew, the nig  6      6    no         223
+
+parsed into [[NEED:]] at all: 10/10 (0 no-cast/error)
+respected the cap: 10/10
+
+HSK 7, six-name topics (maxTokens: 200 sufficiency):
+  needs=6/6  finish=stop  chars=320  ["张伟","李娜","王强","刘敏","陈浩","赵雪"]
+  needs=6/6  finish=stop  chars=208  ["李明","李芳","李伟","李娜","李强","李静"]
+  needs=6/6  finish=stop  chars=223  ["老大","阿强","小林","阿美","老张","瘦猴"]
+
+cost $0.016263
