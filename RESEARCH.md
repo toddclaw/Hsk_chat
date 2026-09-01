@@ -617,7 +617,7 @@ over; not enough on its own to argue for a change.
 
 ### The topic arm, and whether D4 survives it
 
-**Measured once — the result did not need a second run.** D4's assumption is that the declared
+**Measured, then measured again against a different topic.** D4's assumption is that the declared
 cast plus `validate()` is enough to keep a free-text topic in level. Two arms, six stories
 each, HSK 2, `anthropic/claude-sonnet-4.5` (the story model): `no-topic` (the control — no
 topic message, `declareCast()` never called, exactly what shipped before the chooser existed)
@@ -657,13 +657,77 @@ the control. The high `mean dup` (0.758 vs 0.316) is partly this same collapse r
 separate finding — several failed segments in the same story are all the identical fallback
 sentence, which reads as a near-duplicate to the trigram check regardless of the topic.
 
-**Verdict: the free-text topic raises the out-of-level rate materially, and D4's assumption
-does not hold as designed.** `castNames()` is unchanged by a topic (see `systemPrompt()`'s
-comment above) — the model is told "the student wants a story about the Monkey King" and, in
-the same prompt, "the story's people may only be called 小明/小红/小白, no other names" — and
-separately, the *content* vocabulary a mythological topic drags in was never in scope for the
-declared cast to cover. **This is reported, not acted on: D4 is in question and the fix is a
-design decision, not this task's to make.**
+**That first run leaves one question open: is the damage "free text" or "mythological
+content"?** "The Monkey King" is the design plan's own test string and close to a worst case —
+culturally specific, and needing content vocabulary (猴子, 山, 石, 桃子) no HSK 2 list carries.
+The chooser's primary affordance is not free text; it is the curated pool in `STORY_IDEAS`,
+written to suit each level. A second, separately authorised run measures that pool directly,
+using its own first entry verbatim — `HSKPrompt.storyIdeasFor(2)[0]`, "A running race at
+school" — not a friendlier substitute:
+
+```
+node tools/story-ab.js --topic "A running race at school" --stories 6 --level 2 --nojudge --model anthropic/claude-sonnet-4.5
+
+              out-of-level    mean chars  truncated  err+retry  cost
+no-topic      4/30 (13%)      141 (asked 90)0          0+0r    $0.553317
+topic         11/30 (37%)     90 (asked 90)0          0+0r    $0.539295
+
+no-topic      violations/100 han: 0.9   total 39 over 4227 chars
+  top: 公园×5, 饼干×3, 心×2, 摸×2, 主×2, 牌子×2, 码×2, 用×1, 杯×1, 树×1
+topic         violations/100 han: 3.6   total 98 over 2687 chars
+  top: 更×11, 越×8, 赛×6, 加油×5, 操场×4, 定×4, 停×4, 以×3, 努力×3, 声×3
+
+               USABLE   3+ usable  clean 1/2/3+  never clean  introduced  clean chars [[NEED:]]
+no-topic       26/30    6/6        0/11/15       4/30         12          162         16
+topic          19/30    4/6        0/6/13        11/30        2           139         18
+```
+
+The curated topic's leaks are race-narrative vocabulary — 赛 ("race/competition"), 加油 ("go!,"
+the cheer), 操场 ("sports field"), 更/越 (comparative "more") — the furniture of *this* story
+the same way 猴子/山/石/桃子 were the furniture of the Monkey King's. Same mechanism, milder
+content.
+
+**All three arms, side by side** (the two `no-topic` columns are independent six-story samples
+from separate runs, not one control reused — see the caveat below):
+
+| | control (Monkey King run) | Monkey King | control (curated run) | curated: "A running race at school" |
+| --- | --- | --- | --- | --- |
+| out-of-level | 10/30 (33%) | **24/30 (80%)** | 4/30 (13%) | **11/30 (37%)** |
+| violations/100 han | 3.2 | **47.7** | 0.9 | **3.6** |
+| top violators | 园, 心, 可, 然, 聊 | 猴子×64, 山×49, 石×15, 桃子×14 | 公园, 饼干, 心, 摸 | 更×11, 越×8, 赛×6, 加油×5, 操场×4 |
+| never clean | 10/30 | **24/30** | 4/30 | **11/30** |
+| usable | 20/30 | **6/30** | 26/30 | **19/30** |
+| 3+ usable stories | 4/6 | **1/6** | 6/6 | **4/6** |
+
+Reading each topic arm against its **own** paired control (same run, same session, the fairer
+comparison than the two controls against each other): Monkey King multiplies out-of-level rate
+2.4× and violation density **14.9×**; the curated topic multiplies rate 2.8× and density
+**4.0×**. The rate multiplier is similar; the density and usability multipliers are not —
+Monkey King's repair loop collapses (6/30 usable, 1/6 stories with 3+ usable segments) where
+the curated topic's degrades but holds (19/30 usable, 4/6 stories with 3+ usable segments).
+
+**Caveat, stated because it cuts against a clean reading:** the two `no-topic` controls
+disagree with each other — 33% out-of-level in the Monkey King run's control against 13% in the
+curated run's control, the same condition, six stories each, roughly the swing DEVELOPING.md
+warns run-to-run variance can produce elsewhere in this project. Each topic arm is compared
+against its own same-run control above for exactly this reason, but a single run per arm is
+still a single run; the absolute numbers should not be read as more precise than one sample
+supports.
+
+**Verdict: it lands in between, and the numbers say so more clearly than either clean answer
+would.** The curated pool is **not** damage-free — every count moved the wrong way against its
+own control, at a topic taken verbatim from `storyIdeasFor(2)`, the app's own suggestion, not
+an adversarial pick. So this is not "free text is the problem, the chooser is safe." But the
+curated topic's damage is an order of magnitude smaller than the Monkey King arm's on the
+measure that matters most (violation density: 4.0× vs 14.9×) and the repair loop still produces
+a usable story most of the time (19/30, 4/6 stories) rather than collapsing into fallback text
+(6/30, 1/6 stories). So this is not "the topic mechanism is uniformly broken" either. **The
+mechanism itself — a topic sentence plus a names-only cast, with no content-vocabulary
+support — measurably raises the out-of-level rate for *any* topic, curated or free; the
+magnitude scales with how far the topic's required content vocabulary sits from the syllabus.**
+D4 remains in question. This is reported, not acted on: the fix (content vocabulary in the
+declared cast, a narrower curated pool, a stronger repair strategy, or accepting the rate) is a
+design decision, not this task's to make.
 
 ## Things that did not work
 
