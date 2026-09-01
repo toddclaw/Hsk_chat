@@ -2835,6 +2835,23 @@ return true;
     check(await exec("return document.querySelectorAll('#storyTopicInput').length;") === 1,
       "the chooser is back on screen so the learner can pick again");
 
+    /* The chooser makes empty conversations routine: selecting story time
+     * creates one before anything is generated, and backing out leaves it. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat", "the app");
+    await exec("window.newChat('story'); window.newChat('chat');");
+    const left = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(left === 1, "leaving an empty conversation deletes it", String(left));
+    check(await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .some(function (c) { return c.deleted; });`) === true,
+      "and tombstones it, because it may already have synced");
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

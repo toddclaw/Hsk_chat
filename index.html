@@ -2173,7 +2173,30 @@ function currentActivity() {
   return (c && c.activity) || "chat";
 }
 
+/* An activity is a new conversation, and the chooser now creates one before
+ * anything is generated -- so backing out of story time, or switching activity
+ * twice, leaves empty shells behind. Dropped on the way out rather than swept
+ * later, so the chat list never shows one.
+ *
+ * Through deleteChat() rather than by splicing S.chats: an empty conversation
+ * may already have been pushed, and deletion has to be expressible as a
+ * tombstone or the next device to sync brings it back. */
+function dropIfEmpty(id) {
+  /* Also skips while a generation is in flight: at most one runs at a time,
+   * for whichever chat was open when it started, and it lands by pushing
+   * into a captured S.history reference rather than by going through this
+   * function again -- so a segment mid-flight for `id` reads as "empty" here
+   * even though a reply is on the way. Deleting it out from under that push
+   * would tombstone the chat while the reply is still mid-air. */
+  if (!id || S.busy) return;
+  const c = chatById(id);
+  if (!c || c.deleted) return;
+  if ((S.chatMsgs[id] || []).length) return;
+  deleteChat(id);
+}
+
 function newChat(activity) {
+  const leaving = S.chatId;
   /* `level` is fixed at creation, exactly like `activity` and for the same
    * reason: it decides what the partner was allowed to say, so a transcript
    * written under HSK 1 rules does not become an HSK 3 transcript when the
@@ -2187,6 +2210,7 @@ function newChat(activity) {
   S.chatId = c.id;
   S.chatMsgs[c.id] = [];
   S.history = S.chatMsgs[c.id];
+  dropIfEmpty(leaving);
   saveChats();
   queueSync("conversations");
   renderAll(); renderStarters(); updateMirror();
@@ -2209,9 +2233,11 @@ function startActivity(id) {
 }
 
 function openChat(id) {
+  const leaving = S.chatId;
   if (!S.chatMsgs[id]) S.chatMsgs[id] = [];
   S.chatId = id;
   S.history = S.chatMsgs[id];
+  if (leaving !== id) dropIfEmpty(leaving);
   saveChats();
   renderAll(); renderStarters(); updateMirror();
 }
