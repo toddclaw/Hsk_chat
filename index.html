@@ -1609,10 +1609,15 @@ async function turn(ctx) {
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
     const ex = extractNeeds(HSK.stripScaffold(raw));
-    /* Validate against a lexicon that includes this reply's [[NEED:]] words.
-     * Without it the channel defeats itself: the wrapper is stripped before
-     * validation, the bare word is by definition not in the allowlist, and the
-     * request the model was told to make is rejected as a violation. */
+    /* Validate against a lexicon that includes this reply's own [[NEED:]]
+     * words (`ex.needs`) plus every [[NEED:]] word the CONVERSATION has
+     * already announced (`needsSoFar(null)`, every turn, not just this one).
+     * Without the reply's own needs the channel defeats itself: the wrapper is
+     * stripped before validation, the bare word is by definition not in the
+     * allowlist, and the request the model was told to make is rejected as a
+     * violation. The carry-forward is not scoped to story time -- it applies
+     * to every activity, so a name introduced at turn 1 of an ordinary chat
+     * stays legal at turn 50, not just for "the rest of the story". */
     /* The offered words are legal this turn, exactly like a [[NEED:]] request,
      * and so is the activity's cast: the prompt named them, so rejecting them
      * would be the app failing its own instruction. */
@@ -1819,9 +1824,13 @@ function renderMessage(turnObj, shownExtra) {
   const bubble = document.createElement("div");
   bubble.className = "bubble pinyin-" + S.pinyin;
   bubble.dataset.src = turnObj.text;
-  /* Segment with this message's [[NEED:]] words and the activity's cast in
-   * scope. They passed validation, so rendering them as violations would
-   * contradict the badge and the offer sitting right below the bubble. */
+  /* Segment with every [[NEED:]] word the conversation has announced up to
+   * and including this message (`needsSoFar(turnObj)`, not only this
+   * message's own) plus the activity's cast in scope. They passed validation,
+   * so rendering them as violations would contradict the badge and the offer
+   * sitting right below the bubble. The carry-forward applies to every
+   * activity, not only story time -- a name from turn 1 of an ordinary chat
+   * still renders clean at turn 50. */
   const lex = lexWith(needsSoFar(turnObj).concat(castNames()));
   const toks = HSK.segment(turnObj.text, lex);
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
@@ -3289,8 +3298,12 @@ function storyTopic() {
   return (t && t.text) || "";
 }
 
-function setStoryTopic(text, cast) {
-  S.history.push({ role: "topic", text: text || "", needs: cast || [],
+/* `hist` defaults to S.history for every ordinary caller (the chooser's own
+ * make-something-up path, every browser-test seed) but startStoryWith()
+ * passes its own captured target explicitly -- see that function's comment on
+ * why reading S.history here is not safe after an `await`. */
+function setStoryTopic(text, cast, hist) {
+  (hist || S.history).push({ role: "topic", text: text || "", needs: cast || [],
                    id: newMessageId(), created_at: new Date().toISOString() });
   persist();
 }
@@ -3336,7 +3349,25 @@ async function titleStory(id) {
     const raw = await callModel(
       [{ role: "user", content: HSKPrompt.titlePrompt(story) }], 40, teachingModel());
     const title = HSK.stripScaffold(raw).split("\n")[0].trim();
-    if (title) { c.title = title; saveChats(); queueSync("conversations"); renderChats(); }
+    /* The one Chinese string in the app the model writes that would otherwise
+     * reach the learner with no validator between them: renderChats() appends
+     * it as a plain text node, no HSK.segment(), no tap-for-pinyin, no
+     * violation marking. titlePrompt() asks for "only words that appear in
+     * the story", but a prompt instruction is not a guarantee, and the
+     * out-of-level guarantee is the product -- "annotate what leaks" was
+     * already rejected once as a way of relaxing it. lexWith(needsSoFar(null))
+     * is the same lexicon every reply and every rendered bubble already
+     * validates against, reused rather than bespoke. It reads the CURRENT
+     * conversation, not necessarily `id` -- the same narrow, accepted gap as
+     * the `renamed` check above and for the same reason: one network round
+     * trip, best-effort. Failing closed costs nothing here, because the
+     * fallback is not silence: touchChat() already wrote the derived title
+     * (the first segment, which already passed validate() to be told at all)
+     * on every persist() since, so skipping the assignment leaves that
+     * standing rather than leaving the chat untitled. */
+    if (title && HSK.validate(title, lexWith(needsSoFar(null))).length === 0) {
+      c.title = title; saveChats(); queueSync("conversations"); renderChats();
+    }
   } catch (e) {
     console.warn("could not title the story", e);   // the derived title stands
   }
@@ -3381,10 +3412,37 @@ async function declareCast(topic) {
 
 /* Chosen a topic: declare the cast, record both, tell the first segment.
  * "Make something up" passes "" and skips the call entirely, so the default
- * path costs exactly what story time cost before the chooser existed. */
+ * path costs exactly what story time cost before the chooser existed.
+ *
+ * `cid`/`hist` captured now, before the one `await` below: this is the one
+ * new async writer on this branch that used to read S.chatId/S.history AFTER
+ * the await instead, same bug class as titleStory()'s own history (see its
+ * comment). Neither #btnChats nor #newChat is disabled by renderBusy() (only
+ * #activity is), so switching conversations while declareCast() is in flight
+ * is reachable from ordinary UI. storyGenChatId = cid for the duration of the
+ * call so dropIfEmpty() -- reachable from both those buttons -- does not read
+ * this conversation as abandoned and tombstone it while it still looks empty.
+ *
+ * Once the call resolves, chatById(cid) may be gone anyway (an explicit
+ * delete bypasses the storyGenChatId guard, same as it does for storyStep()),
+ * so that is checked before writing anything. setStoryTopic() takes `hist`
+ * explicitly rather than reading S.history, so the topic lands in the
+ * conversation it was chosen for even if the learner has moved on.
+ *
+ * storyStep() is a different matter: it (and turn() beneath it) build the
+ * prompt and validate against the LIVE S.history/S.chatId, not an explicit
+ * target -- lexWith()/needsSoFar() have no parameter for "some other
+ * conversation". There is no correct way to generate into a conversation that
+ * is not the one on screen, so the first segment is only told automatically
+ * when the learner is still looking at it (cid === S.chatId); otherwise the
+ * topic and cast are recorded and left for renderStoryControl()'s "Start the
+ * story" button, exactly what it already shows for a topic with nothing told
+ * yet. */
 async function startStoryWith(topic) {
   if (S.busy) return;
-  S.busy = true; renderBusy(); renderStarters();
+  const cid = S.chatId;
+  const hist = S.history;
+  S.busy = true; storyGenChatId = cid; renderBusy(); renderStarters();
   const bubble = thinkingBubble(topic
     ? "Working out who is in this story…" : "…");
   let cast = [];
@@ -3397,11 +3455,12 @@ async function startStoryWith(topic) {
     if (err.kind !== "stopped") throw err;
     return;
   } finally {
-    bubble.remove(); S.busy = false; renderBusy(); renderStarters();
+    bubble.remove(); S.busy = false; storyGenChatId = null; renderBusy(); renderStarters();
   }
-  setStoryTopic(topic, cast);
+  if (!chatById(cid)) return;   // gone by the time the cast call landed
+  setStoryTopic(topic, cast, hist);
   renderAll(); renderStarters();
-  return storyStep(false);
+  if (cid === S.chatId) return storyStep(false);
 }
 
 async function storyStep(asking) {
@@ -4191,10 +4250,21 @@ async function checkUpdate() {
  * -- inert on a new story, since the composer is the only way to produce a
  * learner turn in a story, so one existing already implies a question was
  * asked to unlock it -- and it reopens a legacy one, since a learner turn
- * there could only have followed the old single end-of-story question. */
+ * there could only have followed the old single end-of-story question.
+ *
+ * That still leaves a legacy story asked but not yet answered: no `kind`
+ * anywhere to satisfy `anyStoryQuestion()`, and no user turn yet either,
+ * because the learner is looking at the question and has not answered it.
+ * `storyTold() > STORY_SEGMENTS` catches that: the old design told every
+ * segment and then asked one more assistant turn, so a fully-told legacy
+ * story sits at STORY_SEGMENTS + 1 by storyTold()'s own legacy count (every
+ * assistant turn before the first user one). Inert on a new story --
+ * storyTold() there counts only `kind === "segment"`, which storyStep()
+ * never lets exceed STORY_SEGMENTS, so this clause can only ever fire on a
+ * transcript old enough to have no `kind` at all. */
 function renderComposer() {
   const listening = currentActivity() === "story" && !anyStoryQuestion() &&
-    !S.history.some(t => t.role === "user");
+    !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS);
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }

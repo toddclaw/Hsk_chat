@@ -646,6 +646,26 @@ var LEVEL_WORDS = {};
   });
 });
 
+// The `needs` list is not the whole prompt: QUESTION_SHAPES is the worked
+// example the model is actually shown, one per type, and a word inside the
+// shape but absent from `needs` slips past the check above. Run every shape
+// through HSK.validate() against every level whose ladder offers its type --
+// the same "checked against the data" purpose as the `needs` loop, extended
+// to the asking form itself. This is what catches 没 in the "infer" shape:
+// only 没有 is an entry at any level.
+var shapesByType = {};
+P.QUESTION_SHAPES.forEach(function (q) { shapesByType[q.type] = q.shape; });
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ladder = P.questionTypesFor(lv);
+  ladder.types.forEach(function (t) {
+    var shape = shapesByType[t];
+    var v = HSK.validate(shape, lex[lv]);
+    check(v.length === 0,
+      "HSK " + lv + "'s \"" + t + "\" question shape validates at its own level",
+      shape + " -- flagged: " + v.map(function (x) { return x.text; }).join(", "));
+  });
+});
+
 // Cumulative: a level never loses a type it had below.
 [2, 3, 4, 5, 6, 7].forEach(function (lv) {
   var below = P.questionTypesFor(lv - 1).types;

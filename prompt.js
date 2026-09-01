@@ -169,6 +169,11 @@
     1: { types: ["yesno", "who", "what", "where", "howmany", "when", "howabout"],
          needs: ["吗", "谁", "什么", "哪儿", "几", "多少", "时候", "怎么样"] },
     2: { types: ["eitheror", "why"], needs: ["还是", "为什么", "因为"] },
+    /* 要是 dropped from the design doc's needs list, same reason as 越来越
+     * below: it is not an entry in data/hsk3.json, only from hsk4.json up.
+     * Neither question shape HSK 3 unlocks uses it (reason: 虽然下雨，他还是去
+     * 了，为什么？ / retell: 用你自己的话说一说刚才那一段。). Fix the ladder, not
+     * the wordlist. */
     3: { types: ["reason", "retell"], needs: ["虽然", "但是", "所以"] },
     /* 越来越 dropped from the design doc's needs list: it is not an entry in
      * data/hsk4.json or any other level -- only 越 is, from HSK 3 up. Neither
@@ -278,7 +283,7 @@
     { type: "retell",   shape: "「用你自己的话说一说刚才那一段。」" },
     { type: "compare",  shape: "「这一段和上一段比，有什么不一样？」" },
     { type: "predict",  shape: "「你觉得下面会怎么样？」" },
-    { type: "infer",    shape: "「他没说，可是你觉得他心里想什么？」" },
+    { type: "infer",    shape: "「他没有说，可是你觉得他心里想什么？」" },
     { type: "opinion",  shape: "「你觉得他做得对不对？为什么？」" },
     { type: "evaluate", shape: "「这个故事想说明什么？你同意吗？」" }
   ];
@@ -778,6 +783,7 @@
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
+              QUESTION_SHAPES: QUESTION_SHAPES,
               build: build,
               translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
               titlePrompt: titlePrompt,

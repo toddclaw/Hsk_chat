@@ -2003,6 +2003,51 @@ return true;
       "and still invites a sentence rather than showing a blank prompt",
       await exec("return document.querySelector('#input').placeholder;"));
 
+    /* Final review, blocking 2: a legacy story asked but not yet answered --
+     * five segments plus the old single end-of-story question, all
+     * `role: "assistant"` with no `kind` anywhere, and no user turn because the
+     * learner read the question and has not answered it yet. Before this plan
+     * storyTold() counted 6 assistant turns before the first user turn, so
+     * `listening = 6 <= 5` was false and the composer was open. anyStoryQuestion()
+     * finds nothing on a `kind`-less history, and the `!S.history.some(user turn)`
+     * clause only reopens a legacy story already answered -- neither covers this
+     * case, so without the `storyTold() > STORY_SEGMENTS` clause the composer
+     * would shut on a question the learner is looking at and cannot answer. */
+    await exec(`
+      var cid = "dddddddd-4444-4444-8444-dddddddddddd";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "dddddddd-4444-4444-8444-dddddddddddd": [
+        { id: "d1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4e00\\u3002", attempts: 1, created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "d2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u4e8c\\u3002", attempts: 1, created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "d3333333-3333-4333-8333-333333333333", role: "assistant",
+          text: "\\u4e09\\u3002", attempts: 1, created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "d4444444-4444-4444-8444-444444444444", role: "assistant",
+          text: "\\u56db\\u3002", attempts: 1, created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "d5555555-5555-4555-8555-555555555555", role: "assistant",
+          text: "\\u4e94\\u3002", attempts: 1, created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "d6666666-6666-4666-8666-666666666666", role: "assistant",
+          text: "\\u4ed6\\u53bb\\u4e86\\u54ea\\u513f\\uff1f", attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold && window.storyTold() === 6 && " +
+      "document.querySelector('#starters').children.length > 0",
+      "the reopened legacy story (asked, unanswered) to finish rendering");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "a legacy story asked but not yet answered keeps its composer open too",
+      String(await exec("return document.querySelector('#input').disabled;")));
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "and still invites a sentence rather than showing a blank prompt",
+      await exec("return document.querySelector('#input').placeholder;"));
+
     /* Neither fixture above actually distinguishes the wholesale fallback from
      * a naive per-message one -- one history is all-kind, the other has none,
      * and a per-message rule like `t.kind ? t.kind === "segment" : t.role ===
@@ -2839,6 +2884,56 @@ return true;
     check(await exec("return document.querySelectorAll('#storyTopicInput').length;") === 1,
       "the chooser is back on screen so the learner can pick again");
 
+    /* Final review, blocking 1: startStoryWith() awaits declareCast() before it
+     * writes anything. Neither #btnChats nor #newChat is disabled by
+     * renderBusy() (only #activity is), so the learner can switch conversations
+     * while the cast call is still in flight -- same idiom as the mid-flight
+     * tests above, a callModel stub that parks its resolver on window rather
+     * than resolving on its own. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.startStoryWith", "the app once more");
+    await exec(
+      "window.__castResolve = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__castResolve = r; }); };" +
+      "window.newChat('story'); window.startStoryWith('a topic mid-flight');");
+    await waitFor("window.__castResolve", "the cast call in flight");
+    const midStoryId = await exec("return window.currentChat().id;");
+    // The learner switches away before the cast call comes back.
+    await exec("window.newChat('chat');");
+    const midOtherId = await exec("return window.currentChat().id;");
+    const midCast = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(midCast === 2,
+      "the story conversation survives switching away while its cast call is in flight",
+      String(midCast));
+    await exec("window.__castResolve('[[NEED:\\u5b59\\u609f\\u7a7a|S\\u016bn W\\u00f9k\\u014dng|the Monkey King]]');");
+    // No second callModel call (the first segment) should ever fire: the
+    // learner is no longer looking at the story conversation.
+    await sleep(300);
+    const midAfter = await exec(`
+      var wantStory = arguments[0], wantOther = arguments[1];
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      return { storyExists: JSON.parse(localStorage["hsk1chat.chats"])
+                 .some(function (c) { return c.id === wantStory && !c.deleted; }),
+               storyMsgs: (msgs[wantStory] || []).map(function (t) { return t.role; }),
+               otherMsgs: (msgs[wantOther] || []).map(function (t) { return t.role; }) };`,
+      [midStoryId, midOtherId]);
+    check(midAfter.storyExists === true,
+      "the story conversation still exists once the cast call resolves",
+      JSON.stringify(midAfter));
+    check(midAfter.storyMsgs.indexOf("topic") !== -1,
+      "the topic message landed in the story conversation it was chosen for",
+      JSON.stringify(midAfter));
+    check(midAfter.otherMsgs.length === 0,
+      "and nothing -- no topic, no segment -- landed in the conversation the learner moved to",
+      JSON.stringify(midAfter));
+
     /* The chooser makes empty conversations routine: selecting story time
      * creates one before anything is generated, and backing out leaves it. */
     await exec(`
@@ -2875,11 +2970,11 @@ return true;
       "window.__models = [];" +
       "window.callModel = function (msgs, maxTok, model) {" +
       "  window.__models.push(model || null);" +
-      "  return Promise.resolve('\\u5c0f\\u660e\\u7684\\u7403'); };" +
+      "  return Promise.resolve('\\u4e00\\u53ea\\u5c0f\\u732b'); };" +
       "window.newChat('story'); window.setStoryTopic('', []);" +
       "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
     await waitFor(
-      "JSON.parse(localStorage['hsk1chat.chats'])[0].title === '\\u5c0f\\u660e\\u7684\\u7403'",
+      "JSON.parse(localStorage['hsk1chat.chats'])[0].title === '\\u4e00\\u53ea\\u5c0f\\u732b'",
       "a written title", 30000);
     check(true, "a finished story is retitled by the teaching model");
     check(await exec("return window.__models[window.__models.length - 1];") === "teaching/model",
@@ -2892,6 +2987,43 @@ return true;
       "window.saveChats(); return window.titleStory(c.id);");
     check(await exec("return window.currentChat().title;") === "mine",
       "and a title the learner typed is left alone");
+
+    /* Final review, blocking 3: the model's title used to reach renderChats()
+     * as a plain text node, no HSK.segment(), no validate() -- the one place in
+     * the app a model's Chinese landed on screen without going through either.
+     * titlePrompt() asks for "only words that appear in the story", but this
+     * project's own rule is that a prompt instruction is not a guarantee, and
+     * "annotate what leaks" was already rejected once as a way of relaxing the
+     * out-of-level guarantee. So titleStory() now validates the model's title
+     * against lexWith(needsSoFar(null)) -- the same lexicon every reply and
+     * every rendered bubble already validates against -- and keeps the derived
+     * title (touchChat() already wrote it, from the first segment, which
+     * itself already passed validate() to be told at all) rather than the
+     * model's when it fails. 球 ("ball") is not an HSK 1 entry. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app once more");
+    await exec(
+      "window.callModel = function (messages) {" +
+      "  var isTitle = (messages || []).some(function (m) {" +
+      "    return typeof m.content === 'string' &&" +
+      "      m.content.indexOf('Give it a title in Chinese') !== -1; });" +
+      "  if (isTitle) return Promise.resolve('\\u4ed6\\u7684\\u7403');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
+    await waitFor("window.storyTold && window.storyTold() === 5", "the story runs out at five segments");
+    await sleep(500);   // the title call fires unawaited off the fifth segment
+    check(await exec("return window.currentChat().title;") !== "他的球",
+      "an out-of-level title (球 is not an HSK 1 entry) is not adopted",
+      await exec("return window.currentChat().title;"));
+    check(await exec("return window.currentChat().title;") ===
+      "他去了学校。",
+      "the derived title -- the first segment, which already validated -- survives instead",
+      await exec("return window.currentChat().title;"));
 
     /* The title call binds to the story that finished, not to whichever chat
      * is open when the reply lands -- the same hazard `hist` already guards
@@ -2930,16 +3062,16 @@ return true;
     await exec("window.newChat('chat');");
     await exec("window.__resolves[0]('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
     await waitFor("window.__resolves.length > 1", "the title call in flight");
-    await exec("window.__resolves[1]('\u5c0f\u660e\u7684\u7403');");
+    await exec("window.__resolves[1]('\u4e00\u53ea\u5c0f\u732b');");
     await waitFor(
       "JSON.parse(localStorage['hsk1chat.chats']).some(function (c) {" +
       "  return c.id === 'cccccccc-3333-4333-8333-cccccccccccc' && " +
-      "    c.title === '\u5c0f\u660e\u7684\u7403'; })",
+      "    c.title === '\u4e00\u53ea\u5c0f\u732b'; })",
       "the story is retitled although it is no longer on screen", 30000);
     check(true, "a title lands on the story it was generated for");
     check(await exec(
       "return JSON.parse(localStorage['hsk1chat.chats'])" +
-      ".find(function (c) { return c.activity === 'chat'; }).title;") !== "\u5c0f\u660e\u7684\u7403",
+      ".find(function (c) { return c.activity === 'chat'; }).title;") !== "\u4e00\u53ea\u5c0f\u732b",
       "and not on the chat the learner switched to while it was in flight");
 
     /* Stopping a generation for a conversation nobody is looking at anymore
