@@ -1035,6 +1035,24 @@ return true;
       "the collapsed Learning row carries the number without opening it",
       await exec(`return document.querySelector('#secLearningNote').textContent;`));
 
+    /* ----------------------------------------- goal-level progress bar */
+
+    const goalProg = await exec(`
+      return document.querySelector('#goalProgress').textContent;`);
+    const goalPct = /(\d+)% you can read/.exec(goalProg || "");
+    check(!!goalPct, "the goal-level progress bar reports a percentage",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    const goalUse = /(\d+)% you can use/.exec(goalProg || "");
+    check(!!goalUse && Number(goalUse[1]) < Number(goalPct[1]),
+      "and production trails reading on the goal bar too",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    check(/HSK 7-9 — goal/.test(goalProg || ""),
+      "the goal bar names its level as the long-term target",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    check(await exec(`
+      return document.querySelector('#goalProgress u') !== null;`),
+      "the 98% threshold tick is shown on the goal bar");
+
     /* ------------------------------------------------- the level browser */
 
     /* The first-level problem: the browser was hardcoded to level+1, so there
