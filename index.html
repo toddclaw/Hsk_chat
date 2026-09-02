@@ -2608,11 +2608,15 @@ async function pullAndMerge() {
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
+      store.set(K.goalLevel, S.goalLevel);
       S.prefsPushedAt = prefsRow.updated_at;
       store.set(K.prefsPushedAt, S.prefsPushedAt);
       applyFont(S.font);
       if (S.level !== oldLevel) await loadLevel(S.level);
       else if (S.script !== oldScript) rebuildLexicon();
+      loadGoalList();
+      fillGoalLevels();
+      renderSectionNotes();
     }
 
     saveChats();
