@@ -158,8 +158,9 @@ fine.
 
 # What the app does
 
-**Levels.** The picker in the header switches the whole allowlist between **HSK 1** and the
-combined 7–9 band, mid-conversation. The bands are the official **HSK 3.0** syllabus
+**Levels.** The picker in Settings switches the whole allowlist between **HSK 1** and the
+combined 7–9 band, mid-conversation; a read-only chip in the header says which one you are
+under. The bands are the official **HSK 3.0** syllabus
 (《国际中文教育中文水平等级标准》, 2021), parsed from
 [hsk-syllabus-vocabulary-parser](https://github.com/Punpuf/hsk-syllabus-vocabulary-parser):
 **300 / 497 / 988 / 1,978 / 3,557 / 5,334 / 10,896** words, cumulative.
@@ -317,7 +318,7 @@ key you had just pasted.)
 | **Time chatting** | today and all-time, summed across every device you sync |
 | **Spend** | today, the last ten days, and all-time — what OpenRouter actually charged |
 | **API key** | OpenRouter key, stored on this device only |
-| **Chat model** | picker, in the header and in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
+| **Chat model** | picker, in Settings; defaults to Qwen3 30B A3B at ~$0.05/M |
 | **Or paste any model id** | for anything the catalogue is not showing — applies as you leave the field |
 | **Sort models** | by price (free first) or by name (A–Z) |
 | **Browse and star models** | the catalogue as a searchable sheet: tap a row to choose it, tap ★ to keep it at hand |
@@ -653,10 +654,21 @@ did not: 怎么样 and 英文 are not HSK 1, 季节 is not HSK 3, 平衡 and 节
 
 ## The A/B flag
 
-HSKStory reports that including the vocabulary list in the prompt makes output *worse*.
-Both paths are built: Settings → Prompt mode toggles `without-list` (rules only) and
-`with-list` (allowlist appended). The counters accumulate turns, mean retries per turn and
-give-ups per mode — run ~20 turns each way and compare. Assume neither result.
+Settings → Prompt mode toggles `without-list` (rules only) and `with-list` (allowlist
+appended). Both paths were built because HSKStory reported that including the vocabulary list
+makes output *worse*, and for a long time this project had no key to check with.
+
+**It has now been checked at four levels, and the answer depends on the level.** The list
+helps where it constrains and stops helping once it does not: violation tokens more than
+halve at HSK 1 and HSK 3, and the advantage decays to nothing by HSK 4 (p = 0.72) and HSK 6
+(p = 1.00) while the cost climbs from 2.7× to 33×. Full numbers, the way the two arms fail
+differently, and the place name that reverses the HSK 6 result are in
+[RESEARCH.md](RESEARCH.md#whether-the-allowlist-belongs-in-the-prompt).
+
+The default is `without-list` at every level, which the measurement says is the wrong arm at
+HSK 1–3 and the right one from HSK 4 up. A single global toggle cannot express that.
+Reproduce or extend with `tools/prompt-ab.js`; the in-app counters (turns, mean retries,
+give-ups per mode) remain for a longer, messier read from real use.
 
 Settings also exposes the assembled prompt itself. Untouched it keeps tracking the level and
 length pickers; edited, it is sent as written with `{level}` and `{words}` substituted.
@@ -732,6 +744,63 @@ measure word   3    我有三个书。 → 我有三本书。
 
 Scanned from the stored grades rather than kept as a running tally, which would be a second
 source of truth to drift out of step.
+
+# Activities
+
+The header's first control is what kind of session this is. Three of them:
+
+| | What it is | Who speaks first |
+|---|---|---|
+| **Chat** | open conversation, the app as it always was | you |
+| **Focused chat** | the partner steers toward words you were taught and have never once written | the partner |
+| **Story time** | a five-part story at your level, then questions about it | the partner |
+
+**Choosing an activity starts a new conversation.** It is not a mode switch on the one you
+are in — an activity is fixed when a conversation is created, so a transcript never mixes a
+story with a chat, and the chat you left is one tap away under 💬. The chat list labels every
+row with its activity, because a list of mixed session types is unreadable without it.
+
+Conversation starters only appear in **Chat**. They are openers for the *learner*, and the
+other two open with the partner speaking first — offering one there would invite you to talk
+over a story that has not started.
+
+**Focused chat** draws its words from the same list the progress panel calls *never used*:
+words the app introduced through pacing that you have not yet written yourself. That list
+already existed, already sorted commonest-first, so the activity is one extra rule and a
+different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
+maintaining per level and would fight the word goal whenever the two disagreed. The words pull
+the conversation somewhere on their own.
+
+**Story time** generates **five segments of about ninety characters**, each as its own turn,
+and then asks you about what it just told you. The segment size is not a stylistic choice and
+not arbitrary: `RESEARCH.md` explains why new words are metered per *turn* at one per 45
+characters read, capped at three, with the remainder **discarded**. A 450-character story told
+as a single turn therefore earns three new words and throws the other ten away — so the one
+activity most entitled to graded-reader density is exactly where the cap silently removes it.
+Ninety characters is two credits and stays under the cap, so no segment loses anything, and
+five of them carry roughly ten new words. `test/pace.test.js` pins that arithmetic against the
+constants rather than against the number, so changing either one fails the suite.
+
+A segment the model cannot get down to level keeps its best attempt and the story carries on.
+The canned fallback is survivable in a chat turn and nonsense in the middle of a narrative.
+
+**Story time needs its own model, and Settings gives it one.** This is the one activity a
+cheap model cannot do. Measured at HSK 1: two usable segments in fifty-five on the default
+chat model, against thirty-three in forty on the default story model — and zero stories out
+of eleven that worked, against eight out of eight. Six different prompt strategies were tried
+first and none of them helped; two of them made a capable model worse. The write-up is in
+DEVELOPING.md. It costs roughly **$0.10 a story**, about 170× a chat turn, which is why it is
+a separate setting you can see and change rather than something the app quietly spends on
+your behalf.
+
+Its characters are called **小明, 小红 and 小白**, and that is not laziness — it is the only
+way story time gets named characters at all. No name character is legal at any level the app
+offers: `明`, `王` and `李` are absent from all 10,896 words of the combined 7–9 band, and
+`红` and `白` do not arrive until HSK 5. So the three are named in the prompt and allowed for
+those turns, the same way a `[[NEED:]]` word or a newly offered word is allowed — and they
+stay illegal everywhere else, including in an ordinary chat. Measured against the alternative
+of banning names outright: fewer out-of-level words per character, and stories you can
+actually follow. See DEVELOPING.md.
 
 # Conversations
 
@@ -1262,8 +1331,9 @@ it.
 The page must not scroll sideways, and one trap made it: flex items default to
 `min-width: auto`, so a `<select>` cannot shrink below its longest option — a model id like
 `qwen/qwen3-30b-a3b-instruct-2507` pushed the header buttons past the right edge and took
-the document with them. The level select keeps its natural width; the model select absorbs
-the shrinking.
+the document with them. That select has since moved into Settings; the activity select is
+the header's one flexible control now and absorbs the shrinking, and the level chip beside it
+is a short button rather than a picker.
 
 Message size is a `--msg` custom property (16–34px). The pinyin ruby is sized in `em` so it
 scales with the text, and is **CSS generated content** rather than a DOM node so that
