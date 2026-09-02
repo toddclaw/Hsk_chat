@@ -106,5 +106,10 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git rm -r --quiet "preview/$safe"
             git commit -m "Remove preview for deleted branch ${{ github.event.ref }}"
+
+            # Rebase on top of any concurrent main publish so we never
+            # overwrite it — see Hsk_chat#24 for the race source.
+            git fetch origin gh-pages --depth=1                  # freshen ref
+            git rebase origin/gh-pages                           # stack on any new commits
             git push origin HEAD:gh-pages
           fi
