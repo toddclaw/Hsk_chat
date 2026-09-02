@@ -1105,6 +1105,24 @@ return true;
         return Array.prototype.slice.call(r, 0, 5).map(function (x) {
           return x.querySelector('.w2').textContent; }).join(" ");`));
 
+    // The "Never used" section shows words introduced by pacing the learner
+    // has never written themselves. Seeded data has 已经 (unused) and 可以 (used).
+    const neverGroups = await exec(`
+      var d = Array.prototype.filter.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return /Never used/.test(d.querySelector('summary').textContent); });
+      return d.length ? { count: d[0].querySelector('.secnote').textContent,
+                         word: d[0].querySelector('.w2').textContent } : null;`);
+    check(!!neverGroups,
+      "the pool browser shows a Never used section",
+      JSON.stringify(neverGroups));
+    check(neverGroups && Number(neverGroups.count) > 0,
+      "with a count of unused words",
+      JSON.stringify(neverGroups));
+    check(neverGroups && neverGroups.word === "\u5df2\u7ecf",
+      "naming the one seeded word the learner never wrote",
+      JSON.stringify(neverGroups));
+
     // Switching levels re-fetches and re-renders, including upward.
     await exec(`
       var sel = document.querySelector('#poolLevel');
