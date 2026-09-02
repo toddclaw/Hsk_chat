@@ -51,6 +51,8 @@ header{
    then pushed the buttons off the right edge of the screen. */
 header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
   padding:8px 6px; min-height:var(--tap); min-width:0}
+#activityNote{font-size:12px; color:var(--dim); padding:6px 10px; line-height:1.5;
+  background:var(--panel); border-bottom:1px solid var(--line); display:none}
 /* The activity is the header's one primary control now, so it absorbs all the
    shrinking; the level chip is a short, read-only signpost beside it. */
 header select#activity{flex:1 1 auto; min-width:0}
@@ -358,6 +360,8 @@ footer{
   <button id="btnVocab" title="Vocabulary">词</button>
   <button id="btnSet" title="Settings">⚙</button>
 </header>
+
+<div id="activityNote"></div>
 
 <div id="log"></div>
 
@@ -3697,6 +3701,9 @@ function fillActivities() {
   $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
     '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
+  const note = HSKPrompt.ACTIVITIES[cur] && HSKPrompt.ACTIVITIES[cur].note;
+  const el = $("#activityNote");
+  if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
 
 /* Read-only: the level is set in Settings. It stays on screen because it governs
