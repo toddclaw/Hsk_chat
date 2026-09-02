@@ -1547,11 +1547,12 @@ function explainSystemPrompt(turnObj, own, followUp) {
       context: own ? contextFor(turnObj) : [], followUp: !!followUp });
 }
 
-function windowed() {
+function windowed(excludeKind) {
   // Notices are UI, not conversation: sending them would teach the model that
   // English error text belongs in the chat.
-  return S.history.filter(t => t.role === "user" || t.role === "assistant")
-    .slice(-WINDOW).map(t => ({ role: t.role, content: t.text }));
+  var msgs = S.history.filter(t => t.role === "user" || t.role === "assistant");
+  if (excludeKind) msgs = msgs.filter(function (t) { return t.kind !== excludeKind; });
+  return msgs.slice(-WINDOW).map(function (t) { return { role: t.role, content: t.text }; });
 }
 
 /* One turn against the history already containing the user's message:
@@ -1585,7 +1586,7 @@ async function turn(ctx) {
   const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
-    .concat(windowed());
+    .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
   let attempt = 0, last = null, missed = null, echoed = null;
@@ -3577,6 +3578,7 @@ async function runTurn(toGloss, text, ctx) {
     hist.push({
       role: "assistant", text: res.text, needs: res.needs,
       attempts: res.attempts, failed: !!res.failed, truncated: !!res.truncated,
+      kind: (ctx && ctx.storyPhase === "discussing") ? "discuss" : undefined,
       id: newMessageId(), created_at: new Date().toISOString()
     });
     const introduced = settlePace(res);
