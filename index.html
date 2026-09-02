@@ -4537,12 +4537,15 @@ function usableWords() {
  * is nothing new. */
 function producedWords() {
   const out = new Set();
-  S.history.forEach(t => {
-    if (t.role !== "user") return;
-    HSK.segment(t.text, S.lex).forEach(tok => {
-      if (tok.kind === "word") out.add(tok.text);
+  const scan = function (list) {
+    (list || []).forEach(function (t) {
+      if (t.role !== "user") return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind === "word") out.add(tok.text);
+      });
     });
-  });
+  };
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) { scan(S.chatMsgs[cid]); });
   return out;
 }
 
