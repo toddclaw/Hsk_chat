@@ -1138,9 +1138,21 @@ return true;
     check(usedGroups && Number(usedGroups.count) >= 10,
       "with a count matching the typed history",
       JSON.stringify(usedGroups));
-    check(usedGroups && usedGroups.first === "\u7684",
+check(usedGroups && usedGroups.first === "\u7684",
       "listing the commonest word first",
       JSON.stringify(usedGroups));
+
+    // producedWords() must scan every chat, not only the currently-open one.
+    // Verify by checking the total is non-trivial from the seeded data alone.
+    const totalProduced = await exec(`
+      return (window.producedWords && window.producedWords().size) || 0;`);
+    check(totalProduced >= 15,
+      "producedWords includes all user turns across every conversation",
+      "got " + totalProduced);
+
+    // Switching levels re-fetches and re-renders, including upward.
+
+    // Switching levels re-fetches and re-renders, including upward.
 
     // Switching levels re-fetches and re-renders, including upward.
     await exec(`
