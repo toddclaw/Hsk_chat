@@ -4211,6 +4211,7 @@ function renderPool() {
     box.appendChild(d);
   });
   renderNeverUsed();
+  renderUsedByYou();
 }
 
 function neverUsedWords() {
@@ -4240,6 +4241,48 @@ function renderNeverUsed() {
       '<span class="w2">' + escapeHtml(e.w) + '</span>' +
       '<span class="g">' + escapeHtml(e.p || "") +
       (lv ? ' — from ' + escapeHtml(lv.label) : "") +
+      " — " + escapeHtml(e.d || "") + "</span>";
+    inner.appendChild(row);
+  });
+  d.appendChild(inner);
+  box.appendChild(d);
+}
+
+function usedWords() {
+  const mine = producedWords();
+  if (!mine.size) return [];
+  const freq = new Map(S.refList.map(e => [e.w, e.f || Infinity]));
+  const seen = new Set();
+  const out = [];
+  // Words from the allowlist and learning list, with their full data.
+  S.base.concat(S.learning, S.extra, S.known).forEach(e => {
+    if (mine.has(e.w) && !seen.has(e.w)) { seen.add(e.w); out.push(e); }
+  });
+  // Any remaining produced words looked up from the reference dictionary.
+  S.refList.forEach(e => {
+    if (mine.has(e.w) && !seen.has(e.w)) { seen.add(e.w); out.push(e); }
+  });
+  return out.sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity));
+}
+
+function renderUsedByYou() {
+  const box = $("#poolList");
+  if (!box) return;
+  const used = usedWords();
+  if (!used.length) return;
+  const d = document.createElement("details");
+  d.className = "sec";
+  d.open = true;
+  d.innerHTML = "<summary>Used by you<span class='secnote'>" + used.length +
+    "</span></summary><div class='note'>Words you have written in your own messages. " +
+    "These are your productive vocabulary — the ones you reach for.</div>";
+  const inner = document.createElement("div");
+  used.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    row.innerHTML = '<span style="width:16px"></span>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p || "") +
       " — " + escapeHtml(e.d || "") + "</span>";
     inner.appendChild(row);
   });
