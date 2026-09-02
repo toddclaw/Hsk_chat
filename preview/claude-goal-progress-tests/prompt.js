@@ -299,7 +299,7 @@
       note: null
     },
     focused: {
-      label: "Focused chat",
+      label: "Ghost Words",
       /* The reuse rule already says "please use these a lot". This one asks for
        * something stronger and different -- build the conversation so the words
        * have somewhere to go -- because a partner that merely uses them when they
@@ -312,7 +312,7 @@
       reuse: "unused",
       gen: "turn",
       converse: true,
-      note: "Focused chat targets words you have learned but never written yourself. " +
+      note: "Ghost Words targets words you have learned but never written yourself. " +
         "The partner steers toward these words and asks questions that need them. " +
         "Progress shows in Settings → Learning → never used: the goal is to shrink that list."
     },
