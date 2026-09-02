@@ -295,7 +295,8 @@
       names: null,
       reuse: null,
       gen: "turn",
-      converse: true
+      converse: true,
+      note: null
     },
     focused: {
       label: "Focused chat",
@@ -310,7 +311,10 @@
       names: null,
       reuse: "unused",
       gen: "turn",
-      converse: true
+      converse: true,
+      note: "Focused chat targets words you have learned but never written yourself. " +
+        "The partner steers toward these words and asks questions that need them. " +
+        "Progress shows in Settings → Learning → never used: the goal is to shrink that list."
     },
     story: {
       label: "Story time",
@@ -321,7 +325,8 @@
       names: STORY_NAMES,
       reuse: null,
       gen: "segments",
-      converse: false
+      converse: false,
+      note: null
     }
   };
 
