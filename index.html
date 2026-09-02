@@ -51,6 +51,8 @@ header{
    then pushed the buttons off the right edge of the screen. */
 header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
   padding:8px 6px; min-height:var(--tap); min-width:0}
+#activityNote{font-size:12px; color:var(--dim); padding:6px 10px; line-height:1.5;
+  background:var(--panel); border-bottom:1px solid var(--line); display:none}
 /* The activity is the header's one primary control now, so it absorbs all the
    shrinking; the level chip is a short, read-only signpost beside it. */
 header select#activity{flex:1 1 auto; min-width:0}
@@ -146,8 +148,8 @@ header button{padding:8px 10px; flex:0 0 auto}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
 /* Each figure takes the color of the bar it describes, so the legend is the
    text itself rather than a key you have to hold in your head. */
-.barnote b{color:var(--accent); font-weight:600}
-.barnote i{color:var(--ok); font-style:normal; font-weight:600}
+.barnote b{color:var(--ok); font-weight:600}
+.barnote i{color:var(--accent); font-style:normal; font-weight:600}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -359,6 +361,8 @@ footer{
   <button id="btnSet" title="Settings">⚙</button>
 </header>
 
+<div id="activityNote"></div>
+
 <div id="log"></div>
 
 <div id="starters"></div>
@@ -562,6 +566,9 @@ footer{
       95% and comfortable independent reading at 98%; moving up makes the next level the one
       you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
+      <div class="note" style="margin-top:8px">Words you have never written yourself (the <b>never used</b> row below) are exactly
+      what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
+      lead you toward them.</div>
 
     <label style="margin-top:14px">Your top mistakes</label>
       <div class="stats" id="mistakes"></div>
@@ -917,7 +924,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v71 — 2026-09-01";
+const VERSION   = "v73 — 2026-09-01";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2601,11 +2608,15 @@ async function pullAndMerge() {
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
+      store.set(K.goalLevel, S.goalLevel);
       S.prefsPushedAt = prefsRow.updated_at;
       store.set(K.prefsPushedAt, S.prefsPushedAt);
       applyFont(S.font);
       if (S.level !== oldLevel) await loadLevel(S.level);
       else if (S.script !== oldScript) rebuildLexicon();
+      loadGoalList();
+      fillGoalLevels();
+      renderSectionNotes();
     }
 
     saveChats();
@@ -3697,6 +3708,9 @@ function fillActivities() {
   $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
     '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
+  const note = HSKPrompt.ACTIVITIES[cur] && HSKPrompt.ACTIVITIES[cur].note;
+  const el = $("#activityNote");
+  if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
 
 /* Read-only: the level is set in Settings. It stays on screen because it governs
@@ -4200,6 +4214,84 @@ function renderPool() {
     renderPoolGroup(d, spec, entries);
     box.appendChild(d);
   });
+  renderNeverUsed();
+  renderUsedByYou();
+}
+
+function neverUsedWords() {
+  const mine = producedWords();
+  const freq = new Map(S.refList.map(e => [e.w, e.f || Infinity]));
+  return S.learning.filter(e => !mine.has(e.w))
+    .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity));
+}
+
+function renderNeverUsed() {
+  const box = $("#poolList");
+  if (!box) return;
+  const unused = neverUsedWords();
+  if (!unused.length) return;
+  const d = document.createElement("details");
+  d.className = "sec";
+  d.open = true;
+  d.innerHTML = "<summary>Never used<span class='secnote'>" + unused.length +
+    "</span></summary><div class='note'>Words the app taught you that you have never written. " +
+    "Switch to <b>Ghost Words</b> in the header to practise them.</div>";
+  const inner = document.createElement("div");
+  unused.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    const lv = LEVELS.find(l => l.id === e.from);
+    row.innerHTML = '<span style="width:16px"></span>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p || "") +
+      (lv ? ' — from ' + escapeHtml(lv.label) : "") +
+      " — " + escapeHtml(e.d || "") + "</span>";
+    inner.appendChild(row);
+  });
+  d.appendChild(inner);
+  box.appendChild(d);
+}
+
+function usedWords() {
+  const mine = producedWords();
+  if (!mine.size) return [];
+  const freq = new Map(S.refList.map(e => [e.w, e.f || Infinity]));
+  const seen = new Set();
+  const out = [];
+  // Words from the allowlist and learning list, with their full data.
+  S.base.concat(S.learning, S.extra, S.known).forEach(e => {
+    if (mine.has(e.w) && !seen.has(e.w)) { seen.add(e.w); out.push(e); }
+  });
+  // Any remaining produced words looked up from the reference dictionary.
+  S.refList.forEach(e => {
+    if (mine.has(e.w) && !seen.has(e.w)) { seen.add(e.w); out.push(e); }
+  });
+  return out.sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity));
+}
+
+function renderUsedByYou() {
+  const box = $("#poolList");
+  if (!box) return;
+  const used = usedWords();
+  if (!used.length) return;
+  const d = document.createElement("details");
+  d.className = "sec";
+  d.open = true;
+  d.innerHTML = "<summary>Used by you<span class='secnote'>" + used.length +
+    "</span></summary><div class='note'>Words you have written in your own messages. " +
+    "These are your productive vocabulary — the ones you reach for.</div>";
+  const inner = document.createElement("div");
+  used.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    row.innerHTML = '<span style="width:16px"></span>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p || "") +
+      " — " + escapeHtml(e.d || "") + "</span>";
+    inner.appendChild(row);
+  });
+  d.appendChild(inner);
+  box.appendChild(d);
 }
 
 function renderVocab() {
@@ -4445,12 +4537,15 @@ function usableWords() {
  * is nothing new. */
 function producedWords() {
   const out = new Set();
-  S.history.forEach(t => {
-    if (t.role !== "user") return;
-    HSK.segment(t.text, S.lex).forEach(tok => {
-      if (tok.kind === "word") out.add(tok.text);
+  const scan = function (list) {
+    (list || []).forEach(function (t) {
+      if (t.role !== "user") return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind === "word") out.add(tok.text);
+      });
     });
-  });
+  };
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) { scan(S.chatMsgs[cid]); });
   return out;
 }
 
@@ -4516,9 +4611,9 @@ function renderGoalProgress() {
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+    '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(goalLv.label) + " — goal</span>" +
-      "<i>" + use + "% you can use</i></div>";
+      "<i>" + pct + "% you can read</i></div>";
 }
 
 function renderNextProgress() {
@@ -4542,9 +4637,9 @@ function renderNextProgress() {
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+    '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
-      "<i>" + use + "% you can use</i></div>" +
+      "<i>" + pct + "% you can read</i></div>" +
     /* A second bar, on its own scale, because the first one cannot show this.
      * Reading coverage starts at 88% for HSK 1 -> 2 and every word that
      * matters lives in the top 12 points of it -- correct, since that is what
