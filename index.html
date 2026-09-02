@@ -527,8 +527,18 @@ footer{
 
   <details class="sec">
     <summary>Learning<span class="secnote" id="secLearningNote"></span></summary>
-    <label>Progress to the next level</label>
-      <div class="stats" id="progress"></div>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:baseline">
+      <label for="goalLevel">Overall goal</label>
+      <select id="goalLevel"></select>
+    </div>
+      <div class="stats" id="goalProgress"></div>
+      <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
+      word at the goal level allows you. <b style="color:var(--ok)">Green</b> is what you can
+      <em>use</em>. The 98% mark is comfortable independent reading — texts at that level
+      become readable without help.</div>
+
+    <label style="margin-top:14px">Progress to the next level</label>
+      <div class="stats" id="nextProgress"></div>
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button id="moveUp" class="primary" type="button" style="display:none"></button>
       </div>
@@ -907,7 +917,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v70 — 2026-09-01";
+const VERSION   = "v71 — 2026-09-01";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -957,6 +967,7 @@ const K = {
   storyModel:"hsk1chat.storyModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
+  goalLevel:"hsk1chat.goalLevel",
   chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId", cost:"hsk1chat.cost",
   teachPrompts:"hsk1chat.teachPrompts",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
@@ -1019,6 +1030,10 @@ const S = {
   /* Gradual introduction of next-level words. `budget` is per level, since the
    * pool it draws from is; `learning` is flat, because a word once met stays
    * met whatever level you switch to afterwards. */
+  goalLevel: store.get(K.goalLevel, 7),
+  // The goal level's wordlist, loaded on init and on goal change. Covers the
+  // whole list so readiness can compute coverage against it.
+  goalList: [],
   pace:    store.get(K.pace, { on: false, rate: HSKPace.DEFAULT_RATE }),
   budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
@@ -1202,6 +1217,16 @@ async function loadPool() {
   } catch (e) { console.warn("pool load failed", e); }
   renderPaceNote();
   renderProgress();
+}
+
+// Goal-level wordlist, loaded and cached separately from the next-level pool.
+async function loadGoalList() {
+  const goalLv = LEVELS.find(l => l.id === S.goalLevel);
+  if (!goalLv) return;
+  try {
+    S.goalList = await levelList(S.goalLevel);
+  } catch (e) { console.warn("goal list load failed", e); }
+  renderGoalProgress();
 }
 
 async function loadLevel(n) {
@@ -3703,6 +3728,18 @@ function fillLevels() {
     '<option value="' + l.id + '"' + (l.id === S.level ? " selected" : "") + ">" + l.label + "</option>").join("");
 }
 
+function fillGoalLevels() {
+  const el = $("#goalLevel");
+  if (!el) return;
+  el.innerHTML = LEVELS.filter(l => l.id > S.level).map(l =>
+    '<option value="' + l.id + '"' + (l.id === S.goalLevel ? " selected" : "") + ">" + l.label + "</option>").join("");
+  // If the stored goal is not above the current level, reset to the top option.
+  if (S.goalLevel <= S.level) {
+    const top = LEVELS.filter(l => l.id > S.level);
+    if (top.length) { S.goalLevel = top[top.length - 1].id; store.set(K.goalLevel, S.goalLevel); }
+  }
+}
+
 // A model's cost is the thing worth seeing while choosing one, so it goes in
 // the label rather than in a note somewhere else.
 function priceLabel(m) {
@@ -4461,8 +4498,31 @@ function readiness() {
   };
 }
 
-function renderProgress() {
-  const box = $("#progress");
+function renderGoalProgress() {
+  const box = $("#goalProgress");
+  if (!box) return;
+  const goalLv = LEVELS.find(l => l.id === S.goalLevel);
+  if (!goalLv || !S.goalList || !S.goalList.length) {
+    box.innerHTML = '<div class="note">Loading…</div>';
+    return;
+  }
+  const usable = usableWords(), mine = producedWords();
+  const read = HSKPace.coverage(S.goalList, usable);
+  const produce = HSKPace.coverage(S.goalList, mine);
+  const pct = Math.round(read * 100);
+  const use = Math.round(produce * 100);
+  const mark = Math.round(HSKPace.READY_AT * 100);
+  box.innerHTML =
+    '<div class="bar"><i style="width:' + pct + '%"></i>' +
+    '<b style="width:' + use + '%"></b>' +
+    '<u style="left:' + mark + '%"></u></div>' +
+    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+      "<span>" + escapeHtml(goalLv.label) + " — goal</span>" +
+      "<i>" + use + "% you can use</i></div>";
+}
+
+function renderNextProgress() {
+  const box = $("#nextProgress");
   if (!box) return;
   const r = readiness();
   if (!r) {
@@ -4515,6 +4575,8 @@ function renderProgress() {
     btn.textContent = "Move up to " + r.next.label;
   }
 }
+
+function renderProgress() { renderGoalProgress(); renderNextProgress(); }
 
 /* Counted across every conversation, not just the open one: a recurring mistake
  * is recurring precisely because it spans them. Scanned rather than stored --
@@ -4614,8 +4676,16 @@ document.addEventListener("click", e => {
 
 $("#level").onchange = async e => {
   await loadLevel(Number(e.target.value));
+  fillGoalLevels();
   queueSync("prefs");
   updateMirror(); renderAll(); renderStarters(); renderLevelChip();
+};
+$("#goalLevel").onchange = async e => {
+  S.goalLevel = Number(e.target.value);
+  store.set(K.goalLevel, S.goalLevel);
+  queueSync("prefs");
+  await loadGoalList();
+  renderSectionNotes();
 };
 $("#activity").onchange = e => { startActivity(e.target.value); fillActivities(); };
 $("#levelChip").onclick = () => openSheet("#setSheet");
@@ -4695,7 +4765,7 @@ $("#moveUp").onclick = async () => {
   await loadLevel(next.id);
   queueSync("prefs");
   $("#level").value = String(S.level);
-  fillLevels();
+  fillLevels(); fillGoalLevels();
   updateMirror(); renderAll(); renderStarters();
   renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
 };
@@ -4795,11 +4865,13 @@ function renderSectionNotes() {
   const m = S.model || "";
   $("#secModelsNote").textContent = m.length > 24 ? m.slice(m.indexOf("/") + 1) : m;
   /* The one number worth seeing without opening the section: how close the
-   * next level is. Blank at the top level, where there is nothing to be close
+   * goal level is. Blank at the top level, where there is nothing to be close
    * to -- a row captioned with a meaningless figure is worse than a bare one. */
-  const r = readiness();
+  const goalLv = LEVELS.find(l => l.id === S.goalLevel);
+  const goalRead = (S.goalList && S.goalList.length)
+    ? Math.round(HSKPace.coverage(S.goalList, usableWords()) * 100) : 0;
   $("#secLearningNote").textContent =
-    r ? Math.round(r.read * 100) + "% to " + r.next.label : "";
+    goalLv && S.goalList.length ? goalRead + "% to " + goalLv.label : "";
   $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
   $("#secVersionNote").textContent = VERSION.split(" ")[0];
 }
@@ -5344,7 +5416,7 @@ $("#setSheet").addEventListener("click", e => {
   } else {
     newChat();
   }
-  fillLevels(); fillModels();
+  fillLevels(); fillGoalLevels(); fillModels();
   $("#btnPy").style.color = S.pinyin === "off" ? "" : "var(--accent)";
   try {
     await loadLevel(S.level);
@@ -5354,6 +5426,7 @@ $("#setSheet").addEventListener("click", e => {
     return;
   }
   loadDict();
+  loadGoalList();
   updateMirror(); autosize(); renderAll(); renderStats(); renderStarters();
   if (!store.get(K.key, "")) $("#btnSet").click();
   /* Restore a signed-in sync session, or pick one up fresh after landing
