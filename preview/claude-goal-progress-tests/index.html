@@ -4210,6 +4210,41 @@ function renderPool() {
     renderPoolGroup(d, spec, entries);
     box.appendChild(d);
   });
+  renderNeverUsed();
+}
+
+function neverUsedWords() {
+  const mine = producedWords();
+  const freq = new Map(S.refList.map(e => [e.w, e.f || Infinity]));
+  return S.learning.filter(e => !mine.has(e.w))
+    .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity));
+}
+
+function renderNeverUsed() {
+  const box = $("#poolList");
+  if (!box) return;
+  const unused = neverUsedWords();
+  if (!unused.length) return;
+  const d = document.createElement("details");
+  d.className = "sec";
+  d.open = true;
+  d.innerHTML = "<summary>Never used<span class='secnote'>" + unused.length +
+    "</span></summary><div class='note'>Words the app taught you that you have never written. " +
+    "Switch to <b>Ghost Words</b> in the header to practise them.</div>";
+  const inner = document.createElement("div");
+  unused.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "poolrow";
+    const lv = LEVELS.find(l => l.id === e.from);
+    row.innerHTML = '<span style="width:16px"></span>' +
+      '<span class="w2">' + escapeHtml(e.w) + '</span>' +
+      '<span class="g">' + escapeHtml(e.p || "") +
+      (lv ? ' — from ' + escapeHtml(lv.label) : "") +
+      " — " + escapeHtml(e.d || "") + "</span>";
+    inner.appendChild(row);
+  });
+  d.appendChild(inner);
+  box.appendChild(d);
 }
 
 function renderVocab() {
