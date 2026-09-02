@@ -4526,9 +4526,9 @@ function renderGoalProgress() {
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+    '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(goalLv.label) + " — goal</span>" +
-      "<i>" + use + "% you can use</i></div>";
+      "<i>" + pct + "% you can read</i></div>";
 }
 
 function renderNextProgress() {
@@ -4552,9 +4552,9 @@ function renderNextProgress() {
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + pct + "% you can read</b>" +
+    '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
-      "<i>" + use + "% you can use</i></div>" +
+      "<i>" + pct + "% you can read</i></div>" +
     /* A second bar, on its own scale, because the first one cannot show this.
      * Reading coverage starts at 88% for HSK 1 -> 2 and every word that
      * matters lives in the top 12 points of it -- correct, since that is what
