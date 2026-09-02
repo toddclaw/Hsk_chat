@@ -148,8 +148,8 @@ header button{padding:8px 10px; flex:0 0 auto}
 .barnote{display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--dim)}
 /* Each figure takes the color of the bar it describes, so the legend is the
    text itself rather than a key you have to hold in your head. */
-.barnote b{color:var(--accent); font-weight:600}
-.barnote i{color:var(--ok); font-style:normal; font-weight:600}
+.barnote b{color:var(--ok); font-weight:600}
+.barnote i{color:var(--accent); font-style:normal; font-weight:600}
 
 /* Word tokens: the greedy matcher's boundaries are the tap targets. */
 .bubble{-webkit-user-select:text; user-select:text; -webkit-touch-callout:default}
@@ -924,7 +924,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v71 — 2026-09-01";
+const VERSION   = "v72 — 2026-09-01";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
