@@ -4,8 +4,11 @@ A single-page PWA for learning Chinese by chatting with an LLM that is held to
 your HSK level's vocabulary. Static files served as-is.
 
 `DEVELOPING.md` is the long form — read it when a section below points there.
-`RESEARCH.md` records why the pedagogical constants have the values they do;
-change one of those numbers and that document needs updating with it.
+`RESEARCH.md` records why the pedagogical constants have the values they do.
+Read it before designing anything that consumes one — `DEFAULT_RATE`,
+`CREDIT_CAP`, `SLATE`, `PROMOTE_AT`, `READY_AT` — not only before changing one:
+a feature can collide with a constant without ever editing it. Change one of
+those numbers and that document needs updating with it.
 
 ## Shape
 

@@ -80,6 +80,28 @@ create index if not exists messages_conversation_idx
 
 alter table public.messages add column if not exists grade jsonb;
 
+-- Which activity a conversation was created in: chat, focused chat or story
+-- time. Nullable, and NULL means "chat" -- conversations written before
+-- activities existed are chats, and an un-migrated database degrades to
+-- activity-less conversations rather than failing every push. See the note on
+-- conversation_id above for why the app tolerates this column being absent.
+
+alter table public.conversations add column if not exists activity text;
+
+-- Which kind of assistant turn this is inside a story: "segment" or "question".
+-- Story time interleaves them, and both are assistant turns, so nothing else
+-- stored tells them apart -- `introduced` is absent on plenty of real segments.
+-- Without it "part 3 of 5" miscounts on any device that pulled the story.
+alter table public.messages add column if not exists kind text;
+
+-- The vocabulary level a conversation was held at. Fixed at creation like
+-- activity, and for the same reason: a transcript written under HSK 1 rules
+-- does not become an HSK 3 transcript when the learner moves up. Nullable --
+-- conversations written before this column existed have no level, and the app
+-- shows nothing rather than guessing the current one.
+
+alter table public.conversations add column if not exists level int;
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.

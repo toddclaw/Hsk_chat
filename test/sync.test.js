@@ -1,7 +1,8 @@
 /* Cloud sync's pure data-shaping and merge logic. Run: node test/sync.test.js
- * The Supabase glue half of sync.js (everything after "Supabase glue" in
- * the file) has no network calls to test here -- it is exercised by the
- * Playwright suite against a mocked Supabase endpoint instead. */
+ * The Supabase glue half of sync.js is mostly exercised by the browser suite
+ * against a mocked endpoint; the one block at the bottom of this file is here
+ * because it is about which module-level flag a FAILED push sets, and the
+ * browser mock never fails. */
 const fs = require("fs");
 const path = require("path");
 const Sync = require("../sync.js");
@@ -163,6 +164,30 @@ check(declared.every(t => listed.includes(t)) && listed.every(t => declared.incl
 check(listed.includes("messages") && listed.includes("prefs"),
   "USER_TABLES covers the conversation and the preferences row, not just vocabulary");
 
+// kind distinguishes a story segment from a comprehension question. It has to
+// survive the round trip, or another device miscounts "part 3 of 5".
+var kindRow = Sync.messageToRow(
+  { id: "11111111-1111-4111-8111-111111111111", role: "assistant",
+    text: "他去了。", kind: "segment", created_at: "2026-01-01T00:00:00.000Z" },
+  "user-1", "conv-1");
+check(kindRow.kind === "segment", "messageToRow carries kind", JSON.stringify(kindRow));
+
+var kindBack = Sync.rowToMessage(
+  { id: "11111111-1111-4111-8111-111111111111", role: "assistant",
+    text: "他去了。", kind: "question", conversation_id: "conv-1",
+    created_at: "2026-01-01T00:00:00.000Z" });
+check(kindBack.kind === "question", "rowToMessage restores kind", JSON.stringify(kindBack));
+
+var noKind = Sync.messageToRow(
+  { id: "22222222-2222-4222-8222-222222222222", role: "user", text: "你好",
+    created_at: "2026-01-01T00:00:00.000Z" }, "user-1", "conv-1");
+check(noKind.kind === null, "and is null rather than absent when there is none",
+  JSON.stringify(noKind));
+
+// The schema file must actually declare it, or the push fails against a real db.
+check(/add column if not exists kind text/.test(schema),
+  "db/schema.sql adds the kind column");
+
 /* ---------------------------------------------------------- conversations */
 
 const A = { id: "a", title: "chat A", created_at: "2026-01-01T00:00:00Z",
@@ -262,5 +287,218 @@ check(local.model === "old/model" && local.replyLength === "short" && local.atte
   "an adopted snapshot overwrites model, reply length and tries -- the reported symptom");
 check(local.key === "keep", "though never the API key");
 
+/* activity is the third optional column. NULL means "chat", so conversations
+ * written before the column existed read back correctly with no migration. */
+const convA = { id: "c1", title: "T", activity: "story",
+                created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
+const rowA = Sync.conversationToRow(convA, "u1");
+check(rowA.activity === "story", "conversationToRow carries the activity");
+check(Sync.rowToConversation(rowA).activity === "story", "and it survives the round trip");
+
+check(Sync.rowToConversation({ id: "c2", created_at: "x", updated_at: "x" }).activity === "chat",
+  "a row with no activity column reads back as chat");
+check(Sync.rowToConversation({ id: "c3", activity: null, created_at: "x", updated_at: "x" })
+  .activity === "chat", "and so does an explicit NULL");
+
+/* The merge trap: mergeConversations rebuilds its object field by field, so a
+ * column not added there is dropped on every sync. */
+const mergedKeep = Sync.mergeConversations(
+  [{ id: "c4", title: "local", activity: "story", updated_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "c4", title: "remote", activity: "story", updated_at: "2026-01-03T00:00:00Z" }]);
+check(mergedKeep[0].activity === "story", "activity survives a merge -- it is not dropped");
+check(mergedKeep[0].title === "remote", "while title is still newest-wins");
+
+/* Not newest-wins. An activity is fixed at creation; a remote row that lost its
+ * activity (older client, un-migrated database) must not erase a local one. */
+const mergedNull = Sync.mergeConversations(
+  [{ id: "c5", activity: "focused", updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "c5", activity: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedNull[0].activity === "focused",
+  "a newer row with no activity does not erase the one we have");
+
+const mergedNew = Sync.mergeConversations(
+  [], [{ id: "c6", activity: "story", created_at: "x", updated_at: "x" }]);
+check(mergedNew[0].activity === "story", "a remote-only conversation keeps its activity");
+
+// Deletion stays monotonic regardless of activity.
+const mergedDel = Sync.mergeConversations(
+  [{ id: "c7", activity: "story", deleted: true, deleted_at: "2026-01-01T00:00:00Z",
+     updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "c7", activity: "story", updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedDel[0].deleted === true, "a deleted conversation stays deleted, activity or not");
+
+/* level is the fourth optional column, and behaves exactly like activity: fixed
+ * at creation, NULL when the column or the row predates it. NULL rather than a
+ * default, because the honest answer for a conversation held before levels were
+ * recorded is "unknown" -- guessing the current one mislabels an old chat. */
+const convL = { id: "c8", title: "T", level: 3,
+                created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z" };
+const rowL = Sync.conversationToRow(convL, "u1");
+check(rowL.level === 3, "conversationToRow carries the level");
+check(Sync.rowToConversation(rowL).level === 3, "and it survives the round trip");
+check(Sync.rowToConversation({ id: "c9", created_at: "x", updated_at: "x" }).level === null,
+  "a row with no level column reads back as no level, not as level 1");
+
+const mergedLev = Sync.mergeConversations(
+  [{ id: "d1", title: "local", level: 2, updated_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "d1", title: "remote", level: 2, updated_at: "2026-01-03T00:00:00Z" }]);
+check(mergedLev[0].level === 2, "level survives a merge -- it is not dropped");
+
+// Same rule as activity: a newer row that lost the column must not erase ours.
+const mergedLevNull = Sync.mergeConversations(
+  [{ id: "d2", level: 4, updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "d2", level: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedLevNull[0].level === 4,
+  "a newer row with no level does not erase the one we have");
+
+/* Story time runs on its own model, so that choice has to reach the other
+ * device like the chat and teaching model ids do. */
+check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,
+  "storyModel syncs with the other model settings");
+check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
+  "and adding it did not smuggle the key or the history in");
+
+/* --- the glue half: one failed push must not disable a different table -----
+ *
+ * configure() reads window.supabase at call time, so a stub client is enough to
+ * drive the push paths here. mockSupabase below decides whether an upsert or a
+ * probe select fails purely from which columns are actually absent from the
+ * simulated database -- the same thing real PostgREST decides from -- rather
+ * than a one-shot "fail the Nth call" counter, so the mock stays faithful as
+ * the retry logic around it changes and never has an error-injection branch
+ * that isn't reachable from a scenario below.
+ *
+ * index.html never calls probeSchema() (only conversationsSupported() is used,
+ * at index.html:4777) -- the retry inside pushMessages is the only degrade
+ * mechanism that actually runs in production. Scenario 1 below is that path:
+ * no probe, a database missing only `kind` (today's real state, since `kind`
+ * is a hand-run migration and the newest one). Scenario 2 is the case the
+ * incremental retry has to fall back from. Scenario 3 keeps probeSchema()
+ * itself covered -- it is real, exported code, just not wired up by this
+ * task. */
+function mockSupabase(missingCols, seen) {
+  return {
+    createClient: function () {
+      return {
+        from: function (table) {
+          const q = {};
+          q._selectCol = null;
+          q.upsert = function (rows) { q._rows = rows; return q; };
+          q.select = function (col) { q._selectCol = col; return q; };
+          q.eq = function () { return q; };
+          q.limit = function () { return q; };
+          // Thenable, so `await client.from(t).upsert(rows)` resolves.
+          q.then = function (resolve) {
+            let error = null;
+            if (q._rows) {
+              // upsert call: fails if any row carries a column the simulated
+              // database doesn't have, exactly like a real un-migrated table.
+              const keys = Object.keys(q._rows[0] || {});
+              seen.push({ table: table, keys: keys });
+              const missingKey = keys.find(k => missingCols.indexOf(k) !== -1);
+              if (missingKey) error = { code: "PGRST204", message: missingKey + " not found" };
+            } else if (q._selectCol) {
+              // select call (probeSchema)
+              if (missingCols.indexOf(q._selectCol) !== -1) {
+                error = { code: "PGRST204", message: "column " + q._selectCol + " does not exist" };
+              }
+            }
+            resolve({ data: [], error: error });
+            return Promise.resolve();
+          };
+          return q;
+        }
+      };
+    }
+  };
+}
+
+// A fresh module instance per scenario: schemaHasKind/ConvId/Grade are
+// module-level flags that persist for a session, so each scenario needs its
+// own un-probed session rather than leftover state from the last one.
+function freshSync() {
+  delete require.cache[require.resolve("../sync.js")];
+  return require("../sync.js");
+}
+
+(async () => {
+  // --- Scenario 1: the production path -- no probe, kind alone is missing --
+  const seen1 = [];
+  global.window = { supabase: mockSupabase(["kind"], seen1) };
+  Sync.configure("https://example.invalid", "publishable");
+
+  await Sync.pushMessages([Sync.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls1 = seen1.filter(c => c.table === "messages");
+  check(msgCalls1.length === 2,
+    "a push that fails only on kind retries exactly once", JSON.stringify(msgCalls1));
+  check(msgCalls1[0] && msgCalls1[0].keys.indexOf("kind") !== -1,
+    "the first attempt still tried to send kind -- nothing was probed in advance");
+  check(msgCalls1[1] && msgCalls1[1].keys.indexOf("kind") === -1,
+    "the retry drops kind alone");
+  check(msgCalls1[1] && msgCalls1[1].keys.indexOf("conversation_id") !== -1 &&
+        msgCalls1[1].keys.indexOf("grade") !== -1,
+    "...but keeps conversation_id and grade -- they were never the problem");
+  check(Sync.gradesSupported() === true,
+    "gradesSupported still reports true after a kind-only failure");
+
+  await Sync.pushMessages([Sync.messageToRow(
+    { id: "bbbbbbbb-0000-0000-0000-000000000002", role: "assistant", text: "还好",
+      created_at: "2026-08-21T10:05:00.000Z" }, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls1After = seen1.filter(c => c.table === "messages").slice(2);
+  check(msgCalls1After.length === 1,
+    "once kind is known missing, a later push in the same session does not need to fail first");
+  check(msgCalls1After[0].keys.indexOf("conversation_id") !== -1 &&
+        msgCalls1After[0].keys.indexOf("grade") !== -1 &&
+        msgCalls1After[0].keys.indexOf("kind") === -1,
+    "and that push still carries grade and conversation_id");
+
+  await Sync.pushConversations([Sync.conversationToRow(
+    { id: "cccccccc-0000-0000-0000-000000000001", activity: "story", level: 1,
+      created_at: "2026-08-27T00:00:00.000Z", updated_at: "2026-08-27T00:00:00.000Z" }, USER)]);
+  const convCalls1 = seen1.filter(c => c.table === "conversations");
+  check(convCalls1.length === 1,
+    "a degraded messages push does not silently switch off conversation pushing",
+    "conversations upserts: " + convCalls1.length);
+  check(convCalls1[0] && convCalls1[0].keys.indexOf("activity") !== -1 &&
+        convCalls1[0].keys.indexOf("level") !== -1,
+    "and it still carries the columns messages knows nothing about");
+
+  // --- Scenario 2: kind alone isn't enough -- conversation_id is missing too
+  const seen2 = [];
+  const Sync2 = freshSync();
+  global.window = { supabase: mockSupabase(["kind", "conversation_id"], seen2) };
+  Sync2.configure("https://example.invalid", "publishable");
+
+  await Sync2.pushMessages([Sync2.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls2 = seen2.filter(c => c.table === "messages");
+  check(msgCalls2.length === 3,
+    "when dropping kind alone isn't enough, the retry escalates once more and then stops",
+    JSON.stringify(msgCalls2));
+  check(msgCalls2[1] && msgCalls2[1].keys.indexOf("kind") === -1 &&
+        msgCalls2[1].keys.indexOf("conversation_id") !== -1,
+    "the second attempt tried dropping only kind, and still had conversation_id");
+  check(msgCalls2[2] && msgCalls2[2].keys.indexOf("kind") === -1 &&
+        msgCalls2[2].keys.indexOf("conversation_id") === -1 &&
+        msgCalls2[2].keys.indexOf("grade") === -1,
+    "the third attempt drops all three -- the blunt fallback -- and succeeds");
+  check(Sync2.gradesSupported() === false,
+    "grade is the acknowledged collateral cost of the blunt fallback, only once kind alone did not fix it");
+
+  // --- Scenario 3: probeSchema() itself, still real code, just not wired up
+  const seen3 = [];
+  const Sync3 = freshSync();
+  global.window = { supabase: mockSupabase(["kind"], seen3) };
+  Sync3.configure("https://example.invalid", "publishable");
+  await Sync3.probeSchema();
+  check(Sync3.gradesSupported() === true, "probeSchema finds grade present");
+
+  await Sync3.pushMessages([Sync3.messageToRow(turn, USER, "cccccccc-0000-0000-0000-000000000001")]);
+  const msgCalls3 = seen3.filter(c => c.table === "messages");
+  check(msgCalls3.length === 1,
+    "once probeSchema has already learned kind is missing, the push needs no retry at all");
+  check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
+    "and the single push still carries grade");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
+})();

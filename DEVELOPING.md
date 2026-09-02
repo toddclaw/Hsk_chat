@@ -165,6 +165,13 @@ Naming the non-word in the prompt primed the model to *discuss* it —
 meta-commentary the partner is not supposed to produce at all. One run spent a
 `[[NEED:]]` on it. The change would have shipped as an improvement.
 
+`tools/prompt-ab.js` is the harness for this kind of question: it builds both system prompts
+the way `index.html` does, calls the real model, validates each reply through `validator.js`
+and counts out-of-level words per arm. It is deliberately not part of `test/run.sh` — it makes
+network calls and costs money. It reads the OpenRouter key from a file outside the repo into a
+variable, never an argv element. See RESEARCH.md, "Whether the allowlist belongs in the
+prompt", for a worked result and the sampling caveats it turned up.
+
 Rules of thumb this leaves:
 
 - **Never put an example of the bad output in the prompt.** It is an instruction
@@ -201,6 +208,188 @@ were real.
 almost no name characters, and `王` is HSK 4 (see [The validator](#the-validator)). It added
 noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
 must be namefree, or the thing being measured is the name.
+
+### Worked example: story time's position rule, and its names
+
+Story time generates five segments in sequence — one per tap since v63, back to back before
+that — and the only thing stopping segment 4 from
+being another segment 0 is one rule — `接着上面的故事往下讲，不要从头开始` in the middle,
+with a different line at each end. `tools/story-ab.js` is the harness. The control arm is a
+**wrong** position rule (every segment told it is the first) rather than no rule, so exactly
+one line differs and the rest of the prompt is held identical; deleting the line instead
+would renumber every rule after it, which is a second change.
+
+Two counters, because one would have been trusted too easily: a judge model
+(`claude-sonnet-4.5`) labelling each segment CONTINUES / RESTARTS / UNRELATED against
+everything before it, and character-trigram overlap with the nearest earlier segment, which
+needs no model at all. `qwen3-30b-a3b`, HSK 1, 20 stories per arm, **pooled over three runs**
+for the shipped arm and two for the control:
+
+| | segments | RESTARTS | stories with no restart | trigram overlap ≥ .25 |
+| --- | --- | --- | --- | --- |
+| position rule correct | 208 | 20 (10%) | 34/52 (65%) | 9/208 (4%) |
+| every segment told it is the first | 100 | 33 (33%) | 5/25 (20%) | 42/100 (42%) |
+
+The rule earns its place three times over, and about a third of stories still contain a
+restarted segment.
+
+**The pooling is the point, and the first run nearly published the opposite conclusion.**
+The shipped arm alone read **20%, 4% and 7% restarts across three sessions** — the first run
+put it at 20% against the control's 28% and would have said, with a straight face and sixty
+samples, that the rule does nothing. Nothing about the prompt changed between those runs;
+OpenRouter routes a model id to whichever provider is serving it. So:
+
+- **Compare arms only within a run.** They interleave, so a provider-side change lands on
+  both. The harness has always done this; the mistake was reading an absolute level off one
+  run rather than a contrast.
+- **Pool across runs before believing a level.** One 20-story run resolves a threefold
+  difference and does not resolve a 1.4× one.
+
+### Story time has to be given a cast, because the syllabus never will
+
+`明` alone was 283 of 1686 violations in one run — 小明, 小红, 小白. The reflex fix is to tell
+the model not to name anyone, and that measured well: violations per 100 Han characters
+28.4 → 22.6, continuity untouched. It shipped for about an hour.
+
+Then a better question: **at what level does story time earn a named character?** Never.
+`明`, `王` and `李` are absent from all 10,896 words of the 7-9 band; `红` and `白` do not
+arrive until HSK 5. `validate()` forgives a name only where `叫` or `姓` introduces it (see
+[The validator](#the-validator)), which repairs the first mention and leaves it bare in
+every segment after. So "no names in stories" was not a beginner constraint a learner grows
+out of — it was permanent.
+
+`ACTIVITIES.story.names` now carries three, listed in the prompt and added to the turn's
+validation lexicon, the same bargain `turn()` already strikes for `[[NEED:]]` words and
+pacing offers: legal because the prompt asked for them. Measured against the no-names rule,
+interleaved, 20 stories per arm:
+
+| | violations per 100 han | RESTARTS | stories with no restart | stories judged CLEAR |
+| --- | --- | --- | --- | --- |
+| `不要起名字` | 22.6 | 6/72 (8%) | 14/18 | 16/18 |
+| named cast | **20.5** | 2/64 (3%) | 14/16 | **32/32** |
+
+The whitelist is at worst neutral on every existing counter and **better on the one that had
+to be added for it**. Restarts measure structure; they cannot see two characters both called
+`他`. `CLEAR / CONFUSING` over the whole story is that counter, and 2 of 18 no-names stories
+were confusing against none of the named ones — suggestive rather than proven at that n, but
+it is the only measure pointing anywhere, and the whitelist costs nothing on the others.
+
+Three points of method worth keeping:
+
+- **Three names is enough because the model's choices are concentrated.** `明`, `红` and `白`
+  were essentially all of it. Naming what it was going to say anyway is why the list does not
+  need to be a name corpus.
+- **An arm that changes a prompt must change the lexicon with it.** The `no-names` control
+  strips `ACTIVITIES.story.names` as well as adding the suppression rule; leaving the names
+  in the lexicon would have scored its own violations away and handed the control a win.
+- **The cast is scoped to the activity, and the browser suite is where that is provable.**
+  The node suite can show the names reach the prompt; only a real page can show they reach
+  the lexicon, and that the identical reply is still rejected in a chat.
+
+### What this did not fix
+
+Segments still come in at **55–83 characters against the 90 they are asked for**, so the
+pacing case for segmenting — 90 characters is two credits at `DEFAULT_RATE`, 55 is one — is
+weaker than `RESEARCH.md`'s arithmetic assumes.
+
+**Out-of-level rate per reply is not comparable across activities of different lengths.**
+Story's 100% against chat's 50% is mostly the four-fold length difference: at 60-odd
+characters a reply almost always contains something. Per hundred Han characters the gap is
+real and smaller — 20–28 against chat's 4–8 — and that is the number to quote. Normalise by
+length or you are measuring reply length.
+
+And, not a prompt question at all: **about one call in eight comes back with an empty
+completion**, at concurrency 1 as well as 4, across every arm. `callModel` throws on an empty
+reply and nothing retries it, so a story that hits one dies mid-narrative on a notice card.
+The harness retries once and counts; the app does not, and should.
+
+### Worked example: six ways to fix story time, none of which worked
+
+Story time at HSK 1 produced nothing usable: with the real three-attempt repair loop,
+94% of segments never came clean and every story degraded into `我不知道。` repeated. Six
+strategies were measured against that, all on `qwen3-30b-a3b`, 12 stories per arm.
+
+**The metric had to be fixed first, and this is the transferable part.** The first pass had
+*fresh context per retry* winning 55% clean against the control's 12%, and *plan then
+constrain* at 62%. Both were writing `他很好。` — clean, in level, and useless as a story.
+Any measure of "did the model obey the constraint" can be maximised by saying almost
+nothing. The counter became USABLE: clean **and** at least 40 Han characters.
+
+| | usable | stories with 3+ usable | chars in clean segments |
+| --- | --- | --- | --- |
+| control (90 characters asked) | 2/55 | **0/11** | 39 |
+| redirect on failure | 0/50 | 0/10 | 25 |
+| redirect on the last attempt only | — | 0/11 | 32 |
+| fresh context per retry | 0/55 | 0/11 | 5 |
+| plan then constrain | 0/60 | 0/12 | 15 |
+| ask for 50 characters | 2/60 | 0/12 | 28 |
+| ask for 30 characters | 0/55 | 0/11 | 19 |
+
+Not one arm produced a story with three usable segments. Asking for less does raise the raw
+clean rate — 7% to 32% to 44% — and shrinks the segments in exact step, so nothing crosses
+the bar. Six attempts instead of three is included in those clean counts.
+
+**The variable none of the prompt work touched was the model.** Same control arm, same level:
+
+| | usable | stories with 3+ usable | chars in clean segments | violations/100 han | $/story |
+| --- | --- | --- | --- | --- | --- |
+| `qwen3-30b-a3b` (shipped default) | 2/55 | 0/11 | 39 | ~27 | $0.0006 |
+| `google/gemini-2.5-flash` | 11/40 | 1/8 | 45 | — | $0.004 |
+| `deepseek/deepseek-v4-pro` | 20/40 | 3/8 | 112 | 11.6 | $0.025 |
+| `anthropic/claude-sonnet-4.5` | **33/40** | **8/8** | 154 | **1.1** | $0.10 |
+
+Sonnet also introduced new words through the ordinary pacing path — 15 across 4 stories,
+with no change to `pace.js` — and used `[[NEED:]]` in 12 of 20 segments. RESEARCH.md records
+that channel firing **0 times in 512 replies**; it is not dead, it was never reachable by the
+model this app ships.
+
+**And the strategies actively hurt on a capable model.** Re-measured on Sonnet, 4 stories per
+arm, because a strategy that fails where everything fails has not really been tested:
+
+| | usable | stories with 3+ usable | chars in clean segments | words introduced |
+| --- | --- | --- | --- | --- |
+| control | **15/20** | **4/4** | 164 | **12** |
+| redirect on failure | 8/20 | 2/4 | 160 | 3 |
+| plan then constrain | 10/20 | 2/4 | 89 | 2 |
+
+Redirect discards material the model could in fact have expressed; plan confines it to a beat
+chosen before the constraint was known. **The prompt was never the problem.** Do not spend
+another run on story-time prompt strategy without first changing the model.
+
+### Two constraints any per-activity model setting has to carry
+
+Discovered while trying to measure `deepseek-v4-pro`, which at first appeared to fail
+completely — 8 stories out of 8 producing nothing.
+
+- **A reasoning model spends `max_tokens` on reasoning before it writes.** At the shipped
+  `STORY_MAX_TOKENS` of 400 it returned nothing 3 times in 5; at 800, 5 out of 5; on a repair
+  turn it burned 1200 and still came back `finish_reason: "length"` with no content. A model
+  id alone is not enough to switch to — it needs a token floor with it.
+- **It will not take the story prompt in the `system` role at all**: 0 completions out of 8,
+  against 8 out of 8 with the identical text as a `user` message. Most likely the story rules
+  tell it not to address the student, and with no user turn it concludes there is nothing to
+  say. `qwen` is unaffected either way, so this is *not* the cause of the one-in-eight empty
+  completions measured across every arm — that remains unexplained.
+
+A harness bug worth naming for the same reason: an empty reply on a *repair* turn was ending
+the whole story, which scored a model down for failing to improve a segment it had already
+written successfully. Segment 0 was returning 84 good characters and the story was thrown
+away regardless. Only an empty *first* attempt ends a story now, which is what `index.html`
+does.
+
+### The chooser's three phases, and how a legacy conversation is told apart
+
+- **Story time has three prompt phases, and each suppresses the others' rules.**
+  `telling` carries 只讲故事，不要问学生问题 as an absolute, so `asking` and
+  `discussing` replace it rather than following it — a model obeys the first
+  absolute rule it reads. `discussing` exists because a learner answering the
+  partner's own question used to be met by the telling rules, which forbid
+  talking to them.
+- **`messages.kind` is what tells a segment from a question.** Both are
+  assistant turns, and nothing else stored distinguishes them. A conversation
+  written before the column existed has it on no message, so `storyTold()` falls
+  back to the old turn-order rule wholesale rather than per message — a mix
+  would count a legacy question as a segment.
 
 ### A cheaper model is not a cheaper conversation
 
@@ -450,6 +639,16 @@ Project setup lives in README.md. What is easy to get wrong:
 
 ## The validator
 
+- **What is rendered must be validated against the same lexicon.** A turn makes
+  extra words legal for itself — its `[[NEED:]]` words, the pacing offer, the
+  activity's cast — and `renderMessage()` has to know all of them or a reply that
+  passed is painted as a violation. Both sites once assembled `S.lex` plus extras
+  by hand and each forgot a different part: `turn()` dropped `S.known`, so a
+  ticked word spent the attempts and landed on the fallback; the renderer dropped
+  `S.learning` and the cast, so words pacing had *taught* came back red with no
+  card explaining them, and only in the messages that carried a need. One bug hid
+  the other — a single fixture could not see both. `lexWith()` is now the only way
+  to say it.
 - **`validate()` output does double duty.** It drives the repair loop *and* the
   learner's "new words" list. Dropping a violation therefore also removes the word
   from the UI — which is why out-of-level names are **marked** (`name: true`) and

@@ -415,5 +415,291 @@ check(!/The conversation so far/.test(
 check(P.grade({ label: "HSK 5", text: SENT }).includes("HSK 5"),
   "grade is told the level, which bounds the correction it offers");
 
+/* modeFor: "auto" is a rule for picking an arm, not an arm. The boundary is a
+ * measured one (RESEARCH.md, "Whether the allowlist belongs in the prompt"), so
+ * it is pinned here -- moving it silently would move the app's cost by an order
+ * of magnitude at the top of the syllabus. */
+check(P.modeFor("auto", 1) === "with-list", "auto puts the list in at HSK 1");
+check(P.modeFor("auto", 3) === "with-list", "auto puts the list in at HSK 3");
+check(P.modeFor("auto", 4) === "without-list", "auto drops the list at HSK 4");
+check(P.modeFor("auto", 7) === "without-list", "auto drops the list at HSK 7-9");
+check(P.AUTO_LIST_MAX_LEVEL === 3, "the measured boundary is 3");
+for (const n of levels) {
+  const m = P.modeFor("auto", n);
+  check(m === "with-list" || m === "without-list",
+    `L${n}: auto resolves to a real arm`, "got " + m);
+}
+// Pinning still pins: the Settings counters are only meaningful if it does.
+for (const n of [1, 4, 7]) {
+  check(P.modeFor("with-list", n) === "with-list", `L${n}: with-list stays pinned`);
+  check(P.modeFor("without-list", n) === "without-list", `L${n}: without-list stays pinned`);
+}
+// An unknown or missing value must not silently become the expensive arm.
+check(P.modeFor(undefined, 6) === "without-list", "a missing mode falls to the cheap arm at HSK 6");
+check(P.modeFor("", 1) === "with-list", "an empty mode still resolves by level");
+
+/* The arm has to reach the prompt: build() takes `words`, and the caller decides
+ * whether to pass it. This asserts the two halves agree about what "with-list"
+ * means -- that the allowlist genuinely appears only in that arm. */
+const modeArmOn = P.build({ level: 1, label: "HSK 1", length: "short", words: "我 你 好" });
+const modeArmOff = P.build({ level: 1, label: "HSK 1", length: "short", words: "" });
+check(modeArmOn.includes("我 你 好"), "build puts the allowlist in when given one");
+check(!modeArmOff.includes("我 你 好"), "and leaves it out when not");
+check(modeArmOn.length > modeArmOff.length, "with-list is the longer prompt");
+
+/* Activities. The contract is four fields because four is what varies: extra
+ * rules, where the reuse list comes from, how generation is driven, and whether
+ * the conversational turn-taking rules apply at all. */
+const ACT_IDS = ["chat", "focused", "story"];
+for (const id of ACT_IDS) {
+  const a = P.activityFor(id);
+  check(!!a, `activity ${id} exists`);
+  check(typeof a.label === "string" && a.label.length > 0, `activity ${id} has a label`);
+  check(a.gen === "turn" || a.gen === "segments", `activity ${id} has a real gen`, a.gen);
+  check(typeof a.converse === "boolean", `activity ${id} says whether it converses`);
+}
+check(P.activityFor("nope") === P.ACTIVITIES.chat, "an unknown activity falls back to chat");
+check(P.activityFor(undefined) === P.ACTIVITIES.chat, "so does a missing one");
+check(P.ACTIVITIES.chat.converse === true, "chat converses");
+check(P.ACTIVITIES.story.converse === false, "story does not converse mid-narrative");
+check(P.ACTIVITIES.story.gen === "segments", "story generates in segments");
+check(P.ACTIVITIES.focused.reuse === "unused", "focused chat draws reuse from the unused list");
+
+// The conversational rules must actually leave the prompt for story time.
+const ASK_RULE = "\u6700\u540e\u95ee\u4e00\u4e2a\u65b0\u95ee\u9898";
+const chatPrompt = P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" });
+const storyPrompt = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                              storySegment: { index: 0, of: 5 } });
+check(chatPrompt.includes(ASK_RULE), "chat keeps the ask-a-question rule");
+check(!storyPrompt.includes(ASK_RULE), "story drops it -- a segment must not end by asking");
+check(!storyPrompt.includes("\u4e0d\u8981\u628a\u5b66\u751f\u7684\u8bdd\u91cd\u590d\u4e00\u904d"),
+  "story drops the echo rule too");
+check(storyPrompt !== chatPrompt, "the two activities produce different prompts");
+
+// Segment position has to reach the model, or every segment restarts the story.
+const seg0 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 0, of: 5 } });
+const seg3 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 3, of: 5 } });
+const seg4 = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                       storySegment: { index: 4, of: 5 } });
+check(seg0 !== seg3, "the first segment reads differently from a middle one");
+check(seg3.includes("\u63a5\u7740"), "a middle segment is told to continue, not restart");
+check(seg4.includes("\u6700\u540e"), "the last segment is told to finish the story");
+check(!seg0.includes(P.LENGTHS.short.rule),
+  "a segment does not also get the conversational length rule -- it contradicts it");
+check(chatPrompt.includes(P.LENGTHS.short.rule), "while chat still does");
+
+// Rule numbering must survive activity rules, the same way it survives the others.
+for (const id of ACT_IDS) {
+  const out = P.build({ level: 3, label: "HSK 3", length: "medium", activity: id,
+                        storySegment: id === "story" ? { index: 1, of: 5 } : null,
+                        offer: [{ w: "\u82f9\u679c" }], reuse: [{ w: "\u559c\u6b22" }], script: "trad" });
+  const nums = out.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m => Number(m[1]));
+  const expected = nums.map((_, i) => i + 1);
+  check(JSON.stringify(nums) === JSON.stringify(expected),
+    `activity ${id}: rule numbering is gap-free and in order`, JSON.stringify(nums));
+}
+
+/* Phase two of story time. Not a segment, so it must not be told to write
+ * another ninety characters -- and it must not carry story time's own
+ * "只讲故事，不要问学生问题", which is stated absolutely and is exactly the
+ * rule a model obeys in preference to a later one contradicting it. */
+const q = P.build({ level: 1, label: "HSK 1", length: "short",
+                    activity: "story", storyPhase: "asking" });
+check(q.includes("\u95ee\u5b66\u751f\u4e00\u4e2a\u5173\u4e8e\u4ed6\u521a\u624d\u8bfb\u7684\u90a3\u4e00\u6bb5\u7684\u95ee\u9898"),
+  "the question phase asks about the part just read");
+check(!q.includes("\u8fd9\u4e00\u6bb5\u5199\u5927\u6982\u4e5d\u5341\u4e2a\u6c49\u5b57"),
+  "and is not told to write another segment");
+check(!q.includes("\u4e0d\u8981\u95ee\u5b66\u751f\u95ee\u9898"),
+  "and is not still under the telling rule forbidding questions");
+check(q.includes(P.LENGTHS.short.rule),
+  "it is a conversational turn again, so the length rule is back");
+const qNums = q.split("\n").map(l => /^(\d+)\. /.exec(l)).filter(Boolean).map(m => Number(m[1]));
+check(JSON.stringify(qNums) === JSON.stringify(qNums.map((_, i) => i + 1)),
+  "and its rule numbering is still gap-free", JSON.stringify(qNums));
+
+/* Task 9: the three story phases, the level-filtered question ladder, and
+ * the defect fix in `discussing` (a learner answering the partner's own
+ * question used to be met with story time's do-not-talk-to-them rules). */
+var asking = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "asking"
+});
+check(asking.indexOf("\u53ea\u8bb2\u6545\u4e8b") === -1,
+  "asking suppresses the do-not-question rule that would contradict it");
+check(asking.indexOf("\u521a\u624d\u8bfb\u7684") !== -1,
+  "and asks about the part just read, which is what circling does");
+check(asking.indexOf("\u4e3a\u4ec0\u4e48") !== -1,
+  "at HSK 2 the partner may ask why", asking.slice(0, 300));
+
+var askingOne = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyPhase: "asking"
+});
+check(askingOne.indexOf("\u4e3a\u4ec0\u4e48") === -1,
+  "at HSK 1 it may not -- \u4e3a is above the level");
+
+var discussing = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "discussing"
+});
+check(discussing.indexOf("\u53ea\u8bb2\u6545\u4e8b") === -1,
+  "discussing does not tell the partner to keep telling the story");
+check(discussing.indexOf("\u4e0d\u8981\u518d\u95ee") !== -1,
+  "and stops after reacting, because the button asks the next question");
+
+var telling = P.build({
+  level: 2, label: "HSK 2", length: "short", activity: "story",
+  storyPhase: "telling", storySegment: { index: 1, of: 5 }
+});
+check(telling.indexOf("\u53ea\u8bb2\u6545\u4e8b") !== -1, "telling keeps story time's own rules");
+
+/* Names are the single largest source of out-of-level words in a story, and the
+ * whitelist has to reach every segment -- not just the first, where 叫 would
+ * have covered it anyway -- and the question phase, which asks about the
+ * characters by name. */
+const nameRule = "\u6545\u4e8b\u91cc\u7684\u4eba\u53ef\u4ee5\u53eb";
+for (const idx of [0, 2, 4]) {
+  const out = P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                        storySegment: { index: idx, of: 5 } });
+  check(out.includes(nameRule), `segment ${idx} is given the cast`);
+  for (const e of P.STORY_NAMES) {
+    check(out.includes(e.w), `segment ${idx} lists ${e.w}`);
+  }
+}
+check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "story",
+                storyPhase: "asking" }).includes(nameRule),
+  "and so is the question phase -- it asks about the characters by name");
+
+/* Every name needs pinyin and a gloss or the popover is blank, and none may
+ * carry a `t`: the caller runs these through the same toScript() as the rule
+ * text, and a second conversion path is a second answer. */
+for (const e of P.STORY_NAMES) {
+  check(!!e.p && !!e.d, `${e.w} has pinyin and a gloss`);
+  check(e.t === undefined, `${e.w} carries no separate traditional form`);
+}
+
+check(!P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
+        .includes(nameRule), "while chat is not -- it is story time's problem");
+check(P.ACTIVITIES.chat.names === null && P.ACTIVITIES.focused.names === null,
+  "and neither dialogue activity has a cast");
+
+// The topic reaches the model as a rule, not as a conversation turn.
+var topicPrompt = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyTopic: "the Monkey King", storySegment: { index: 0, of: 5 }
+});
+check(topicPrompt.indexOf("the Monkey King") !== -1,
+  "the topic is named in the story prompt", topicPrompt.slice(0, 200));
+check(topicPrompt.indexOf("学生想听一个关于") !== -1,
+  "and introduced in Chinese, like every other rule");
+
+var noTopic = P.build({
+  level: 1, label: "HSK 1", length: "short", activity: "story",
+  storyTopic: "", storySegment: { index: 0, of: 5 }
+});
+check(noTopic.indexOf("学生想听一个关于") === -1,
+  "make-something-up adds no topic rule at all");
+
+// Every level has ideas of its own, per D8: a table filled in only to HSK 2
+// would leave every level above it on HSK 1's suggestions with nothing saying so.
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ideas = P.storyIdeasFor(lv);
+  check(ideas.length >= 4, "HSK " + lv + " has at least four story ideas",
+    JSON.stringify(ideas));
+  check(ideas.every(function (s) { return s && s.trim().length; }),
+    "HSK " + lv + "'s ideas are all non-empty");
+  check(new Set(ideas).size === ideas.length,
+    "HSK " + lv + "'s ideas are distinct", JSON.stringify(ideas));
+});
+// storyIdeasFor falls back to STORY_IDEAS[1] for any level with no row of its
+// own, so a per-level length/non-empty/distinct check alone cannot tell a real
+// row from a silently-missing one that fell back to HSK 1's -- it would pass
+// either way. This is the D8 failure mode by name: compare every other level's
+// list against HSK 1's fallback target so a deleted row is caught, not just
+// HSK 4's.
+var hsk1Ideas = P.storyIdeasFor(1).join("|");
+[2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  check(P.storyIdeasFor(lv).join("|") !== hsk1Ideas,
+    "HSK " + lv + "'s ideas are not just HSK 1's (would mean a missing row)",
+    JSON.stringify(P.storyIdeasFor(lv)));
+});
+
+// The ladder is checked against the data, not against the author's taste: a type
+// is permitted only where the level carries the words its asking form needs.
+// This is what catches 还是 at HSK 1, which validate() lets through as 还 + 是.
+var LEVEL_WORDS = {};
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  LEVEL_WORDS[lv] = new Set(JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "data", "hsk" + lv + ".json"), "utf8")
+  ).map(function (e) { return e.w; }));
+});
+
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ladder = P.questionTypesFor(lv);
+  check(ladder.types.length > 0, "HSK " + lv + " permits at least one question type",
+    JSON.stringify(ladder));
+  ladder.needs.forEach(function (w) {
+    check(LEVEL_WORDS[lv].has(w),
+      "HSK " + lv + " carries 「" + w + "」, which its questions need", w);
+  });
+});
+
+// The `needs` list is not the whole prompt: QUESTION_SHAPES is the worked
+// example the model is actually shown, one per type, and a word inside the
+// shape but absent from `needs` slips past the check above. Run every shape
+// through HSK.validate() against every level whose ladder offers its type --
+// the same "checked against the data" purpose as the `needs` loop, extended
+// to the asking form itself. This is what catches 没 in the "infer" shape:
+// only 没有 is an entry at any level.
+var shapesByType = {};
+P.QUESTION_SHAPES.forEach(function (q) { shapesByType[q.type] = q.shape; });
+[1, 2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var ladder = P.questionTypesFor(lv);
+  ladder.types.forEach(function (t) {
+    var shape = shapesByType[t];
+    var v = HSK.validate(shape, lex[lv]);
+    check(v.length === 0,
+      "HSK " + lv + "'s \"" + t + "\" question shape validates at its own level",
+      shape + " -- flagged: " + v.map(function (x) { return x.text; }).join(", "));
+  });
+});
+
+// Cumulative: a level never loses a type it had below.
+[2, 3, 4, 5, 6, 7].forEach(function (lv) {
+  var below = P.questionTypesFor(lv - 1).types;
+  var here = P.questionTypesFor(lv).types;
+  check(below.every(function (t) { return here.indexOf(t) !== -1; }),
+    "HSK " + lv + " keeps every question type HSK " + (lv - 1) + " had");
+});
+
+// The findings that shaped the order, pinned so a well-meaning edit cannot undo them.
+check(P.questionTypesFor(1).types.indexOf("eitheror") === -1,
+  "either/or is NOT offered at HSK 1 -- 还是 is HSK 2, and validate() cannot see it " +
+  "because 还 and 是 are separately legal");
+check(P.questionTypesFor(1).types.indexOf("what") !== -1,
+  "but wh- questions are, because 什么 and 谁 are HSK 1 -- the English ladder inverts here");
+check(P.questionTypesFor(1).types.indexOf("why") === -1,
+  "and why is not, because 为 is above HSK 1");
+check(P.questionTypesFor(2).types.indexOf("why") !== -1,
+  "why arrives at HSK 2 with 为什么 and 因为");
+
+// The declared cast is asked for before the story is written, in the
+// [[NEED:]] shape extractNeeds() already parses -- no format, storage or
+// lexicon plumbing of its own.
+var cast = P.castPrompt("the Monkey King", "HSK 1", 3);
+check(cast.indexOf("the Monkey King") !== -1, "the cast prompt names the topic");
+check(cast.indexOf("[[NEED:") !== -1,
+  "and asks for the answer in the channel extractNeeds already parses");
+check(/\b3\b/.test(cast), "and states the cap");
+
+// A finished story's derived title (the first sentence of segment 1) is
+// unreadable in a chat list -- rereading is part of how this app is used, so
+// a short one worth finding again is asked for from the teaching model.
+var titleP = P.titlePrompt("小明去了商店。他买了一个球。");
+check(titleP.indexOf("小明去了商店") !== -1, "the title prompt carries the story");
+check(/\b(title|name)\b/i.test(titleP), "and asks for a title");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

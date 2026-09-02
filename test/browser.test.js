@@ -484,13 +484,13 @@ return true;
       "and it is Connection, the one a first run needs", JSON.stringify(secs));
 
     /* The default a new install runs on. Nothing seeded hsk1chat.model, so this
-     * is MODELS[0] reaching the header picker unaided -- the cheap model the
+     * is MODELS[0] reaching the Settings picker unaided -- the cheap model the
      * app was tuned against, not whichever frontier name happens to be first in
      * the list. */
-    check(await exec(`return document.querySelector('#model').value;`)
+    check(await exec(`return document.querySelector('#modelChat').value;`)
             === "qwen/qwen3-30b-a3b-instruct-2507",
       "a fresh install defaults to the cheap Qwen model",
-      await exec(`return document.querySelector('#model').value;`));
+      await exec(`return document.querySelector('#modelChat').value;`));
 
     /* ------------------------------------------------- the Models two-step
      *
@@ -637,19 +637,18 @@ return true;
     check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.model"));`) !== chatBefore,
       "and actually changes the chat model");
 
-    /* One setting, three controls. Leaving any of them stale would show you a
-     * model you are not actually talking to. */
+    /* One setting, two controls now that the header picker is gone. Leaving
+     * either stale would show you a model you are not actually talking to. */
     await exec(`
       var sel = document.querySelector('#modelChat');
       sel.value = "big/one";
       sel.dispatchEvent(new Event("change"));
       return true;`);
     const synced = await exec(`
-      return { header: document.querySelector('#model').value,
-               box: document.querySelector('#modelId').value,
+      return { box: document.querySelector('#modelId').value,
                stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
-    check(synced.header === "big/one", "choosing in Settings moves the header picker", JSON.stringify(synced));
-    check(synced.box === "big/one", "and the paste-an-id box", JSON.stringify(synced));
+    check(synced.box === "big/one", "choosing in Settings moves the paste-an-id box",
+      JSON.stringify(synced));
     check(synced.stored === "big/one", "and is persisted", JSON.stringify(synced));
 
     /* The other direction, which used not to work: the box was write-only, so a
@@ -664,13 +663,11 @@ return true;
       box.dispatchEvent(new Event("change"));
       return true;`);
     const pasted = await exec(`
-      return { header: document.querySelector('#model').value,
-               chat: document.querySelector('#modelChat').value,
+      return { chat: document.querySelector('#modelChat').value,
                stored: JSON.parse(localStorage.getItem("hsk1chat.model")) };`);
-    check(pasted.header === "someone/not-in-the-catalogue",
-      "pasting an id updates the header picker at once", JSON.stringify(pasted));
     check(pasted.chat === "someone/not-in-the-catalogue",
-      "and the Settings picker, without closing and reopening", JSON.stringify(pasted));
+      "pasting an id updates the Settings picker at once, without closing and reopening",
+      JSON.stringify(pasted));
     check(pasted.stored === "someone/not-in-the-catalogue",
       "and is persisted", JSON.stringify(pasted));
 
@@ -939,7 +936,7 @@ return true;
      * a panel reporting the list share instead would land near 41% and a broken
      * one would land at 0 or 100. */
     const prog = await exec(`
-      return document.querySelector('#progress').textContent;`);
+      return document.querySelector('#nextProgress').textContent;`);
     const pctMatch = /(\d+)% you can read/.exec(prog || "");
     check(!!pctMatch, "the progress panel reports a percentage of the next level",
       JSON.stringify((prog || "").slice(0, 160)));
@@ -1014,16 +1011,16 @@ return true;
       "with a denominator of the level's new words, not its whole list",
       newBar ? newBar[0] : "no match");
     check(await exec(`
-      return document.querySelectorAll('#progress .bar').length;`) === 2,
+      return document.querySelectorAll('#nextProgress .bar').length;`) === 2,
       "and draws it as a second bar rather than folding it into the first");
     /* Its fill must not track the reading bar: they are different numbers and
      * a shared width would mean one of them is lying. */
     check(await exec(`
-      var b = document.querySelectorAll('#progress .bar');
+      var b = document.querySelectorAll('#nextProgress .bar');
       return b[0].querySelector('i').style.width !== b[1].querySelector('i').style.width;`),
       "the two bars are filled independently",
       await exec(`
-        var b = document.querySelectorAll('#progress .bar');
+        var b = document.querySelectorAll('#nextProgress .bar');
         return b[0].querySelector('i').style.width + " vs " + b[1].querySelector('i').style.width;`));
 
     /* Below the threshold there must be no Move up button: it is a
@@ -1033,7 +1030,7 @@ return true;
       return b.style.display === "none" || b.offsetParent === null;`),
       "Move up is hidden until the threshold is reached");
 
-    check(/% to HSK 2/.test(await exec(`
+    check(/% to HSK 7-9/.test(await exec(`
       return document.querySelector('#secLearningNote').textContent;`)),
       "the collapsed Learning row carries the number without opening it",
       await exec(`return document.querySelector('#secLearningNote').textContent;`));
@@ -1437,6 +1434,1677 @@ return true;
         .some(function (e) { return e.w === "咖啡"; });`),
       "and commits a word left in the box rather than discarding it",
       await exec(`return localStorage.getItem("hsk1chat.extraVocab");`));
+
+    /* ------------------------------------------------------- activities */
+
+    /* S is a const in index.html so it is not on window; top-level function
+     * declarations are. Conversation state is read back through currentChat()
+     * and through the localStorage key saveChats() writes. */
+    await exec("window.newChat('story');");
+    check(await exec("return window.currentActivity();") === "story",
+      "a chat created as story time reports story");
+    check(await exec("return window.currentChat().activity;") === "story",
+      "and the activity is on the conversation object");
+    check(JSON.parse(await exec("return localStorage.getItem('hsk1chat.chats');"))[0].activity
+      === "story", "and it is persisted, not only held in memory");
+
+    await exec("window.newChat();");
+    check(await exec("return window.currentActivity();") === "chat",
+      "newChat with no argument is a chat");
+
+    // Conversations written before activities existed carry none at all.
+    await exec("window.newChat('story'); delete window.currentChat().activity;");
+    check(await exec("return window.currentActivity();") === "chat",
+      "a conversation with no activity reads as chat");
+
+    // Switching activity leaves the conversation you were in alone.
+    const beforeId = await exec("return window.currentChat().id;");
+    await exec("window.startActivity('focused');");
+    check(await exec("return window.currentChat().id;") !== beforeId,
+      "startActivity opens a different conversation");
+    check(await exec("return window.currentActivity();") === "focused",
+      "and that conversation is in the new activity");
+    check(await exec(
+      "var raw = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "var want = arguments[0];" +
+      "return raw.filter(function (c) { return c.id === want; }).length;",
+      [beforeId]) === 1, "and the previous conversation still exists");
+
+
+    /* ------------------------------------------- the header after the swap */
+
+    check(await exec("return !document.querySelector('#model');") === true,
+      "the header model picker is gone");
+    check(await exec("return !!document.querySelector('#modelChat');") === true,
+      "but Settings still has one");
+    check(await exec("return !document.querySelector('header #level');") === true,
+      "the level picker has left the header");
+    check(await exec("return !!document.querySelector('#level');") === true,
+      "and is still in the document, in Settings");
+    check(await exec("return !!document.querySelector('#activity');") === true,
+      "the header has an activity selector");
+
+    /* The chip navigates, so it is a control: focusable and announced. Its
+     * visible text ("HSK 1") does not say what it does, hence the aria-label. */
+    check(await exec("return document.querySelector('#levelChip').tagName;") === "BUTTON",
+      "the level chip is a button, not a styled span");
+    check(await exec(
+      "return !!document.querySelector('#levelChip').getAttribute('aria-label');") === true,
+      "the level chip has an aria-label");
+
+    /* The handler awaits loadLevel() before anything re-renders, so this has to
+     * wait for the wordlist rather than read the chip straight back. */
+    await exec("var l = document.querySelector('#level');" +
+               "l.value = '3'; l.dispatchEvent(new Event('change'));");
+    let chipFollowed = true;
+    try {
+      await waitFor("document.querySelector('#levelChip').textContent.indexOf('3') !== -1",
+        "the level chip catching up", 15000);
+    } catch (e) { chipFollowed = false; }
+    check(chipFollowed, "the chip follows the level set in Settings",
+      await exec("return document.querySelector('#levelChip').textContent;"));
+
+    /* Back to HSK 1 for everything below: the focused-chat block seeds words
+     * introduced from HSK 2, and readiness() only counts those as unused while
+     * the current level is below the level they came from. */
+    await exec("var l = document.querySelector('#level');" +
+               "l.value = '1'; l.dispatchEvent(new Event('change'));");
+    await waitFor("document.querySelector('#levelChip').textContent.indexOf('1') !== -1",
+      "the level back at HSK 1", 15000);
+
+    const actOpts = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#activity option')," +
+      "function (o) { return o.value; });");
+    check(actOpts.indexOf("chat") !== -1 && actOpts.indexOf("focused") !== -1 &&
+          actOpts.indexOf("story") !== -1,
+      "all three activities are offered", JSON.stringify(actOpts));
+
+    await exec(
+      "var s = document.querySelector('#activity');" +
+      "s.value = 'focused'; s.dispatchEvent(new Event('change'));");
+    check(await exec("return window.currentActivity();") === "focused",
+      "choosing an activity opens a conversation in it");
+
+    /* The activity change above started an opening turn against the seeded
+     * key, and everything below is about the busy state, so wait for that one
+     * to finish first or it is the turn being observed. */
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the focused-chat opening turn to settle", 30000);
+
+    /* S.busy is not reachable from here, so the only way to observe the busy
+     * state is to be in it: a stub that never resolves on its own holds the app
+     * there until the test lets it go. \u505c is the stop button, \u9001 send. */
+    await exec(
+      "window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};");
+    await exec("window.newChat('story'); window.storyStep(false);");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "the send button becomes a stop button while a turn is running");
+    check(await exec("return document.querySelector('#activity').disabled;") === true,
+      "and the activity selector is locked for as long as it runs");
+    check(/Writing part 1 of 5/.test(await exec(
+      "return document.querySelector('#log').textContent;")),
+      "a story segment says what it is generating rather than showing a bare ellipsis");
+
+    /* Stopping is a decision, not a failure: busy clears, the composer comes
+     * back, and nothing is written to the log. */
+    await exec("window.__rej({ kind: 'stopped' });");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "stopping a turn clears the busy state");
+    check(await exec("return document.querySelectorAll('#log .notice').length;") === 0,
+      "a stopped turn leaves no error card behind");
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") === 0,
+      "and no half-written segment");
+
+
+    /* --------------------------------- the chat list, and who gets starters */
+
+    await exec("window.newChat('story'); window.renderChats();");
+    const meta = await exec(
+      "var m = document.querySelector('#chatList .cmeta'); return m ? m.textContent : '';");
+    check(/Story time/.test(meta),
+      "the chat list says which activity a conversation was", meta);
+    check(/message/.test(meta), "and still says how many messages", meta);
+
+    /* And which level it was held at. The level decides what the partner was
+     * allowed to say, so it is part of what a saved transcript IS -- and it is
+     * read off the conversation, not off S.level, or every old chat would be
+     * relabelled the moment the learner moves up. */
+    check(await exec(
+      "var b = document.querySelector('#chatList .chatrow .clev');" +
+      "return b ? b.textContent : '';") === "HSK 1",
+      "the chat list says which level a conversation was held at");
+    check(await exec("return window.currentChat().level;") === 1,
+      "the level is fixed on the conversation at creation, not derived at render");
+
+    /* A conversation from before levels were recorded has none, and the current
+     * level is not an answer for it. */
+    await exec("delete window.currentChat().level; window.renderChats();");
+    check(await exec(
+      "return !!document.querySelector('#chatList .chatrow.on .clev');") === false,
+      "a conversation with no recorded level is left unlabelled rather than guessed");
+
+    /* Starters are openers for the LEARNER, so only chat wants them. The sync
+     * block above flipped the global toggle to drive a prefs push, so put it
+     * back first -- otherwise all three cases below are empty for a reason that
+     * has nothing to do with activities. */
+    await exec("var b = document.querySelector('#showStarters');" +
+               "b.checked = true; b.dispatchEvent(new Event('change'));");
+    await exec("window.newChat('chat'); window.renderStarters();");
+    check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
+      "chat offers starters");
+    /* A fresh story chat has no topic yet, so this is the chooser rather than
+     * the starters strip a fresh chat gets -- it lands on the chooser instead
+     * of any sentence-starter buttons, Task 5's replacement for the old
+     * "Start the story" control that used to sit here. */
+    await exec("window.newChat('story'); window.renderStarters();");
+    check(await exec("return !!document.querySelector('#storyTopicInput');") === true,
+      "story time does not offer sentence starters -- it lands on the chooser instead");
+    check(await exec(
+      "var b = document.querySelector('#starters button.story');" +
+      "return b ? b.textContent : '';") === "Make something up",
+      "which includes a way in that names no topic, the .story class marking it as the control");
+
+    /* Ruling 2 (Task 5 review): the empty-state hint in the log used to point
+     * at a "Start the story" button that no longer exists once the strip is
+     * the chooser -- the learner has not picked a topic yet, so there is
+     * nothing to tap. */
+    await exec("window.renderAll();");
+    check(await exec(
+      "var h = document.querySelector('#log .hint');" +
+      "return h ? /pick what the story is about/i.test(h.innerHTML) : false;") === true,
+      "a fresh story conversation's hint tells the learner to pick a topic",
+      await exec("var h = document.querySelector('#log .hint'); return h ? h.innerHTML : '(no hint)';"));
+    check(await exec(
+      "var h = document.querySelector('#log .hint');" +
+      "return h ? /start the story/i.test(h.innerHTML) : true;") === false,
+      "and does not point at a \"Start the story\" button that is not on screen");
+    await exec("window.newChat('focused'); window.renderStarters();");
+    check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
+      "and neither does focused chat");
+
+
+    /* ------------------------------------ the chooser replaces auto-start */
+
+    /* Picking Story time used to generate segment 1 immediately. It now lands
+     * on the chooser, and nothing is spent until a topic is picked. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    await exec("window.__calls = 0;" +
+      "window.callModel = function () { window.__calls++;" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u3002'); };" +
+      "window.startActivity('story');");
+    await waitFor("document.querySelector('#starters button')", "the chooser");
+    check(await exec("return window.__calls;") === 0,
+      "picking story time spends nothing until a topic is chosen",
+      String(await exec("return window.__calls;")));
+    check(await exec("return !!document.querySelector('#storyTopicInput');") === true,
+      "and the chooser offers a box to type a topic into");
+    check(await exec(
+      "return Array.prototype.some.call(document.querySelectorAll('#starters button')," +
+      "  function (b) { return /make something up/i.test(b.textContent); });") === true,
+      "and a make-something-up button");
+
+    /* The curated ideas are a sample, not a fixed slice -- HSK 1's pool has
+     * five and the chooser shows four, drawn through sampleOf() rather than
+     * .slice(0, 4), so which one is left out and the order of the rest both
+     * vary. Render the chooser 25 times over and check the four-of-five sets
+     * are not all identical -- with a true shuffle the odds of that are
+     * astronomical, and a plain .slice(0, 4) would fail this every time. */
+    const ideaDraws = await exec(
+      "var out = [];" +
+      "for (var i = 0; i < 25; i++) {" +
+      "  window.renderStarters();" +
+      "  out.push(Array.prototype.map.call(" +
+      "    document.querySelectorAll('#starters button:not(.story)')," +
+      "    function (b) { return b.textContent; }).join('|'));" +
+      "}" +
+      "return out;");
+    check(new Set(ideaDraws).size > 1,
+      "the four curated ideas offered are shuffled, not the same four in the same order every time",
+      JSON.stringify(ideaDraws));
+    check(ideaDraws.every(d => d.split("|").length === 4),
+      "and there are always exactly four of them", JSON.stringify(ideaDraws));
+
+    /* Ruling 2: a history holding only a topic message -- set but nothing
+     * generated yet, e.g. a request stopped right after picking a topic --
+     * must still show the empty-state hint rather than a blank log.
+     * renderMessage() returns null for role "topic", so a raw-length check on
+     * S.history would suppress the hint here. */
+    await exec("window.setStoryTopic('a topic with no segment yet', []); window.renderAll();");
+    check(await exec("return document.querySelectorAll('#log .hint').length;") === 1,
+      "a topic picked but nothing generated yet still shows the empty-state hint, not a blank log");
+
+    /* pastStoryTopics() reads S.chats and S.chatMsgs directly, so it has to
+     * survive a deleted conversation and a conversation with no messages (an
+     * empty array's find() is undefined, not a throw). Marking `.deleted`
+     * directly rather than calling deleteChat(), which also drops the chat's
+     * messages -- that alone would keep a deleted topic out of the list, so it
+     * would not prove the `c.deleted` check in pastStoryTopics is doing
+     * anything. */
+    await exec("window.newChat('story'); window.setStoryTopic('topic that stays', []);");
+    await exec("window.newChat('story'); window.setStoryTopic('topic that is deleted', []);" +
+      "window.currentChat().deleted = true;");
+    await exec("window.newChat('story');");   // no topic, no messages: the empty-conversation case
+    await exec("window.newChat('story'); window.renderStarters();");
+    const pastButtons = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#starters button')," +
+      "  function (b) { return b.textContent; });");
+    check(pastButtons.indexOf("More about topic that stays") !== -1,
+      "a topic from an earlier, undeleted story is offered again", JSON.stringify(pastButtons));
+    check(!pastButtons.some(t => /deleted/.test(t)),
+      "but a deleted conversation's topic is not, and neither it nor an empty " +
+      "conversation crashed the scan", JSON.stringify(pastButtons));
+
+
+    /* ------------------------------------------- the partner opening a turn */
+
+    /* The model is stubbed in-page, the same way this file already stubs
+     * supabase. callModel is a top-level function declaration, so it is a
+     * writable window property and reassigning it changes what turn() resolves
+     * at call time. \u4eca\u5929\u5f88\u597d is HSK 1 and carries no name --
+     * a name would fail validation and land every turn on the canned fallback,
+     * which would prove nothing about the opening path. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4eca\\u5929\\u5f88\\u597d\\u3002'); };");
+    await exec("window.newChat('focused');");
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg').length > 0", "the opening reply");
+
+    const cls = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#log .msg')," +
+      "function (m) { return m.className; });");
+    check(cls.length > 0, "an opening turn produced a message");
+    check(/bot/.test(cls[0]), "and the first message is the partner's", JSON.stringify(cls));
+    check(!cls.some(c => /\buser\b/.test(c)),
+      "with no learner turn invented to justify it", JSON.stringify(cls));
+
+
+    /* ------------------------------------------------------- focused chat */
+
+    /* S.learning is seeded through localStorage and a reload, exactly the way
+     * this file already seeds it further up. Sync is off by this point (the
+     * wipe turned it off), so the reload needs no supabase mock reinstalled. */
+    await exec(
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify([" +
+      "{w:'\\u82f9\\u679c',p:'ping guo',d:'apple',seen:9,from:2}," +
+      "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after reload");
+    // readiness() is null until the next level's wordlist has loaded.
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
+    await exec("window.newChat('focused');");
+
+    const focusedReuse = await exec(
+      "return window.reuseFor('focused').map(function (e) { return e.w; });");
+    check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
+      "focused chat reuses a word the learner has never written",
+      JSON.stringify(focusedReuse));
+    const chatReuse = await exec(
+      "return window.reuseFor('chat').map(function (e) { return e.w; });");
+    check(JSON.stringify(chatReuse) !== JSON.stringify(focusedReuse),
+      "and chat does not draw from the same list",
+      JSON.stringify(chatReuse) + " vs " + JSON.stringify(focusedReuse));
+
+    const fp = await exec(
+      "return window.systemPrompt([], window.reuseFor('focused'), '');");
+    check(/\u5fc5\u987b\u7528\u5230\u8fd9\u4e9b\u8bcd/.test(fp),
+      "the focused-chat rule asks the partner to build openings, not merely to use the words");
+
+
+    /* --------------------------------------------------- story time, part 1 */
+
+    /* \u4ed6\u53bb\u4e86\u5b66\u6821 rather than \u5c0f\u738b\u53bb\u4e86\u5b66\u6821:
+     * \u738b arrives at HSK 4, so a stub carrying it would fail validation on
+     * every segment and land the whole story on the canned fallback, proving
+     * nothing about segment generation. Same rule CLAUDE.md states for
+     * measurement -- run name-free. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "five story segments");
+
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
+      "a story is five segments");
+    check(await exec("return document.querySelectorAll('#log .msg.user').length;") === 0,
+      "generated without inventing a learner turn");
+    check(await exec(
+      "return Array.prototype.every.call(document.querySelectorAll('#log .msg.bot')," +
+      "function (m) { return m.textContent.trim().length > 0; });") === true,
+      "and every segment has text");
+
+
+    /* --------------------------------------------------- story time, part 2 */
+
+    /* The stub answers with a question only when the story is over, so the last
+     * message proves the hand-off to phase two happened. */
+    await exec(
+      "window.__seg = 0;" +
+      "window.callModel = function (msgs) {" +
+      "  window.__seg++;" +
+      "  var sys = msgs[0].content;" +
+      "  if (sys.indexOf('\\u95ee\\u5b66\\u751f\\u4e00\\u4e2a') !== -1)" +
+      "    return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u54ea\\u513f\\uff1f');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story');");
+    // Five segments told, then the sixth call asks about them.
+    await exec("(async function () { for (var i = 0; i < 6; i++)" +
+      " await window.storyStep(i === 5); })();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 6",
+      "five segments and a question");
+
+    const lastMsg = await exec(
+      "var all = document.querySelectorAll('#log .msg.bot');" +
+      "return all.length ? all[all.length - 1].textContent : '';");
+    check(/\uff1f/.test(lastMsg),
+      "after the last segment the partner asks about the story", lastMsg);
+
+    /* A segment that exhausts its attempts must not end the story. The stub
+     * returns an out-of-level word for one segment only, which drives turn()
+     * through every repair attempt and out the failure path. */
+    await exec(
+      "window.__n = 0;" +
+      "window.callModel = function () {" +
+      "  window.__n++;" +
+      "  if (window.__n >= 3 && window.__n <= 5)" +
+      "    return Promise.resolve('\\u91ce\\u9910\\u78bb\\u3002');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story');");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "the story survived a bad segment");
+    check(await exec("return document.querySelectorAll('#log .msg.bot').length;") >= 5,
+      "a segment that exhausts its attempts does not stop the story");
+
+
+    /* ------------------------------------------- story time names its cast */
+
+    /* The node suite can prove the names reach the prompt; only here can it be
+     * shown they reach the LEXICON, which is what decides whether the app
+     * rejects a reply for using the name it just asked for. \u5c0f\u660e is
+     * the case the whole whitelist exists for: \u660e is absent from every
+     * band the app offers, including 7-9, so without the injection this reply
+     * fails validation three times and lands on the canned fallback. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    await exec("(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5",
+      "a story about a named character");
+
+    const named = await exec(
+      "return Array.prototype.map.call(document.querySelectorAll('#log .msg.bot')," +
+      "function (m) { return m.textContent; });");
+    check(named.slice(0, 5).every(t => t.indexOf("\u5c0f\u660e") !== -1),
+      "a named character survives validation instead of falling back",
+      JSON.stringify(named.slice(0, 5)));
+
+    /* ------------------------- a story is a conversation you can come back to */
+
+    /* The bug this replaced the loop for: a five-segment loop wrote nothing to
+     * storage until its first segment landed, so backgrounding the tab during
+     * the slowest call in the app lost the whole story. Stepping persists as it
+     * goes, and what is in storage is what survives a reload. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };");
+    await exec("window.newChat('story');");
+    const storyId = await exec("return window.currentChat().id;");
+    await exec("(async function () { for (var i = 0; i < 2; i++) await window.storyStep(false); })();");
+    await waitFor("window.storyTold() === 2", "two segments told");
+    check(await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs'))[arguments[0]];" +
+      "return m.filter(function (t) { return t.role === 'assistant'; }).length;",
+      [storyId]) === 2,
+      "each segment is in storage the moment it is told, not when the story ends");
+
+    /* The position is derived from the transcript, so an unfinished story picked
+     * up on any device knows where it was without a stored counter -- which is
+     * as well, since db/schema.sql has no column to sync one in. */
+    await exec("window.newChat('chat');");
+    await exec("window.openChat(arguments[0]);", [storyId]);
+    check(await exec("return window.storyTold();") === 2,
+      "reopening a half-told story knows how far it got");
+    check(await exec(
+      "var b = document.querySelector('#starters button.story'); return b ? b.textContent : '';")
+      === "Read on (3 of 5)",
+      "and offers to read on from there");
+    check(await exec("return document.querySelector('#input').disabled;") === true,
+      "the composer stays shut while the story is still being told");
+    check(await exec("return document.querySelector('#input').placeholder;") === "",
+      "and does not ask for a sentence there is nowhere to put");
+
+    /* The chat list is how you get back to it, so it has to be nameable. A story
+     * has no learner turn, and titleFrom used to look only at those. */
+    await exec("window.renderChats();");
+    check(await exec(
+      "var rows = document.querySelectorAll('#chatList .chatrow');" +
+      "for (var i = 0; i < rows.length; i++)" +
+      "  if (/Story time/.test(rows[i].querySelector('.cmeta').textContent))" +
+      "    return rows[i].querySelector('.ctitle').textContent;" +
+      "return '';") !== "New chat",
+      "a saved story is named after its own first line, not left as \"New chat\"");
+
+    /* Finish it: three more segments, then the question. storyTold() counts
+     * only `kind === "segment"` messages, so it plateaus at STORY_SEGMENTS
+     * once the question is asked -- the composer must reopen and the "Read
+     * on" button must stop offering, both keyed off the question having
+     * happened rather than off a segment count that no longer moves. */
+    await exec("(async function () { for (var i = 0; i < 4; i++)" +
+      " await window.storyStep(i === 3); })();");
+    await waitFor("window.storyTold() === 5", "the story runs out at five segments and a question");
+    await exec("window.renderStarters();");
+    check(await exec(
+      "return document.querySelectorAll('#starters button.story').length;") === 0,
+      "a finished, asked story offers nothing to read on to");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "and the composer reopens now that a question has been asked");
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "inviting the sentence that answers it");
+
+
+    /* --------------------------------- storyTold() counts segments by kind */
+
+    /* Questions interleave with segments, so both are assistant turns and the
+     * old "assistant turns before the first user turn" count stops at the first
+     * answer. Stories written before `kind` existed must still count. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4e00\\u3002", kind: "segment", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u4ed6\\u597d\\u5417\\uff1f", kind: "question",
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "f3333333-3333-4333-8333-333333333333", role: "user",
+          text: "\\u597d", created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "f4444444-4444-4444-8444-444444444444", role: "assistant",
+          text: "\\u4e8c\\u3002", kind: "segment", created_at: "2026-01-01T00:00:03.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app");
+    check(await exec("return window.storyTold();") === 2,
+      "segments are counted across an answered question",
+      String(await exec("return window.storyTold();")));
+
+    // A story from before `kind` existed still counts.
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f5555555-5555-4555-8555-555555555555", role: "assistant",
+          text: "\\u4e00\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f6666666-6666-4666-8666-666666666666", role: "assistant",
+          text: "\\u4e8c\\u3002", created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "f7777777-7777-4777-8777-777777777777", role: "user",
+          text: "\\u597d", created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app again");
+    check(await exec("return window.storyTold();") === 2,
+      "and a story written before kind existed still counts",
+      String(await exec("return window.storyTold();")));
+
+    /* Finding 1 (task 10 review, round 3): a v67 story already in phase two,
+     * written before `kind` existed -- so anyStoryQuestion() finds nothing on
+     * it -- must not have the new gate shut its composer forever. The learner
+     * was already mid-conversation (a user turn is already in the transcript);
+     * losing the composer there is data damage, not a fresh-story edge case.
+     * The legacy fallback above already proves storyTold() still counts these
+     * turns; this proves the composer stays usable too. */
+    await exec(`
+      var cid = "99999999-4444-4444-8444-999999999999";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-4444-4444-8444-999999999999": [
+        { id: "aaaaaaaa-4444-4444-8444-aaaaaaaaaaaa", role: "assistant",
+          text: "他去了学校。", attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "bbbbbbbb-4444-4444-8444-bbbbbbbbbbbb", role: "assistant",
+          text: "他去了哪儿？", attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "cccccccc-4444-4444-8444-cccccccccccc", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    /* storyTold() alone is not enough to wait on: S.history is wired up to
+     * the reopened chat early in boot(), well before the async loadLevel()
+     * that gates the FINAL renderStarters()/renderComposer() call -- so
+     * storyTold() can already read correctly while the composer's disabled
+     * state still reflects an earlier, unrelated render. #starters getting
+     * its content is downstream of that same renderStarters() call, so
+     * waiting on it too guarantees renderComposer() has already run. */
+    await waitFor("window.storyTold && window.storyTold() === 2 && " +
+      "document.querySelector('#starters').children.length > 0",
+      "the reopened legacy story to finish rendering");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "a legacy story already answered keeps its composer open, not shut forever",
+      String(await exec("return document.querySelector('#input').disabled;")));
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "and still invites a sentence rather than showing a blank prompt",
+      await exec("return document.querySelector('#input').placeholder;"));
+
+    /* Final review, blocking 2: a legacy story asked but not yet answered --
+     * five segments plus the old single end-of-story question, all
+     * `role: "assistant"` with no `kind` anywhere, and no user turn because the
+     * learner read the question and has not answered it yet. Before this plan
+     * storyTold() counted 6 assistant turns before the first user turn, so
+     * `listening = 6 <= 5` was false and the composer was open. anyStoryQuestion()
+     * finds nothing on a `kind`-less history, and the `!S.history.some(user turn)`
+     * clause only reopens a legacy story already answered -- neither covers this
+     * case, so without the `storyTold() > STORY_SEGMENTS` clause the composer
+     * would shut on a question the learner is looking at and cannot answer. */
+    await exec(`
+      var cid = "dddddddd-4444-4444-8444-dddddddddddd";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "dddddddd-4444-4444-8444-dddddddddddd": [
+        { id: "d1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4e00\\u3002", attempts: 1, created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "d2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u4e8c\\u3002", attempts: 1, created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "d3333333-3333-4333-8333-333333333333", role: "assistant",
+          text: "\\u4e09\\u3002", attempts: 1, created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "d4444444-4444-4444-8444-444444444444", role: "assistant",
+          text: "\\u56db\\u3002", attempts: 1, created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "d5555555-5555-4555-8555-555555555555", role: "assistant",
+          text: "\\u4e94\\u3002", attempts: 1, created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "d6666666-6666-4666-8666-666666666666", role: "assistant",
+          text: "\\u4ed6\\u53bb\\u4e86\\u54ea\\u513f\\uff1f", attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold && window.storyTold() === 6 && " +
+      "document.querySelector('#starters').children.length > 0",
+      "the reopened legacy story (asked, unanswered) to finish rendering");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "a legacy story asked but not yet answered keeps its composer open too",
+      String(await exec("return document.querySelector('#input').disabled;")));
+    check(await exec("return document.querySelector('#input').placeholder;") ===
+      "用中文写…",
+      "and still invites a sentence rather than showing a blank prompt",
+      await exec("return document.querySelector('#input').placeholder;"));
+
+    /* Neither fixture above actually distinguishes the wholesale fallback from
+     * a naive per-message one -- one history is all-kind, the other has none,
+     * and a per-message rule like `t.kind ? t.kind === "segment" : t.role ===
+     * "assistant"` would score both identically. A story in progress when this
+     * migration landed is the case that tells them apart: one legacy turn with
+     * no `kind` at all (it could have been the old design's question, told
+     * right after the segments, not a segment itself) followed by one told
+     * after the deploy, with `kind: "segment"`. Per-message would count both
+     * (2). Wholesale sees a `kind` on the second turn, puts the *whole*
+     * history on the filter branch, and the filter excludes the legacy turn
+     * outright (no `kind` on it at all, let alone "segment") -- 1, not 2. This
+     * fixture never exercises the fallback branch itself; the all-legacy
+     * fixture above it is what covers that. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "f8888888-8888-4888-8888-888888888888", role: "assistant",
+          text: "\\u4e09\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "f9999999-9999-4999-8999-999999999999", role: "assistant",
+          text: "\\u4ed6\\u5462\\uff1f", kind: "segment",
+          created_at: "2026-01-01T00:00:01.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app a third time");
+    check(await exec("return window.storyTold();") === 1,
+      "a legacy turn does not borrow a later turn's kind, or vice versa",
+      String(await exec("return window.storyTold();")));
+
+    /* `kind` also lives on `role: "notice"` messages -- index.html pushes
+     * `{ role: "notice", kind: err.kind || "http", ... }` on a transient
+     * network error, and that field predates this diff and means something
+     * unrelated. A legacy story (no `kind` on any real turn) that hits one
+     * network hiccup mid-story must not have that notice's `kind` flip it onto
+     * the filter branch: two real legacy segments plus one notice must still
+     * count as two, not zero. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "faaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role: "assistant",
+          text: "\\u56db\\u3002", created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "fbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", role: "assistant",
+          text: "\\u4e94\\u3002", created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "fccccccc-cccc-4ccc-8ccc-cccccccccccc", role: "notice",
+          kind: "http", detail: "network hiccup",
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTold", "the app a fourth time");
+    check(await exec("return window.storyTold();") === 2,
+      "a notice's unrelated kind does not knock a legacy story's count to zero",
+      String(await exec("return window.storyTold();")));
+
+    /* A topic message is not a conversation turn: it must not be sent to the
+     * model as one, and it must not be rendered as a bubble. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "a1111111-1111-4111-8111-111111111111", role: "topic",
+          text: "the Monkey King", needs: [],
+          created_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyTopic", "the app");
+    check(await exec("return window.storyTopic();") === "the Monkey King",
+      "the topic is read back off the conversation");
+    check(await exec("return document.querySelectorAll('#log .msg').length;") === 0,
+      "and is not rendered as a message",
+      String(await exec("return document.querySelectorAll('#log .msg').length;")));
+
+    /* The cast is legal for the activity that was told about it, not globally.
+     * The identical reply in a chat must still be rejected -- three attempts,
+     * then the canned fallback -- or the whitelist has quietly widened the
+     * allowlist for every conversation. */
+    await exec("window.newChat('chat');");
+    await exec(
+      "window.__msgs = [];" +
+      "document.querySelector('#composer') || 0;" +
+      "window.callModel = function () {" +
+      "  window.__msgs.push(1);" +
+      "  return Promise.resolve('\\u5c0f\\u660e\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the chat reply");
+    const chatReply = await exec(
+      "var b = document.querySelectorAll('#log .msg.bot');" +
+      "return b[b.length - 1].textContent;");
+    check(chatReply.indexOf("\u5c0f\u660e") === -1,
+      "the same named reply is still rejected in a chat -- the cast does not leak",
+      chatReply);
+    check(await exec("return window.__msgs.length;") > 1,
+      "and it cost the repair attempts, which is what rejection means",
+      String(await exec("return window.__msgs.length;")));
+
+
+    /* ------------------------------------------ the story-time model setting */
+
+    /* Measured: story time produces nothing usable on the cheap chat model at
+     * HSK 1 -- 2 usable segments in 55 against 33 in 40 on Sonnet. So it gets
+     * its own model, and the default is capable rather than cheap. */
+    check(await exec("return !!document.querySelector('#storyModel');") === true,
+      "Settings has a story-time model picker");
+    check(await exec("return window.storyModel();") === "anthropic/claude-sonnet-4.5",
+      "and defaults to a model that can actually do it",
+      await exec("return window.storyModel();"));
+
+    /* The model has to reach the request, not just the setting. callModel's
+     * third argument is what turn() passes through. */
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (msgs, maxTok, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('story');" +
+      "(async function () { for (var i = 0; i < 6; i++) await window.storyStep(false); })();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 5", "a story");
+    /* The 5 segments are window.__models[0..4], always in that order -- a
+     * finished story also fires a best-effort title call on the teaching
+     * model (Task 12), which may or may not have landed yet as a trailing
+     * 6th entry, so it is the first 5 that are checked here, not "every". */
+    check(await exec(
+      "return window.__models.length >= 5 && window.__models.slice(0, 5).every(function (m) {" +
+      "  return m === 'anthropic/claude-sonnet-4.5'; });") === true,
+      "story turns request the story model",
+      JSON.stringify(await exec("return window.__models;")));
+
+    // A chat turn must not, or every conversation silently costs story money.
+    await exec("window.__models = []; window.newChat('chat');");
+    await exec("window.openingTurn();");
+    await waitFor("window.__models.length > 0", "a chat turn");
+    check(await exec(
+      "return window.__models.every(function (m) { return !m; });") === true,
+      "while a chat turn does not -- it uses the chat model",
+      JSON.stringify(await exec("return window.__models;")));
+
+    /* Questions are available at every pause, not only after the last segment,
+     * and they run on the teaching model: a question about a story already
+     * written is a far easier job than writing graded narrative, and ~37x
+     * cheaper. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u5417\\uff1f'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "window.storyStep(false);");
+    await waitFor("window.__models.length > 0", "a segment");
+    const midStory = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#starters button'),
+        function (b) { return b.textContent; });`);
+    check(midStory.some(t => /ask me about it/i.test(t)),
+      "a question is offered mid-story, not only at the end", JSON.stringify(midStory));
+
+    await exec("window.__models = []; window.storyStep(true);");
+    await waitFor("window.__models.length > 0", "a question");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "and it is asked by the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec(
+      "var m = JSON.parse(localStorage['hsk1chat.chatMsgs']);" +
+      "var all = [].concat.apply([], Object.keys(m).map(function (k) { return m[k]; }));" +
+      "return all.filter(function (x) { return x.kind === 'question'; }).length;") === 1,
+      "and stored as a question rather than a segment");
+    // The check above only proves the callModel stub was invoked, not that
+    // storyStep()'s own persist()/renderAll() cleanup has finished -- wait
+    // for the busy state to actually clear before driving the composer.
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the question turn to finish settling");
+
+    /* Finding 2 (task 10 review, round 3): `answering` used to be derived
+     * from the LAST assistant turn's `kind`, so only the FIRST reply after a
+     * question reached the discussing phase. Continuing this same story (a
+     * question was just asked, above): the learner's first answer leaves a
+     * kind-less discussing reply as the last assistant turn, so a SECOND
+     * consecutive learner turn used to compute `answering === false` and
+     * fall back to the telling rules that forbid talking to the learner at
+     * all -- exactly the defect the discussing phase exists to fix.
+     *
+     * Two harness notes for this one: gradeTurn() also calls callModel,
+     * unawaited and concurrent with the reply, but its first message is role
+     * "user" (the grade prompt), never "system" (systemPrompt()'s own role),
+     * so filtering on that keeps the grader's call out of __sys regardless of
+     * which one lands first. And window.callModel resolves instantly here
+     * (no real network latency), so the busy ("停") state can come and go
+     * inside a single poll interval -- unlike the deliberately-hung stub the
+     * busy-button test above uses, this cannot be waited on reliably; wait on
+     * the effect (a system prompt captured) instead, matching every other
+     * model-routing check in this file. */
+    await exec(
+      "window.__sys = [];" +
+      "window.callModel = function (msgs) {" +
+      "  if (msgs[0] && msgs[0].role === 'system') window.__sys.push(msgs[0].content);" +
+      "  return Promise.resolve('好。'); };" +
+      "document.querySelector('#input').value = '好';" +
+      "window.send();");
+    await waitFor("window.__sys.length > 0", "the first discussing reply");
+    check(await exec("return window.__sys.length;") === 1,
+      "the first learner turn after a question reaches the discussing phase");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the first discussing reply to finish settling");
+    await exec(
+      "document.querySelector('#input').value = '也好';" +
+      "window.send();");
+    await waitFor("window.__sys.length > 1", "the second discussing reply");
+    check(await exec("return window.__sys.length;") === 2,
+      "and a second learner turn is sent too");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "the second discussing reply to finish settling");
+    check((await exec("return window.__sys[1];")).indexOf("先说他答得对不对") !== -1,
+      "the second consecutive learner turn also reaches the discussing phase",
+      await exec("return window.__sys[1];"));
+    check((await exec("return window.__sys[1];")).indexOf("只讲故事，不要问学生问题") === -1,
+      "and does not fall back to the telling rules that forbid talking to the learner",
+      await exec("return window.__sys[1];"));
+
+    /* An empty completion is one call in eight and used to end a story on a
+     * notice card. One retry, inside turn(), so every activity gets it. */
+    await exec(
+      "window.__n = 0;" +
+      "window.callModel = function () {" +
+      "  window.__n++;" +
+      "  if (window.__n === 1) { var e = new Error(''); e.kind = 'empty'; return Promise.reject(e); }" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002');" +
+      "};");
+    await exec("window.newChat('chat'); window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "a reply after one empty completion");
+    check(await exec(
+      "var b = document.querySelectorAll('#log .msg.bot');" +
+      "return b.length && b[b.length - 1].textContent.indexOf('\\u5b66\\u6821') !== -1;") === true,
+      "an empty completion is retried rather than ending the turn");
+    check(await exec("return document.querySelectorAll('#log .msg.notice').length;") === 0,
+      "and no error card is shown for it");
+
+    /* A bubble is rendered against the lexicon its reply was validated
+     * against. Those two used to be assembled by hand in two places and each
+     * forgot a different part of S.lex, so they need separate replies: one
+     * bug masks the other. renderMessage() dropped the introduced words and
+     * the cast, so a reply that validated clean was displayed as a violation
+     * -- red, with no new-word card to explain it. turn() dropped the ticked
+     * words, so a reply using one was repaired until it gave up, which
+     * replaces the text with a fallback and leaves nothing red to find.
+     *
+     * Seeded through localStorage and reloaded rather than set at runtime:
+     * the vocabulary lists are read into S at boot, and this sandbox cannot
+     * reach S by name. Story time throughout, because an activity with a cast
+     * is what puts turn() on the extended-lexicon path at all. */
+    await exec(`
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "\u7403", p: "qi\u00fa", d: "ball", seen: 2, from: 2 }
+      ]));
+      localStorage.setItem("hsk1chat.knownAhead", JSON.stringify([
+        { w: "\u8d70", p: "z\u01d2u", d: "to walk" }
+      ]));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
+
+    const lastBubble = `
+      var all = document.querySelectorAll('#log .msg.bot .bubble');
+      var last = all[all.length - 1];
+      return {
+        red: Array.prototype.map.call(last.querySelectorAll('.w.bad'),
+          function (e) { return e.textContent; }).join(" "),
+        text: last.textContent,
+        retried: !!document.querySelector('#log .msg.bot .meta .badge.warn')
+      };`;
+
+    /* A cast name, an introduced word and a [[NEED:]] word, none of them
+     * HSK 1 and all three legal for the turn. No ticked word, so this reply
+     * reaches the screen intact either way and the only thing under test is
+     * how it is painted. */
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u6709\u4e00\u4e2a\u7403\u3002\u4ed6\u5f88\u559c\u6b22" +
+      "[[NEED:\u81ea\u5df1|z\u00ec j\u01d0|oneself]]\u7684\u7403\u3002'); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a story segment");
+    const painted = await exec(lastBubble);
+    check(painted.red === "",
+      "nothing in a validated reply renders as above level", JSON.stringify(painted));
+    check(painted.text.indexOf("\u7403") !== -1,
+      "and that reply is the one that was generated", JSON.stringify(painted));
+
+    // A word the learner ticked as already known is not a violation to repair.
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u8d70\u4e86\u3002\u4ed6\u5f88\u597d\u3002'); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a second story segment");
+    const ticked = await exec(lastBubble);
+    check(ticked.text.indexOf("\u8d70") !== -1,
+      "a reply using a ticked word survives rather than falling back",
+      JSON.stringify(ticked));
+    check(ticked.retried === false,
+      "and costs no repair attempt", JSON.stringify(ticked));
+
+    /* Pacing offers three words and the prompt asks for one. A model that
+     * works in two or three has already put them in front of the learner, so
+     * every one of them is banked and the budget goes into debt -- the reading
+     * happened whether or not a credit was there to pay for it. Banking only
+     * what the credits covered left the surplus above level for good: no card,
+     * and red in every later render.
+     *
+     * The nine ticked words push the slate past 就/着/让/但/得/过/从/等/出 onto
+     * 自己、已经、这样, which are stable, absent from the sense registry, and
+     * easy to use in one HSK 1 sentence. */
+    await exec(`
+      localStorage.setItem("hsk1chat.pace", JSON.stringify({ on: true, rate: 45 }));
+      localStorage.setItem("hsk1chat.paceState", JSON.stringify({ "1": { chars: 0, credits: 1 } }));
+      localStorage.setItem("hsk1chat.learning", "[]");
+      localStorage.setItem("hsk1chat.knownAhead", JSON.stringify(
+        ["\u5c31", "\u7740", "\u8ba9", "\u4f46", "\u5f97", "\u8fc7", "\u4ece", "\u7b49", "\u51fa"]
+          .map(function (w) { return { w: w, p: "", d: "" }; })));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    // The offering row names the slate, so this waits for the pool as well.
+    await waitFor("document.querySelector('#paceNote') && " +
+      "document.querySelector('#paceNote').textContent.indexOf('\u81ea\u5df1') !== -1",
+      "the pacing slate");
+
+    await exec(
+      "window.callModel = function () { return Promise.resolve(" +
+      "'\u5c0f\u660e\u6709\u81ea\u5df1\u7684\u4e66\u3002\u4ed6\u5df2\u7ecf\u770b\u4e86\u3002" +
+      "\u8fd9\u6837\u5f88\u597d\u3002'); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("document.querySelectorAll('#log .newword').length > 0", "a new-word card");
+    const paced = await exec(`
+      var msg = document.querySelectorAll('#log .msg.bot');
+      var last = msg[msg.length - 1];
+      return {
+        cards: Array.prototype.map.call(last.querySelectorAll('.newword b'),
+          function (e) { return e.textContent; }),
+        red: Array.prototype.map.call(last.querySelectorAll('.bubble .w.bad'),
+          function (e) { return e.textContent; }).join(" "),
+        note: document.querySelector('#paceNote').textContent
+      };`);
+    check(paced.cards.length === 3,
+      "every offered word the model used is banked, not only what the credits covered",
+      JSON.stringify(paced.cards));
+    check(paced.red === "",
+      "so none of them is left rendering as above level", JSON.stringify(paced));
+    check(/2 borrowed back/.test(paced.note),
+      "and the overspend is carried as debt rather than forgiven",
+      JSON.stringify(paced.note));
+
+    /* The translation ceiling has to fit what is being translated. A flat 200
+     * tokens was set against chat replies of a sentence or two and silently
+     * truncated a story segment's English -- and the result is cached, so the
+     * missing last sentence stayed missing until the learner redid it. */
+    await exec(
+      "window.__tok = [];" +
+      "window.callModel = function (m, maxTok) { window.__tok.push(maxTok);" +
+      "  return Promise.resolve('ok'); };" +
+      "window.translateText(new Array(101).join('\u5c0f\u660e'), false);");
+    await waitFor("window.__tok.length > 0", "a translation request");
+    await exec("window.translateText('\u4f60\u597d', false);");
+    await waitFor("window.__tok.length > 1", "a second translation request");
+    /* The explanation ceiling was raised once already, from 600 to 1000, for
+     * this same reason -- and 1000 was picked against chat replies too. */
+    await exec(
+      "window.explainAsk({ role: 'assistant', explainChat: [],"
+      + " text: new Array(101).join('\u5c0f\u660e') }, null);");
+    await waitFor("window.__tok.length > 2", "an explanation request");
+    await exec(
+      "window.explainAsk({ role: 'assistant', explainChat: [],"
+      + " text: '\u4f60\u597d' }, null);");
+    await waitFor("window.__tok.length > 3", "a second explanation request");
+    const toks = await exec("return window.__tok;");
+    check(toks[0] >= 600,
+      "a story-length segment is given room to be translated whole",
+      JSON.stringify(toks));
+    check(toks[1] === 200,
+      "while a short message keeps the original translation ceiling",
+      JSON.stringify(toks));
+    check(toks[2] >= 1800,
+      "and room to be explained whole", JSON.stringify(toks));
+    check(toks[3] >= 1000 && toks[3] < 1100,
+      "while a short message keeps the explanation ceiling that was tuned for it",
+      JSON.stringify(toks));
+
+    /* A reply belongs to the conversation it was asked for. A segment takes
+     * most of a minute, and storyStep() used to push into whichever S.history
+     * pointed at when the reply landed -- so switching chats mid-generation
+     * dropped the segment into the conversation the learner had moved to, which
+     * reads as a story turning into a chat. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
+    await exec(
+      "window.__resolve = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__resolve = r; }); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("window.__resolve", "a segment request in flight");
+    // The learner navigates away while the segment is still being written.
+    await exec("window.newChat('chat');");
+    await exec("window.__resolve('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
+    await waitFor(
+      "Object.keys(JSON.parse(localStorage['hsk1chat.chatMsgs'] || '{}'))" +
+      ".some(function (k) { return JSON.parse(localStorage['hsk1chat.chatMsgs'])[k].length; })",
+      "the segment to be stored");
+    const placed = await exec(`
+      var chats = JSON.parse(localStorage["hsk1chat.chats"] || "[]");
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      return chats.map(function (c) { return c.activity + ":" + ((msgs[c.id] || []).length); });`);
+    check(placed.indexOf("story:1") !== -1 && placed.indexOf("chat:0") !== -1,
+      "a segment lands in the story it was asked for, not the chat navigated to",
+      JSON.stringify(placed));
+
+    /* "try again" on a failed segment used to pop every message looking for a
+     * user turn a story does not have, then return before persist() and
+     * renderAll() -- so the button looked dead and the story was gone. */
+    await exec(`
+      var cid = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa": [
+        { id: "bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb", role: "assistant",
+          text: "\u4ed6\u5f88\u597d\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "cccccccc-1111-4111-8111-cccccccccccc", role: "assistant",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')", "the seeded story");
+    await exec(
+      "window.callModel = function () {" +
+      "  return Promise.resolve('\u5979\u53bb\u4e86\u5546\u5e97\u3002'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("document.querySelector('#log').textContent.indexOf('\u5546\u5e97') !== -1",
+      "a retried segment");
+    const kept = await exec(`
+      return { text: document.querySelector('#log').textContent,
+               bots: document.querySelectorAll('#log .msg.bot').length };`);
+    check(kept.text.indexOf("\u4ed6\u5f88\u597d") !== -1,
+      "retrying a failed segment keeps the story that came before it",
+      JSON.stringify(kept).slice(0, 160));
+    check(kept.text.indexOf("\u6211\u4e0d\u77e5\u9053") === -1,
+      "and drops the failed reply rather than leaving it above the new one",
+      JSON.stringify(kept).slice(0, 160));
+
+    /* retryLast() used to call storyStep() with no argument, which was safe
+     * only because the old self-derived `asking` recomputed to the same
+     * answer on a retry. Now that a question can fail at any pause, a bare
+     * retry cannot tell a question from a segment -- it has to read back
+     * which phase failed. Mid-story: retried as a question, on the cheap
+     * teaching model, not as a brand-new segment on the expensive one. */
+    await exec(`
+      var cid = "dddddddd-2222-4222-8222-dddddddddddd";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "dddddddd-2222-4222-8222-dddddddddddd": [
+        { id: "eeeeeeee-2222-4222-8222-eeeeeeeeeeee", role: "assistant", kind: "segment",
+          text: "\u4ed6\u53bb\u4e86\u5b66\u6821\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "ffffffff-2222-4222-8222-ffffffffffff", role: "assistant", kind: "question",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed question mid-story");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u597d\\u5417\\uff1f'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("window.__models.length > 0", "a retried question");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "retrying a failed question mid-story asks again on the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec(
+      "var m = JSON.parse(localStorage['hsk1chat.chatMsgs']);" +
+      "var all = m['dddddddd-2222-4222-8222-dddddddddddd'];" +
+      "return all[all.length - 1].kind;") === "question",
+      "and stays a question rather than becoming a new segment");
+
+    /* And a failed question at the very end must not silently no-op: the
+     * guard is `!asking && told >= STORY_SEGMENTS`, and a bare retry call
+     * used to always pass "not asking". */
+    await exec(`
+      var cid = "11111111-3333-4333-8333-111111111111";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "11111111-3333-4333-8333-111111111111": [
+        { id: "22222222-3333-4333-8333-222222222222", role: "assistant", kind: "segment",
+          text: "\u4ed6\u53bb\u4e86\u5b66\u6821\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "33333333-3333-4333-8333-333333333333", role: "assistant", kind: "segment",
+          text: "\u4ed6\u770b\u4e66\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "44444444-3333-4333-8333-444444444444", role: "assistant", kind: "segment",
+          text: "\u4ed6\u56de\u5bb6\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "55555555-3333-4333-8333-555555555555", role: "assistant", kind: "segment",
+          text: "\u4ed6\u5403\u996d\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "66666666-3333-4333-8333-666666666666", role: "assistant", kind: "segment",
+          text: "\u4ed6\u7761\u89c9\u3002", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" },
+        { id: "77777777-3333-4333-8333-777777777777", role: "assistant", kind: "question",
+          text: "\u6211\u4e0d\u77e5\u9053\u3002", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:06.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded finished story with a failed question at the end");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u54ea\\u513f\\u4e86\\uff1f'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    // A silent no-op has nothing to wait for, so failure here is a timeout --
+    // caught rather than left to abort the rest of the suite.
+    let askedAgain = true;
+    try {
+      await waitFor("window.__models.length > 0",
+        "a retried question at the end of the story", 3000);
+    } catch (e) { askedAgain = false; }
+    check(askedAgain,
+      "retrying a failed question at the end of the story asks again rather than doing nothing");
+    check(askedAgain && await exec("return window.__models[0];") === "teaching/model",
+      "and that retry still asks on the teaching model",
+      JSON.stringify(askedAgain ? await exec("return window.__models;") : []));
+
+    /* Finding 3 (task 10 review, round 3): the fix round above handled the
+     * two ways a storyStep() turn can fail, but not the third way a story
+     * turn can fail -- runTurn()'s own failure paths, reached when a
+     * learner's ANSWER (not a segment or a question) does not come back
+     * clean. Neither failure shape carries `kind` or `asking`, so a bare
+     * `storyStep(false)` retried it as a brand-new segment, discarding the
+     * answer and spending the story model, or (at the end) silently no-op'd.
+     * This one uses the soft give-up shape: a normal `role: "assistant"`
+     * push with `failed: true` and no `kind` at all. */
+    await exec(`
+      var cid = "22222222-5555-4555-8555-222222222222";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "22222222-5555-4555-8555-222222222222": [
+        { id: "33333333-5555-4555-8555-333333333333", role: "assistant", kind: "segment",
+          text: "他去了学校。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "44444444-5555-4555-8555-444444444444", role: "assistant", kind: "question",
+          text: "他去了哪儿？", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "55555555-5555-4555-8555-555555555555", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "66666666-5555-4555-8555-666666666666", role: "assistant",
+          text: "我不知道。", needs: [], attempts: 5, failed: true,
+          created_at: "2026-01-01T00:00:03.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed answer mid-story");
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('对，是学校。'); };" +
+      "var bs = document.querySelectorAll('#log .meta button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (bs[i].textContent === 'try again') { bs[i].click(); break; } }");
+    await waitFor("window.__models.length > 0", "a retried answer");
+    check(await exec("return window.__models[0];") === "teaching/model",
+      "retrying a failed answer mid-story replies again on the teaching model",
+      JSON.stringify(await exec("return window.__models;")));
+    check(await exec("return window.storyTold();") === 1,
+      "and no new segment is generated in its place",
+      String(await exec("return window.storyTold();")));
+
+    /* Same failure, at the end of the story, and the notice shape (an
+     * outright error) rather than the soft-give-up shape -- covering both
+     * of the failure shapes the finding names. Must retry, not no-op. */
+    await exec(`
+      var cid = "77777777-6666-4666-8666-777777777777";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "s", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "77777777-6666-4666-8666-777777777777": [
+        { id: "88888888-6666-4666-8666-888888888888", role: "assistant", kind: "segment",
+          text: "他去了学校。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "99999999-6666-4666-8666-999999999999", role: "assistant", kind: "segment",
+          text: "他看书。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "aaaaaaaa-6666-4666-8666-aaaaaaaaaaaa", role: "assistant", kind: "segment",
+          text: "他回家。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:02.000Z" },
+        { id: "bbbbbbbb-6666-4666-8666-bbbbbbbbbbbb", role: "assistant", kind: "segment",
+          text: "他吃饭。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:03.000Z" },
+        { id: "cccccccc-6666-4666-8666-cccccccccccc", role: "assistant", kind: "segment",
+          text: "他睡觉。", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:04.000Z" },
+        { id: "dddddddd-6666-4666-8666-dddddddddddd", role: "assistant", kind: "question",
+          text: "他去了哪儿？", needs: [], attempts: 1,
+          created_at: "2026-01-01T00:00:05.000Z" },
+        { id: "eeeeeeee-6666-4666-8666-eeeeeeeeeeee", role: "user",
+          text: "学校", created_at: "2026-01-01T00:00:06.000Z" },
+        { id: "ffffffff-6666-4666-8666-ffffffffffff", role: "notice",
+          kind: "http", detail: "network hiccup",
+          created_at: "2026-01-01T00:00:07.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot')",
+      "the seeded story with a failed answer at the end");
+    // A notice (this is one -- an outright error, not a soft give-up) puts
+    // its "Try again" button in a ".row", not the ".meta" a failed assistant
+    // reply uses -- search both, matching either capitalisation.
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (m, t, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('对，是学校。'); };" +
+      "var bs = document.querySelectorAll('#log button');" +
+      "for (var i = 0; i < bs.length; i++) {" +
+      "  if (/^try again$/i.test(bs[i].textContent)) { bs[i].click(); break; } }");
+    let answerRetried = true;
+    try {
+      await waitFor("window.__models.length > 0",
+        "a retried answer at the end of the story", 3000);
+    } catch (e) { answerRetried = false; }
+    check(answerRetried,
+      "retrying a failed answer at the end of the story replies again rather than doing nothing");
+    check(answerRetried && await exec("return window.__models[0];") === "teaching/model",
+      "and that retry replies on the teaching model",
+      JSON.stringify(answerRetried ? await exec("return window.__models;") : []));
+
+    /* One card per word. Pacing offers a word, the model uses it AND wraps it in
+     * [[NEED:]] because from its side the learner does not know it -- 12 of 17
+     * needs in one real run -- and it was glossed twice. */
+    await exec(`
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "\u7403", p: "qi\u00fa", d: "ball", seen: 1, from: 2 }
+      ]));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "dddddddd-1111-4111-8111-dddddddddddd", role: "assistant",
+          text: "\u4ed6\u6709\u4e00\u4e2a\u7403\u3002", attempts: 1,
+          needs: [{ w: "\u7403", p: "qi\u00fa", d: "ball", start: 4, end: 5 }],
+          introduced: ["\u7403"], created_at: "2026-01-01T00:00:00.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "the seeded reply");
+    const cards = await exec(`
+      return { newword: document.querySelectorAll('#log .newword').length,
+               pending: document.querySelectorAll('#log .pending').length };`);
+    check(cards.newword === 1 && cards.pending === 0,
+      "a word pacing introduced is glossed once, not also offered as an unknown word",
+      JSON.stringify(cards));
+
+    /* A needed word is legal for the rest of the story, not only the reply that
+     * asked for it -- otherwise a recurring name is a violation in every later
+     * segment. Scoped to messages up to the one being rendered, so a word first
+     * needed in segment 2 is still flagged in segment 1. The leading segment
+     * below uses the same word *before* any need declares it, unglossed --
+     * proving the carry-forward does not leak backward and retroactively
+     * un-flag an earlier, still-illegal use (the v67 bug one layer up: what
+     * renders must agree with what validation actually allowed at that point,
+     * not with the conversation's eventual total). */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.learning", "[]");
+      localStorage.setItem("hsk1chat.history", JSON.stringify([
+        { id: "e0000000-0000-4000-8000-000000000000", role: "assistant",
+          text: "\\u81ea\\u5df1\\u5f88\\u597d\\u3002", attempts: 1, needs: [],
+          created_at: "2025-12-31T23:59:59.000Z" },
+        { id: "e1111111-1111-4111-8111-111111111111", role: "assistant",
+          text: "\\u4ed6\\u5f88\\u597d\\u3002", attempts: 1, needs: [],
+          created_at: "2026-01-01T00:00:00.000Z" },
+        { id: "e2222222-2222-4222-8222-222222222222", role: "assistant",
+          text: "\\u81ea\\u5df1\\u5f88\\u597d\\u3002", attempts: 1,
+          needs: [{ w: "\\u81ea\\u5df1", p: "z\\u00ec j\\u01d0", d: "oneself", start: 0, end: 2 }],
+          created_at: "2026-01-01T00:00:01.000Z" },
+        { id: "e3333333-3333-4333-8333-333333333333", role: "assistant",
+          text: "\\u81ea\\u5df1\\u53bb\\u4e86\\u3002", attempts: 1, needs: [],
+          created_at: "2026-01-01T00:00:02.000Z" }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelectorAll('#log .msg.bot .bubble').length >= 4",
+      "four seeded replies");
+    const carried = await exec(`
+      var b = document.querySelectorAll('#log .msg.bot .bubble');
+      function red(el) {
+        return Array.prototype.map.call(el.querySelectorAll('.w.bad'),
+          function (e) { return e.textContent; }).join(" ");
+      }
+      return { leading: red(b[0]), first: red(b[1]), second: red(b[2]), third: red(b[3]) };`);
+    check(carried.leading !== "",
+      "a word only needed later does not retroactively legalize an earlier, unglossed use of it",
+      JSON.stringify(carried));
+    check(carried.third === "",
+      "a word needed in an earlier segment is still legal in a later one",
+      JSON.stringify(carried));
+    check(carried.second === "",
+      "and legal in the segment that asked for it", JSON.stringify(carried));
+
+    /* The declared cast is stored as the topic message's own needs, so it is
+     * glossed before reading and legal in every segment through needsSoFar(). */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startStoryWith", "the app");
+    /* Dispatch on what the call actually asks for, not on call order -- a
+     * mock keyed by count cannot tell "the cast call never happened" from
+     * "the cast call happened first", which is exactly the distinction this
+     * check exists to make. The cast call is recognisable by its own prompt
+     * text (HSKPrompt.castPrompt's "Name the people or creatures..." line);
+     * anything else is the segment, and it gets a plain reply with no
+     * [[NEED:]] of its own, so a red word here can only mean the declared
+     * cast failed to reach the segment's lexicon. */
+    await exec(
+      "window.callModel = function (messages) {" +
+      "  var isCast = (messages || []).some(function (m) {" +
+      "    return typeof m.content === 'string' &&" +
+      "      m.content.indexOf('Name the people or creatures the story needs') !== -1; });" +
+      "  if (isCast) return Promise.resolve(" +
+      "    '[[NEED:\\u5b59\\u609f\\u7a7a|S\\u016bn W\\u00f9k\\u014dng|the Monkey King]]');" +
+      "  return Promise.resolve('\\u5b59\\u609f\\u7a7a\\u5f88\\u597d\\u3002'); };" +
+      "window.newChat('story'); window.startStoryWith('the Monkey King');");
+    await waitFor("document.querySelector('#log .msg.bot .bubble .w')", "a first segment");
+    const casted = await exec(`
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      var all = [].concat.apply([], Object.keys(msgs).map(function (k) { return msgs[k]; }));
+      var topic = all.filter(function (m) { return m.role === "topic"; })[0];
+      var b = document.querySelectorAll('#log .msg.bot .bubble');
+      return { cast: topic ? (topic.needs || []).map(function (n) { return n.w; }) : null,
+               text: b[b.length - 1].textContent,
+               red: Array.prototype.map.call(b[b.length - 1].querySelectorAll('.w.bad'),
+                 function (e) { return e.textContent; }).join(" ") };`);
+    check(JSON.stringify(casted.cast) === JSON.stringify(["孙悟空"]),
+      "the declared cast is stored on the topic message", JSON.stringify(casted));
+    /* Checking only for a red word is not enough: a name the segment fails to
+     * validate does not render red, it disappears -- five rejected attempts
+     * exhaust the repair loop and the canned FALLBACKS text ("我不知道。", no
+     * 孙悟空 in it at all) is shown instead, which also has no red word. So the
+     * text itself is asserted too: only a reply that still says 孙悟空 and is
+     * not flagged proves the declared cast actually reached the segment's
+     * lexicon through needsSoFar(), rather than the name having been silently
+     * rejected into a fallback that happens to contain nothing to flag. */
+    check(casted.text.indexOf("孙悟空") !== -1 && casted.red === "",
+      "and the name it declared is not flagged in the story", JSON.stringify(casted));
+
+    /* A stop mid-cast-call must not turn into the app writing the story
+     * anyway on a second, new call -- that is spending money on a story the
+     * learner just tried to cancel, in the one feature whose entire point is
+     * spending nothing until asked. Same idiom as the stop test above: a
+     * stub that never resolves on its own until the test releases it, so the
+     * app is genuinely caught mid-flight rather than raced against a real
+     * network delay. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.removeItem("hsk1chat.history");
+      return true;`);
+    await go(base);
+    await waitFor("window.startStoryWith", "the app");
+    await exec(
+      "window.__calls = 0; window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  window.__calls++;" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};");
+    await exec("window.newChat('story'); window.startStoryWith('the Monkey King');");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "the send button becomes a stop button while the cast call is running");
+    check(await exec("return window.__calls;") === 1,
+      "exactly one call is in flight -- the cast call, nothing queued behind it");
+    await exec("window.__rej({ kind: 'stopped' });");
+    await waitFor("document.querySelector('#send').textContent === '\\u9001'",
+      "stopping the cast call clears the busy state");
+    check(await exec("return window.storyTopic();") === "",
+      "no topic message was stored", await exec("return window.storyTopic();"));
+    check(await exec("return window.__calls;") === 1,
+      "and no second call went out to write the story anyway -- this is the one that pins the money",
+      String(await exec("return window.__calls;")));
+    check(await exec("return document.querySelectorAll('#storyTopicInput').length;") === 1,
+      "the chooser is back on screen so the learner can pick again");
+
+    /* Final review, blocking 1: startStoryWith() awaits declareCast() before it
+     * writes anything. Neither #btnChats nor #newChat is disabled by
+     * renderBusy() (only #activity is), so the learner can switch conversations
+     * while the cast call is still in flight -- same idiom as the mid-flight
+     * tests above, a callModel stub that parks its resolver on window rather
+     * than resolving on its own. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.startStoryWith", "the app once more");
+    await exec(
+      "window.__castResolve = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__castResolve = r; }); };" +
+      "window.newChat('story'); window.startStoryWith('a topic mid-flight');");
+    await waitFor("window.__castResolve", "the cast call in flight");
+    const midStoryId = await exec("return window.currentChat().id;");
+    // The learner switches away before the cast call comes back.
+    await exec("window.newChat('chat');");
+    const midOtherId = await exec("return window.currentChat().id;");
+    const midCast = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(midCast === 2,
+      "the story conversation survives switching away while its cast call is in flight",
+      String(midCast));
+    await exec("window.__castResolve('[[NEED:\\u5b59\\u609f\\u7a7a|S\\u016bn W\\u00f9k\\u014dng|the Monkey King]]');");
+    // No second callModel call (the first segment) should ever fire: the
+    // learner is no longer looking at the story conversation.
+    await sleep(300);
+    const midAfter = await exec(`
+      var wantStory = arguments[0], wantOther = arguments[1];
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      return { storyExists: JSON.parse(localStorage["hsk1chat.chats"])
+                 .some(function (c) { return c.id === wantStory && !c.deleted; }),
+               storyMsgs: (msgs[wantStory] || []).map(function (t) { return t.role; }),
+               otherMsgs: (msgs[wantOther] || []).map(function (t) { return t.role; }) };`,
+      [midStoryId, midOtherId]);
+    check(midAfter.storyExists === true,
+      "the story conversation still exists once the cast call resolves",
+      JSON.stringify(midAfter));
+    check(midAfter.storyMsgs.indexOf("topic") !== -1,
+      "the topic message landed in the story conversation it was chosen for",
+      JSON.stringify(midAfter));
+    check(midAfter.otherMsgs.length === 0,
+      "and nothing -- no topic, no segment -- landed in the conversation the learner moved to",
+      JSON.stringify(midAfter));
+
+    /* The chooser makes empty conversations routine: selecting story time
+     * creates one before anything is generated, and backing out leaves it. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat", "the app");
+    await exec("window.newChat('story'); window.newChat('chat');");
+    const left = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(left === 1, "leaving an empty conversation deletes it", String(left));
+    check(await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .some(function (c) { return c.deleted; });`) === true,
+      "and tombstones it, because it may already have synced");
+
+    /* The derived title is the first sentence of segment 1, which is
+     * unreadably long in a list -- and rereading is part of the expected use. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app");
+    /* callModel's third argument records which model each of the 5 segment
+     * calls plus the trailing title call actually used -- a mock that
+     * ignores it cannot tell the title call from a segment call, which is
+     * exactly what happened before this check existed: the model argument
+     * could be dropped on the floor and nothing here would notice. */
+    await exec(
+      "window.__models = [];" +
+      "window.callModel = function (msgs, maxTok, model) {" +
+      "  window.__models.push(model || null);" +
+      "  return Promise.resolve('\\u4e00\\u53ea\\u5c0f\\u732b'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats'])[0].title === '\\u4e00\\u53ea\\u5c0f\\u732b'",
+      "a written title", 30000);
+    check(true, "a finished story is retitled by the teaching model");
+    check(await exec("return window.__models[window.__models.length - 1];") === "teaching/model",
+      "using the teaching model, not the story model",
+      JSON.stringify(await exec("return window.__models;")));
+
+    // A hand-typed title is never overwritten.
+    await exec(
+      "var c = window.currentChat(); c.renamed = true; c.title = 'mine';" +
+      "window.saveChats(); return window.titleStory(c.id);");
+    check(await exec("return window.currentChat().title;") === "mine",
+      "and a title the learner typed is left alone");
+
+    /* Final review, blocking 3: the model's title used to reach renderChats()
+     * as a plain text node, no HSK.segment(), no validate() -- the one place in
+     * the app a model's Chinese landed on screen without going through either.
+     * titlePrompt() asks for "only words that appear in the story", but this
+     * project's own rule is that a prompt instruction is not a guarantee, and
+     * "annotate what leaks" was already rejected once as a way of relaxing the
+     * out-of-level guarantee. So titleStory() now validates the model's title
+     * against lexWith(needsSoFar(null)) -- the same lexicon every reply and
+     * every rendered bubble already validates against -- and keeps the derived
+     * title (touchChat() already wrote it, from the first segment, which
+     * itself already passed validate() to be told at all) rather than the
+     * model's when it fails. 球 ("ball") is not an HSK 1 entry. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app once more");
+    await exec(
+      "window.callModel = function (messages) {" +
+      "  var isTitle = (messages || []).some(function (m) {" +
+      "    return typeof m.content === 'string' &&" +
+      "      m.content.indexOf('Give it a title in Chinese') !== -1; });" +
+      "  if (isTitle) return Promise.resolve('\\u4ed6\\u7684\\u7403');" +
+      "  return Promise.resolve('\\u4ed6\\u53bb\\u4e86\\u5b66\\u6821\\u3002'); };" +
+      "window.newChat('story'); window.setStoryTopic('', []);" +
+      "(async function () { for (var i = 0; i < 5; i++) await window.storyStep(false); })();");
+    await waitFor("window.storyTold && window.storyTold() === 5", "the story runs out at five segments");
+    await sleep(500);   // the title call fires unawaited off the fifth segment
+    check(await exec("return window.currentChat().title;") !== "他的球",
+      "an out-of-level title (球 is not an HSK 1 entry) is not adopted",
+      await exec("return window.currentChat().title;"));
+    check(await exec("return window.currentChat().title;") ===
+      "他去了学校。",
+      "the derived title -- the first segment, which already validated -- survives instead",
+      await exec("return window.currentChat().title;"));
+
+    /* The title call binds to the story that finished, not to whichever chat
+     * is open when the reply lands -- the same hazard `hist` already guards
+     * the segment push itself against, one statement earlier in the same
+     * function. Seed a story with its first four segments already told, so
+     * the fifth (final) one is the only call in flight. */
+    await exec(`
+      var sid = "cccccccc-3333-4333-8333-cccccccccccc";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: sid, title: "old title", activity: "story", level: 1,
+          created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z",
+          deleted: false }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(sid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "cccccccc-3333-4333-8333-cccccccccccc": [
+        { role: "topic", text: "", needs: [], id: "t0", created_at: "2026-01-01T00:00:00.000Z" },
+        { role: "assistant", text: "1", kind: "segment", id: "s1", created_at: "2026-01-01T00:00:01.000Z" },
+        { role: "assistant", text: "2", kind: "segment", id: "s2", created_at: "2026-01-01T00:00:02.000Z" },
+        { role: "assistant", text: "3", kind: "segment", id: "s3", created_at: "2026-01-01T00:00:03.000Z" },
+        { role: "assistant", text: "4", kind: "segment", id: "s4", created_at: "2026-01-01T00:00:04.000Z" }
+      ] }));
+      localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
+      return true;`);
+    await go(base);
+    await waitFor("window.storyStep", "the app with the seeded story");
+    /* Two callModel calls happen in this flow -- the segment, then the title
+     * -- so resolvers queue up rather than a single variable, which only the
+     * first call would ever fill. */
+    await exec(
+      "window.__resolves = [];" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__resolves.push(r); }); };" +
+      "window.storyStep(false);");
+    await waitFor("window.__resolves.length > 0", "the fifth segment in flight");
+    // The learner switches to a different, ordinary conversation while it waits.
+    await exec("window.newChat('chat');");
+    await exec("window.__resolves[0]('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
+    await waitFor("window.__resolves.length > 1", "the title call in flight");
+    await exec("window.__resolves[1]('\u4e00\u53ea\u5c0f\u732b');");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats']).some(function (c) {" +
+      "  return c.id === 'cccccccc-3333-4333-8333-cccccccccccc' && " +
+      "    c.title === '\u4e00\u53ea\u5c0f\u732b'; })",
+      "the story is retitled although it is no longer on screen", 30000);
+    check(true, "a title lands on the story it was generated for");
+    check(await exec(
+      "return JSON.parse(localStorage['hsk1chat.chats'])" +
+      ".find(function (c) { return c.activity === 'chat'; }).title;") !== "\u4e00\u53ea\u5c0f\u732b",
+      "and not on the chat the learner switched to while it was in flight");
+
+    /* Stopping a generation for a conversation nobody is looking at anymore
+     * must not leave it behind empty: dropIfEmpty() skips it only while the
+     * call is actually in flight FOR that conversation, so storyStep()'s
+     * finally sweeps it once the call ends, in case it is still empty. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await waitFor("window.newChat && window.storyStep", "the app once more");
+    await exec(
+      "window.__reject = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__reject = rej; }); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("window.__reject", "the segment request in flight");
+    // The learner switches away from the still-empty story before stopping it.
+    await exec("window.newChat('chat');");
+    const midFlight = await exec(`
+      return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
+        .filter(function (c) { return !c.deleted; }).length;`);
+    check(midFlight === 2,
+      "the empty story is not dropped while its own call is still in flight",
+      String(midFlight));
+    await exec("window.__reject({ kind: 'stopped' });");
+    await waitFor(
+      "JSON.parse(localStorage['hsk1chat.chats'] || '[]')" +
+      ".filter(function (c) { return !c.deleted; }).length === 1",
+      "the stopped, still-empty story to be swept");
+    check(true, "stopping a generation for a chat no longer on screen still drops it if it stayed empty");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

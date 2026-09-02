@@ -1,0 +1,22 @@
+model=anthropic/claude-sonnet-4.5 judge=anthropic/claude-sonnet-4.5 level=2 stories=6/arm segments=5 calls=60
+1/12 2/12 3/12 4/12 5/12 6/12 7/12 8/12 9/12 10/12 11/12 12/12 
+
+
+              stories  segs  CONT  RESTART  UNREL  clean stories  mean dup  dup>=.25  clear     
+no-topic      6        24    0     0 (0%)   0      0/6            0.093     2         0/0       
+topic         6        24    0     0 (0%)   0      0/6            0.300     7         0/0       
+
+              out-of-level    mean chars  truncated  err+retry  cost
+no-topic      4/30 (13%)      141 (asked 90)0          0+0r    $0.553317
+topic         11/30 (37%)     90 (asked 90)0          0+0r    $0.539295
+
+no-topic      violations/100 han: 0.9   total 39 over 4227 chars
+  top: 公园×5, 饼干×3, 心×2, 摸×2, 主×2, 牌子×2, 码×2, 用×1, 杯×1, 树×1
+topic         violations/100 han: 3.6   total 98 over 2687 chars
+  top: 更×11, 越×8, 赛×6, 加油×5, 操场×4, 定×4, 停×4, 以×3, 努力×3, 声×3
+
+               USABLE   3+ usable  clean 1/2/3+  never clean  introduced  clean chars [[NEED:]]
+no-topic       26/30    6/6        0/11/15       4/30         12          162         16
+topic          19/30    4/6        0/6/13        11/30        2           139         18
+
+judging cost $0.000000

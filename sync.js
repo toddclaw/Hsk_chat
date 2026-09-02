@@ -47,6 +47,7 @@
       show_translation: !!turnObj.showTranslation,
       explain_chat: turnObj.explainChat && turnObj.explainChat.length ? turnObj.explainChat : null,
       grade: turnObj.grade || null,
+      kind: turnObj.kind || null,
       created_at: turnObj.created_at,
       updated_at: new Date().toISOString()
     };
@@ -67,6 +68,7 @@
     if (row.show_translation) t.showTranslation = true;
     if (row.explain_chat) t.explainChat = row.explain_chat;
     if (row.grade) t.grade = row.grade;
+    if (row.kind) t.kind = row.kind;
     return t;
   }
 
@@ -119,6 +121,8 @@
       id: c.id,
       user_id: userId,
       title: c.title || null,
+      activity: c.activity || "chat",
+      level: c.level || null,
       created_at: c.created_at,
       updated_at: c.updated_at || new Date().toISOString(),
       deleted_at: c.deleted ? (c.deleted_at || new Date().toISOString()) : null
@@ -129,6 +133,8 @@
     return {
       id: row.id,
       title: row.title || "",
+      activity: row.activity || "chat",
+      level: row.level || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       deleted: !!row.deleted_at,
@@ -156,6 +162,15 @@
       // Copied, never mutated in place: `existing` is the caller's own object.
       var merged = {
         id: newer.id, title: newer.title,
+        /* Not newest-wins, unlike title. An activity is fixed when the
+         * conversation is created and never changes, so the question is never
+         * "which is newer" but "which side actually has one" -- a remote row
+         * from an un-migrated database carries none, and a recency rule would
+         * let it erase ours. */
+        activity: existing.activity || incoming.activity || "chat",
+        // Fixed at creation exactly like activity, so the same rule: whichever
+        // side actually has one, never whichever is newer.
+        level: existing.level || incoming.level || null,
         created_at: existing.created_at || incoming.created_at,
         updated_at: newer.updated_at,
         deleted: !!(existing.deleted || incoming.deleted),
@@ -228,7 +243,7 @@
    * impossible to accidentally sync the API key or the model cache, not
    * just a matter of remembering to leave them out. */
   var PREFS_KEYS = [
-    "level", "model", "teachModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
+    "level", "goalLevel", "model", "teachModel", "storyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "anki", "font", "starters", "script", "speechRate",
     "freeOnly", "modelSort", "favModels", "favOnly", "grader", "pace", "budget", "teachPrompts"
   ];
@@ -310,10 +325,13 @@
      * fails the whole batch -- so the conversation grouping is dropped rather
      * than the messages. Backing up the conversation matters more than
      * remembering which chat it was in, and the grouping comes back for free
-     * once the column exists. */
+     * once the column exists. What is dropped here is this column, never the
+     * conversations table's own flag: a message the server will not take says
+     * nothing about whether conversations can be written. */
     var drop = [];
-    if (schemaHasConversations === false) drop.push("conversation_id");
+    if (schemaHasConvId === false) drop.push("conversation_id");
     if (schemaHasGrade === false) drop.push("grade");
+    if (schemaHasKind === false) drop.push("kind");
     var payload = drop.length
       ? rows.map(function (r) {
           var copy = {};
@@ -325,15 +343,32 @@
       : rows;
     var r = await client.from("messages").upsert(payload);
     if (r.error) {
-      /* A last resort for a push that got past the probe -- a column dropped
-       * mid-session, or a probe that never ran. Drops both optional columns
-       * rather than guessing which one failed, and retries once: with both
-       * already false there is nothing left to strip, so this cannot recurse. */
-      if (isMissingSchema(r.error) &&
-          (schemaHasConversations !== false || schemaHasGrade !== false)) {
-        schemaHasConversations = false;
-        schemaHasGrade = false;
-        return pushMessages(rows);
+      /* index.html never calls probeSchema() (only conversationsSupported()
+       * is used) -- this retry is the only degrade mechanism that actually
+       * runs in production, so which column it blames first matters. `kind`
+       * is the column this change adds and the one certain to be unmigrated
+       * -- a hand-run SQL-editor statement, newer than conversation_id and
+       * grade -- so it is the cheapest and likeliest culprit. Dropping it
+       * alone first means the overwhelmingly common case (kind missing,
+       * everything else fine) doesn't take two working columns down with it.
+       *
+       * Only if a kind-only retry still fails on a missing column do we fall
+       * back to the blunt drop-everything retry. That is at most two retries:
+       * the first only fires while schemaHasKind isn't already false, the
+       * second only fires while schemaHasConvId or schemaHasGrade isn't
+       * already false, and both branches set the flag(s) they check before
+       * recursing -- so the same branch can never fire twice, and with all
+       * three flags false there is nothing left for either branch to strip. */
+      if (isMissingSchema(r.error)) {
+        if (schemaHasKind !== false) {
+          schemaHasKind = false;
+          return pushMessages(rows);
+        }
+        if (schemaHasConvId !== false || schemaHasGrade !== false) {
+          schemaHasConvId = false;
+          schemaHasGrade = false;
+          return pushMessages(rows);
+        }
       }
       throw r.error;
     }
@@ -369,11 +404,27 @@
    * once per session by pullConversations() below, because the app has to keep
    * working against a database whose owner has not run the SQL yet -- whoever
    * runs the deployment may not be the person reading the screen. */
+  /* Four independent migrations, four flags, and they must stay independent.
+   *
+   * `schemaHasConversations` is the conversations TABLE. `schemaHasConvId` is
+   * the conversation_id COLUMN on messages. They arrived together in one SQL
+   * file, which is exactly why one flag used to stand for both -- and why a
+   * failed messages push could switch off conversation pushing entirely for the
+   * rest of the session. `pushConversations` returns silently when the table is
+   * gone, so nothing raised, nothing retried, and flushSync still reported
+   * "Synced just now" while no conversation ever left the device. Two names,
+   * because they are two facts. */
   var schemaHasConversations = null;   // null = not probed yet
+  var schemaHasConvId = null;
   var schemaHasGrade = null;
+  var schemaHasActivity = null;
+  var schemaHasLevel = null;
+  var schemaHasKind = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }
+  function activitySupported() { return schemaHasActivity !== false; }
+  function levelSupported() { return schemaHasLevel !== false; }
 
   /* Asked once per session, before anything is pushed.
    *
@@ -388,7 +439,20 @@
       var r = await client.from("messages").select("grade").limit(1);
       schemaHasGrade = !(r.error && isMissingSchema(r.error));
     }
-    return { conversations: conversationsSupported(), grade: gradesSupported() };
+    if (schemaHasKind === null) {
+      var k = await client.from("messages").select("kind").limit(1);
+      schemaHasKind = !(k.error && isMissingSchema(k.error));
+    }
+    if (schemaHasActivity === null) {
+      var a = await client.from("conversations").select("activity").limit(1);
+      schemaHasActivity = !(a.error && isMissingSchema(a.error));
+    }
+    if (schemaHasLevel === null) {
+      var l = await client.from("conversations").select("level").limit(1);
+      schemaHasLevel = !(l.error && isMissingSchema(l.error));
+    }
+    return { conversations: conversationsSupported(), grade: gradesSupported(),
+             activity: activitySupported(), level: levelSupported() };
   }
 
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
@@ -414,8 +478,37 @@
 
   async function pushConversations(rows) {
     if (!rows.length || schemaHasConversations === false) return;
-    var r = await client.from("conversations").upsert(rows);
+    /* Same bargain pushMessages strikes over conversation_id: an un-migrated
+     * database has no activity or level column, and upserting one fails the
+     * whole batch -- which would take conversation sync down entirely rather
+     * than losing the one field. Drop the columns, keep the conversations, and
+     * the labels come back for free once the ALTER has run. */
+    var drop = [];
+    if (schemaHasActivity === false) drop.push("activity");
+    if (schemaHasLevel === false) drop.push("level");
+    var payload = drop.length
+      ? rows.map(function (r) {
+          var copy = {};
+          Object.keys(r).forEach(function (k) {
+            if (drop.indexOf(k) === -1) copy[k] = r[k];
+          });
+          return copy;
+        })
+      : rows;
+    var r = await client.from("conversations").upsert(payload);
     if (r.error) {
+      /* A push that got past the probe -- a column dropped mid-session, or a
+       * probe that never ran. Drop both optional columns once before concluding
+       * the whole table is missing. Both rather than the guilty one: telling
+       * them apart means parsing PostgREST's localized message text, which is
+       * what the probe exists to avoid. With both already false there is
+       * nothing left to strip, so this cannot recurse. */
+      if (isMissingSchema(r.error) &&
+          (schemaHasActivity !== false || schemaHasLevel !== false)) {
+        schemaHasActivity = false;
+        schemaHasLevel = false;
+        return pushConversations(rows);
+      }
       if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
       throw r.error;
     }
@@ -477,6 +570,8 @@
     deleteConversationMessages: deleteConversationMessages,
     conversationsSupported: conversationsSupported,
     gradesSupported: gradesSupported,
+    activitySupported: activitySupported,
+    levelSupported: levelSupported,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
