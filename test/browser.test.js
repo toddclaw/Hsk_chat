@@ -1123,6 +1123,25 @@ return true;
       "naming the one seeded word the learner never wrote",
       JSON.stringify(neverGroups));
 
+    // "Used by you" section shows words the learner has actually written.
+    // Seeded history includes 我, 我们, 今天, 来, 这里, 看看, 你, 的, 东西, 很多,
+    // 不, 去, 了, 可以, 这个, 很, 好, 也, 是, 喜欢, 吃, 中国, 菜, 吗.
+    const usedGroups = await exec(`
+      var d = Array.prototype.filter.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return /Used by you/.test(d.querySelector('summary').textContent); });
+      return d.length ? { count: d[0].querySelector('.secnote').textContent,
+                         first: d[0].querySelector('.w2').textContent } : null;`);
+    check(!!usedGroups,
+      "the pool browser shows a Used by you section",
+      JSON.stringify(usedGroups));
+    check(usedGroups && Number(usedGroups.count) >= 10,
+      "with a count matching the typed history",
+      JSON.stringify(usedGroups));
+    check(usedGroups && usedGroups.first === "\u7684",
+      "listing the commonest word first",
+      JSON.stringify(usedGroups));
+
     // Switching levels re-fetches and re-renders, including upward.
     await exec(`
       var sel = document.querySelector('#poolLevel');
