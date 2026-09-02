@@ -924,7 +924,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v73 — 2026-09-01";
+const VERSION   = "v74 — 2026-09-02";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4228,7 +4228,11 @@ function neverUsedWords() {
 function renderNeverUsed() {
   const box = $("#poolList");
   if (!box) return;
-  const unused = neverUsedWords();
+  /* When viewing your own level: show all unused words from higher levels (matches Settings).
+   * When browsing a different level: show only unused words from that specific level. */
+  const unused = neverUsedWords().filter(e =>
+    poolLevel === S.level ? (e.from || 0) > S.level : e.from === poolLevel
+  );
   if (!unused.length) return;
   const d = document.createElement("details");
   d.className = "sec";
