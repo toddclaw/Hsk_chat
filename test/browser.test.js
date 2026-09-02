@@ -936,7 +936,7 @@ return true;
      * a panel reporting the list share instead would land near 41% and a broken
      * one would land at 0 or 100. */
     const prog = await exec(`
-      return document.querySelector('#progress').textContent;`);
+      return document.querySelector('#nextProgress').textContent;`);
     const pctMatch = /(\d+)% you can read/.exec(prog || "");
     check(!!pctMatch, "the progress panel reports a percentage of the next level",
       JSON.stringify((prog || "").slice(0, 160)));
@@ -1011,16 +1011,16 @@ return true;
       "with a denominator of the level's new words, not its whole list",
       newBar ? newBar[0] : "no match");
     check(await exec(`
-      return document.querySelectorAll('#progress .bar').length;`) === 2,
+      return document.querySelectorAll('#nextProgress .bar').length;`) === 2,
       "and draws it as a second bar rather than folding it into the first");
     /* Its fill must not track the reading bar: they are different numbers and
      * a shared width would mean one of them is lying. */
     check(await exec(`
-      var b = document.querySelectorAll('#progress .bar');
+      var b = document.querySelectorAll('#nextProgress .bar');
       return b[0].querySelector('i').style.width !== b[1].querySelector('i').style.width;`),
       "the two bars are filled independently",
       await exec(`
-        var b = document.querySelectorAll('#progress .bar');
+        var b = document.querySelectorAll('#nextProgress .bar');
         return b[0].querySelector('i').style.width + " vs " + b[1].querySelector('i').style.width;`));
 
     /* Below the threshold there must be no Move up button: it is a
@@ -1030,7 +1030,7 @@ return true;
       return b.style.display === "none" || b.offsetParent === null;`),
       "Move up is hidden until the threshold is reached");
 
-    check(/% to HSK 2/.test(await exec(`
+    check(/% to HSK 7-9/.test(await exec(`
       return document.querySelector('#secLearningNote').textContent;`)),
       "the collapsed Learning row carries the number without opening it",
       await exec(`return document.querySelector('#secLearningNote').textContent;`));
