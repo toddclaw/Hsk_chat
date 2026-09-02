@@ -1641,7 +1641,7 @@ return true;
       "and does not point at a \"Start the story\" button that is not on screen");
     await exec("window.newChat('focused'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
-      "and neither does focused chat");
+      "and neither does Ghost Words");
 
 
     /* ------------------------------------ the chooser replaces auto-start */
@@ -1745,7 +1745,7 @@ return true;
       "with no learner turn invented to justify it", JSON.stringify(cls));
 
 
-    /* ------------------------------------------------------- focused chat */
+    /* ------------------------------------------------------- Ghost Words */
 
     /* S.learning is seeded through localStorage and a reload, exactly the way
      * this file already seeds it further up. Sync is off by this point (the
@@ -1764,7 +1764,7 @@ return true;
     const focusedReuse = await exec(
       "return window.reuseFor('focused').map(function (e) { return e.w; });");
     check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
-      "focused chat reuses a word the learner has never written",
+      "Ghost Words reuses a word the learner has never written",
       JSON.stringify(focusedReuse));
     const chatReuse = await exec(
       "return window.reuseFor('chat').map(function (e) { return e.w; });");
