@@ -4228,7 +4228,11 @@ function neverUsedWords() {
 function renderNeverUsed() {
   const box = $("#poolList");
   if (!box) return;
-  const unused = neverUsedWords();
+  /* When viewing your own level: show all unused words from higher levels (matches Settings).
+   * When browsing a different level: show only unused words from that specific level. */
+  const unused = neverUsedWords().filter(e =>
+    poolLevel === S.level ? (e.from || 0) > S.level : e.from === poolLevel
+  );
   if (!unused.length) return;
   const d = document.createElement("details");
   d.className = "sec";
