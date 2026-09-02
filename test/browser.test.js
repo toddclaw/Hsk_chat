@@ -1035,6 +1035,24 @@ return true;
       "the collapsed Learning row carries the number without opening it",
       await exec(`return document.querySelector('#secLearningNote').textContent;`));
 
+    /* ----------------------------------------- goal-level progress bar */
+
+    const goalProg = await exec(`
+      return document.querySelector('#goalProgress').textContent;`);
+    const goalPct = /(\d+)% you can read/.exec(goalProg || "");
+    check(!!goalPct, "the goal-level progress bar reports a percentage",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    const goalUse = /(\d+)% you can use/.exec(goalProg || "");
+    check(!!goalUse && Number(goalUse[1]) < Number(goalPct[1]),
+      "and production trails reading on the goal bar too",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    check(/HSK 7-9 — goal/.test(goalProg || ""),
+      "the goal bar names its level as the long-term target",
+      JSON.stringify((goalProg || "").slice(0, 160)));
+    check(await exec(`
+      return document.querySelector('#goalProgress u') !== null;`),
+      "the 98% threshold tick is shown on the goal bar");
+
     /* ------------------------------------------------- the level browser */
 
     /* The first-level problem: the browser was hardcoded to level+1, so there
@@ -1086,6 +1104,55 @@ return true;
         var r = document.querySelectorAll('#poolList .poolrow');
         return Array.prototype.slice.call(r, 0, 5).map(function (x) {
           return x.querySelector('.w2').textContent; }).join(" ");`));
+
+    // The "Never used" section shows words introduced by pacing the learner
+    // has never written themselves. Seeded data has 已经 (unused) and 可以 (used).
+    const neverGroups = await exec(`
+      var d = Array.prototype.filter.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return /Never used/.test(d.querySelector('summary').textContent); });
+      return d.length ? { count: d[0].querySelector('.secnote').textContent,
+                         word: d[0].querySelector('.w2').textContent } : null;`);
+    check(!!neverGroups,
+      "the pool browser shows a Never used section",
+      JSON.stringify(neverGroups));
+    check(neverGroups && Number(neverGroups.count) > 0,
+      "with a count of unused words",
+      JSON.stringify(neverGroups));
+    check(neverGroups && neverGroups.word === "\u5df2\u7ecf",
+      "naming the one seeded word the learner never wrote",
+      JSON.stringify(neverGroups));
+
+    // "Used by you" section shows words the learner has actually written.
+    // Seeded history includes 我, 我们, 今天, 来, 这里, 看看, 你, 的, 东西, 很多,
+    // 不, 去, 了, 可以, 这个, 很, 好, 也, 是, 喜欢, 吃, 中国, 菜, 吗.
+    const usedGroups = await exec(`
+      var d = Array.prototype.filter.call(
+        document.querySelectorAll('#poolList details'),
+        function (d) { return /Used by you/.test(d.querySelector('summary').textContent); });
+      return d.length ? { count: d[0].querySelector('.secnote').textContent,
+                         first: d[0].querySelector('.w2').textContent } : null;`);
+    check(!!usedGroups,
+      "the pool browser shows a Used by you section",
+      JSON.stringify(usedGroups));
+    check(usedGroups && Number(usedGroups.count) >= 10,
+      "with a count matching the typed history",
+      JSON.stringify(usedGroups));
+check(usedGroups && usedGroups.first === "\u7684",
+      "listing the commonest word first",
+      JSON.stringify(usedGroups));
+
+    // producedWords() must scan every chat, not only the currently-open one.
+    // Verify by checking the total is non-trivial from the seeded data alone.
+    const totalProduced = await exec(`
+      return (window.producedWords && window.producedWords().size) || 0;`);
+    check(totalProduced >= 15,
+      "producedWords includes all user turns across every conversation",
+      "got " + totalProduced);
+
+    // Switching levels re-fetches and re-renders, including upward.
+
+    // Switching levels re-fetches and re-renders, including upward.
 
     // Switching levels re-fetches and re-renders, including upward.
     await exec(`
@@ -1623,7 +1690,7 @@ return true;
       "and does not point at a \"Start the story\" button that is not on screen");
     await exec("window.newChat('focused'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
-      "and neither does focused chat");
+      "and neither does Ghost Words");
 
 
     /* ------------------------------------ the chooser replaces auto-start */
@@ -1727,7 +1794,7 @@ return true;
       "with no learner turn invented to justify it", JSON.stringify(cls));
 
 
-    /* ------------------------------------------------------- focused chat */
+    /* ------------------------------------------------------- Ghost Words */
 
     /* S.learning is seeded through localStorage and a reload, exactly the way
      * this file already seeds it further up. Sync is off by this point (the
@@ -1746,7 +1813,7 @@ return true;
     const focusedReuse = await exec(
       "return window.reuseFor('focused').map(function (e) { return e.w; });");
     check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
-      "focused chat reuses a word the learner has never written",
+      "Ghost Words reuses a word the learner has never written",
       JSON.stringify(focusedReuse));
     const chatReuse = await exec(
       "return window.reuseFor('chat').map(function (e) { return e.w; });");
