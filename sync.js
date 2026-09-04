@@ -123,6 +123,8 @@
       title: c.title || null,
       activity: c.activity || "chat",
       level: c.level || null,
+      side: c.side || null,
+      secret: c.secret || null,
       created_at: c.created_at,
       updated_at: c.updated_at || new Date().toISOString(),
       deleted_at: c.deleted ? (c.deleted_at || new Date().toISOString()) : null
@@ -135,6 +137,8 @@
       title: row.title || "",
       activity: row.activity || "chat",
       level: row.level || null,
+      side: row.side || null,
+      secret: row.secret || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       deleted: !!row.deleted_at,
@@ -171,6 +175,8 @@
         // Fixed at creation exactly like activity, so the same rule: whichever
         // side actually has one, never whichever is newer.
         level: existing.level || incoming.level || null,
+        side: existing.side || incoming.side || null,
+        secret: existing.secret || incoming.secret || null,
         created_at: existing.created_at || incoming.created_at,
         updated_at: newer.updated_at,
         deleted: !!(existing.deleted || incoming.deleted),
@@ -420,11 +426,15 @@
   var schemaHasActivity = null;
   var schemaHasLevel = null;
   var schemaHasKind = null;
+  var schemaHasSide = null;
+  var schemaHasSecret = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }
   function activitySupported() { return schemaHasActivity !== false; }
   function levelSupported() { return schemaHasLevel !== false; }
+  function sideSupported() { return schemaHasSide !== false; }
+  function secretSupported() { return schemaHasSecret !== false; }
 
   /* Asked once per session, before anything is pushed.
    *
@@ -451,8 +461,17 @@
       var l = await client.from("conversations").select("level").limit(1);
       schemaHasLevel = !(l.error && isMissingSchema(l.error));
     }
+    if (schemaHasSide === null) {
+      var s = await client.from("conversations").select("side").limit(1);
+      schemaHasSide = !(s.error && isMissingSchema(s.error));
+    }
+    if (schemaHasSecret === null) {
+      var sec = await client.from("conversations").select("secret").limit(1);
+      schemaHasSecret = !(sec.error && isMissingSchema(sec.error));
+    }
     return { conversations: conversationsSupported(), grade: gradesSupported(),
-             activity: activitySupported(), level: levelSupported() };
+             activity: activitySupported(), level: levelSupported(),
+             side: sideSupported(), secret: secretSupported() };
   }
 
   /* PGRST205 is "table not in the schema cache" and 42P01 is Postgres's own
@@ -486,6 +505,8 @@
     var drop = [];
     if (schemaHasActivity === false) drop.push("activity");
     if (schemaHasLevel === false) drop.push("level");
+    if (schemaHasSide === false) drop.push("side");
+    if (schemaHasSecret === false) drop.push("secret");
     var payload = drop.length
       ? rows.map(function (r) {
           var copy = {};
@@ -498,15 +519,18 @@
     var r = await client.from("conversations").upsert(payload);
     if (r.error) {
       /* A push that got past the probe -- a column dropped mid-session, or a
-       * probe that never ran. Drop both optional columns once before concluding
-       * the whole table is missing. Both rather than the guilty one: telling
-       * them apart means parsing PostgREST's localized message text, which is
-       * what the probe exists to avoid. With both already false there is
-       * nothing left to strip, so this cannot recurse. */
+       * probe that never ran. Drop every optional column once before concluding
+       * the whole table is missing. All of them rather than the guilty one:
+       * telling them apart means parsing PostgREST's localized message text,
+       * which is what the probe exists to avoid. With all already false there
+       * is nothing left to strip, so this cannot recurse. */
       if (isMissingSchema(r.error) &&
-          (schemaHasActivity !== false || schemaHasLevel !== false)) {
+          (schemaHasActivity !== false || schemaHasLevel !== false ||
+           schemaHasSide !== false || schemaHasSecret !== false)) {
         schemaHasActivity = false;
         schemaHasLevel = false;
+        schemaHasSide = false;
+        schemaHasSecret = false;
         return pushConversations(rows);
       }
       if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
@@ -572,6 +596,8 @@
     gradesSupported: gradesSupported,
     activitySupported: activitySupported,
     levelSupported: levelSupported,
+    sideSupported: sideSupported,
+    secretSupported: secretSupported,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
