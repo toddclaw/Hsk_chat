@@ -187,15 +187,25 @@ return true;
   const srv = await serve(port);
   const driverPort = await freePort();
   WD = "http://127.0.0.1:" + driverPort;
-  const driver = spawn(DRIVER, ["--port", String(driverPort)], { stdio: "ignore" });
+  /* detached: true makes geckodriver the leader of its own process group, so
+   * killing -driver.pid (the group, not just the one process) reaches the
+   * Firefox child it spawns too. Without this, SIGKILLing geckodriver alone
+   * can leave Firefox itself orphaned and still running: geckodriver never
+   * gets to run its own "quit the browser" cleanup, since SIGKILL cannot be
+   * caught. An orphan surviving into a same-VM retry (run.sh retries this
+   * file once on failure) then competes for CPU with the next attempt's own
+   * Firefox, which was observed making the retry fail worse, not better. */
+  const driver = spawn(DRIVER, ["--port", String(driverPort)],
+    { stdio: "ignore", detached: true });
+  const killGroup = () => { try { process.kill(-driver.pid, "SIGKILL"); } catch (e) {} };
   let closed = false;
   const shutdown = async () => {
     if (closed) return; closed = true;
     try { if (session) await call("DELETE", "/session/" + session); } catch (e) {}
-    try { driver.kill("SIGKILL"); } catch (e) {}
+    killGroup();
     try { srv.close(); } catch (e) {}
   };
-  process.on("exit", () => { try { driver.kill("SIGKILL"); } catch (e) {} });
+  process.on("exit", killGroup);
 
   try {
     // geckodriver needs a moment before it answers.
