@@ -472,6 +472,14 @@ footer{
     roughly <b>$0.10 a story</b> — about 170&times; a chat turn — and <b>Spend</b> above shows
     what you actually paid.</div>
 
+    <label for="twentyModel">Model for 20 Questions</label>
+    <select id="twentyModel"></select>
+    <button id="browseTwentyModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
+    <div class="note">20 Questions asks a lot of a model turn after turn: stay in its role,
+    track every answer so far, and not repeat or contradict an earlier question. No default is
+    set here — unlike story time, this has not been measured yet, so picking one is a guess
+    until it is. Same escape hatch as the other two: empty uses the chat model.</div>
+
     <label class="toggle" for="freeOnly">
       <input type="checkbox" id="freeOnly">
       <span>Display free models only</span>
@@ -935,7 +943,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v81 — 2026-09-04";
+const VERSION   = "v82 — 2026-09-04";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -982,7 +990,7 @@ const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel",
-  storyModel:"hsk1chat.storyModel", extra:"hsk1chat.extraVocab",
+  storyModel:"hsk1chat.storyModel", twentyModel:"hsk1chat.twentyModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   goalLevel:"hsk1chat.goalLevel",
@@ -1022,6 +1030,7 @@ const S = {
   model:   store.get(K.model, MODELS[0].id),
   teachModel: store.get(K.teachModel, TEACH_MODEL),
   storyModel: store.get(K.storyModel, STORY_MODEL),
+  twentyModel: store.get(K.twentyModel, ""),
   /* Per-device chat time, summed for display. See time.js for why it is not
    * one number: a counter under last-write-wins loses whichever device synced
    * first, without saying so. */
@@ -1522,6 +1531,13 @@ function teachingModel() { return S.teachModel || S.model; }
 /* Empty means "whatever I am chatting with", the same escape hatch the teaching
  * model has -- and the same thing that happens if this default id is withdrawn. */
 function storyModel() { return S.storyModel || S.model; }
+/* Same escape hatch again. Unlike story time, no default id is set here yet --
+ * the multi-turn constraint-tracking gap DEVELOPING.md records for 20
+ * Questions is exactly the kind of thing story time already measured a
+ * capable model fixes, but that measurement has not been run for this
+ * activity, and guessing a default without it is the mistake CLAUDE.md warns
+ * against for any prompt-adjacent change. Empty until someone runs it. */
+function twentyModel() { return S.twentyModel || S.model; }
 
 /* The four prompts behind the two buttons. Four rather than two because `own`
  * changes what each one should ask for: the partner's reply is known-good
@@ -1652,6 +1668,12 @@ async function turn(ctx) {
   // In Ghost Words, "required" is the first unused word to push production.
   const required = isFocused ? (reuse[0] && reuse[0].w) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
+  /* A story turn names its own model in ctx (storyStep(), and the discussing
+   * phase send() sets up). Every other twenty turn -- opening, and every
+   * ordinary send() while playing -- comes through here with no ctx.model at
+   * all, so it has to be resolved the same way here, once, rather than
+   * threaded through every caller. */
+  const model = (ctx && ctx.model) || (currentActivity() === "twenty" ? twentyModel() : null);
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
     .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
@@ -1669,11 +1691,11 @@ async function turn(ctx) {
      * loudly instead of silently doubling their cost. */
     let raw;
     try {
-      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
     } catch (err) {
       if (err.kind !== "empty") throw err;
       console.warn("[empty completion] retrying once");
-      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
     }
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
@@ -2664,7 +2686,8 @@ async function pullAndMerge() {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
       store.set(K.model, S.model); store.set(K.teachModel, S.teachModel);
-      store.set(K.storyModel, S.storyModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.storyModel, S.storyModel); store.set(K.twentyModel, S.twentyModel);
+      store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
@@ -3945,6 +3968,16 @@ function fillModels() {
     sList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
       (m.id === S.storyModel ? " selected" : "") + ">" +
       escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+  // Same unfiltered list again, for 20 Questions.
+  let twList = tList;
+  if (S.twentyModel && !twList.some(m => m.id === S.twentyModel)) {
+    twList = [{ id: S.twentyModel, label: S.twentyModel }].concat(twList);
+  }
+  $("#twentyModel").innerHTML =
+    '<option value=""' + (S.twentyModel ? "" : " selected") + ">Same as the chat model</option>" +
+    twList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
+      (m.id === S.twentyModel ? " selected" : "") + ">" +
+      escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
   /* Which of the two states the section is in. Loading the catalogue is setup;
    * once it is done the button that did it has no business outranking the
    * pickers, and the known-good list it sat with is strictly worse than the
@@ -3984,6 +4017,11 @@ const MODEL_PICKERS = {
     title: "Model for story time", free: false,
     get: () => S.storyModel,
     set: id => { S.storyModel = id; store.set(K.storyModel, id); queueSync("prefs"); fillModels(); }
+  },
+  twenty: {
+    title: "Model for 20 Questions", free: false,
+    get: () => S.twentyModel,
+    set: id => { S.twentyModel = id; store.set(K.twentyModel, id); queueSync("prefs"); fillModels(); }
   }
 };
 let modelPickFor = "chat";      // which picker opened the sheet
@@ -4944,6 +4982,10 @@ $("#storyModel").onchange = e => {
   S.storyModel = e.target.value; store.set(K.storyModel, S.storyModel); queueSync("prefs");
 };
 $("#browseStoryModel").onclick = () => openModelPicker("story");
+$("#twentyModel").onchange = e => {
+  S.twentyModel = e.target.value; store.set(K.twentyModel, S.twentyModel); queueSync("prefs");
+};
+$("#browseTwentyModel").onclick = () => openModelPicker("twenty");
 $("#teachModel").onchange = e => {
   S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
 };
