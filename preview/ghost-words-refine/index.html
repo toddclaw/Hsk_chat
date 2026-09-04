@@ -4573,12 +4573,18 @@ function usableWords() {
  * the harder half and lags recognition, so it is worth counting separately --
  * and it costs no new storage, since every message is already saved.
  * renderAll() segments the whole history on every render too, so the work here
- * is nothing new. */
+ * is nothing new.
+ *
+ * A word only counts when the grader has passed the sentence it sits in:
+ * typing a word in a broken sentence is not demonstrating you can use it.
+ * Messages that were never graded (grader off, or still in flight) do not
+ * contribute. */
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
       if (t.role !== "user") return;
+      if (!t.grade || !t.grade.ok) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
         if (tok.kind === "word") out.add(tok.text);
       });
