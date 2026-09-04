@@ -201,14 +201,28 @@
 
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
+  /* `solo` is the same sentence-count budget with the "share your own thing,
+   * then ask" turn-taking instruction stripped out -- for an activity whose
+   * OWN rule already dictates a different shape (20 Questions: one guess, or
+   * one yes/no answer, nothing else). Without it, `rule`'s medium/long text
+   * reintroduces exactly the contamination the worked-example fix removed,
+   * just from a different rule -- this one was never gated by `act.converse`
+   * the way rules 5-7 are, since it is not about turn-taking, it is about
+   * length. Measured live: a real reply correctly asked its second guessing
+   * question and then, unprompted, appended "我昨天努力学习。老师说我的练习
+   * 很好。你最近有什么特别的事吗？" -- word for word the medium rule's own
+   * instruction, on a reply-length setting other than short. */
   var LENGTHS = {
     short:  { label: "short — 1-2 sentences",  maxTokens: 300,
-              rule: "每次说一到两句话。不要长。" },
+              rule: "每次说一到两句话。不要长。",
+              solo: "每次说一到两句话。不要长。" },
     medium: { label: "medium — 3-4 sentences", maxTokens: 500,
-              rule: "每次说三到四句话。先说你自己的事，再问学生。" },
+              rule: "每次说三到四句话。先说你自己的事，再问学生。",
+              solo: "每次说三到四句话。" },
     long:   { label: "longer — 5-6 sentences", maxTokens: 800,
               rule: "每次说五到六句话。多说一点你自己的想法和今天做的事，" +
-                    "最后问学生一个问题。不要只说一两句。" }
+                    "最后问学生一个问题。不要只说一两句。",
+              solo: "每次说五到六句话。不要只说一两句。" }
   };
 
   /* Which arm of the prompt-mode A/B a level actually wants.
@@ -429,20 +443,44 @@
        * opened with ordinary chat instead of a guessing question. `opening`
        * is a fact the caller already knows (S.history.length === 0 in
        * index.html) rather than something the model has to infer from the
-       * transcript. */
+       * transcript.
+       *
+       * "学生想了一个东西", not "学生心里想了一个东西": measured live, EVERY
+       * guessing question the model asked echoed 心里 back verbatim ("你心里
+       * 想的东西是...") -- 心 is not an HSK 1 entry, so every single reply
+       * needed a repair round trip, and one in ten still fell back after all
+       * three. Dropping the one word the rule never needed to say in the
+       * first place: 10/10 clean on the first attempt, no retries, same
+       * DEVELOPING.md lesson as 鸡鸟 -- naming a word in the prompt primes
+       * the model to reach for it. */
       rules.push(
         (opts.opening ? convert("现在马上问第一个是非问题，不要先打招呼，不要先说别的。") + " " : "") +
-        convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
+        convert("学生想了一个东西，你负责猜。一次只问一个是非问题") +
         convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
         convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
     } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
       var secret = convert(opts.secret);
       /* Same defect, more visible here: measured live, EVERY opening reply in
        * both arms was plain small talk with no sign a game had started at
-       * all (0/8 twice over) -- the reactive-only rule gives the model
-       * nothing to say when there is no question yet to answer. */
+       * all -- the reactive-only rule gives the model nothing to say when
+       * there is no question yet to answer.
+       *
+       * A free-form instruction to announce readiness ("先说你已经想好了一
+       * 个东西...") was not enough on its own: measured live, the model
+       * reliably reached for 回答/或/开始 describing the game in its own
+       * words, none of them HSK 1, and 8/10 fell back to 我不知道 after
+       * exhausting the repair loop's 3 attempts. The concept "I will answer
+       * yes-or-no" has no simple HSK 1 phrasing to reach for instead.
+       *
+       * A literal, pre-validated template sidesteps the problem rather than
+       * asking the model to compose around it: told to say this EXACT
+       * sentence, it did, verbatim, 10/10 on the first attempt, no retries.
+       * One-time cost: the opening line no longer varies -- always "我想了
+       * 一个东西，你问我吧。" -- an acceptable trade for a line said once
+       * per round that previously had roughly even odds of failing
+       * outright. */
       rules.push(
-        (opts.opening ? convert("先说你已经想好了一个东西，请学生开始问你是非问题，不要说是什么。") + " " : "") +
+        (opts.opening ? convert("先说这句话：「我想了一个东西，你问我吧。」不要改。") + " " : "") +
         convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
         convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
         convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
@@ -508,8 +546,12 @@
     rules.push(convert(style.vocab) +
       ((opts.offer && opts.offer.length) ? convert("（后面提到的新词除外。）") : ""));
     /* A story segment sets its own length below; LENGTHS is the conversational
-     * axis and its "one or two sentences" contradicts it outright. */
-    if (!seg) rules.push(convert(len.rule));
+     * axis and its "one or two sentences" contradicts it outright. Scoped to
+     * twenty specifically, not act.converse generally: story's own asking/
+     * discussing phases have converse === false at the activity level too,
+     * but ARE meant to react to the student the ordinary way, so they keep
+     * the full rule -- see LENGTHS' own comment on why twenty does not. */
+    if (!seg) rules.push(convert(opts.activity === "twenty" ? (len.solo || len.rule) : len.rule));
     rules.push(convert(style.grammar));
     rules.push(convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，") +
                "\n   " + convert("不要用英文，不要用拼音，不要用汉字注音。"));

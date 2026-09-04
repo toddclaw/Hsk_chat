@@ -1,286 +1,406 @@
 {
   "model": "qwen/qwen3-30b-a3b-instruct-2507",
   "runs": 10,
-  "when": "2026-09-04T15:35:35.015Z",
+  "when": "2026-09-04T16:50:00.740Z",
   "rows": [
     {
       "arm": "shipped",
       "side": "answerer",
-      "text": "你好！今天天气很好。你吃饭了吗？",
-      "cost": 0.00003522,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西是动物吗？",
-      "cost": 0.0000422,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！今天天气好。你吃饭了吗？",
-      "cost": 0.00003594,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问问题，我回答是或不是。",
-      "cost": 0.0000432,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西是吃的吗？",
-      "cost": 0.0000403,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是食物吗？",
-      "cost": 0.00003813,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！你吃苹果吗？",
-      "cost": 0.000039,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问问题，我回答是或不是。",
-      "cost": 0.0000432,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西，是不是吃的？",
-      "cost": 0.00003642,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是吃的吗？",
-      "cost": 0.0000422,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！你吃苹果吗？",
-      "cost": 0.000039,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问是非问题。",
-      "cost": 0.00005564,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西是吃的吗？",
-      "cost": 0.00003642,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是吃的吗？",
-      "cost": 0.00003813,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！今天天气好。你吃饭了吗？",
-      "cost": 0.00005343,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问问题，我回答是或不是。",
-      "cost": 0.0000432,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "你好！今天天气好。你吃饭了吗？",
-      "cost": 0.0000391,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是食物吗？",
-      "cost": 0.0000422,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！你吃苹果吗？",
-      "cost": 0.000039,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我想好了一个东西。你问是非问题吧。",
-      "cost": 0.0000423,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西是吃的吗？",
-      "cost": 0.0000403,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是吃的吗？",
-      "cost": 0.00003813,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
-      "text": "你好！今天天气好。你吃饭了吗？",
-      "cost": 0.00005343,
-      "ok": false
-    },
-    {
-      "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问问题。我回答是或不是。",
-      "cost": 0.0000432,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西是吃的吗？",
-      "cost": 0.0000403,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：是动物吗？",
-      "cost": 0.00005486,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
-      "side": "guesser",
       "text": "你好！你今天吃饭了吗？",
-      "cost": 0.000039,
+      "cost": 0.00001873395,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": false
     },
     {
       "arm": "candidate",
-      "side": "guesser",
-      "text": "我有一个东西。你问是或不是。",
-      "cost": 0.000042,
-      "ok": true
-    },
-    {
-      "arm": "shipped",
       "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西，有没有翅膀？",
-      "cost": 0.00003642,
-      "ok": true
-    },
-    {
-      "arm": "candidate",
-      "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是食物吗？",
-      "cost": 0.0000422,
+      "text": "这是第1个问题。你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     },
     {
       "arm": "shipped",
       "side": "guesser",
       "text": "你好！你吃饭了吗？",
-      "cost": 0.00003474,
+      "cost": 0.00001897425,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": false
     },
     {
       "arm": "candidate",
       "side": "guesser",
-      "text": "我想好了一个东西。你可以问我问题了。",
-      "cost": 0.000042,
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     },
     {
       "arm": "shipped",
       "side": "answerer",
-      "text": "这是第1个问题。你心里想的东西，是吃的吗？",
-      "cost": 0.00003672,
-      "ok": true
+      "text": "你好！今天天气很好。你吃早饭了吗？",
+      "cost": 0.0000196992,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
     },
     {
       "arm": "candidate",
       "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是吃的吗？",
-      "cost": 0.0000422,
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     },
     {
       "arm": "shipped",
       "side": "guesser",
-      "text": "你好！你吃早饭了吗？",
-      "cost": 0.0000393,
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": false
     },
     {
       "arm": "candidate",
       "side": "guesser",
-      "text": "我想好了一个东西。你可以问我问题了。",
-      "cost": 0.000042,
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     },
     {
       "arm": "shipped",
       "side": "answerer",
       "text": "你好！今天天气好。你吃饭了吗？",
-      "cost": 0.00005239,
+      "cost": 0.000039,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": false
     },
     {
       "arm": "candidate",
       "side": "answerer",
-      "text": "这是第1个问题：你心里想的东西是吃的吗？",
-      "cost": 0.0000422,
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     },
     {
       "arm": "shipped",
       "side": "guesser",
-      "text": "你好！你吃苹果吗？",
-      "cost": 0.000039,
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.0000399,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": false
     },
     {
       "arm": "candidate",
       "side": "guesser",
-      "text": "我有一个东西。你问是非问题。",
-      "cost": 0.00003753,
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00005226,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000418,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！你今天吃饭了吗？",
+      "cost": 0.0000191673,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.0000411,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！今天好吗？",
+      "cost": 0.0000724909,
+      "attempts": 2,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题。你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.0000411,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！你今天吃午饭了吗？",
+      "cost": 0.000018927,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！你今天吃饭了吗？",
+      "cost": 0.00001873395,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！你今天吃饭了吗？",
+      "cost": 0.00001873395,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题。你想到的东西是吃的吗？",
+      "cost": 0.0000208071,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！你今天好吗？",
+      "cost": 0.00001897425,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.0000411,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.000039,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题：你想到的东西是吃的吗？",
+      "cost": 0.0000418,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "answerer",
+      "text": "你好！你叫什么名字？",
+      "cost": 0.0000381,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "answerer",
+      "text": "这是第1个问题。你想到的东西是吃的吗？",
+      "cost": 0.00005629,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": true
+    },
+    {
+      "arm": "shipped",
+      "side": "guesser",
+      "text": "你好！今天天气好。你吃饭了吗？",
+      "cost": 0.00001974645,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
+      "ok": false
+    },
+    {
+      "arm": "candidate",
+      "side": "guesser",
+      "text": "我想了一个东西，你问我吧。",
+      "cost": 0.00002022705,
+      "attempts": 1,
+      "validated": true,
+      "violations": [],
       "ok": true
     }
   ]

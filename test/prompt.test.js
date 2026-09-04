@@ -754,8 +754,10 @@ check(noSide.indexOf("你负责猜") === -1 && noSide.indexOf("你心里想的�
 
 var answerer = P.build({ level: 1, label: "HSK 1", length: "short",
                          activity: "twenty", side: "answerer" });
-check(answerer.indexOf("学生心里想了一个东西，你负责猜") !== -1,
+check(answerer.indexOf("学生想了一个东西，你负责猜") !== -1,
   "answerer: the model is told it is the one guessing");
+check(answerer.indexOf("心里") === -1,
+  "and not primed to echo 心里 (above HSK 1) into every guessing question -- measured live");
 check(answerer.indexOf("大概二十个问题以内") !== -1,
   "and given the roughly-twenty budget to narrate against");
 check(answerer.indexOf("你心里想的是") === -1,
@@ -767,7 +769,7 @@ check(guesser.indexOf("你心里想的是「苹果」") !== -1,
   "guesser: the model is told its own secret");
 check(guesser.indexOf("只回答「是」或「不是」") !== -1,
   "and told to answer only yes/no");
-check(guesser.indexOf("学生心里想了一个东西") === -1,
+check(guesser.indexOf("学生想了一个东西") === -1,
   "and not given the answerer's rule instead");
 
 var guesserNoSecret = P.build({ level: 1, label: "HSK 1", length: "short",
@@ -859,13 +861,23 @@ var answererLater = P.build({ level: 1, label: "HSK 1", length: "short",
 check(answererLater.indexOf("现在马上问第一个是非问题") === -1,
   "and that instruction does not repeat on later turns, which already have something to react to");
 
+/* A free-form "announce readiness in your own words" instruction measured
+ * badly here (8/10 fell back to 我不知道 after 3 repair attempts): the
+ * concept "I will answer yes-or-no" has no simple HSK 1 phrasing, so the
+ * model reliably reached for 回答/或/开始, all above HSK 1. A literal,
+ * pre-validated template sidesteps it -- told to say this exact sentence,
+ * the model did, verbatim, 10/10 on the first attempt. */
+var GUESSER_OPENING_LINE = "我想了一个东西，你问我吧。";
+check(HSK.validate(GUESSER_OPENING_LINE,
+  HSK.buildLexicon(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "hsk1.json"), "utf8"))))
+  .length === 0, "the guesser opening template is itself legal at HSK 1 -- it is the whole point");
 var guesserOpening = P.build({ level: 1, label: "HSK 1", length: "short",
                                activity: "twenty", side: "guesser", secret: "苹果", opening: true });
-check(guesserOpening.indexOf("先说你已经想好了一个东西") !== -1,
-  "guesser's opening turn is told to announce readiness rather than default to small talk");
+check(guesserOpening.indexOf(GUESSER_OPENING_LINE) !== -1,
+  "guesser's opening turn is told to say the pre-validated announcement");
 var guesserLater = P.build({ level: 1, label: "HSK 1", length: "short",
                              activity: "twenty", side: "guesser", secret: "苹果", opening: false });
-check(guesserLater.indexOf("先说你已经想好了一个东西") === -1,
+check(guesserLater.indexOf(GUESSER_OPENING_LINE) === -1,
   "and that instruction does not repeat on later turns either");
 
 // Rule numbering must survive the opening instruction too.
@@ -874,6 +886,23 @@ var openingNums = answererOpening.split("\n").map(function (l) {
 }).filter(Boolean).map(Number);
 check(JSON.stringify(openingNums) === JSON.stringify(openingNums.map(function (_, i) { return i + 1; })),
   "opening turn: rule numbering is still gap-free", JSON.stringify(openingNums));
+
+/* Measured live: a real medium-length reply correctly asked its second
+ * guessing question, then appended "我昨天努力学习。老师说我的练习很好。
+ * 你最近有什么特别的事吗？" -- word for word the medium length rule's own
+ * "share your own thing, then ask" instruction, which is not gated by
+ * act.converse the way rules 5-7 are (it is not a turn-taking rule). */
+["medium", "long"].forEach(function (len) {
+  var out = P.build({ level: 1, label: "HSK 1", length: len, activity: "twenty", side: "answerer" });
+  check(out.indexOf("先说你自己的事") === -1 && out.indexOf("多说一点你自己的想法") === -1,
+    "twenty at " + len + " length drops the length rule's share-yourself instruction",
+    out.split("\n")[3]);
+  check(out.indexOf(len === "medium" ? "三到四句话" : "五到六句话") !== -1,
+    "but keeps the sentence-count budget itself");
+});
+check(P.build({ level: 1, label: "HSK 1", length: "medium", activity: "chat" })
+        .indexOf("先说你自己的事") !== -1,
+  "chat keeps the full medium rule -- this is scoped to twenty, not global");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

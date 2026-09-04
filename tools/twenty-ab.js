@@ -1,4 +1,4 @@
-/* A/B the 20 Questions opening-turn instruction against a real model.
+/* A/B the 20 Questions opening-turn fixes against a real model.
  *
  * The role rule (build()'s activityRules(), twenty branch) only ever
  * described REACTIVE behavior -- what to ask, how to count, when to reveal --
@@ -6,18 +6,24 @@
  * react to. A first run of this harness (testing a since-shipped, unrelated
  * fix -- the worked example's contradicting exchange) turned up the real
  * defect by accident: every guesser opening reply, in every arm, was plain
- * small talk with no sign a game had started (0/8, twice over), and the
- * answerer's opening reliability was worse than a too-loose "does it contain
- * 吗" check made it look.
+ * small talk with no sign a game had started.
  *
  * `opening: true` states the first-turn behavior explicitly instead of
  * asking the model to infer "is this my first message" from an empty
- * transcript. This compares that against the same prompt with `opening:
- * false` (what shipped before this fix) on the opening turn -- no prior
- * student message, exactly what openingTurn() sends -- for both roles. The
- * "reply" shape (student already asked a clean yes/no question) is not
- * re-tested here: an earlier run already found both arms answer that
- * correctly, and `opening` changes nothing about it.
+ * transcript. But "in character" alone was the wrong metric -- a reply can
+ * be perfectly in character and still get rejected by the real HSK
+ * validator, which is what `我不知道` (the app's own give-up fallback) turned
+ * out to mean in production: 0/10 of the guesser's opening announcements
+ * survived a real HSK 1 validate() call, because the model reliably reaches
+ * for 或/回答/是非 (all above HSK 1) to describe the game. Worse, the
+ * answerer's guessing question echoed 心里 (also above HSK 1) from the rule
+ * text's OWN wording into every single reply -- the same contamination
+ * DEVELOPING.md documents for 鸡鸟, just a different word.
+ *
+ * `validates` runs each reply through the actual retry-and-repair loop
+ * turn() uses (up to 3 attempts, the app's default), not a single shot --
+ * that loop already exists in production and recovers some of the time, so
+ * a single-sample validate() call understates what a user actually sees.
  *
  * Plain node, no dependencies, and never part of `test/run.sh`: it makes
  * network calls and costs money. The key is read out of a file OUTSIDE the
@@ -31,8 +37,10 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
+const HSK = require("../validator.js");
 const HSKPrompt = require("../prompt.js");
 
+const ROOT = path.join(__dirname, "..");
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const KEY_FILE = process.env.OPENROUTER_KEY_FILE ||
   path.join(os.homedir(), "Documents", "openrouter_key.txt");
@@ -45,12 +53,15 @@ const arg = (name, dflt) => {
 const RUNS = Number(arg("runs", 8));
 const MODEL = arg("model", "qwen/qwen3-30b-a3b-instruct-2507");
 const CONCURRENCY = Number(arg("concurrency", 4));
+const ATTEMPTS = 3; // S.attempts' shipped default in index.html.
 
 const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
 if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
 
 const LEVEL = 1, LABEL = "HSK 1", LENGTH = "short";
 const SECRET = "苹果";
+const entries = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "hsk" + LEVEL + ".json"), "utf8"));
+const baseLex = HSK.buildLexicon(entries);
 
 function opensysPrompt(side, opening) {
   return HSKPrompt.build({
@@ -59,13 +70,24 @@ function opensysPrompt(side, opening) {
   });
 }
 
-async function callModel(systemContent) {
+const NEED_RE = /\[\[NEED:([^\]|]+)(?:\|([^\]|]*))?(?:\|([^\]]*))?\]\]/g;
+function extractNeeds(text) {
+  const needs = [];
+  NEED_RE.lastIndex = 0;
+  const out = text.replace(NEED_RE, (_m, w) => {
+    const word = String(w).trim();
+    if (word && needs.indexOf(word) === -1) needs.push(word);
+    return word;
+  });
+  return { text: out, needs: needs };
+}
+
+async function callModel(messages) {
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + KEY, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: MODEL,
-      messages: [{ role: "system", content: systemContent }],
+      model: MODEL, messages: messages,
       max_tokens: HSKPrompt.LENGTHS[LENGTH].maxTokens,
       temperature: 0.7,
       usage: { include: true }
@@ -79,35 +101,66 @@ async function callModel(systemContent) {
   return { text: txt.trim(), cost: (body.usage && body.usage.cost) || 0 };
 }
 
+// Same shape as index.html's repairPrompt(), abbreviated: named violations,
+// plus a substitute suggestion once the loop is on its last attempt.
+function repairPrompt(violations, attempt) {
+  const named = violations.map(v => "「" + v + "」").join("、");
+  const parts = ["你用了" + named + "。这些词太难，学生不认识，不可以用。"];
+  if (attempt >= ATTEMPTS) {
+    violations.slice(0, 3).forEach(v => {
+      const s = HSK.suggest(v, baseLex, 4).map(e => e.w);
+      if (s.length) parts.push("「" + v + "」可以换成：" + s.join("、") + "。");
+    });
+    parts.push("只用最简单的词。");
+  }
+  return parts.join("");
+}
+
 /* "In character", counted rather than read (DEVELOPING.md's rule). Both
  * checks require a marker tied to the GUESSING frame specifically, not just
  * "is grammatically a yes/no question" -- an earlier version of this script
  * scored "你吃饭了吗？" (ordinary chat, uses 吗) the same as "这是第一个问题，
  * 是吃的吗？" (an actual guess), which overcounted the answerer arm's
- * success and hid the real gap.
- *
- * - answerer: must ask a yes/no question (吗/是不是/对不对/有没有 + ？) AND
- *   reference the thing or the count (心里想/东西/猜/第N个问题) -- otherwise
- *   an ordinary "did you eat" question would pass.
- * - guesser: on the opening turn there is nothing to answer yet, so the bar
- *   is different -- it must announce readiness/invite questions, not
- *   silently pass by default the way an earlier version of this script did.
- *   Widened once already after a real run: the model's actual phrasings
- *   ("我有一个东西，你问是或不是" -- "I have a thing, you ask yes-or-no")
- *   did not match a first guess at the wording ("想好", "是非问题"). */
+ * success and hid the real gap. The guesser check was widened once already
+ * after a real run: "我有一个东西，你问是或不是" did not match a first
+ * guess at the wording. */
 function inCharacter(side, text) {
   if (side === "answerer") {
     const yesNo = /吗|是不是|对不对|有没有/.test(text) && /[？?]/.test(text);
-    const aboutThing = /心里想|东西|猜|第.{0,3}个问题/.test(text);
+    const aboutThing = /心里想|想到的东西|东西|猜|第.{0,3}个问题/.test(text);
     return yesNo && aboutThing;
   }
-  return /想好|想的东西|有一个东西|问我|是非问题|是或不是|准备好|你可以问|你问/.test(text);
+  return /想好|想的东西|想到|有一个东西|问我|是非问题|是或不是|准备好|你可以问|你问/.test(text);
+}
+
+// Runs the actual production retry loop, not a single sample: turn() already
+// recovers from a violation some of the time, so a one-shot validate() call
+// understates what a user actually sees.
+async function playToValidation(systemContent) {
+  const scratch = [{ role: "system", content: systemContent }];
+  let cost = 0;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    const res = await callModel(scratch);
+    cost += res.cost;
+    const ex = extractNeeds(res.text);
+    const lex = ex.needs.length ? HSK.buildLexicon(entries, ex.needs.map(w => ({ w: w }))) : baseLex;
+    const violations = HSK.validate(ex.text, lex).filter(v => !v.name);
+    if (!violations.length) return { validated: true, attempts: attempt, text: ex.text, cost: cost };
+    if (attempt === 1) var firstText = ex.text, firstViolations = violations.map(v => v.text);
+    scratch.push({ role: "assistant", content: res.text });
+    scratch.push({ role: "user", content: repairPrompt(violations.map(v => v.text), attempt + 1) });
+  }
+  return { validated: false, attempts: ATTEMPTS, text: firstText, violations: firstViolations, cost: cost };
 }
 
 async function sample(arm, side) {
   const prompt = opensysPrompt(side, arm === "candidate");
-  const res = await callModel(prompt);
-  return { arm: arm, side: side, text: res.text, cost: res.cost, ok: inCharacter(side, res.text) };
+  const v = await playToValidation(prompt);
+  return {
+    arm: arm, side: side, text: v.text, cost: v.cost, attempts: v.attempts,
+    validated: v.validated, violations: v.violations || [],
+    ok: inCharacter(side, v.text)
+  };
 }
 
 async function pool(tasks, n) {
@@ -138,7 +191,8 @@ async function pool(tasks, n) {
       tasks.push(() => sample("candidate", side).catch(e => ({ arm: "candidate", side: side, error: e.message })));
     });
   }
-  console.error("model=" + MODEL + " runs=" + RUNS + " samples=" + tasks.length);
+  console.error("model=" + MODEL + " runs=" + RUNS + " samples=" + tasks.length +
+    " (each up to " + ATTEMPTS + " real calls -- the production retry loop)");
   const rows = await pool(tasks, CONCURRENCY);
 
   let totalCost = 0;
@@ -148,15 +202,21 @@ async function pool(tasks, n) {
       const rs = rows.filter(r => r && r.arm === arm && r.side === side);
       const ok = rs.filter(r => !r.error);
       const good = ok.filter(r => r.ok).length;
+      const validated = ok.filter(r => r.validated).length;
       ok.forEach(r => { totalCost += r.cost || 0; });
-      console.log(arm + ": " + good + "/" + ok.length + " in character" +
+      console.log(arm + ": " + good + "/" + ok.length + " in character, " +
+        validated + "/" + ok.length + " validate within " + ATTEMPTS + " attempts" +
         (rs.length - ok.length ? " (" + (rs.length - ok.length) + " errors)" : ""));
-      ok.filter(r => !r.ok).forEach(r => console.log("  broke character: " + r.text.replace(/\n/g, " / ")));
+      ok.filter(r => !r.validated).forEach(r =>
+        console.log("  fell back after " + r.attempts + " attempts -- last try: " +
+          r.text.replace(/\n/g, " / ") + " [" + r.violations.join(",") + "]"));
+      ok.filter(r => r.validated && !r.ok).forEach(r =>
+        console.log("  validated but not in character: " + r.text.replace(/\n/g, " / ")));
     });
   });
   console.log("\ncost: $" + totalCost.toFixed(6));
 
   const out = path.join(__dirname, "twenty-ab-results.json");
   fs.writeFileSync(out, JSON.stringify({ model: MODEL, runs: RUNS, when: new Date().toISOString(), rows: rows }, null, 2));
-  console.log("rows written to " + path.relative(path.join(__dirname, ".."), out));
+  console.log("rows written to " + path.relative(ROOT, out));
 })();
