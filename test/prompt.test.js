@@ -797,5 +797,33 @@ var twentyNums = twentyPrompt.split("\n").map(function (l) {
 check(JSON.stringify(twentyNums) === JSON.stringify(twentyNums.map(function (_, i) { return i + 1; })),
   "twenty: rule numbering is gap-free and in order", JSON.stringify(twentyNums));
 
+/* activityRules() is what a custom system prompt still gets (systemPrompt()'s
+ * own branch in index.html), extracted out of build() so the two can never
+ * drift apart -- its output must always be exactly a subset of what build()
+ * itself produces for the same opts. */
+[
+  { activity: "chat" },
+  { activity: "focused" },
+  { activity: "story", storySegment: { index: 0, of: 5 } },
+  { activity: "story", storyPhase: "asking" },
+  { activity: "story", storyPhase: "discussing" },
+  { activity: "twenty", side: "answerer" },
+  { activity: "twenty", side: "guesser", secret: "苹果" }
+].forEach(function (o) {
+  var opts = Object.assign({ level: 1, label: "HSK 1", length: "short" }, o);
+  var rules = P.activityRules(opts);
+  var full = P.build(opts);
+  rules.forEach(function (r) {
+    check(full.indexOf(r) !== -1,
+      "activityRules() for " + JSON.stringify(o) + " appears verbatim in build()'s own output",
+      r);
+  });
+});
+check(P.activityRules({ activity: "twenty", level: 1, label: "HSK 1", length: "short" }).length === 0,
+  "activityRules() adds nothing for twenty with no side chosen yet -- a custom " +
+  "prompt should not invent a role the chooser never set");
+check(P.activityRules({ activity: "focused", level: 1, label: "HSK 1", length: "short" }).length > 0,
+  "and Ghost Words' targeting instruction survives a custom prompt");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

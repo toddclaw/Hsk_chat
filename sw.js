@@ -7,7 +7,7 @@
  *
  * API calls never touch this: they are cross-origin POSTs to OpenRouter.
  */
-const CACHE = "hsk-chat-v76";
+const CACHE = "hsk-chat-v77";
 
 // Installed up front: only what a first launch needs. The other level files and
 // the reference dictionary total a few megabytes and are cached on first use.
