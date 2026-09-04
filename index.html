@@ -1316,6 +1316,7 @@ function systemPrompt(offer, reuse, required, ctx) {
 }
 
 function defaultPrompt(offer, reuse, required, ctx) {
+  const c = currentChat();
   const p = HSKPrompt.build({
     offer: offer || [],
     reuse: reuse || [],
@@ -1328,6 +1329,8 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storySegment: (ctx && ctx.storySegment) || null,
     storyPhase: (ctx && ctx.storyPhase) || null,
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
+    side: currentActivity() === "twenty" ? (c && c.side) : null,
+    secret: currentActivity() === "twenty" ? (c && c.secret) : null,
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -2037,6 +2040,8 @@ function renderAll() {
                                 : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
+    } else if (currentActivity() === "twenty") {
+      hintText = 'Pick who thinks of something, below.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2302,7 +2307,10 @@ function startActivity(id) {
    * sees, so nothing is generated -- and nothing is spent -- until they have
    * said what the story should be about. Every other activity still opens with
    * the partner speaking. */
-  if (act.gen !== "segments" && id !== "chat") openingTurn();
+  /* Same withholding as story time, for the same reason: nothing is
+   * generated until the learner has chosen a role, since the role decides
+   * what the model is even allowed to say. */
+  if (act.gen !== "segments" && id !== "chat" && id !== "twenty") openingTurn();
   return c;
 }
 
@@ -4433,8 +4441,10 @@ async function checkUpdate() {
  * never lets exceed STORY_SEGMENTS, so this clause can only ever fire on a
  * transcript old enough to have no `kind` at all. */
 function renderComposer() {
-  const listening = currentActivity() === "story" && !anyStoryQuestion() &&
-    !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS);
+  const c = currentChat();
+  const listening = (currentActivity() === "story" && !anyStoryQuestion() &&
+    !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS)) ||
+    (currentActivity() === "twenty" && !(c && c.side));
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -4530,6 +4540,41 @@ function renderStoryControl(box) {
   }
 }
 
+/* Choosing a role for 20 Questions: fixed once, exactly like activity/level
+ * (design D5). secret only for guesser, drawn from the curated pool
+ * intersected with the student's own cumulative wordlist -- never rendered
+ * anywhere; only systemPrompt() reads it (design D3). Guarded on c.side so a
+ * double tap (or a stray click after the first choice already landed) cannot
+ * silently redraw the secret out from under an in-progress round. */
+function chooseTwentySide(side) {
+  const c = currentChat();
+  if (!c || c.side) return;
+  c.side = side;
+  if (side === "guesser") c.secret = HSKPrompt.pickSecret(S.base);
+  saveChats();
+  queueSync("conversations");
+  renderStarters();
+  openingTurn();
+}
+
+/* Choosing state only -- once `side` is set there is nothing to show here,
+ * same as the ordinary chat starters once a story control's own topic
+ * exists. */
+function renderTwentyControl(box) {
+  const c = currentChat();
+  if (!c || c.side) return;
+  const answerer = document.createElement("button");
+  answerer.className = "story";
+  answerer.textContent = "I'll think of something";
+  answerer.onclick = () => chooseTwentySide("answerer");
+  box.appendChild(answerer);
+  const guesser = document.createElement("button");
+  guesser.className = "story";
+  guesser.textContent = "You think of something";
+  guesser.onclick = () => chooseTwentySide("guesser");
+  box.appendChild(guesser);
+}
+
 /* Tapping a starter fills the composer instead of sending: the learner sees the
  * sentence they are about to say, can edit it, and the words get underlined and
  * learned like anything typed. */
@@ -4542,6 +4587,7 @@ function renderStarters() {
    * learner to talk over a story that has not started. Story time uses the
    * strip for its own control instead. */
   if (currentActivity() === "story") return renderStoryControl(box);
+  if (currentActivity() === "twenty") return renderTwentyControl(box);
   if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
