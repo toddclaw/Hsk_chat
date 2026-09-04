@@ -2012,6 +2012,20 @@ function renderAll() {
   /* Not raw length: a history holding only a `role: "topic"` message is length
    * 1, but renderMessage() returns null for that role, so a raw-length check
    * would suppress this hint over an empty-looking log instead of showing it. */
+  /* Ghost Words banner persists for the whole conversation. */
+  function ghostBanner() {
+    if (currentActivity() !== "focused") return "";
+    const targets = reuseFor("focused");
+    if (targets && targets.length) {
+      return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
+        '<b style="color:var(--accent);font-size:22px">' +
+        targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
+        '<span style="color:var(--dim)">The partner will ask questions that need them.</span></div>';
+    }
+    return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
+      'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
+      'chat for a while, then switch back here.</div>';
+  }
   if (!S.history.some(t => t.role !== "topic")) {
     /* Two sub-states share this branch for story time: no topic yet (the
      * chooser is on screen, nothing to tap) and a topic just picked but the
@@ -2024,17 +2038,8 @@ function renderAll() {
         '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
     } else if (currentActivity() === "focused") {
-      const targets = reuseFor("focused");
-      if (targets && targets.length) {
-        hintText = '<b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
-          '<b style="color:var(--accent);font-size:22px">' +
-          targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
-          '<span style="color:var(--dim)">The partner will ask questions that need them.</span>';
-      } else {
-        hintText = '<b>Ghost Words</b><br>No unused words yet.<br>' +
-          'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
-          'chat for a while, then switch back here.';
-      }
+      log.innerHTML = ghostBanner();
+      return;
     } else {
       hintText = 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
         'Replies are checked against the ' + levelLabel() +
@@ -2043,6 +2048,7 @@ function renderAll() {
     log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
+  log.innerHTML = ghostBanner();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
