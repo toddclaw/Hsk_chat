@@ -2017,14 +2017,30 @@ function renderAll() {
      * chooser is on screen, nothing to tap) and a topic just picked but the
      * request for segment 1 was interrupted before it landed (the "Start the
      * story" button is back on screen, same as before this hint existed). */
-    log.innerHTML = '<div class="hint">' + (currentActivity() === "story"
-      ? (storyTopic() ? 'Tap <b>Start the story</b> below.'
-                       : 'Pick what the story is about below.') +
+    let hintText;
+    if (currentActivity() === "story") {
+      hintText = (storyTopic() ? 'Tap <b>Start the story</b> below.'
+                                : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
-        ' short parts, one tap each \u2014<br>then the partner asks you about it.'
-      : 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
+        ' short parts, one tap each \u2014<br>then the partner asks you about it.';
+    } else if (currentActivity() === "focused") {
+      const targets = reuseFor("focused");
+      if (targets && targets.length) {
+        hintText = '<b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
+          '<b style="color:var(--accent);font-size:22px">' +
+          targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
+          '<span style="color:var(--dim)">The partner will ask questions that need them.</span>';
+      } else {
+        hintText = '<b>Ghost Words</b><br>No unused words yet.<br>' +
+          'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
+          'chat for a while, then switch back here.';
+      }
+    } else {
+      hintText = 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
         'Replies are checked against the ' + levelLabel() +
-        ' list and rewritten until they fit.') + '</div>';
+        ' list and rewritten until they fit.';
+    }
+    log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
   const shownExtra = new Set();   // added words already highlighted once, this pass
@@ -3718,6 +3734,8 @@ function fillActivities() {
     if (targets && targets.length) {
       note = "Focus words: " + targets.slice(0, 6).map(e => e.w).join("、") +
         " — tap words in chat for pinyin/meaning";
+    } else {
+      note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
     }
   }
   const el = $("#activityNote");
