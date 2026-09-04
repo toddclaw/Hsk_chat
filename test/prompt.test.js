@@ -842,5 +842,38 @@ check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
         .indexOf(CHAT_EXAMPLE_LINE) !== -1,
   "chat keeps the full worked example -- this is scoped to twenty, not global");
 
+/* Measured live (tools/twenty-ab.js): the role rule alone only describes
+ * REACTIVE behavior, and says nothing about the opening turn, where there is
+ * nothing yet to react to. Every guesser opening reply in a real run was
+ * plain small talk with no sign a game had started (0/8, twice over); the
+ * answerer's opening reliability was worse than an earlier, too-loose check
+ * suggested. `opening` fixes this by stating the first-turn behavior
+ * explicitly rather than asking the model to infer it from an empty
+ * transcript. */
+var answererOpening = P.build({ level: 1, label: "HSK 1", length: "short",
+                                activity: "twenty", side: "answerer", opening: true });
+check(answererOpening.indexOf("现在马上问第一个是非问题") !== -1,
+  "answerer's opening turn is told to ask a guessing question immediately");
+var answererLater = P.build({ level: 1, label: "HSK 1", length: "short",
+                              activity: "twenty", side: "answerer", opening: false });
+check(answererLater.indexOf("现在马上问第一个是非问题") === -1,
+  "and that instruction does not repeat on later turns, which already have something to react to");
+
+var guesserOpening = P.build({ level: 1, label: "HSK 1", length: "short",
+                               activity: "twenty", side: "guesser", secret: "苹果", opening: true });
+check(guesserOpening.indexOf("先说你已经想好了一个东西") !== -1,
+  "guesser's opening turn is told to announce readiness rather than default to small talk");
+var guesserLater = P.build({ level: 1, label: "HSK 1", length: "short",
+                             activity: "twenty", side: "guesser", secret: "苹果", opening: false });
+check(guesserLater.indexOf("先说你已经想好了一个东西") === -1,
+  "and that instruction does not repeat on later turns either");
+
+// Rule numbering must survive the opening instruction too.
+var openingNums = answererOpening.split("\n").map(function (l) {
+  return (/^(\d+)\. /.exec(l) || [])[1];
+}).filter(Boolean).map(Number);
+check(JSON.stringify(openingNums) === JSON.stringify(openingNums.map(function (_, i) { return i + 1; })),
+  "opening turn: rule numbering is still gap-free", JSON.stringify(openingNums));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

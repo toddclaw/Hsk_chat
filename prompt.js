@@ -422,12 +422,28 @@
       rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
         convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
     } else if (opts.activity === "twenty" && opts.side === "answerer") {
-      rules.push(convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
+      /* Measured live (see tools/twenty-ab.js): the rule below on its own
+       * describes only REACTIVE behavior -- what to ask, how to count -- and
+       * says nothing about the very first turn, where there is nothing to
+       * react to yet. Given no explicit opening instruction the model often
+       * opened with ordinary chat instead of a guessing question. `opening`
+       * is a fact the caller already knows (S.history.length === 0 in
+       * index.html) rather than something the model has to infer from the
+       * transcript. */
+      rules.push(
+        (opts.opening ? convert("现在马上问第一个是非问题，不要先打招呼，不要先说别的。") + " " : "") +
+        convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
         convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
         convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
     } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
       var secret = convert(opts.secret);
-      rules.push(convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
+      /* Same defect, more visible here: measured live, EVERY opening reply in
+       * both arms was plain small talk with no sign a game had started at
+       * all (0/8 twice over) -- the reactive-only rule gives the model
+       * nothing to say when there is no question yet to answer. */
+      rules.push(
+        (opts.opening ? convert("先说你已经想好了一个东西，请学生开始问你是非问题，不要说是什么。") + " " : "") +
+        convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
         convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
         convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
     } else {
