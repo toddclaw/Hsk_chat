@@ -645,6 +645,17 @@ footer{
       substituted. The validator does not care what is in here — an instruction to use hard
       words just costs retries.</div>
 
+    <label>Activity prompts</label>
+      <!-- Built by renderActivityPrompts(): what HSKPrompt.build() actually
+           produces for each activity, at your current level and settings --
+           read-only, and separate from the editable System prompt above,
+           which replaces all of these at once when it is customized. -->
+      <div id="actPrompts"></div>
+      <div class="note">What the app actually sends the model for each activity, built fresh from
+      the settings on this page. Read-only — these are for checking what an activity does, not for
+      editing; use <b>System prompt</b> above to override generation for every activity at once.
+      20 Questions has two shapes, one per role; Story time shows the opening segment.</div>
+
     <label>Teaching prompts</label>
       <!-- Built by renderTeachPrompts(): four near-identical blocks are better
            generated from the one list that also names them at the call sites. -->
@@ -924,7 +935,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v76 — 2026-09-04";
+const VERSION   = "v77 — 2026-09-04";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1303,6 +1314,24 @@ function systemPrompt(offer, reuse, required, ctx) {
     if (effectiveMode() === "with-list" && S.prompt.indexOf("{words}") === -1) {
       out += "\n\n你只可以用这些词：\n" + wordList();
     }
+    /* A custom prompt still gets the activity's own mechanism -- a story's
+     * phase, 20 Questions' role and secret, Ghost Words' targeting
+     * instruction -- the same reasoning as the pacing lines just below.
+     * Without this, customizing the system prompt once silently turned
+     * every one of those activities into plain chat with no sign anything
+     * was wrong: see HSKPrompt.activityRules()'s own comment. */
+    const cActRules = currentChat();
+    const mech = HSKPrompt.activityRules({
+      activity: currentActivity(),
+      level: S.level,
+      storySegment: (ctx && ctx.storySegment) || null,
+      storyPhase: (ctx && ctx.storyPhase) || null,
+      storyTopic: currentActivity() === "story" ? storyTopic() : "",
+      side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
+      secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
+      convert: toScript
+    });
+    if (mech.length) out += "\n\n" + mech.join("\n");
     // A custom prompt still gets the pacing lines; they are mechanism, not style.
     if (required) {
       out += "\n\n" + toScript("这次一定要用「") + required + toScript("」这个词。");
@@ -4565,12 +4594,12 @@ function renderTwentyControl(box) {
   if (!c || c.side) return;
   const answerer = document.createElement("button");
   answerer.className = "story";
-  answerer.textContent = "I'll think of something";
+  answerer.textContent = "I'll think of a word";
   answerer.onclick = () => chooseTwentySide("answerer");
   box.appendChild(answerer);
   const guesser = document.createElement("button");
   guesser.className = "story";
-  guesser.textContent = "You think of something";
+  guesser.textContent = "I'll ask questions";
   guesser.onclick = () => chooseTwentySide("guesser");
   box.appendChild(guesser);
 }
@@ -5109,6 +5138,7 @@ $("#btnSet").onclick = () => {
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
   fillPrompt();
+  renderActivityPrompts();
   renderTeachPrompts();
   renderStats();
   renderVersion();
@@ -5172,6 +5202,44 @@ $("#resetPrompt").onclick = () => {
   S.replyLength = $("#replyLength").value;
   fillPrompt();
 };
+
+/* One prompt per activity, read-only. Unlike #sysPrompt this is never saved
+ * anywhere -- it exists so "why did the partner say that" has an answer that
+ * does not require switching activities and reopening Settings, which for
+ * 20 Questions and Story time cannot show every shape anyway (a role, a
+ * phase) just by being the current activity. The secret shown for the
+ * guesser shape is a fixed illustrative word, not any live game's actual
+ * secret -- this is a fresh, standalone build(), not a read of currentChat(). */
+function renderActivityPrompts() {
+  const box = $("#actPrompts");
+  box.innerHTML = "";
+  const base = {
+    level: S.level, label: levelLabel(), length: S.replyLength, script: S.script,
+    words: effectiveMode() === "with-list" ? wordList() : "", convert: toScript
+  };
+  const specs = [
+    { label: "Chat", activity: "chat" },
+    { label: "Ghost Words", activity: "focused", opts: { reuse: reuseFor("focused") } },
+    { label: "Story time (opening segment)", activity: "story",
+      opts: { storySegment: { index: 0, of: STORY_SEGMENTS } } },
+    { label: "20 Questions — “I’ll think of a word”", activity: "twenty",
+      opts: { side: "answerer" } },
+    { label: "20 Questions — “I’ll ask questions”", activity: "twenty",
+      opts: { side: "guesser", secret: "苹果" } }
+  ];
+  specs.forEach(spec => {
+    const wrap = document.createElement("div");
+    wrap.className = "teachRow";
+    const lab = document.createElement("label");
+    lab.textContent = spec.label;
+    const ta = document.createElement("textarea");
+    ta.className = "small";
+    ta.readOnly = true;
+    ta.value = HSKPrompt.build(Object.assign({}, base, { activity: spec.activity }, spec.opts));
+    wrap.append(lab, ta);
+    box.appendChild(wrap);
+  });
+}
 
 /* What each teaching prompt looked like when the sheet opened, so an untouched
  * box can be told from an edited one on close -- exactly how #sysPrompt does it.

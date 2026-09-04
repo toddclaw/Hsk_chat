@@ -382,6 +382,87 @@
     return LEVEL_STYLE[level] || LEVEL_STYLE[1];
   }
 
+  /* The part of a prompt that makes an activity what it is, separate from the
+   * vocabulary/grammar/register rules build() assembles around it: story's
+   * phase and position, 20 Questions' role and secret, Ghost Words' targeting
+   * instruction. Extracted into its own function so systemPrompt()'s custom-
+   * prompt branch in index.html can still carry it -- it is mechanism, not
+   * style, the same reasoning that already keeps the pacing lines (offer/
+   * require) alive under a custom prompt. Without this a custom prompt turned
+   * an activity that depends entirely on its rule (20 Questions, above all)
+   * into plain chat with no sign anything was wrong.
+   *
+   * Story time has three phases, and each suppresses the rules that would
+   * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
+   * absolutely, and build() already knows what a model does with a later rule
+   * contradicting an earlier absolute one: it obeys the first. So asking and
+   * discussing replace those rules rather than following them.
+   *
+   * `discussing` fixes a defect rather than adding a feature: before it, a
+   * learner answering the partner's own question was met by the telling
+   * rules, which forbid talking to them.
+   *
+   * Returns an array of already-convert()-ed strings, unnumbered -- the
+   * caller assigns numbers when it assembles the full rule list. */
+  function activityRules(opts) {
+    var convert = opts.convert || function (t) { return t; };
+    var act = activityFor(opts.activity);
+    var seg = opts.storySegment || null;
+    var rules = [];
+
+    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
+    if (phase === "asking") {
+      var ladder = questionTypesFor(opts.level);
+      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
+        convert("问题要短，用简单的话。") +
+        convert("可以问这样的问题：") + QUESTION_SHAPES
+          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
+          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
+    } else if (phase === "discussing") {
+      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
+        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "answerer") {
+      rules.push(convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
+        convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
+        convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
+      var secret = convert(opts.secret);
+      rules.push(convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
+        convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
+        convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
+    } else {
+      (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    }
+    /* Deliberately outside the phase branch above: asking and discussing both
+     * refer to the characters the story just introduced, and 「小明去了哪儿？」
+     * must not fail validation for the name it is asking about. */
+    if (act.names && act.names.length) {
+      rules.push(convert("故事里的人可以叫") +
+        act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
+        convert("。别的名字不要用。"));
+    }
+    /* What the learner asked for. Placed before the segment's position so the
+     * model reads the subject first and the position as a qualifier of it.
+     * Passed through verbatim, in whatever language it was typed: a topic is
+     * the learner's own words, not app-authored Chinese, so `convert` does not
+     * touch it. */
+    if (opts.storyTopic) {
+      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
+                 convert("的故事。"));
+    }
+    if (seg) {
+      if (seg.index === 0) {
+        rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
+      } else if (seg.index >= seg.of - 1) {
+        rules.push(convert("这是故事的最后一段。把故事讲完，给它一个结尾。"));
+      } else {
+        rules.push(convert("接着上面的故事往下讲，不要从头开始，也不要现在就结束。"));
+      }
+      rules.push(convert("这一段写大概九十个汉字。"));
+    }
+    return rules;
+  }
+
   /* opts: { level, label, length, words, script, convert }
    * `words` is the allowlist joined by spaces, appended only in with-list mode.
    * `convert` rewrites app-authored Chinese into the active script; it runs over
@@ -443,66 +524,9 @@
 
     /* The activity's own rules, then its position in the story if it has one.
      * Position after the activity's own rules so it reads as the more immediate
-     * instruction of the two. */
-    /* Story time has three phases, and each suppresses the rules that would
-     * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
-     * absolutely, and build() already knows what a model does with a later rule
-     * contradicting an earlier absolute one: it obeys the first. So asking and
-     * discussing replace those rules rather than following them.
-     *
-     * `discussing` fixes a defect rather than adding a feature: before it, a
-     * learner answering the partner's own question was met by the telling
-     * rules, which forbid talking to them. */
-    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
-    if (phase === "asking") {
-      var ladder = questionTypesFor(opts.level);
-      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
-        convert("问题要短，用简单的话。") +
-        convert("可以问这样的问题：") + QUESTION_SHAPES
-          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
-          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
-    } else if (phase === "discussing") {
-      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
-        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
-    } else if (opts.activity === "twenty" && opts.side === "answerer") {
-      rules.push(convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
-        convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
-        convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
-    } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
-      var secret = convert(opts.secret);
-      rules.push(convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
-        convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
-        convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
-    } else {
-      (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
-    }
-    /* Deliberately outside the phase branch above: asking and discussing both
-     * refer to the characters the story just introduced, and 「小明去了哪儿？」
-     * must not fail validation for the name it is asking about. */
-    if (act.names && act.names.length) {
-      rules.push(convert("故事里的人可以叫") +
-        act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
-        convert("。别的名字不要用。"));
-    }
-    /* What the learner asked for. Placed before the segment's position so the
-     * model reads the subject first and the position as a qualifier of it.
-     * Passed through verbatim, in whatever language it was typed: a topic is
-     * the learner's own words, not app-authored Chinese, so `convert` does not
-     * touch it. */
-    if (opts.storyTopic) {
-      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
-                 convert("的故事。"));
-    }
-    if (seg) {
-      if (seg.index === 0) {
-        rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
-      } else if (seg.index >= seg.of - 1) {
-        rules.push(convert("这是故事的最后一段。把故事讲完，给它一个结尾。"));
-      } else {
-        rules.push(convert("接着上面的故事往下讲，不要从头开始，也不要现在就结束。"));
-      }
-      rules.push(convert("这一段写大概九十个汉字。"));
-    }
+     * instruction of the two. Extracted to activityRules() below so a custom
+     * system prompt can still carry it -- see that function's own comment. */
+    rules = rules.concat(activityRules(opts));
 
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
@@ -843,7 +867,7 @@
               styleFor: styleFor, startersFor: startersFor,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               QUESTION_SHAPES: QUESTION_SHAPES,
-              build: build,
+              build: build, activityRules: activityRules,
               translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
