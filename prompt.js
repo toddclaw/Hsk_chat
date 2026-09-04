@@ -266,6 +266,36 @@
     { w: "小白", p: "Xiǎo Bái",  d: "Xiao Bai, a name" }
   ];
 
+  /* The secret pool for `guesser` mode: concrete, guessable nouns. No
+   * per-level tagging -- an uncurated random word from the raw allowlist can
+   * be ungoessable (因为, 应该, 如果), so membership is checked against the
+   * student's own cumulative wordlist (S.base) at PICK time instead of
+   * asserted up front. Measured against the real data/hsk<N>.json files, HSK 1
+   * alone already yields well over half of this pool, so an empty
+   * intersection is not a realistic case at any level -- pickSecret() still
+   * falls back to any word in base if it ever is one, rather than throwing. */
+  var GUESS_POOL = [
+    "苹果", "猫", "狗", "书", "老师", "医院", "电脑", "手机", "椅子", "桌子",
+    "车", "飞机", "火车", "水果", "衣服", "雨",
+    "咖啡", "鱼", "鸟", "床", "门", "花", "足球", "裤子",
+    "香蕉", "西瓜", "房子", "伞", "自行车", "公园", "太阳", "山", "树",
+    "窗户", "眼镜", "帽子", "星星"
+  ];
+
+  /* base: an array of {w,...} entries, e.g. S.base. rng: () => [0,1), so a
+   * test can pin the draw. Filters to what the student actually has, falls
+   * back to the raw base if that intersection is empty, and returns null only
+   * when there is truly nothing to draw from. */
+  function pickSecret(base, rng) {
+    var r = rng || Math.random;
+    var have = {};
+    (base || []).forEach(function (e) { have[e.w] = true; });
+    var pool = GUESS_POOL.filter(function (w) { return have[w]; });
+    if (!pool.length) pool = (base || []).map(function (e) { return e.w; });
+    if (!pool.length) return null;
+    return pool[Math.min(pool.length - 1, Math.floor(r() * pool.length))];
+  }
+
   /* One example per question type, so the rule shows the shape rather than
    * naming a category the model has to guess at. Filtered by the level's
    * ladder, so HSK 1 never sees a 为什么 example it cannot legally use. */
@@ -785,6 +815,7 @@
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
               ACTIVITIES: ACTIVITIES, activityFor: activityFor,
               STORY_NAMES: STORY_NAMES,
+              GUESS_POOL: GUESS_POOL, pickSecret: pickSecret,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,

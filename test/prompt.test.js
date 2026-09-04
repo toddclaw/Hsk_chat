@@ -701,5 +701,43 @@ var titleP = P.titlePrompt("小明去了商店。他买了一个球。");
 check(titleP.indexOf("小明去了商店") !== -1, "the title prompt carries the story");
 check(/\b(title|name)\b/i.test(titleP), "and asks for a title");
 
+/* The secret pool for 20 Questions: concrete, guessable nouns, not tagged per
+ * level -- membership is checked against the student's own cumulative
+ * wordlist at pick time instead. */
+check(Array.isArray(P.GUESS_POOL) && P.GUESS_POOL.length >= 30,
+  "GUESS_POOL has a real number of entries", P.GUESS_POOL && P.GUESS_POOL.length);
+check(new Set(P.GUESS_POOL).size === P.GUESS_POOL.length,
+  "GUESS_POOL has no duplicates");
+check(P.GUESS_POOL.every(function (w) { return typeof w === "string" && w.length; }),
+  "every entry is a non-empty string");
+
+var hsk1Words = new Set(JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "data", "hsk1.json"), "utf8")
+).map(function (e) { return e.w; }));
+var hsk1Hits = P.GUESS_POOL.filter(function (w) { return hsk1Words.has(w); });
+check(hsk1Hits.length >= 15,
+  "HSK 1 alone already clears a real chunk of the pool -- an empty " +
+  "intersection is not a realistic case at any level", hsk1Hits.length);
+
+// pickSecret: filter to the student's own words, fall back if the
+// intersection is empty, and never throw on an empty base.
+var base1 = [{ w: "苹果" }, { w: "猫" }, { w: "水" }];   // 水 is not in GUESS_POOL
+var zeroRng = function () { return 0; };
+check(P.pickSecret(base1, zeroRng) === "苹果" || P.pickSecret(base1, zeroRng) === "猫",
+  "pickSecret only ever returns a word actually in the base", P.pickSecret(base1, zeroRng));
+check(["苹果", "猫", "水"].indexOf(P.pickSecret(base1, zeroRng)) !== -1,
+  "and it is one the caller actually offered");
+
+var baseNoOverlap = [{ w: "水" }, { w: "空气" }];   // neither is in GUESS_POOL
+check(P.pickSecret(baseNoOverlap, zeroRng) === "水",
+  "an empty intersection falls back to any word in base, not a throw");
+
+check(P.pickSecret([], zeroRng) === null,
+  "an empty base returns null rather than throwing");
+
+var manyRng = function () { return 0.999999; };
+check(P.pickSecret([{ w: "苹果" }], manyRng) === "苹果",
+  "rng is clamped to a real index even near 1");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
