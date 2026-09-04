@@ -397,9 +397,11 @@ check(/add column if not exists secret text/.test(schema),
   "db/schema.sql adds the secret column");
 
 /* Story time runs on its own model, so that choice has to reach the other
- * device like the chat and teaching model ids do. */
+ * device like the chat and teaching model ids do. 20 Questions the same. */
 check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,
   "storyModel syncs with the other model settings");
+check(Sync.PREFS_KEYS.indexOf("twentyModel") !== -1,
+  "twentyModel syncs with the other model settings");
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "and adding it did not smuggle the key or the history in");
 
