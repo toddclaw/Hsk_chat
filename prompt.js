@@ -558,14 +558,25 @@
       convert("规则：")
     ].concat(rules.map(function (r, i) { return (i + 1) + ". " + r; }));
 
+    lines.push("", convert("例子："), convert("学生：你好！"), convert("你：") + convert(style.sample));
+    /* An exchange that answers, adds something, and asks something new -- a
+     * worked example of exactly the shape rule 5 describes for an ordinary
+     * conversation. Dropped for 20 Questions: a few-shot example is a
+     * stronger signal than a numbered rule, and this one directly
+     * demonstrates the "answer, share, ask" turn the role rule (rule 8,
+     * above) forbids -- measured live, both roles fell back to plain chat,
+     * word for word this pattern's shape, with the role rule otherwise
+     * unchanged. Left in place for every other activity, unmeasured here. */
+    if (opts.activity !== "twenty") {
+      lines.push(
+        convert("学生：你喜欢喝茶吗？"),
+        convert("你：我很喜欢。我喜欢喝水。你喜欢吃什么？")
+      );
+    }
+    // The [[NEED:]] demonstration stays for every activity, twenty included --
+    // a student can still ask "怎么说 X" mid-round and the model still needs
+    // to know the channel to answer it in.
     lines.push(
-      "",
-      convert("例子："),
-      convert("学生：你好！"),
-      convert("你：") + convert(style.sample),
-      // An exchange that answers, adds something, and asks something new.
-      convert("学生：你喜欢喝茶吗？"),
-      convert("你：我很喜欢。我喜欢喝水。你喜欢吃什么？"),
       convert("学生：") + "怎么说 fried egg",
       convert("你：") + "[[NEED:" + convert("煎蛋") + "|jiān dàn|fried egg]]" +
         convert("。你喜欢吃吗？")

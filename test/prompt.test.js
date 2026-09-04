@@ -825,5 +825,22 @@ check(P.activityRules({ activity: "twenty", level: 1, label: "HSK 1", length: "s
 check(P.activityRules({ activity: "focused", level: 1, label: "HSK 1", length: "short" }).length > 0,
   "and Ghost Words' targeting instruction survives a custom prompt");
 
+/* Measured live: both 20 Questions roles fell back to plain chat, the exact
+ * shape of the worked example below -- answer, share something, ask a new
+ * question -- which is unconditional in every other activity's prompt and
+ * directly contradicts the role rule. A few-shot example outweighs a
+ * numbered rule, so it has to go for this activity specifically; every
+ * other activity is unmeasured and keeps it. */
+var CHAT_EXAMPLE_LINE = "你喜欢吃什么";
+var twentyAnswererPrompt = P.build({ level: 1, label: "HSK 1", length: "short",
+                                     activity: "twenty", side: "answerer" });
+check(twentyAnswererPrompt.indexOf(CHAT_EXAMPLE_LINE) === -1,
+  "twenty's worked example drops the answer-share-ask exchange that contradicts its own role rule");
+check(twentyAnswererPrompt.indexOf("[[NEED:") !== -1,
+  "but keeps the [[NEED:]] demonstration -- a student can still ask 怎么说 mid-round");
+check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
+        .indexOf(CHAT_EXAMPLE_LINE) !== -1,
+  "chat keeps the full worked example -- this is scoped to twenty, not global");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
