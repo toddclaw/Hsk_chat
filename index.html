@@ -924,7 +924,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v74 — 2026-09-02";
+const VERSION   = "v75 — 2026-09-02";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1606,16 +1606,18 @@ function reuseFor(activity) {
 }
 
 async function turn(ctx) {
-  /* Offer next-level words only when a credit has been earned. The same slate
-   * is re-offered across repair attempts: a reply rejected for other reasons
-   * should not cost the introduction. */
+  /* Offer next-level words only when a credit has been earned.
+   * Ghost Words (focused) does NOT introduce new words — it practices existing ones. */
+  const isFocused = currentActivity() === "focused";
   const b = levelBudget();
-  const offer = (S.pace.on && b.credits > 0)
+  const offer = (!isFocused && S.pace.on && b.credits > 0)
     ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
     : [];
   const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
-  const required = (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
+  // In Ghost Words, "required" is the first unused word to push production.
+  const required = isFocused ? (reuse[0] && reuse[0].w) :
+    (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
     .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
@@ -2010,21 +2012,43 @@ function renderAll() {
   /* Not raw length: a history holding only a `role: "topic"` message is length
    * 1, but renderMessage() returns null for that role, so a raw-length check
    * would suppress this hint over an empty-looking log instead of showing it. */
+  /* Ghost Words banner persists for the whole conversation. */
+  function ghostBanner() {
+    if (currentActivity() !== "focused") return "";
+    const targets = reuseFor("focused");
+    if (targets && targets.length) {
+      return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
+        '<b style="color:var(--accent);font-size:22px">' +
+        targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
+        '<span style="color:var(--dim)">The partner will ask questions that need them.</span></div>';
+    }
+    return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
+      'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
+      'chat for a while, then switch back here.</div>';
+  }
   if (!S.history.some(t => t.role !== "topic")) {
     /* Two sub-states share this branch for story time: no topic yet (the
      * chooser is on screen, nothing to tap) and a topic just picked but the
      * request for segment 1 was interrupted before it landed (the "Start the
      * story" button is back on screen, same as before this hint existed). */
-    log.innerHTML = '<div class="hint">' + (currentActivity() === "story"
-      ? (storyTopic() ? 'Tap <b>Start the story</b> below.'
-                       : 'Pick what the story is about below.') +
+    let hintText;
+    if (currentActivity() === "story") {
+      hintText = (storyTopic() ? 'Tap <b>Start the story</b> below.'
+                                : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
-        ' short parts, one tap each \u2014<br>then the partner asks you about it.'
-      : 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
+        ' short parts, one tap each \u2014<br>then the partner asks you about it.';
+    } else if (currentActivity() === "focused") {
+      log.innerHTML = ghostBanner();
+      return;
+    } else {
+      hintText = 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
         'Replies are checked against the ' + levelLabel() +
-        ' list and rewritten until they fit.') + '</div>';
+        ' list and rewritten until they fit.';
+    }
+    log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
+  log.innerHTML = ghostBanner();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
@@ -3708,7 +3732,18 @@ function fillActivities() {
   $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
     '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
-  const note = HSKPrompt.ACTIVITIES[cur] && HSKPrompt.ACTIVITIES[cur].note;
+  const act = HSKPrompt.ACTIVITIES[cur];
+  let note = act && act.note;
+  /* Ghost Words: show the target words so the user knows what to aim for. */
+  if (cur === "focused") {
+    const targets = reuseFor("focused");
+    if (targets && targets.length) {
+      note = "Focus words: " + targets.slice(0, 6).map(e => e.w).join("、") +
+        " — tap words in chat for pinyin/meaning";
+    } else {
+      note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
+    }
+  }
   const el = $("#activityNote");
   if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
@@ -4538,12 +4573,18 @@ function usableWords() {
  * the harder half and lags recognition, so it is worth counting separately --
  * and it costs no new storage, since every message is already saved.
  * renderAll() segments the whole history on every render too, so the work here
- * is nothing new. */
+ * is nothing new.
+ *
+ * A word only counts when the grader has passed the sentence it sits in:
+ * typing a word in a broken sentence is not demonstrating you can use it.
+ * Messages that were never graded (grader off, or still in flight) do not
+ * contribute. */
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
       if (t.role !== "user") return;
+      if (!t.grade || !t.grade.ok) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
         if (tok.kind === "word") out.add(tok.text);
       });
