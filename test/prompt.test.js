@@ -450,7 +450,7 @@ check(modeArmOn.length > modeArmOff.length, "with-list is the longer prompt");
 /* Activities. The contract is four fields because four is what varies: extra
  * rules, where the reuse list comes from, how generation is driven, and whether
  * the conversational turn-taking rules apply at all. */
-const ACT_IDS = ["chat", "focused", "story"];
+const ACT_IDS = ["chat", "focused", "story", "twenty"];
 for (const id of ACT_IDS) {
   const a = P.activityFor(id);
   check(!!a, `activity ${id} exists`);
@@ -738,6 +738,64 @@ check(P.pickSecret([], zeroRng) === null,
 var manyRng = function () { return 0.999999; };
 check(P.pickSecret([{ w: "苹果" }], manyRng) === "苹果",
   "rng is clamped to a real index even near 1");
+
+/* 20 Questions: a role branch parallel to storyPhase, per D6. Neither role's
+ * text is held to the level allowlist -- same rule as every other activity's
+ * `rules`, which already use 英文/语法. */
+check(!!P.ACTIVITIES.twenty, "activity twenty exists");
+check(P.ACTIVITIES.twenty.gen === "turn", "twenty generates one turn at a time");
+check(P.ACTIVITIES.twenty.converse === false,
+  "twenty suppresses the ordinary chat turn-taking rules -- a yes/no exchange isn't that shape");
+check(P.ACTIVITIES.twenty.names === null, "twenty has no cast");
+
+var noSide = P.build({ level: 1, label: "HSK 1", length: "short", activity: "twenty" });
+check(noSide.indexOf("你负责猜") === -1 && noSide.indexOf("你心里想的是") === -1,
+  "with no side chosen yet, neither role's rule appears");
+
+var answerer = P.build({ level: 1, label: "HSK 1", length: "short",
+                         activity: "twenty", side: "answerer" });
+check(answerer.indexOf("学生心里想了一个东西，你负责猜") !== -1,
+  "answerer: the model is told it is the one guessing");
+check(answerer.indexOf("大概二十个问题以内") !== -1,
+  "and given the roughly-twenty budget to narrate against");
+check(answerer.indexOf("你心里想的是") === -1,
+  "and not handed a secret it never got");
+
+var guesser = P.build({ level: 1, label: "HSK 1", length: "short",
+                        activity: "twenty", side: "guesser", secret: "苹果" });
+check(guesser.indexOf("你心里想的是「苹果」") !== -1,
+  "guesser: the model is told its own secret");
+check(guesser.indexOf("只回答「是」或「不是」") !== -1,
+  "and told to answer only yes/no");
+check(guesser.indexOf("学生心里想了一个东西") === -1,
+  "and not given the answerer's rule instead");
+
+var guesserNoSecret = P.build({ level: 1, label: "HSK 1", length: "short",
+                                activity: "twenty", side: "guesser" });
+check(guesserNoSecret.indexOf("你心里想的是") === -1,
+  "guesser with no secret yet adds no rule at all, rather than leaking a literal undefined");
+
+// The conversational turn-taking rules must actually leave the prompt.
+var twentyPrompt = P.build({ level: 1, label: "HSK 1", length: "short",
+                             activity: "twenty", side: "answerer" });
+check(twentyPrompt.indexOf(ASK_RULE) === -1,
+  "twenty drops the ask-a-new-question rule -- the round has its own shape");
+
+// Script conversion reaches the secret exactly like every other app-authored
+// rule -- it is Chinese vocabulary data, not learner-typed English like a
+// story topic.
+var guesserTrad = P.build({ level: 1, label: "HSK 1", length: "short",
+                            activity: "twenty", side: "guesser", secret: "苹果",
+                            script: "trad", convert: function (t) { return t.replace(/苹果/g, "蘋果"); } });
+check(guesserTrad.indexOf("蘋果") !== -1,
+  "the secret is passed through the same convert() as the rest of the rule");
+
+// Rule numbering must survive the role branch, same as every other activity.
+var twentyNums = twentyPrompt.split("\n").map(function (l) {
+  return (/^(\d+)\. /.exec(l) || [])[1];
+}).filter(Boolean).map(Number);
+check(JSON.stringify(twentyNums) === JSON.stringify(twentyNums.map(function (_, i) { return i + 1; })),
+  "twenty: rule numbering is gap-free and in order", JSON.stringify(twentyNums));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

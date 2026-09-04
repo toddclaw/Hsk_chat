@@ -357,6 +357,20 @@
       gen: "segments",
       converse: false,
       note: null
+    },
+    twenty: {
+      label: "20 Questions",
+      /* Role-dependent, not activity-dependent -- handled by the branch in
+       * build() below, same shape as storyPhase. */
+      rules: null,
+      names: null,
+      reuse: null,
+      gen: "turn",
+      /* A yes/no-question exchange isn't the answer-then-share-then-ask shape
+       * these rules assume; see the role branch in build(). */
+      converse: false,
+      note: "20 Questions: think of something and let the partner guess it, " +
+        "or guess what the partner is thinking of."
     }
   };
 
@@ -450,6 +464,15 @@
     } else if (phase === "discussing") {
       rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
         convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "answerer") {
+      rules.push(convert("学生心里想了一个东西，你负责猜。一次只问一个是非问题") +
+        convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
+        convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
+      var secret = convert(opts.secret);
+      rules.push(convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
+        convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
+        convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
     }
