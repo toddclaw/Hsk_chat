@@ -305,16 +305,16 @@
        * have somewhere to go -- because a partner that merely uses them when they
        * fit is what the unused list is evidence of not working. */
       rules: [
-        "学生学过下面这些词，可是一次也没有自己用过。请你带着话题往这些词的方向走，" +
-        "问一些必须用到这些词才好回答的问题，让学生自己说出来。"
+        "学生学过下面这些词，可是一次也没有自己用过。这是今天的练习目标。" +
+        "请你带着话题往这些词的方向走，问一些必须用到这些词才好回答的问题，" +
+        "让学生自己说出来。如果学生没有用这些词，继续问，直到他们用到。"
       ],
       names: null,
       reuse: "unused",
       gen: "turn",
       converse: true,
-      note: "Ghost Words targets words you have learned but never written yourself. " +
-        "The partner steers toward these words and asks questions that need them. " +
-        "Progress shows in Settings → Learning → never used: the goal is to shrink that list."
+      note: "Ghost Words: practice words you've learned but never used. " +
+        "The partner asks questions that need these words in the answer."
     },
     story: {
       label: "Story time",

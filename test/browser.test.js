@@ -217,7 +217,8 @@ return true;
            * calling the model -- this suite has no key and no network. The text
            * is the shape a real answer arrives in: Markdown nobody asked for. */
           explainChat: [{ role: "assistant",
-            text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }] },
+            text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }],
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
         /* A real learner's worth of typing, not two short turns. The progress
          * panel measures production by segmenting these, and a two-word
          * history cannot reach the states where the reading and production
@@ -226,7 +227,8 @@ return true;
          * purpose: those carry nearly all the weight. */
         { id: "44444444-4444-4444-8444-444444444444", role: "user",
           text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
-          needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z" },
+          needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
         { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
           text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
           created_at: "2026-01-01T00:01:00.000Z" },
@@ -234,7 +236,8 @@ return true;
          * -- which is the only way to see whether the turn above reached it. */
         { id: "33333333-3333-4333-8333-333333333333", role: "user",
           text: "我也是", needs: [], attempts: 1,
-          created_at: "2026-01-01T00:02:00.000Z" }
+          created_at: "2026-01-01T00:02:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } }
       ]));
       /* Only the teaching model is seeded. The chat model is left alone so the
        * shipped default is what runs, which is the thing worth asserting -- and
