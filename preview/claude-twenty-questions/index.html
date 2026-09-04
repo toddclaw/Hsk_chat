@@ -935,7 +935,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v78 — 2026-09-04";
+const VERSION   = "v79 — 2026-09-04";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1329,6 +1329,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       storyTopic: currentActivity() === "story" ? storyTopic() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
+      opening: S.history.length === 0,
       convert: toScript
     });
     if (mech.length) out += "\n\n" + mech.join("\n");
@@ -1360,6 +1361,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
+    opening: S.history.length === 0,
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -5222,10 +5224,10 @@ function renderActivityPrompts() {
     { label: "Ghost Words", activity: "focused", opts: { reuse: reuseFor("focused") } },
     { label: "Story time (opening segment)", activity: "story",
       opts: { storySegment: { index: 0, of: STORY_SEGMENTS } } },
-    { label: "20 Questions — “I’ll think of a word”", activity: "twenty",
-      opts: { side: "answerer" } },
-    { label: "20 Questions — “I’ll ask questions”", activity: "twenty",
-      opts: { side: "guesser", secret: "苹果" } }
+    { label: "20 Questions — “I’ll think of a word” (opening turn)", activity: "twenty",
+      opts: { side: "answerer", opening: true } },
+    { label: "20 Questions — “I’ll ask questions” (opening turn)", activity: "twenty",
+      opts: { side: "guesser", secret: "苹果", opening: true } }
   ];
   specs.forEach(spec => {
     const wrap = document.createElement("div");
