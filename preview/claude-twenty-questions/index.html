@@ -935,7 +935,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v79 — 2026-09-04";
+const VERSION   = "v80 — 2026-09-04";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3313,7 +3313,17 @@ async function retryLast() {
    * searched and then gave up, leaving the history it had already eaten. */
   let i = S.history.length - 1;
   while (i >= 0 && S.history[i].role !== "user") i--;
-  if (i < 0) return;
+  /* No user turn anywhere: this can only be the OPENING turn of an activity
+   * where the partner speaks first (focused, twenty -- chat never calls
+   * openingTurn()), and it failed or gave up before the learner ever said
+   * anything. The old `return` here silently did nothing, which is what
+   * "Try again" not working turned out to be: there was nothing for this
+   * function's own retry shape (find my last message, resend it) to find. */
+  if (i < 0) {
+    S.history.length = 0;
+    persist(); renderAll();
+    return openingTurn();
+  }
   S.history.length = i + 1;
   const text = S.history[i].text;
   S.busy = true; renderBusy();
