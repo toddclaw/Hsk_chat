@@ -891,14 +891,16 @@ check(JSON.stringify(openingNums) === JSON.stringify(openingNums.map(function (_
  * guessing question, then appended "我昨天努力学习。老师说我的练习很好。
  * 你最近有什么特别的事吗？" -- word for word the medium length rule's own
  * "share your own thing, then ask" instruction, which is not gated by
- * act.converse the way rules 5-7 are (it is not a turn-taking rule). */
-["medium", "long"].forEach(function (len) {
+ * act.converse the way rules 5-7 are (it is not a turn-taking rule). Omitted
+ * for twenty entirely (not narrowed to a sentence-count-only variant): rule
+ * 8 already states the shape, and long's own "不要只说一两句" flatly
+ * contradicts "ask exactly one question" -- see build()'s own comment on
+ * why this ships as a textual-contradiction fix, not a proven fix for the
+ * rambling that prompted it. */
+["short", "medium", "long"].forEach(function (len) {
   var out = P.build({ level: 1, label: "HSK 1", length: len, activity: "twenty", side: "answerer" });
-  check(out.indexOf("先说你自己的事") === -1 && out.indexOf("多说一点你自己的想法") === -1,
-    "twenty at " + len + " length drops the length rule's share-yourself instruction",
-    out.split("\n")[3]);
-  check(out.indexOf(len === "medium" ? "三到四句话" : "五到六句话") !== -1,
-    "but keeps the sentence-count budget itself");
+  check(out.indexOf(P.LENGTHS[len].rule) === -1,
+    "twenty at " + len + " length drops the length rule entirely -- rule 8 already states the shape");
 });
 check(P.build({ level: 1, label: "HSK 1", length: "medium", activity: "chat" })
         .indexOf("先说你自己的事") !== -1,

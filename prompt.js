@@ -201,28 +201,14 @@
 
   /* How much the partner says. Kept level-neutral -- the register comes from
    * LEVEL_STYLE, the volume from here -- so the two compose. */
-  /* `solo` is the same sentence-count budget with the "share your own thing,
-   * then ask" turn-taking instruction stripped out -- for an activity whose
-   * OWN rule already dictates a different shape (20 Questions: one guess, or
-   * one yes/no answer, nothing else). Without it, `rule`'s medium/long text
-   * reintroduces exactly the contamination the worked-example fix removed,
-   * just from a different rule -- this one was never gated by `act.converse`
-   * the way rules 5-7 are, since it is not about turn-taking, it is about
-   * length. Measured live: a real reply correctly asked its second guessing
-   * question and then, unprompted, appended "我昨天努力学习。老师说我的练习
-   * 很好。你最近有什么特别的事吗？" -- word for word the medium rule's own
-   * instruction, on a reply-length setting other than short. */
   var LENGTHS = {
     short:  { label: "short — 1-2 sentences",  maxTokens: 300,
-              rule: "每次说一到两句话。不要长。",
-              solo: "每次说一到两句话。不要长。" },
+              rule: "每次说一到两句话。不要长。" },
     medium: { label: "medium — 3-4 sentences", maxTokens: 500,
-              rule: "每次说三到四句话。先说你自己的事，再问学生。",
-              solo: "每次说三到四句话。" },
+              rule: "每次说三到四句话。先说你自己的事，再问学生。" },
     long:   { label: "longer — 5-6 sentences", maxTokens: 800,
               rule: "每次说五到六句话。多说一点你自己的想法和今天做的事，" +
-                    "最后问学生一个问题。不要只说一两句。",
-              solo: "每次说五到六句话。不要只说一两句。" }
+                    "最后问学生一个问题。不要只说一两句。" }
   };
 
   /* Which arm of the prompt-mode A/B a level actually wants.
@@ -546,12 +532,25 @@
     rules.push(convert(style.vocab) +
       ((opts.offer && opts.offer.length) ? convert("（后面提到的新词除外。）") : ""));
     /* A story segment sets its own length below; LENGTHS is the conversational
-     * axis and its "one or two sentences" contradicts it outright. Scoped to
-     * twenty specifically, not act.converse generally: story's own asking/
+     * axis and its "one or two sentences" contradicts it outright. Omitted
+     * for twenty entirely, not just at medium/long: rule 8 below already
+     * says the whole shape ("一次只问一个是非问题" / one yes/no answer,
+     * nothing else), and long's own "不要只说一两句" flatly contradicts
+     * that -- the model is told in one rule never to ask more than one
+     * question and in another never to say only one or two sentences.
+     * Measured live: a reply correctly asked its second guessing question,
+     * then appended unrelated small talk word for word matching the medium
+     * rule's own "share your own thing" instruction. A follow-up attempt to
+     * isolate the length-rule contradiction specifically as the cause of
+     * occasional rambling (tools/twenty-ab.js) did not find a measurable
+     * effect either way across three separate real-model tests -- this is
+     * shipped as a genuine textual contradiction worth removing on its own
+     * terms, not as a proven fix for that rambling. Scoped to twenty
+     * specifically, not act.converse generally: story's own asking/
      * discussing phases have converse === false at the activity level too,
      * but ARE meant to react to the student the ordinary way, so they keep
-     * the full rule -- see LENGTHS' own comment on why twenty does not. */
-    if (!seg) rules.push(convert(opts.activity === "twenty" ? (len.solo || len.rule) : len.rule));
+     * the length rule. */
+    if (!seg && opts.activity !== "twenty") rules.push(convert(len.rule));
     rules.push(convert(style.grammar));
     rules.push(convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，") +
                "\n   " + convert("不要用英文，不要用拼音，不要用汉字注音。"));
