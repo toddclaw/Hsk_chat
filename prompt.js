@@ -266,6 +266,36 @@
     { w: "小白", p: "Xiǎo Bái",  d: "Xiao Bai, a name" }
   ];
 
+  /* The secret pool for `guesser` mode: concrete, guessable nouns. No
+   * per-level tagging -- an uncurated random word from the raw allowlist can
+   * be ungoessable (因为, 应该, 如果), so membership is checked against the
+   * student's own cumulative wordlist (S.base) at PICK time instead of
+   * asserted up front. Measured against the real data/hsk<N>.json files, HSK 1
+   * alone already yields well over half of this pool, so an empty
+   * intersection is not a realistic case at any level -- pickSecret() still
+   * falls back to any word in base if it ever is one, rather than throwing. */
+  var GUESS_POOL = [
+    "苹果", "猫", "狗", "书", "老师", "医院", "电脑", "手机", "椅子", "桌子",
+    "车", "飞机", "火车", "水果", "衣服", "雨",
+    "咖啡", "鱼", "鸟", "床", "门", "花", "足球", "裤子",
+    "香蕉", "西瓜", "房子", "伞", "自行车", "公园", "太阳", "山", "树",
+    "窗户", "眼镜", "帽子", "星星"
+  ];
+
+  /* base: an array of {w,...} entries, e.g. S.base. rng: () => [0,1), so a
+   * test can pin the draw. Filters to what the student actually has, falls
+   * back to the raw base if that intersection is empty, and returns null only
+   * when there is truly nothing to draw from. */
+  function pickSecret(base, rng) {
+    var r = rng || Math.random;
+    var have = {};
+    (base || []).forEach(function (e) { have[e.w] = true; });
+    var pool = GUESS_POOL.filter(function (w) { return have[w]; });
+    if (!pool.length) pool = (base || []).map(function (e) { return e.w; });
+    if (!pool.length) return null;
+    return pool[Math.min(pool.length - 1, Math.floor(r() * pool.length))];
+  }
+
   /* One example per question type, so the rule shows the shape rather than
    * naming a category the model has to guess at. Filtered by the level's
    * ladder, so HSK 1 never sees a 为什么 example it cannot legally use. */
@@ -327,6 +357,20 @@
       gen: "segments",
       converse: false,
       note: null
+    },
+    twenty: {
+      label: "20 Questions",
+      /* Role-dependent, not activity-dependent -- handled by the branch in
+       * build() below, same shape as storyPhase. */
+      rules: null,
+      names: null,
+      reuse: null,
+      gen: "turn",
+      /* A yes/no-question exchange isn't the answer-then-share-then-ask shape
+       * these rules assume; see the role branch in build(). */
+      converse: false,
+      note: "20 Questions: think of something and let the partner guess it, " +
+        "or guess what the partner is thinking of."
     }
   };
 
@@ -336,6 +380,127 @@
 
   function styleFor(level) {
     return LEVEL_STYLE[level] || LEVEL_STYLE[1];
+  }
+
+  /* The part of a prompt that makes an activity what it is, separate from the
+   * vocabulary/grammar/register rules build() assembles around it: story's
+   * phase and position, 20 Questions' role and secret, Ghost Words' targeting
+   * instruction. Extracted into its own function so systemPrompt()'s custom-
+   * prompt branch in index.html can still carry it -- it is mechanism, not
+   * style, the same reasoning that already keeps the pacing lines (offer/
+   * require) alive under a custom prompt. Without this a custom prompt turned
+   * an activity that depends entirely on its rule (20 Questions, above all)
+   * into plain chat with no sign anything was wrong.
+   *
+   * Story time has three phases, and each suppresses the rules that would
+   * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
+   * absolutely, and build() already knows what a model does with a later rule
+   * contradicting an earlier absolute one: it obeys the first. So asking and
+   * discussing replace those rules rather than following them.
+   *
+   * `discussing` fixes a defect rather than adding a feature: before it, a
+   * learner answering the partner's own question was met by the telling
+   * rules, which forbid talking to them.
+   *
+   * Returns an array of already-convert()-ed strings, unnumbered -- the
+   * caller assigns numbers when it assembles the full rule list. */
+  function activityRules(opts) {
+    var convert = opts.convert || function (t) { return t; };
+    var act = activityFor(opts.activity);
+    var seg = opts.storySegment || null;
+    var rules = [];
+
+    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
+    if (phase === "asking") {
+      var ladder = questionTypesFor(opts.level);
+      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
+        convert("问题要短，用简单的话。") +
+        convert("可以问这样的问题：") + QUESTION_SHAPES
+          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
+          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
+    } else if (phase === "discussing") {
+      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
+        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "answerer") {
+      /* Measured live (see tools/twenty-ab.js): the rule below on its own
+       * describes only REACTIVE behavior -- what to ask, how to count -- and
+       * says nothing about the very first turn, where there is nothing to
+       * react to yet. Given no explicit opening instruction the model often
+       * opened with ordinary chat instead of a guessing question. `opening`
+       * is a fact the caller already knows (S.history.length === 0 in
+       * index.html) rather than something the model has to infer from the
+       * transcript.
+       *
+       * "学生想了一个东西", not "学生心里想了一个东西": measured live, EVERY
+       * guessing question the model asked echoed 心里 back verbatim ("你心里
+       * 想的东西是...") -- 心 is not an HSK 1 entry, so every single reply
+       * needed a repair round trip, and one in ten still fell back after all
+       * three. Dropping the one word the rule never needed to say in the
+       * first place: 10/10 clean on the first attempt, no retries, same
+       * DEVELOPING.md lesson as 鸡鸟 -- naming a word in the prompt primes
+       * the model to reach for it. */
+      rules.push(
+        (opts.opening ? convert("现在马上问第一个是非问题，不要先打招呼，不要先说别的。") + " " : "") +
+        convert("学生想了一个东西，你负责猜。一次只问一个是非问题") +
+        convert("（能用「是不是」、「对不对」、「有没有」回答的那种），") +
+        convert("大概二十个问题以内猜出来，一边猜一边说这是第几个问题。"));
+    } else if (opts.activity === "twenty" && opts.side === "guesser" && opts.secret) {
+      var secret = convert(opts.secret);
+      /* Same defect, more visible here: measured live, EVERY opening reply in
+       * both arms was plain small talk with no sign a game had started at
+       * all -- the reactive-only rule gives the model nothing to say when
+       * there is no question yet to answer.
+       *
+       * A free-form instruction to announce readiness ("先说你已经想好了一
+       * 个东西...") was not enough on its own: measured live, the model
+       * reliably reached for 回答/或/开始 describing the game in its own
+       * words, none of them HSK 1, and 8/10 fell back to 我不知道 after
+       * exhausting the repair loop's 3 attempts. The concept "I will answer
+       * yes-or-no" has no simple HSK 1 phrasing to reach for instead.
+       *
+       * A literal, pre-validated template sidesteps the problem rather than
+       * asking the model to compose around it: told to say this EXACT
+       * sentence, it did, verbatim, 10/10 on the first attempt, no retries.
+       * One-time cost: the opening line no longer varies -- always "我想了
+       * 一个东西，你问我吧。" -- an acceptable trade for a line said once
+       * per round that previously had roughly even odds of failing
+       * outright. */
+      rules.push(
+        (opts.opening ? convert("先说这句话：「我想了一个东西，你问我吧。」不要改。") + " " : "") +
+        convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
+        convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
+        convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
+    } else {
+      (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
+    }
+    /* Deliberately outside the phase branch above: asking and discussing both
+     * refer to the characters the story just introduced, and 「小明去了哪儿？」
+     * must not fail validation for the name it is asking about. */
+    if (act.names && act.names.length) {
+      rules.push(convert("故事里的人可以叫") +
+        act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
+        convert("。别的名字不要用。"));
+    }
+    /* What the learner asked for. Placed before the segment's position so the
+     * model reads the subject first and the position as a qualifier of it.
+     * Passed through verbatim, in whatever language it was typed: a topic is
+     * the learner's own words, not app-authored Chinese, so `convert` does not
+     * touch it. */
+    if (opts.storyTopic) {
+      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
+                 convert("的故事。"));
+    }
+    if (seg) {
+      if (seg.index === 0) {
+        rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
+      } else if (seg.index >= seg.of - 1) {
+        rules.push(convert("这是故事的最后一段。把故事讲完，给它一个结尾。"));
+      } else {
+        rules.push(convert("接着上面的故事往下讲，不要从头开始，也不要现在就结束。"));
+      }
+      rules.push(convert("这一段写大概九十个汉字。"));
+    }
+    return rules;
   }
 
   /* opts: { level, label, length, words, script, convert }
@@ -367,8 +532,25 @@
     rules.push(convert(style.vocab) +
       ((opts.offer && opts.offer.length) ? convert("（后面提到的新词除外。）") : ""));
     /* A story segment sets its own length below; LENGTHS is the conversational
-     * axis and its "one or two sentences" contradicts it outright. */
-    if (!seg) rules.push(convert(len.rule));
+     * axis and its "one or two sentences" contradicts it outright. Omitted
+     * for twenty entirely, not just at medium/long: rule 8 below already
+     * says the whole shape ("一次只问一个是非问题" / one yes/no answer,
+     * nothing else), and long's own "不要只说一两句" flatly contradicts
+     * that -- the model is told in one rule never to ask more than one
+     * question and in another never to say only one or two sentences.
+     * Measured live: a reply correctly asked its second guessing question,
+     * then appended unrelated small talk word for word matching the medium
+     * rule's own "share your own thing" instruction. A follow-up attempt to
+     * isolate the length-rule contradiction specifically as the cause of
+     * occasional rambling (tools/twenty-ab.js) did not find a measurable
+     * effect either way across three separate real-model tests -- this is
+     * shipped as a genuine textual contradiction worth removing on its own
+     * terms, not as a proven fix for that rambling. Scoped to twenty
+     * specifically, not act.converse generally: story's own asking/
+     * discussing phases have converse === false at the activity level too,
+     * but ARE meant to react to the student the ordinary way, so they keep
+     * the length rule. */
+    if (!seg && opts.activity !== "twenty") rules.push(convert(len.rule));
     rules.push(convert(style.grammar));
     rules.push(convert("学生可以用英文问你，你看得懂。但是你回答的时候只可以写汉字，") +
                "\n   " + convert("不要用英文，不要用拼音，不要用汉字注音。"));
@@ -399,57 +581,9 @@
 
     /* The activity's own rules, then its position in the story if it has one.
      * Position after the activity's own rules so it reads as the more immediate
-     * instruction of the two. */
-    /* Story time has three phases, and each suppresses the rules that would
-     * contradict it. Rule 2 of telling is 只讲故事，不要问学生问题 stated
-     * absolutely, and build() already knows what a model does with a later rule
-     * contradicting an earlier absolute one: it obeys the first. So asking and
-     * discussing replace those rules rather than following them.
-     *
-     * `discussing` fixes a defect rather than adding a feature: before it, a
-     * learner answering the partner's own question was met by the telling
-     * rules, which forbid talking to them. */
-    var phase = opts.storyPhase || (opts.activity === "story" ? "telling" : null);
-    if (phase === "asking") {
-      var ladder = questionTypesFor(opts.level);
-      rules.push(convert("现在问学生一个关于他刚才读的那一段的问题，一次只问一个。") +
-        convert("问题要短，用简单的话。") +
-        convert("可以问这样的问题：") + QUESTION_SHAPES
-          .filter(function (q) { return ladder.types.indexOf(q.type) !== -1; })
-          .map(function (q) { return convert(q.shape); }).join("、") + convert("。"));
-    } else if (phase === "discussing") {
-      rules.push(convert("学生在回答你刚才的问题。先说他答得对不对，") +
-        convert("再用学生会的词把对的答案说一次。说完就停，不要再问新的问题。"));
-    } else {
-      (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
-    }
-    /* Deliberately outside the phase branch above: asking and discussing both
-     * refer to the characters the story just introduced, and 「小明去了哪儿？」
-     * must not fail validation for the name it is asking about. */
-    if (act.names && act.names.length) {
-      rules.push(convert("故事里的人可以叫") +
-        act.names.map(function (e) { return "「" + convert(e.w) + "」"; }).join("") +
-        convert("。别的名字不要用。"));
-    }
-    /* What the learner asked for. Placed before the segment's position so the
-     * model reads the subject first and the position as a qualifier of it.
-     * Passed through verbatim, in whatever language it was typed: a topic is
-     * the learner's own words, not app-authored Chinese, so `convert` does not
-     * touch it. */
-    if (opts.storyTopic) {
-      rules.push(convert("学生想听一个关于") + "「" + opts.storyTopic + "」" +
-                 convert("的故事。"));
-    }
-    if (seg) {
-      if (seg.index === 0) {
-        rules.push(convert("这是故事的第一段。开个头，介绍一两个人和一个地方。"));
-      } else if (seg.index >= seg.of - 1) {
-        rules.push(convert("这是故事的最后一段。把故事讲完，给它一个结尾。"));
-      } else {
-        rules.push(convert("接着上面的故事往下讲，不要从头开始，也不要现在就结束。"));
-      }
-      rules.push(convert("这一段写大概九十个汉字。"));
-    }
+     * instruction of the two. Extracted to activityRules() below so a custom
+     * system prompt can still carry it -- see that function's own comment. */
+    rules = rules.concat(activityRules(opts));
 
     if (opts.script === "trad") {
       // The one rule with no simplified counterpart: say which script to write.
@@ -481,14 +615,25 @@
       convert("规则：")
     ].concat(rules.map(function (r, i) { return (i + 1) + ". " + r; }));
 
+    lines.push("", convert("例子："), convert("学生：你好！"), convert("你：") + convert(style.sample));
+    /* An exchange that answers, adds something, and asks something new -- a
+     * worked example of exactly the shape rule 5 describes for an ordinary
+     * conversation. Dropped for 20 Questions: a few-shot example is a
+     * stronger signal than a numbered rule, and this one directly
+     * demonstrates the "answer, share, ask" turn the role rule (rule 8,
+     * above) forbids -- measured live, both roles fell back to plain chat,
+     * word for word this pattern's shape, with the role rule otherwise
+     * unchanged. Left in place for every other activity, unmeasured here. */
+    if (opts.activity !== "twenty") {
+      lines.push(
+        convert("学生：你喜欢喝茶吗？"),
+        convert("你：我很喜欢。我喜欢喝水。你喜欢吃什么？")
+      );
+    }
+    // The [[NEED:]] demonstration stays for every activity, twenty included --
+    // a student can still ask "怎么说 X" mid-round and the model still needs
+    // to know the channel to answer it in.
     lines.push(
-      "",
-      convert("例子："),
-      convert("学生：你好！"),
-      convert("你：") + convert(style.sample),
-      // An exchange that answers, adds something, and asks something new.
-      convert("学生：你喜欢喝茶吗？"),
-      convert("你：我很喜欢。我喜欢喝水。你喜欢吃什么？"),
       convert("学生：") + "怎么说 fried egg",
       convert("你：") + "[[NEED:" + convert("煎蛋") + "|jiān dàn|fried egg]]" +
         convert("。你喜欢吃吗？")
@@ -785,11 +930,12 @@
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
               ACTIVITIES: ACTIVITIES, activityFor: activityFor,
               STORY_NAMES: STORY_NAMES,
+              GUESS_POOL: GUESS_POOL, pickSecret: pickSecret,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               QUESTION_SHAPES: QUESTION_SHAPES,
-              build: build,
+              build: build, activityRules: activityRules,
               translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };

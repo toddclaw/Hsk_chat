@@ -472,6 +472,14 @@ footer{
     roughly <b>$0.10 a story</b> — about 170&times; a chat turn — and <b>Spend</b> above shows
     what you actually paid.</div>
 
+    <label for="twentyModel">Model for 20 Questions</label>
+    <select id="twentyModel"></select>
+    <button id="browseTwentyModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
+    <div class="note">20 Questions asks a lot of a model turn after turn: stay in its role,
+    track every answer so far, and not repeat or contradict an earlier question. No default is
+    set here — unlike story time, this has not been measured yet, so picking one is a guess
+    until it is. Same escape hatch as the other two: empty uses the chat model.</div>
+
     <label class="toggle" for="freeOnly">
       <input type="checkbox" id="freeOnly">
       <span>Display free models only</span>
@@ -644,6 +652,17 @@ footer{
       level and reply-length settings. <code>{level}</code> and <code>{words}</code> are
       substituted. The validator does not care what is in here — an instruction to use hard
       words just costs retries.</div>
+
+    <label>Activity prompts</label>
+      <!-- Built by renderActivityPrompts(): what HSKPrompt.build() actually
+           produces for each activity, at your current level and settings --
+           read-only, and separate from the editable System prompt above,
+           which replaces all of these at once when it is customized. -->
+      <div id="actPrompts"></div>
+      <div class="note">What the app actually sends the model for each activity, built fresh from
+      the settings on this page. Read-only — these are for checking what an activity does, not for
+      editing; use <b>System prompt</b> above to override generation for every activity at once.
+      20 Questions has two shapes, one per role; Story time shows the opening segment.</div>
 
     <label>Teaching prompts</label>
       <!-- Built by renderTeachPrompts(): four near-identical blocks are better
@@ -924,7 +943,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v75 — 2026-09-02";
+const VERSION   = "v82 — 2026-09-04";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -971,7 +990,7 @@ const SYNC_DEBOUNCE_MS  = 2000;   // local edits settle this long before a push
 
 const K = {
   key:"hsk1chat.apiKey", model:"hsk1chat.model", teachModel:"hsk1chat.teachModel",
-  storyModel:"hsk1chat.storyModel", extra:"hsk1chat.extraVocab",
+  storyModel:"hsk1chat.storyModel", twentyModel:"hsk1chat.twentyModel", extra:"hsk1chat.extraVocab",
   history:"hsk1chat.history", mode:"hsk1chat.promptMode", level:"hsk1chat.level",
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   goalLevel:"hsk1chat.goalLevel",
@@ -1011,6 +1030,7 @@ const S = {
   model:   store.get(K.model, MODELS[0].id),
   teachModel: store.get(K.teachModel, TEACH_MODEL),
   storyModel: store.get(K.storyModel, STORY_MODEL),
+  twentyModel: store.get(K.twentyModel, ""),
   /* Per-device chat time, summed for display. See time.js for why it is not
    * one number: a counter under last-write-wins loses whichever device synced
    * first, without saying so. */
@@ -1303,6 +1323,25 @@ function systemPrompt(offer, reuse, required, ctx) {
     if (effectiveMode() === "with-list" && S.prompt.indexOf("{words}") === -1) {
       out += "\n\n你只可以用这些词：\n" + wordList();
     }
+    /* A custom prompt still gets the activity's own mechanism -- a story's
+     * phase, 20 Questions' role and secret, Ghost Words' targeting
+     * instruction -- the same reasoning as the pacing lines just below.
+     * Without this, customizing the system prompt once silently turned
+     * every one of those activities into plain chat with no sign anything
+     * was wrong: see HSKPrompt.activityRules()'s own comment. */
+    const cActRules = currentChat();
+    const mech = HSKPrompt.activityRules({
+      activity: currentActivity(),
+      level: S.level,
+      storySegment: (ctx && ctx.storySegment) || null,
+      storyPhase: (ctx && ctx.storyPhase) || null,
+      storyTopic: currentActivity() === "story" ? storyTopic() : "",
+      side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
+      secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
+      opening: S.history.length === 0,
+      convert: toScript
+    });
+    if (mech.length) out += "\n\n" + mech.join("\n");
     // A custom prompt still gets the pacing lines; they are mechanism, not style.
     if (required) {
       out += "\n\n" + toScript("这次一定要用「") + required + toScript("」这个词。");
@@ -1316,6 +1355,7 @@ function systemPrompt(offer, reuse, required, ctx) {
 }
 
 function defaultPrompt(offer, reuse, required, ctx) {
+  const c = currentChat();
   const p = HSKPrompt.build({
     offer: offer || [],
     reuse: reuse || [],
@@ -1328,6 +1368,9 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storySegment: (ctx && ctx.storySegment) || null,
     storyPhase: (ctx && ctx.storyPhase) || null,
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
+    side: currentActivity() === "twenty" ? (c && c.side) : null,
+    secret: currentActivity() === "twenty" ? (c && c.secret) : null,
+    opening: S.history.length === 0,
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -1488,6 +1531,13 @@ function teachingModel() { return S.teachModel || S.model; }
 /* Empty means "whatever I am chatting with", the same escape hatch the teaching
  * model has -- and the same thing that happens if this default id is withdrawn. */
 function storyModel() { return S.storyModel || S.model; }
+/* Same escape hatch again. Unlike story time, no default id is set here yet --
+ * the multi-turn constraint-tracking gap DEVELOPING.md records for 20
+ * Questions is exactly the kind of thing story time already measured a
+ * capable model fixes, but that measurement has not been run for this
+ * activity, and guessing a default without it is the mistake CLAUDE.md warns
+ * against for any prompt-adjacent change. Empty until someone runs it. */
+function twentyModel() { return S.twentyModel || S.model; }
 
 /* The four prompts behind the two buttons. Four rather than two because `own`
  * changes what each one should ask for: the partner's reply is known-good
@@ -1618,6 +1668,12 @@ async function turn(ctx) {
   // In Ghost Words, "required" is the first unused word to push production.
   const required = isFocused ? (reuse[0] && reuse[0].w) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
+  /* A story turn names its own model in ctx (storyStep(), and the discussing
+   * phase send() sets up). Every other twenty turn -- opening, and every
+   * ordinary send() while playing -- comes through here with no ctx.model at
+   * all, so it has to be resolved the same way here, once, rather than
+   * threaded through every caller. */
+  const model = (ctx && ctx.model) || (currentActivity() === "twenty" ? twentyModel() : null);
 
   const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
     .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
@@ -1635,11 +1691,11 @@ async function turn(ctx) {
      * loudly instead of silently doubling their cost. */
     let raw;
     try {
-      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
     } catch (err) {
       if (err.kind !== "empty") throw err;
       console.warn("[empty completion] retrying once");
-      raw = await callModel(scratch, ctx && ctx.maxTokens, ctx && ctx.model);
+      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
     }
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
@@ -2037,6 +2093,8 @@ function renderAll() {
                                 : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
+    } else if (currentActivity() === "twenty") {
+      hintText = 'Pick who thinks of something, below.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2302,7 +2360,10 @@ function startActivity(id) {
    * sees, so nothing is generated -- and nothing is spent -- until they have
    * said what the story should be about. Every other activity still opens with
    * the partner speaking. */
-  if (act.gen !== "segments" && id !== "chat") openingTurn();
+  /* Same withholding as story time, for the same reason: nothing is
+   * generated until the learner has chosen a role, since the role decides
+   * what the model is even allowed to say. */
+  if (act.gen !== "segments" && id !== "chat" && id !== "twenty") openingTurn();
   return c;
 }
 
@@ -2625,7 +2686,8 @@ async function pullAndMerge() {
       const oldLevel = S.level, oldScript = S.script;
       HSKSync.applyPrefsSnapshot(S, prefsRow.data);
       store.set(K.model, S.model); store.set(K.teachModel, S.teachModel);
-      store.set(K.storyModel, S.storyModel); store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
+      store.set(K.storyModel, S.storyModel); store.set(K.twentyModel, S.twentyModel);
+      store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
@@ -3274,7 +3336,17 @@ async function retryLast() {
    * searched and then gave up, leaving the history it had already eaten. */
   let i = S.history.length - 1;
   while (i >= 0 && S.history[i].role !== "user") i--;
-  if (i < 0) return;
+  /* No user turn anywhere: this can only be the OPENING turn of an activity
+   * where the partner speaks first (focused, twenty -- chat never calls
+   * openingTurn()), and it failed or gave up before the learner ever said
+   * anything. The old `return` here silently did nothing, which is what
+   * "Try again" not working turned out to be: there was nothing for this
+   * function's own retry shape (find my last message, resend it) to find. */
+  if (i < 0) {
+    S.history.length = 0;
+    persist(); renderAll();
+    return openingTurn();
+  }
   S.history.length = i + 1;
   const text = S.history[i].text;
   S.busy = true; renderBusy();
@@ -3896,6 +3968,16 @@ function fillModels() {
     sList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
       (m.id === S.storyModel ? " selected" : "") + ">" +
       escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
+  // Same unfiltered list again, for 20 Questions.
+  let twList = tList;
+  if (S.twentyModel && !twList.some(m => m.id === S.twentyModel)) {
+    twList = [{ id: S.twentyModel, label: S.twentyModel }].concat(twList);
+  }
+  $("#twentyModel").innerHTML =
+    '<option value=""' + (S.twentyModel ? "" : " selected") + ">Same as the chat model</option>" +
+    twList.map(m => '<option value="' + escapeHtml(m.id) + '"' +
+      (m.id === S.twentyModel ? " selected" : "") + ">" +
+      escapeHtml(m.label + priceLabel(m)) + "</option>").join("");
   /* Which of the two states the section is in. Loading the catalogue is setup;
    * once it is done the button that did it has no business outranking the
    * pickers, and the known-good list it sat with is strictly worse than the
@@ -3935,6 +4017,11 @@ const MODEL_PICKERS = {
     title: "Model for story time", free: false,
     get: () => S.storyModel,
     set: id => { S.storyModel = id; store.set(K.storyModel, id); queueSync("prefs"); fillModels(); }
+  },
+  twenty: {
+    title: "Model for 20 Questions", free: false,
+    get: () => S.twentyModel,
+    set: id => { S.twentyModel = id; store.set(K.twentyModel, id); queueSync("prefs"); fillModels(); }
   }
 };
 let modelPickFor = "chat";      // which picker opened the sheet
@@ -4433,8 +4520,10 @@ async function checkUpdate() {
  * never lets exceed STORY_SEGMENTS, so this clause can only ever fire on a
  * transcript old enough to have no `kind` at all. */
 function renderComposer() {
-  const listening = currentActivity() === "story" && !anyStoryQuestion() &&
-    !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS);
+  const c = currentChat();
+  const listening = (currentActivity() === "story" && !anyStoryQuestion() &&
+    !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS)) ||
+    (currentActivity() === "twenty" && !(c && c.side));
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -4530,6 +4619,41 @@ function renderStoryControl(box) {
   }
 }
 
+/* Choosing a role for 20 Questions: fixed once, exactly like activity/level
+ * (design D5). secret only for guesser, drawn from the curated pool
+ * intersected with the student's own cumulative wordlist -- never rendered
+ * anywhere; only systemPrompt() reads it (design D3). Guarded on c.side so a
+ * double tap (or a stray click after the first choice already landed) cannot
+ * silently redraw the secret out from under an in-progress round. */
+function chooseTwentySide(side) {
+  const c = currentChat();
+  if (!c || c.side) return;
+  c.side = side;
+  if (side === "guesser") c.secret = HSKPrompt.pickSecret(S.base);
+  saveChats();
+  queueSync("conversations");
+  renderStarters();
+  openingTurn();
+}
+
+/* Choosing state only -- once `side` is set there is nothing to show here,
+ * same as the ordinary chat starters once a story control's own topic
+ * exists. */
+function renderTwentyControl(box) {
+  const c = currentChat();
+  if (!c || c.side) return;
+  const answerer = document.createElement("button");
+  answerer.className = "story";
+  answerer.textContent = "I'll think of a word";
+  answerer.onclick = () => chooseTwentySide("answerer");
+  box.appendChild(answerer);
+  const guesser = document.createElement("button");
+  guesser.className = "story";
+  guesser.textContent = "I'll ask questions";
+  guesser.onclick = () => chooseTwentySide("guesser");
+  box.appendChild(guesser);
+}
+
 /* Tapping a starter fills the composer instead of sending: the learner sees the
  * sentence they are about to say, can edit it, and the words get underlined and
  * learned like anything typed. */
@@ -4542,6 +4666,7 @@ function renderStarters() {
    * learner to talk over a story that has not started. Story time uses the
    * strip for its own control instead. */
   if (currentActivity() === "story") return renderStoryControl(box);
+  if (currentActivity() === "twenty") return renderTwentyControl(box);
   if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
@@ -4857,6 +4982,10 @@ $("#storyModel").onchange = e => {
   S.storyModel = e.target.value; store.set(K.storyModel, S.storyModel); queueSync("prefs");
 };
 $("#browseStoryModel").onclick = () => openModelPicker("story");
+$("#twentyModel").onchange = e => {
+  S.twentyModel = e.target.value; store.set(K.twentyModel, S.twentyModel); queueSync("prefs");
+};
+$("#browseTwentyModel").onclick = () => openModelPicker("twenty");
 $("#teachModel").onchange = e => {
   S.teachModel = e.target.value; store.set(K.teachModel, S.teachModel); queueSync("prefs");
 };
@@ -5063,6 +5192,7 @@ $("#btnSet").onclick = () => {
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
   fillPrompt();
+  renderActivityPrompts();
   renderTeachPrompts();
   renderStats();
   renderVersion();
@@ -5126,6 +5256,44 @@ $("#resetPrompt").onclick = () => {
   S.replyLength = $("#replyLength").value;
   fillPrompt();
 };
+
+/* One prompt per activity, read-only. Unlike #sysPrompt this is never saved
+ * anywhere -- it exists so "why did the partner say that" has an answer that
+ * does not require switching activities and reopening Settings, which for
+ * 20 Questions and Story time cannot show every shape anyway (a role, a
+ * phase) just by being the current activity. The secret shown for the
+ * guesser shape is a fixed illustrative word, not any live game's actual
+ * secret -- this is a fresh, standalone build(), not a read of currentChat(). */
+function renderActivityPrompts() {
+  const box = $("#actPrompts");
+  box.innerHTML = "";
+  const base = {
+    level: S.level, label: levelLabel(), length: S.replyLength, script: S.script,
+    words: effectiveMode() === "with-list" ? wordList() : "", convert: toScript
+  };
+  const specs = [
+    { label: "Chat", activity: "chat" },
+    { label: "Ghost Words", activity: "focused", opts: { reuse: reuseFor("focused") } },
+    { label: "Story time (opening segment)", activity: "story",
+      opts: { storySegment: { index: 0, of: STORY_SEGMENTS } } },
+    { label: "20 Questions — “I’ll think of a word” (opening turn)", activity: "twenty",
+      opts: { side: "answerer", opening: true } },
+    { label: "20 Questions — “I’ll ask questions” (opening turn)", activity: "twenty",
+      opts: { side: "guesser", secret: "苹果", opening: true } }
+  ];
+  specs.forEach(spec => {
+    const wrap = document.createElement("div");
+    wrap.className = "teachRow";
+    const lab = document.createElement("label");
+    lab.textContent = spec.label;
+    const ta = document.createElement("textarea");
+    ta.className = "small";
+    ta.readOnly = true;
+    ta.value = HSKPrompt.build(Object.assign({}, base, { activity: spec.activity }, spec.opts));
+    wrap.append(lab, ta);
+    box.appendChild(wrap);
+  });
+}
 
 /* What each teaching prompt looked like when the sheet opened, so an untouched
  * box can be told from an edited one on close -- exactly how #sysPrompt does it.
