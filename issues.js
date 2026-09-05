@@ -163,22 +163,41 @@
     var title = "[HSK Chat] " + category;
     var body = description + "\n\n---\n\n" + formatContextForGitHub(context, checkboxes);
     
-    var response = await fetch("https://api.github.com/repos/toddclaw/Hsk_chat/issues", {
-      method: "POST",
-      headers: {
-        "Authorization": "token " + githubToken,
-        "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "HSK-Chat-Issue-Reporter/" + VERSION
-      },
-      body: JSON.stringify({
-        title: title,
-        body: body,
-        labels: labels
-      })
-    });
+    var response;
+    try {
+      response = await fetch("https://api.github.com/repos/toddclaw/Hsk_chat/issues", {
+        method: "POST",
+        headers: {
+          "Authorization": "token " + githubToken,
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "HSK-Chat-Issue-Reporter/" + VERSION
+        },
+        body: JSON.stringify({
+          title: title,
+          body: body,
+          labels: labels
+        })
+      });
+    } catch (networkErr) {
+      throw new Error("Network error. Check your connection and try again.");
+    }
     
     if (!response.ok) {
-      var error = await response.json();
+      // Handle rate limiting
+      if (response.status === 429) {
+        throw new Error("GitHub rate limit exceeded. Please try again in a few minutes.");
+      }
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("GitHub authentication failed. Please sign in again (Settings → Sync & Backup).");
+      }
+      // Other errors
+      var error;
+      try {
+        error = await response.json();
+      } catch (e) {
+        error = { message: "Failed to create GitHub issue (status " + response.status + ")" };
+      }
       throw new Error(error.message || "Failed to create GitHub issue");
     }
     
