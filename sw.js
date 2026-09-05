@@ -7,17 +7,17 @@
  *
  * API calls never touch this: they are cross-origin POSTs to OpenRouter.
  */
-const CACHE = "hsk-chat-v82";
+const CACHE = "hsk-chat-v83";
 
 // Installed up front: only what a first launch needs. The other level files and
 // the reference dictionary total a few megabytes and are cached on first use.
 const SHELL = [
-  "./", "./index.html", "./validator.js", "./prompt.js", "./md.js", "./time.js", "./pace.js", "./senses.js", "./sync.js",
+  "./", "./index.html", "./validator.js", "./prompt.js", "./md.js", "./time.js", "./pace.js", "./senses.js", "./sync.js", "./issues.js",
   "./manifest.json", "./data/hsk1.json", "./icon-192.png", "./icon-512.png"
 ];
 
 const isShell = path => path.endsWith("/") ||
-  /\/(index\.html|validator\.js|prompt\.js|md\.js|time\.js|pace\.js|senses\.js|sync\.js|manifest\.json)$/.test(path);
+  /\/(index\.html|validator\.js|prompt\.js|md\.js|time\.js|pace\.js|senses\.js|sync\.js|issues\.js|manifest\.json)$/.test(path);
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

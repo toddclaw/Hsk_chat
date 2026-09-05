@@ -350,6 +350,20 @@ footer{
 .addrow{display:flex; gap:8px; margin-top:8px}
 .addrow input{flex:1}
 .hint{color:var(--dim); font-size:14px; text-align:center; padding:24px 12px; line-height:1.7}
+/* Issue submission form */
+#issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
+#issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
+  color:var(--ink); border-radius:10px; padding:10px; resize:vertical}
+#issueSection input[type="text"]{width:100%; background:var(--panel2); border:1px solid var(--line);
+  color:var(--ink); border-radius:10px; padding:10px; min-height:var(--tap)}
+#issueSection .contextToggle{display:flex; align-items:center; gap:8px; margin:8px 0; font-size:13px; color:var(--dim)}
+#issueSection .contextToggle input{margin:0}
+#issueSection .contextDetails{font-size:12px; color:var(--dim); margin-left:24px}
+#issueSection .previewBox{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+  padding:12px; font-size:12px; max-height:300px; overflow-y:auto; white-space:pre-wrap}
+#issueSection .issueActions{display:flex; gap:8px; margin-top:12px}
+#issueSection .issueStatus{margin-top:12px; font-size:13px}
+#issueSection .issueStatus a{color:var(--accent)}
 </style>
 
 <header>
@@ -743,6 +757,51 @@ footer{
 
   </details>
 
+  <button id="issueSectionBtn" type="button" style="width:100%; text-align:left; padding:12px; background:none; border:none; border-top:1px solid var(--line); color:var(--ink)">
+    Report Issue
+  </button>
+
+  <div id="issueSection" class="sheet-section" style="display:none">
+    <h3>Report Issue</h3>
+    <p style="font-size:13px; color:var(--dim); margin-bottom:12px">
+      Submit bugs, feature requests, or UX issues directly to GitHub. Context about your session is captured automatically.
+    </p>
+    
+    <div style="margin-bottom:12px">
+      <label for="issueCategory" style="display:block; margin-bottom:6px; font-size:13px">Category</label>
+      <input type="text" id="issueCategory" placeholder="e.g., UX issue, Story Time bug, duplication, translation error">
+    </div>
+    
+    <div style="margin-bottom:12px">
+      <label for="issueDescription" style="display:block; margin-bottom:6px; font-size:13px">Description</label>
+      <textarea id="issueDescription" placeholder="Describe the issue, what you expected, and what happened instead..."></textarea>
+    </div>
+    
+    <div style="margin-bottom:12px">
+      <button id="contextPreviewBtn" type="button" style="width:100%">Preview Captured Context</button>
+      <div id="contextPreview" class="previewBox" style="display:none; margin-top:8px"></div>
+    </div>
+    
+    <div id="contextCheckboxes" style="margin-bottom:12px">
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="system"> System info (browser, version)</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="appState"> App state (level, activity, settings)</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="dataSummary"> Data summary (conversation/vocab counts)</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="errors"> Recent errors</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="submissions"> Recent messages</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="translations"> Recent translations</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="explanations"> Recent explanations</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="grader"> Recent grader results</label>
+      <label class="contextToggle"><input type="checkbox" checked data-ctx="words"> Recently introduced words</label>
+    </div>
+    
+    <div class="issueActions">
+      <button id="submitIssueBtn" class="primary" type="button" style="flex:1">Submit to GitHub</button>
+      <button id="cancelIssueBtn" type="button" style="flex:1">Cancel</button>
+    </div>
+    
+    <div id="issueStatus" class="issueStatus"></div>
+  </div>
+
   <div style="margin-top:16px"><button id="setClose" class="primary">Done</button></div>
 </div></div>
 
@@ -879,6 +938,7 @@ footer{
 <script src="pace.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
+<script src="issues.js"></script>
 <script>
 "use strict";
 
@@ -943,7 +1003,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v82 — 2026-09-04";
+const VERSION   = "v83 — 2026-09-05";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -5239,6 +5299,85 @@ function commitSettings() {
 }
 $("#setClose").onclick = commitSettings;
 $("#setX").onclick = commitSettings;
+
+// Issue form handlers
+var issueSection = document.getElementById("issueSection");
+var issueSectionBtn = document.getElementById("issueSectionBtn");
+var contextPreviewBtn = document.getElementById("contextPreviewBtn");
+var contextPreview = document.getElementById("contextPreview");
+var submitIssueBtn = document.getElementById("submitIssueBtn");
+var cancelIssueBtn = document.getElementById("cancelIssueBtn");
+var issueStatus = document.getElementById("issueStatus");
+
+if (issueSectionBtn) {
+  issueSectionBtn.onclick = function() {
+    issueSection.style.display = issueSection.style.display === "block" ? "none" : "block";
+  };
+}
+
+if (contextPreviewBtn) {
+  contextPreviewBtn.onclick = function() {
+    var context = HSKIssues.captureContext();
+    var checkboxes = {};
+    document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
+      checkboxes[cb.dataset.ctx] = cb.checked;
+    });
+    
+    var preview = HSKIssues.formatContextForGitHub(context, checkboxes);
+    contextPreview.textContent = preview;
+    contextPreview.style.display = contextPreview.textContent ? "block" : "none";
+  };
+}
+
+if (submitIssueBtn) {
+  submitIssueBtn.onclick = async function() {
+    var category = document.getElementById("issueCategory").value.trim();
+    var description = document.getElementById("issueDescription").value.trim();
+    
+    if (!category || !description) {
+      issueStatus.innerHTML = "<span style='color:var(--bad)'>Please fill in both category and description</span>";
+      return;
+    }
+    
+    submitIssueBtn.disabled = true;
+    submitIssueBtn.textContent = "Submitting...";
+    
+    try {
+      var sessionResult = await HSKSync.getSession();
+      if (!sessionResult || !sessionResult.provider_token) {
+        throw new Error("Please sign in with GitHub first (Settings → Sync & Backup)");
+      }
+      
+      var context = HSKIssues.captureContext();
+      var checkboxes = {};
+      document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
+        checkboxes[cb.dataset.ctx] = cb.checked;
+      });
+      
+      var issue = await HSKIssues.submitToGitHub(category, description, context, checkboxes, sessionResult.provider_token);
+      
+      issueStatus.innerHTML = "✓ Issue submitted! <a href='" + issue.html_url + "' target='_blank'>View on GitHub</a>";
+      document.getElementById("issueCategory").value = "";
+      document.getElementById("issueDescription").value = "";
+      contextPreview.style.display = "none";
+    } catch (err) {
+      issueStatus.innerHTML = "<span style='color:var(--bad)'>Error: " + err.message + "</span>";
+    } finally {
+      submitIssueBtn.disabled = false;
+      submitIssueBtn.textContent = "Submit to GitHub";
+    }
+  };
+}
+
+if (cancelIssueBtn) {
+  cancelIssueBtn.onclick = function() {
+    issueSection.style.display = "none";
+    issueStatus.textContent = "";
+    document.getElementById("issueCategory").value = "";
+    document.getElementById("issueDescription").value = "";
+  };
+}
+
 /* What the textarea was last filled with. Saving compares against this, not
  * against a freshly generated default: changing the level or reply length while
  * the panel is open moves the default out from under the text, and comparing

@@ -3192,6 +3192,56 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the stopped, still-empty story to be swept");
     check(true, "stopping a generation for a chat no longer on screen still drops it if it stayed empty");
 
+    /* ------------------------------------------------- issue submission form
+     *
+     * Tests the UI for the issue submission form: that it renders, the toggle
+     * works, and the form elements are present. Actual submission is tested in
+     * test/issues.test.js; this only checks the form exists and is usable.
+     */
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')", "Settings");
+    
+    // Find and click Report Issue button
+    const issueBtnFound = await exec(`
+      var btn = document.getElementById("issueSectionBtn");
+      return btn && btn.textContent.trim() === "Report Issue";`);
+    check(issueBtnFound, "Report Issue button exists in Settings");
+    
+    // Click the button and verify section shows
+    await exec(`document.getElementById("issueSectionBtn").click(); return true;`);
+    await sleep(100);
+    
+    const issueSectionVisible = await exec(`
+      var sec = document.getElementById("issueSection");
+      return sec && sec.style.display === "block";`);
+    check(issueSectionVisible, "Issue section becomes visible when button clicked");
+    
+    // Check form elements exist
+    const formElements = await exec(`
+      return {
+        category: document.getElementById("issueCategory") !== null,
+        description: document.getElementById("issueDescription") !== null,
+        previewBtn: document.getElementById("contextPreviewBtn") !== null,
+        submitBtn: document.getElementById("submitIssueBtn") !== null,
+        cancelBtn: document.getElementById("cancelIssueBtn") !== null,
+        checkboxes: document.querySelectorAll("#contextCheckboxes input").length
+      };`);
+    check(formElements.category, "Category input exists");
+    check(formElements.description, "Description textarea exists");
+    check(formElements.previewBtn, "Preview button exists");
+    check(formElements.submitBtn, "Submit button exists");
+    check(formElements.cancelBtn, "Cancel button exists");
+    check(formElements.checkboxes === 9, "Nine context checkboxes exist", "found " + formElements.checkboxes);
+    
+    // Click cancel and verify section hides
+    await exec(`document.getElementById("cancelIssueBtn").click(); return true;`);
+    await sleep(100);
+    
+    const issueSectionHidden = await exec(`
+      var sec = document.getElementById("issueSection");
+      return sec && sec.style.display === "none";`);
+    check(issueSectionHidden, "Issue section hides when Cancel clicked");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
