@@ -93,57 +93,29 @@ jobs:
         if: steps.dest.outputs.dir != '.'
         run: |
           cd ../site
-          # Update recent-branches.json
-          if [ -f "preview/recent-branches.json" ]; then
-            branches=$(cat preview/recent-branches.json)
-          else
-            branches="[]"
-          fi
-          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          new_entry="{\"branch\":\"$branch\",\"safeName\":\"$safe\",\"timestamp\":\"$timestamp\",\"commit\":\"${GITHUB_SHA::7}\"}"
-          # Add new entry, keep last 10, sort by timestamp
-          echo "$branches" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-new = json.loads('$new_entry')
-# Remove any existing entry for this branch
-data = [e for e in data if e.get('branch') != '$branch']
-# Add new entry at the end (most recent)
-data.append(new)
-# Keep last 10
-data = data[-10:]
-print(json.dumps(data, indent=2))
-" > preview/recent-branches.json.tmp
-          mv preview/recent-branches.json.tmp preview/recent-branches.json
           
-          # Get latest branch name for redirect
-          latest_safe=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['safeName'] if data else '')")
-          latest_branch=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['branch'] if data else '')")
-          latest_commit=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['commit'] if data else '')")
+          # Update recent-branches.json
+          python3 ../.github/scripts/update-branches.py \
+            preview/recent-branches.json \
+            "$branch" \
+            "$safe" \
+            "${GITHUB_SHA::7}"
+          
+          # Get latest branch info
+          latest_info=$(python3 ../.github/scripts/get-latest-branch.py preview/recent-branches.json)
+          latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
+          latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
+          latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
           
           if [ -n "$latest_safe" ]; then
             # Generate redirect index.html
-            cat > preview/index.html << EOF
-<!DOCTYPE html>
-<meta charset="utf-8">
-<title>HSK Chat Preview</title>
-<meta http-equiv="refresh" content="0;url=./${latest_safe}/">
-<meta name="robots" content="noindex">
-<style>
-  body{background:#0f1317;color:#e8edf2;font:16px/1.5 system-ui,sans-serif;padding:40px}
-  .banner{background:#2a343e;border:1px solid #5a4a22;border-radius:10px;padding:20px;margin-bottom:20px}
-  .warning{color:#ffd479}
-  a{color:#6aa9ff}
-  code{background:#1a2026;padding:2px 6px;border-radius:4px}
-</style>
-<div class="banner">
-  <b class="warning">⚠ Preview Build</b> — This is a preview from a feature branch, not production.
-  <div>Branch: <code>${latest_branch}</code></div>
-  <div>Commit: <code>${latest_commit}</code></div>
-  <p>Redirecting to preview... <a href="./${latest_safe}/">Click here if not redirected</a></p>
-  <p><a href="./">View all previews</a> | <a href="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/">Go to production</a></p>
-</div>
-EOF
+            python3 ../.github/scripts/generate-redirect.py \
+              preview/index.html \
+              "$latest_safe" \
+              "$latest_branch" \
+              "$latest_commit" \
+              "${{ github.repository_owner }}" \
+              "${{ github.event.repository.name }}"
           fi
           
           git add -A
@@ -155,19 +127,16 @@ EOF
           echo "Waiting 30 seconds for GitHub Pages to process..."
           sleep 30
           
-          base_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           
           if [ "${{ steps.dest.outputs.dir }}" = "." ]; then
-            # Production deployment - check main page
             test_url="$base_url/"
           else
-            # Preview deployment - check preview page
             test_url="$base_url/${{ steps.dest.outputs.url }}"
           fi
           
           echo "Verifying deployment at: $test_url"
           
-          # Try up to 3 times with exponential backoff
           for i in 1 2 3; do
             status=$(curl -s -o /dev/null -w "%{http_code}" "$test_url" || echo "000")
             if [ "$status" = "200" ]; then
@@ -180,7 +149,7 @@ EOF
             sleep $((i * 10))
           done
           
-          echo "✗ Deployment verification failed after 3 attempts"
+          echo "::error::Deployment verification failed after 3 attempts"
           echo "Expected URL: $test_url"
           echo "Last status: $status"
           exit 1
@@ -203,44 +172,24 @@ EOF
             git rm -r --quiet "preview/$safe"
             
             # Update recent-branches.json - remove deleted branch
-            if [ -f "preview/recent-branches.json" ]; then
-              python3 -c "
-import json
-with open('preview/recent-branches.json') as f:
-    data = json.load(f)
-data = [e for e in data if e.get('branch') != '${{ github.event.ref }}']
-with open('preview/recent-branches.json', 'w') as f:
-    json.dump(data, f, indent=2)
-"
-            fi
+            python3 ../.github/scripts/cleanup-branch.py \
+              preview/recent-branches.json \
+              "${{ github.event.ref }}"
             
             # Regenerate index.html with new latest
-            latest_safe=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['safeName'] if data else '')" 2>/dev/null || echo "")
-            latest_branch=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['branch'] if data else '')" 2>/dev/null || echo "")
-            latest_commit=$(python3 -c "import json; data=json.load(open('preview/recent-branches.json')); print(data[-1]['commit'] if data else '')" 2>/dev/null || echo "")
+            latest_info=$(python3 ../.github/scripts/get-latest-branch.py preview/recent-branches.json 2>/dev/null || echo "")
+            latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
+            latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
+            latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
             
             if [ -n "$latest_safe" ]; then
-              cat > preview/index.html << EOF
-<!DOCTYPE html>
-<meta charset="utf-8">
-<title>HSK Chat Preview</title>
-<meta http-equiv="refresh" content="0;url=./${latest_safe}/">
-<meta name="robots" content="noindex">
-<style>
-  body{background:#0f1317;color:#e8edf2;font:16px/1.5 system-ui,sans-serif;padding:40px}
-  .banner{background:#2a343e;border:1px solid #5a4a22;border-radius:10px;padding:20px;margin-bottom:20px}
-  .warning{color:#ffd479}
-  a{color:#6aa9ff}
-  code{background:#1a2026;padding:2px 6px;border-radius:4px}
-</style>
-<div class="banner">
-  <b class="warning">⚠ Preview Build</b> — This is a preview from a feature branch, not production.
-  <div>Branch: <code>${latest_branch}</code></div>
-  <div>Commit: <code>${latest_commit}</code></div>
-  <p>Redirecting to preview... <a href="./${latest_safe}/">Click here if not redirected</a></p>
-  <p><a href="./">View all previews</a> | <a href="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/">Go to production</a></p>
-</div>
-EOF
+              python3 ../.github/scripts/generate-redirect.py \
+                preview/index.html \
+                "$latest_safe" \
+                "$latest_branch" \
+                "$latest_commit" \
+                "${{ github.repository_owner }}" \
+                "${{ github.event.repository.name }}"
             else
               # No branches left, remove the index
               rm -f preview/index.html preview/recent-branches.json
@@ -259,7 +208,7 @@ EOF
             echo "Waiting 20 seconds for GitHub Pages to process cleanup..."
             sleep 20
             
-            base_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+            base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
             preview_url="$base_url/preview/"
             
             echo "Verifying preview index at: $preview_url"
@@ -267,6 +216,6 @@ EOF
             if [ "$status" = "200" ]; then
               echo "✓ Preview index verified successfully"
             else
-              echo "⚠ Preview index returned status $status (may be OK if no previews remain)"
+              echo "::warning::Preview index returned status $status (may be OK if no previews remain)"
             fi
           fi
