@@ -351,10 +351,57 @@ const mergedLevNull = Sync.mergeConversations(
 check(mergedLevNull[0].level === 4,
   "a newer row with no level does not erase the one we have");
 
+/* side is the fifth optional column: which role the STUDENT took in a 20
+ * Questions conversation. Behaves exactly like activity/level: fixed at
+ * creation, NULL when the column or the row predates it. */
+const convS = { id: "e1", title: "T", side: "guesser",
+                created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z" };
+const rowS = Sync.conversationToRow(convS, "u1");
+check(rowS.side === "guesser", "conversationToRow carries the side");
+check(Sync.rowToConversation(rowS).side === "guesser", "and it survives the round trip");
+check(Sync.rowToConversation({ id: "e2", created_at: "x", updated_at: "x" }).side === null,
+  "a row with no side column reads back as no side, not a guessed default");
+
+const mergedSide = Sync.mergeConversations(
+  [{ id: "f1", title: "local", side: "answerer", updated_at: "2026-01-02T00:00:00Z" }],
+  [{ id: "f1", title: "remote", side: "answerer", updated_at: "2026-01-03T00:00:00Z" }]);
+check(mergedSide[0].side === "answerer", "side survives a merge -- it is not dropped");
+
+// Same rule as activity/level: a newer row that lost the column must not erase ours.
+const mergedSideNull = Sync.mergeConversations(
+  [{ id: "f2", side: "guesser", updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "f2", side: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedSideNull[0].side === "guesser",
+  "a newer row with no side does not erase the one we have");
+
+/* secret is the sixth optional column, present only for a guesser round.
+ * This only checks it moves -- design D3 (never rendered) is index.html's job. */
+const convSec = { id: "e3", title: "T", side: "guesser", secret: "苹果",
+                  created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
+const rowSec = Sync.conversationToRow(convSec, "u1");
+check(rowSec.secret === "苹果", "conversationToRow carries the secret");
+check(Sync.rowToConversation(rowSec).secret === "苹果", "and it survives the round trip");
+check(Sync.rowToConversation({ id: "e4", created_at: "x", updated_at: "x" }).secret === null,
+  "a row with no secret column reads back as no secret");
+
+const mergedSecret = Sync.mergeConversations(
+  [{ id: "f3", secret: "猫", updated_at: "2026-01-01T00:00:00Z" }],
+  [{ id: "f3", secret: null, updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedSecret[0].secret === "猫",
+  "a newer row with no secret does not erase the one we have");
+
+// The schema file must actually declare both, or the push fails against a real db.
+check(/add column if not exists side text/.test(schema),
+  "db/schema.sql adds the side column");
+check(/add column if not exists secret text/.test(schema),
+  "db/schema.sql adds the secret column");
+
 /* Story time runs on its own model, so that choice has to reach the other
- * device like the chat and teaching model ids do. */
+ * device like the chat and teaching model ids do. 20 Questions the same. */
 check(Sync.PREFS_KEYS.indexOf("storyModel") !== -1,
   "storyModel syncs with the other model settings");
+check(Sync.PREFS_KEYS.indexOf("twentyModel") !== -1,
+  "twentyModel syncs with the other model settings");
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "and adding it did not smuggle the key or the history in");
 
@@ -462,6 +509,9 @@ function freshSync() {
   check(convCalls1[0] && convCalls1[0].keys.indexOf("activity") !== -1 &&
         convCalls1[0].keys.indexOf("level") !== -1,
     "and it still carries the columns messages knows nothing about");
+  check(convCalls1[0] && convCalls1[0].keys.indexOf("side") !== -1 &&
+        convCalls1[0].keys.indexOf("secret") !== -1,
+    "and the twenty-questions columns ride along with activity/level");
 
   // --- Scenario 2: kind alone isn't enough -- conversation_id is missing too
   const seen2 = [];

@@ -450,7 +450,7 @@ check(modeArmOn.length > modeArmOff.length, "with-list is the longer prompt");
 /* Activities. The contract is four fields because four is what varies: extra
  * rules, where the reuse list comes from, how generation is driven, and whether
  * the conversational turn-taking rules apply at all. */
-const ACT_IDS = ["chat", "focused", "story"];
+const ACT_IDS = ["chat", "focused", "story", "twenty"];
 for (const id of ACT_IDS) {
   const a = P.activityFor(id);
   check(!!a, `activity ${id} exists`);
@@ -700,6 +700,211 @@ check(/\b3\b/.test(cast), "and states the cap");
 var titleP = P.titlePrompt("小明去了商店。他买了一个球。");
 check(titleP.indexOf("小明去了商店") !== -1, "the title prompt carries the story");
 check(/\b(title|name)\b/i.test(titleP), "and asks for a title");
+
+/* The secret pool for 20 Questions: concrete, guessable nouns, not tagged per
+ * level -- membership is checked against the student's own cumulative
+ * wordlist at pick time instead. */
+check(Array.isArray(P.GUESS_POOL) && P.GUESS_POOL.length >= 30,
+  "GUESS_POOL has a real number of entries", P.GUESS_POOL && P.GUESS_POOL.length);
+check(new Set(P.GUESS_POOL).size === P.GUESS_POOL.length,
+  "GUESS_POOL has no duplicates");
+check(P.GUESS_POOL.every(function (w) { return typeof w === "string" && w.length; }),
+  "every entry is a non-empty string");
+
+var hsk1Words = new Set(JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "data", "hsk1.json"), "utf8")
+).map(function (e) { return e.w; }));
+var hsk1Hits = P.GUESS_POOL.filter(function (w) { return hsk1Words.has(w); });
+check(hsk1Hits.length >= 15,
+  "HSK 1 alone already clears a real chunk of the pool -- an empty " +
+  "intersection is not a realistic case at any level", hsk1Hits.length);
+
+// pickSecret: filter to the student's own words, fall back if the
+// intersection is empty, and never throw on an empty base.
+var base1 = [{ w: "苹果" }, { w: "猫" }, { w: "水" }];   // 水 is not in GUESS_POOL
+var zeroRng = function () { return 0; };
+check(P.pickSecret(base1, zeroRng) === "苹果" || P.pickSecret(base1, zeroRng) === "猫",
+  "pickSecret only ever returns a word actually in the base", P.pickSecret(base1, zeroRng));
+check(["苹果", "猫", "水"].indexOf(P.pickSecret(base1, zeroRng)) !== -1,
+  "and it is one the caller actually offered");
+
+var baseNoOverlap = [{ w: "水" }, { w: "空气" }];   // neither is in GUESS_POOL
+check(P.pickSecret(baseNoOverlap, zeroRng) === "水",
+  "an empty intersection falls back to any word in base, not a throw");
+
+check(P.pickSecret([], zeroRng) === null,
+  "an empty base returns null rather than throwing");
+
+var manyRng = function () { return 0.999999; };
+check(P.pickSecret([{ w: "苹果" }], manyRng) === "苹果",
+  "rng is clamped to a real index even near 1");
+
+/* 20 Questions: a role branch parallel to storyPhase, per D6. Neither role's
+ * text is held to the level allowlist -- same rule as every other activity's
+ * `rules`, which already use 英文/语法. */
+check(!!P.ACTIVITIES.twenty, "activity twenty exists");
+check(P.ACTIVITIES.twenty.gen === "turn", "twenty generates one turn at a time");
+check(P.ACTIVITIES.twenty.converse === false,
+  "twenty suppresses the ordinary chat turn-taking rules -- a yes/no exchange isn't that shape");
+check(P.ACTIVITIES.twenty.names === null, "twenty has no cast");
+
+var noSide = P.build({ level: 1, label: "HSK 1", length: "short", activity: "twenty" });
+check(noSide.indexOf("你负责猜") === -1 && noSide.indexOf("你心里想的是") === -1,
+  "with no side chosen yet, neither role's rule appears");
+
+var answerer = P.build({ level: 1, label: "HSK 1", length: "short",
+                         activity: "twenty", side: "answerer" });
+check(answerer.indexOf("学生想了一个东西，你负责猜") !== -1,
+  "answerer: the model is told it is the one guessing");
+check(answerer.indexOf("心里") === -1,
+  "and not primed to echo 心里 (above HSK 1) into every guessing question -- measured live");
+check(answerer.indexOf("大概二十个问题以内") !== -1,
+  "and given the roughly-twenty budget to narrate against");
+check(answerer.indexOf("你心里想的是") === -1,
+  "and not handed a secret it never got");
+
+var guesser = P.build({ level: 1, label: "HSK 1", length: "short",
+                        activity: "twenty", side: "guesser", secret: "苹果" });
+check(guesser.indexOf("你心里想的是「苹果」") !== -1,
+  "guesser: the model is told its own secret");
+check(guesser.indexOf("只回答「是」或「不是」") !== -1,
+  "and told to answer only yes/no");
+check(guesser.indexOf("学生想了一个东西") === -1,
+  "and not given the answerer's rule instead");
+
+var guesserNoSecret = P.build({ level: 1, label: "HSK 1", length: "short",
+                                activity: "twenty", side: "guesser" });
+check(guesserNoSecret.indexOf("你心里想的是") === -1,
+  "guesser with no secret yet adds no rule at all, rather than leaking a literal undefined");
+
+// The conversational turn-taking rules must actually leave the prompt.
+var twentyPrompt = P.build({ level: 1, label: "HSK 1", length: "short",
+                             activity: "twenty", side: "answerer" });
+check(twentyPrompt.indexOf(ASK_RULE) === -1,
+  "twenty drops the ask-a-new-question rule -- the round has its own shape");
+
+// Script conversion reaches the secret exactly like every other app-authored
+// rule -- it is Chinese vocabulary data, not learner-typed English like a
+// story topic.
+var guesserTrad = P.build({ level: 1, label: "HSK 1", length: "short",
+                            activity: "twenty", side: "guesser", secret: "苹果",
+                            script: "trad", convert: function (t) { return t.replace(/苹果/g, "蘋果"); } });
+check(guesserTrad.indexOf("蘋果") !== -1,
+  "the secret is passed through the same convert() as the rest of the rule");
+
+// Rule numbering must survive the role branch, same as every other activity.
+var twentyNums = twentyPrompt.split("\n").map(function (l) {
+  return (/^(\d+)\. /.exec(l) || [])[1];
+}).filter(Boolean).map(Number);
+check(JSON.stringify(twentyNums) === JSON.stringify(twentyNums.map(function (_, i) { return i + 1; })),
+  "twenty: rule numbering is gap-free and in order", JSON.stringify(twentyNums));
+
+/* activityRules() is what a custom system prompt still gets (systemPrompt()'s
+ * own branch in index.html), extracted out of build() so the two can never
+ * drift apart -- its output must always be exactly a subset of what build()
+ * itself produces for the same opts. */
+[
+  { activity: "chat" },
+  { activity: "focused" },
+  { activity: "story", storySegment: { index: 0, of: 5 } },
+  { activity: "story", storyPhase: "asking" },
+  { activity: "story", storyPhase: "discussing" },
+  { activity: "twenty", side: "answerer" },
+  { activity: "twenty", side: "guesser", secret: "苹果" }
+].forEach(function (o) {
+  var opts = Object.assign({ level: 1, label: "HSK 1", length: "short" }, o);
+  var rules = P.activityRules(opts);
+  var full = P.build(opts);
+  rules.forEach(function (r) {
+    check(full.indexOf(r) !== -1,
+      "activityRules() for " + JSON.stringify(o) + " appears verbatim in build()'s own output",
+      r);
+  });
+});
+check(P.activityRules({ activity: "twenty", level: 1, label: "HSK 1", length: "short" }).length === 0,
+  "activityRules() adds nothing for twenty with no side chosen yet -- a custom " +
+  "prompt should not invent a role the chooser never set");
+check(P.activityRules({ activity: "focused", level: 1, label: "HSK 1", length: "short" }).length > 0,
+  "and Ghost Words' targeting instruction survives a custom prompt");
+
+/* Measured live: both 20 Questions roles fell back to plain chat, the exact
+ * shape of the worked example below -- answer, share something, ask a new
+ * question -- which is unconditional in every other activity's prompt and
+ * directly contradicts the role rule. A few-shot example outweighs a
+ * numbered rule, so it has to go for this activity specifically; every
+ * other activity is unmeasured and keeps it. */
+var CHAT_EXAMPLE_LINE = "你喜欢吃什么";
+var twentyAnswererPrompt = P.build({ level: 1, label: "HSK 1", length: "short",
+                                     activity: "twenty", side: "answerer" });
+check(twentyAnswererPrompt.indexOf(CHAT_EXAMPLE_LINE) === -1,
+  "twenty's worked example drops the answer-share-ask exchange that contradicts its own role rule");
+check(twentyAnswererPrompt.indexOf("[[NEED:") !== -1,
+  "but keeps the [[NEED:]] demonstration -- a student can still ask 怎么说 mid-round");
+check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "chat" })
+        .indexOf(CHAT_EXAMPLE_LINE) !== -1,
+  "chat keeps the full worked example -- this is scoped to twenty, not global");
+
+/* Measured live (tools/twenty-ab.js): the role rule alone only describes
+ * REACTIVE behavior, and says nothing about the opening turn, where there is
+ * nothing yet to react to. Every guesser opening reply in a real run was
+ * plain small talk with no sign a game had started (0/8, twice over); the
+ * answerer's opening reliability was worse than an earlier, too-loose check
+ * suggested. `opening` fixes this by stating the first-turn behavior
+ * explicitly rather than asking the model to infer it from an empty
+ * transcript. */
+var answererOpening = P.build({ level: 1, label: "HSK 1", length: "short",
+                                activity: "twenty", side: "answerer", opening: true });
+check(answererOpening.indexOf("现在马上问第一个是非问题") !== -1,
+  "answerer's opening turn is told to ask a guessing question immediately");
+var answererLater = P.build({ level: 1, label: "HSK 1", length: "short",
+                              activity: "twenty", side: "answerer", opening: false });
+check(answererLater.indexOf("现在马上问第一个是非问题") === -1,
+  "and that instruction does not repeat on later turns, which already have something to react to");
+
+/* A free-form "announce readiness in your own words" instruction measured
+ * badly here (8/10 fell back to 我不知道 after 3 repair attempts): the
+ * concept "I will answer yes-or-no" has no simple HSK 1 phrasing, so the
+ * model reliably reached for 回答/或/开始, all above HSK 1. A literal,
+ * pre-validated template sidesteps it -- told to say this exact sentence,
+ * the model did, verbatim, 10/10 on the first attempt. */
+var GUESSER_OPENING_LINE = "我想了一个东西，你问我吧。";
+check(HSK.validate(GUESSER_OPENING_LINE,
+  HSK.buildLexicon(JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "hsk1.json"), "utf8"))))
+  .length === 0, "the guesser opening template is itself legal at HSK 1 -- it is the whole point");
+var guesserOpening = P.build({ level: 1, label: "HSK 1", length: "short",
+                               activity: "twenty", side: "guesser", secret: "苹果", opening: true });
+check(guesserOpening.indexOf(GUESSER_OPENING_LINE) !== -1,
+  "guesser's opening turn is told to say the pre-validated announcement");
+var guesserLater = P.build({ level: 1, label: "HSK 1", length: "short",
+                             activity: "twenty", side: "guesser", secret: "苹果", opening: false });
+check(guesserLater.indexOf(GUESSER_OPENING_LINE) === -1,
+  "and that instruction does not repeat on later turns either");
+
+// Rule numbering must survive the opening instruction too.
+var openingNums = answererOpening.split("\n").map(function (l) {
+  return (/^(\d+)\. /.exec(l) || [])[1];
+}).filter(Boolean).map(Number);
+check(JSON.stringify(openingNums) === JSON.stringify(openingNums.map(function (_, i) { return i + 1; })),
+  "opening turn: rule numbering is still gap-free", JSON.stringify(openingNums));
+
+/* Measured live: a real medium-length reply correctly asked its second
+ * guessing question, then appended "我昨天努力学习。老师说我的练习很好。
+ * 你最近有什么特别的事吗？" -- word for word the medium length rule's own
+ * "share your own thing, then ask" instruction, which is not gated by
+ * act.converse the way rules 5-7 are (it is not a turn-taking rule). Omitted
+ * for twenty entirely (not narrowed to a sentence-count-only variant): rule
+ * 8 already states the shape, and long's own "不要只说一两句" flatly
+ * contradicts "ask exactly one question" -- see build()'s own comment on
+ * why this ships as a textual-contradiction fix, not a proven fix for the
+ * rambling that prompted it. */
+["short", "medium", "long"].forEach(function (len) {
+  var out = P.build({ level: 1, label: "HSK 1", length: len, activity: "twenty", side: "answerer" });
+  check(out.indexOf(P.LENGTHS[len].rule) === -1,
+    "twenty at " + len + " length drops the length rule entirely -- rule 8 already states the shape");
+});
+check(P.build({ level: 1, label: "HSK 1", length: "medium", activity: "chat" })
+        .indexOf("先说你自己的事") !== -1,
+  "chat keeps the full medium rule -- this is scoped to twenty, not global");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

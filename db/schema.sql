@@ -102,6 +102,17 @@ alter table public.messages add column if not exists kind text;
 
 alter table public.conversations add column if not exists level int;
 
+-- Which role the STUDENT took in a 20 Questions conversation ("answerer" --
+-- the student thinks of something and the model guesses -- or "guesser" --
+-- the model thinks of something and the student guesses), and, only for a
+-- guesser round, what the model is thinking of. Fixed at creation like
+-- activity and level. secret is read by nothing except the prompt sent to
+-- the model -- it is never shown to the student, so an un-migrated database
+-- degrading to no secret just means the chooser reappears on that device.
+
+alter table public.conversations add column if not exists side text;
+alter table public.conversations add column if not exists secret text;
+
 -- Vocabulary tables: keyed by (user_id, word), upserted -- naturally
 -- conflict-free, since two devices adding different words never collide and
 -- re-adding the same word from two places is just a no-op update.
