@@ -769,6 +769,9 @@ footer{
     <div style="background:#2a343e; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; color:var(--dim)">
       <b style="color:var(--ink)">Note:</b> This will create an issue under your GitHub account. Your conversation text and session data will be visible publicly on GitHub.
     </div>
+    <div id="issueGitHubStatus" style="background:#2c5a3f; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; display:none">
+      <b style="color:#5ecb8b">✓</b> GitHub connected
+    </div>
     
     <div style="margin-bottom:12px">
       <label for="issueCategory" style="display:block; margin-bottom:6px; font-size:13px">Category</label>
@@ -2583,6 +2586,12 @@ async function ensureSyncClient() {
     const user = (session && session.user) || null;
     const isNewSignIn = user && (!syncUser || syncUser.id !== user.id);
     syncUser = user;
+    
+    // Store GitHub provider token for issue submission
+    if (session && session.provider_token) {
+      localStorage.setItem("github_provider_token", session.provider_token);
+    }
+    
     renderSyncSection();
     if (isNewSignIn) setTimeout(() => pullAndMerge(), 0);
   });
@@ -5311,24 +5320,45 @@ var contextPreview = document.getElementById("contextPreview");
 var submitIssueBtn = document.getElementById("submitIssueBtn");
 var cancelIssueBtn = document.getElementById("cancelIssueBtn");
 var issueStatus = document.getElementById("issueStatus");
+var issueGitHubStatus = document.getElementById("issueGitHubStatus");
+
+function updateGitHubStatus() {
+  if (!issueGitHubStatus) return;
+  var hasToken = localStorage.getItem("github_provider_token") !== null;
+  issueGitHubStatus.style.display = hasToken ? "block" : "none";
+}
 
 if (issueSectionBtn) {
   issueSectionBtn.onclick = function() {
-    issueSection.style.display = issueSection.style.display === "block" ? "none" : "block";
+    var wasHidden = issueSection.style.display !== "block";
+    issueSection.style.display = wasHidden ? "block" : "none";
+    if (wasHidden) {
+      updateGitHubStatus();
+    }
   };
 }
 
 if (contextPreviewBtn) {
   contextPreviewBtn.onclick = function() {
-    var context = HSKIssues.captureContext();
-    var checkboxes = {};
-    document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
-      checkboxes[cb.dataset.ctx] = cb.checked;
-    });
-    
-    var preview = HSKIssues.formatContextForGitHub(context, checkboxes);
-    contextPreview.textContent = preview;
-    contextPreview.style.display = contextPreview.textContent ? "block" : "none";
+    if (typeof HSKIssues === "undefined") {
+      contextPreview.textContent = "Error: Issue module not loaded. Please refresh the page.";
+      contextPreview.style.display = "block";
+      return;
+    }
+    try {
+      var context = HSKIssues.captureContext();
+      var checkboxes = {};
+      document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
+        checkboxes[cb.dataset.ctx] = cb.checked;
+      });
+      
+      var preview = HSKIssues.formatContextForGitHub(context, checkboxes);
+      contextPreview.textContent = preview || "(No context to display - all checkboxes unchecked)";
+      contextPreview.style.display = "block";
+    } catch (err) {
+      contextPreview.textContent = "Error: " + err.message;
+      contextPreview.style.display = "block";
+    }
   };
 }
 
@@ -5346,9 +5376,23 @@ if (submitIssueBtn) {
     submitIssueBtn.textContent = "Submitting...";
     
     try {
-      var sessionResult = await HSKSync.getSession();
-      if (!sessionResult || !sessionResult.provider_token) {
-        throw new Error("Please sign in with GitHub first (Settings → Sync & Backup)");
+      // Try to get GitHub token from localStorage (stored after OAuth sign-in)
+      var githubToken = localStorage.getItem("github_provider_token");
+      
+      if (!githubToken) {
+        // Fallback: try to get from session (may not have provider_token)
+        var sessionResult = await HSKSync.getSession();
+        if (sessionResult && sessionResult.provider_token) {
+          githubToken = sessionResult.provider_token;
+        }
+      }
+      
+      if (!githubToken) {
+        throw new Error("Please sign in with GitHub first (Settings → Sync & Backup). If already signed in, try signing out and back in.");
+      }
+      
+      if (typeof HSKIssues === "undefined") {
+        throw new Error("Issue module not loaded. Please refresh the page.");
       }
       
       var context = HSKIssues.captureContext();
@@ -5357,7 +5401,7 @@ if (submitIssueBtn) {
         checkboxes[cb.dataset.ctx] = cb.checked;
       });
       
-      var issue = await HSKIssues.submitToGitHub(category, description, context, checkboxes, sessionResult.provider_token);
+      var issue = await HSKIssues.submitToGitHub(category, description, context, checkboxes, githubToken);
       
       issueStatus.innerHTML = "✓ Issue submitted! <a href='" + issue.html_url + "' target='_blank'>View on GitHub</a>";
       document.getElementById("issueCategory").value = "";
