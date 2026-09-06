@@ -92,24 +92,28 @@ jobs:
       - name: Update latest preview redirect
         if: steps.dest.outputs.dir != '.'
         run: |
+          # Copy scripts to site directory (they're in the source checkout, not gh-pages)
+          mkdir -p ../site/.github/scripts
+          cp .github/scripts/*.py ../site/.github/scripts/
+          
           cd ../site
           
           # Update recent-branches.json
-          python3 ../.github/scripts/update-branches.py \
+          python3 .github/scripts/update-branches.py \
             preview/recent-branches.json \
             "$branch" \
             "$safe" \
             "${GITHUB_SHA::7}"
           
           # Get latest branch info
-          latest_info=$(python3 ../.github/scripts/get-latest-branch.py preview/recent-branches.json)
+          latest_info=$(python3 .github/scripts/get-latest-branch.py preview/recent-branches.json)
           latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
           latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
           latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
           
           if [ -n "$latest_safe" ]; then
             # Generate redirect index.html
-            python3 ../.github/scripts/generate-redirect.py \
+            python3 .github/scripts/generate-redirect.py \
               preview/index.html \
               "$latest_safe" \
               "$latest_branch" \
@@ -165,6 +169,11 @@ jobs:
           fetch-depth: 1
       - name: Remove the preview and update redirect
         run: |
+          # Copy scripts to site directory (they're in the source checkout, not gh-pages)
+          mkdir -p ../site/.github/scripts
+          cp .github/scripts/*.py ../site/.github/scripts/ 2>/dev/null || true
+          
+          cd ../site
           safe=$(printf '%s' "${{ github.event.ref }}" | tr '/' '-')
           if [ -d "preview/$safe" ]; then
             git config user.name "github-actions[bot]"
@@ -172,18 +181,18 @@ jobs:
             git rm -r --quiet "preview/$safe"
             
             # Update recent-branches.json - remove deleted branch
-            python3 ../.github/scripts/cleanup-branch.py \
+            python3 .github/scripts/cleanup-branch.py \
               preview/recent-branches.json \
               "${{ github.event.ref }}"
             
             # Regenerate index.html with new latest
-            latest_info=$(python3 ../.github/scripts/get-latest-branch.py preview/recent-branches.json 2>/dev/null || echo "")
+            latest_info=$(python3 .github/scripts/get-latest-branch.py preview/recent-branches.json 2>/dev/null || echo "")
             latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
             latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
             latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
             
             if [ -n "$latest_safe" ]; then
-              python3 ../.github/scripts/generate-redirect.py \
+              python3 .github/scripts/generate-redirect.py \
                 preview/index.html \
                 "$latest_safe" \
                 "$latest_branch" \
