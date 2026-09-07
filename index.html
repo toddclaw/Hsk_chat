@@ -1010,7 +1010,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v84 — 2026-09-06";
+const VERSION   = "v85 — 2026-09-07";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -5339,27 +5339,34 @@ if (issueSectionBtn) {
   };
 }
 
+/* Open and shut, like the translation button: a preview you cannot put away
+ * leaves the form's own fields scrolled off the screen. */
+function hideContextPreview() {
+  contextPreview.style.display = "none";
+  contextPreviewBtn.textContent = "Preview Captured Context";
+}
+
 if (contextPreviewBtn) {
   contextPreviewBtn.onclick = function() {
+    if (contextPreview.style.display === "block") { hideContextPreview(); return; }
+    var text;
     if (typeof HSKIssues === "undefined") {
-      contextPreview.textContent = "Error: Issue module not loaded. Please refresh the page.";
-      contextPreview.style.display = "block";
-      return;
+      text = "Error: Issue module not loaded. Please refresh the page.";
+    } else {
+      try {
+        var checkboxes = {};
+        document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
+          checkboxes[cb.dataset.ctx] = cb.checked;
+        });
+        text = HSKIssues.formatContextForGitHub(HSKIssues.captureContext(), checkboxes) ||
+          "(No context to display - all checkboxes unchecked)";
+      } catch (err) {
+        text = "Error: " + err.message;
+      }
     }
-    try {
-      var context = HSKIssues.captureContext();
-      var checkboxes = {};
-      document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
-        checkboxes[cb.dataset.ctx] = cb.checked;
-      });
-      
-      var preview = HSKIssues.formatContextForGitHub(context, checkboxes);
-      contextPreview.textContent = preview || "(No context to display - all checkboxes unchecked)";
-      contextPreview.style.display = "block";
-    } catch (err) {
-      contextPreview.textContent = "Error: " + err.message;
-      contextPreview.style.display = "block";
-    }
+    contextPreview.textContent = text;
+    contextPreview.style.display = "block";
+    contextPreviewBtn.textContent = "Hide Captured Context";
   };
 }
 
@@ -5407,7 +5414,7 @@ if (submitIssueBtn) {
       issueStatus.innerHTML = "✓ Issue submitted! <a href='" + issue.html_url + "' target='_blank'>View on GitHub</a>";
       document.getElementById("issueCategory").value = "";
       document.getElementById("issueDescription").value = "";
-      contextPreview.style.display = "none";
+      hideContextPreview();
     } catch (err) {
       issueStatus.innerHTML = "<span style='color:var(--bad)'>Error: " + escapeHtml(err.message) + "</span>";
     } finally {

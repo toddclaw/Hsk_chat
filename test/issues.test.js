@@ -56,6 +56,12 @@ describe("HSKIssues context capture", function() {
     assert(ctx.level === 2);
   });
   
+  it("reports the page's VERSION, not undefined", function() {
+    global.VERSION = "v85 \u2014 2026-09-07";
+    assert(HSKIssues.captureContext().version === "v85 \u2014 2026-09-07");
+    delete global.VERSION;
+  });
+
   it("smart samples recent items", function() {
     var history = [
       { role: "user", text: "old", created_at: "2026-09-05T10:00:00Z" },
@@ -138,6 +144,61 @@ describe("smartSample helper", function() {
   it("handles null items", function() {
     var sampled = HSKIssues.smartSample(null, "created_at", 2);
     assert(sampled.length === 0);
+  });
+});
+
+describe("full-turn preview", function() {
+  // A real turn carries fields smartSample used to throw away: the crash was
+  // "t.translation is undefined" on every chat that had ever been translated.
+  var now = new Date().toISOString();
+  var history = [
+    { role: "user", text: "\u6211\u559c\u6b22\u5403\u996d", created_at: now,
+      translation: "I like eating rice",
+      explainChat: [ { role: "assistant", text: "\u559c\u6b22 takes a verb directly." } ],
+      grade: { ok: false, better: "\u6211\u559c\u6b22\u5403\u7c73\u996d",
+               errors: [ { tag: "word", note: "\u996d alone is a meal" } ] } },
+    { role: "assistant", text: "\u4f60\u5403\u4e86\u5417", created_at: now,
+      translation: "Have you eaten?",
+      explainChat: [ { role: "assistant", text: "A common greeting." } ] }
+  ];
+  var all = { system: true, appState: true, dataSummary: true, errors: true,
+              submissions: true, translations: true, explanations: true,
+              grader: true, words: true };
+
+  it("does not throw on a turn with translation, grammar and grade", function() {
+    var ctx = HSKIssues.captureContext({ history: history });
+    HSKIssues.formatContextForGitHub(ctx, all);
+  });
+
+  it("includes my last message text, translation, grammar and grade", function() {
+    var out = HSKIssues.formatContextForGitHub(
+      HSKIssues.captureContext({ history: history }), all);
+    assert(out.indexOf("\u6211\u559c\u6b22\u5403\u996d") !== -1, "user text missing");
+    assert(out.indexOf("I like eating rice") !== -1, "user translation missing");
+    assert(out.indexOf("\u559c\u6b22 takes a verb directly.") !== -1, "grammar missing");
+    assert(out.indexOf("\u6211\u559c\u6b22\u5403\u7c73\u996d") !== -1, "grade better missing");
+    assert(out.indexOf("\u996d alone is a meal") !== -1, "grade error note missing");
+  });
+
+  it("includes the partner's last message text, translation and explanation", function() {
+    var out = HSKIssues.formatContextForGitHub(
+      HSKIssues.captureContext({ history: history }), all);
+    assert(out.indexOf("\u4f60\u5403\u4e86\u5417") !== -1, "assistant text missing");
+    assert(out.indexOf("Have you eaten?") !== -1, "assistant translation missing");
+    assert(out.indexOf("A common greeting.") !== -1, "explanation missing");
+  });
+
+  it("does not throw when those fields are absent", function() {
+    var bare = [ { role: "user", text: "\u4f60\u597d", created_at: now },
+                 { role: "assistant", text: "\u4f60\u597d", created_at: now } ];
+    var out = HSKIssues.formatContextForGitHub(
+      HSKIssues.captureContext({ history: bare }), all);
+    assert(out.indexOf("## Recent Translations") === -1, "empty section emitted");
+  });
+
+  it("does not throw on a turn whose text is missing", function() {
+    var junk = [ { role: "user", created_at: now, translation: null, grade: {} } ];
+    HSKIssues.formatContextForGitHub(HSKIssues.captureContext({ history: junk }), all);
   });
 });
 

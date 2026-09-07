@@ -1,7 +1,13 @@
 (function (root) {
   "use strict";
   
-  var VERSION = typeof window !== "undefined" ? window.VERSION : "v82";
+  /* index.html declares VERSION with const, which never lands on window, and
+   * this file loads before that script runs -- latching it at load time put
+   * "undefined" in the one field a bug report most needs. Read it at call
+   * time from the global lexical scope the two scripts share. */
+  function appVersion() {
+    return typeof VERSION !== "undefined" ? VERSION : "unknown";
+  }
   
   function smartSample(items, key, minutes) {
     if (!items || !items.length) return [];
@@ -27,20 +33,17 @@
       recent.push(mostRecent);
     }
     
-    return recent.map(function(item) {
-      return {
-        text: item.text,
-        created_at: item.created_at,
-        role: item.role
-      };
-    });
+    /* The whole turn, not a projection: the formatter needs translation,
+     * explainChat and grade, and dropping them is what made every preview of a
+     * translated chat throw. */
+    return recent;
   }
   
   function captureContext(options) {
     options = options || {};
     
     var context = {
-      version: VERSION,
+      version: appVersion(),
       browser: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
       language: typeof navigator !== "undefined" ? navigator.language : "unknown",
       platform: typeof navigator !== "undefined" ? navigator.platform : "unknown",
@@ -85,6 +88,54 @@
     return context;
   }
   
+  /* Anything reaching the formatter may be absent, null, or not a string --
+   * a turn that was never translated, a grade that failed to parse. Clip
+   * returns "" for all of it and callers drop empty lines, so a missing field
+   * costs a line of preview, not an exception. */
+  function clip(s) {
+    if (typeof s !== "string") return "";
+    s = s.trim();
+    return s.length > 100 ? s.substring(0, 100) + "..." : s;
+  }
+
+  function who(item) {
+    return item && item.role === "user" ? "you" : "partner";
+  }
+
+  /* Header plus lines, but only if some line survived clipping. */
+  function section(lines, title, quoted) {
+    if (!quoted.length) return;
+    lines.push("## " + title);
+    quoted.forEach(function(q) { lines.push("> " + q); });
+  }
+
+  /* The grammar/explanation chat is a thread; the reply is what is worth
+   * reading back, so take the last assistant turn in it. */
+  function lastExplain(item) {
+    var chat = (item && item.explainChat) || [];
+    for (var i = chat.length - 1; i >= 0; i--) {
+      if (chat[i] && chat[i].role === "assistant") return clip(chat[i].text);
+    }
+    return "";
+  }
+
+  function gradeLine(item) {
+    var g = (item && item.grade) || {};
+    var parts = [];
+    if (g.unreadable) parts.push("unreadable");
+    else parts.push(g.ok ? "ok" : "not ok");
+    if (clip(g.better)) parts.push("better: " + clip(g.better));
+    (g.errors || []).forEach(function(e) {
+      if (e && (e.tag || e.note)) parts.push((e.tag || "?") + ": " + clip(e.note));
+    });
+    var src = clip(item && item.text);
+    return (src ? src + " — " : "") + parts.join("; ");
+  }
+
+  function collect(items, fn) {
+    return (items || []).map(fn).filter(function(s) { return !!s; });
+  }
+
   function formatContextForGitHub(context, checkboxes) {
     var lines = [];
     
@@ -113,42 +164,40 @@
       lines.push("- **Known Words:** " + context.vocabKnownCount);
     }
     
-    if (checkboxes.errors && context.recentErrors.length) {
-      lines.push("## Recent Errors");
-      context.recentErrors.forEach(function(err) {
-        lines.push("- " + err.kind + ": " + err.message);
-      });
+    if (checkboxes.errors) {
+      section(lines, "Recent Errors", collect(context.recentErrors, function(err) {
+        var msg = clip(err && err.message);
+        return msg ? ((err.kind || "error") + ": " + msg) : "";
+      }));
     }
     
-    if (checkboxes.submissions && context.recentSubmissions.length) {
-      lines.push("## Recent Submissions");
-      context.recentSubmissions.forEach(function(sub) {
-        lines.push("> " + sub.text.substring(0, 100) + (sub.text.length > 100 ? "..." : ""));
-      });
+    if (checkboxes.submissions) {
+      section(lines, "Recent Submissions", collect(context.recentSubmissions, function(sub) {
+        return clip(sub && sub.text);
+      }));
     }
     
-    if (checkboxes.translations && context.recentTranslations.length) {
-      lines.push("## Recent Translations");
-      context.recentTranslations.forEach(function(t) {
-        lines.push("> " + t.translation.substring(0, 100) + (t.translation.length > 100 ? "..." : ""));
-      });
+    if (checkboxes.translations) {
+      section(lines, "Recent Translations", collect(context.recentTranslations, function(t) {
+        var en = clip(t && t.translation);
+        return en ? ("[" + who(t) + "] " + clip(t.text) + " — " + en) : "";
+      }));
     }
     
-    if (checkboxes.explanations && context.recentExplanations.length) {
-      lines.push("## Recent Explanations");
-      context.recentExplanations.forEach(function(e) {
-        lines.push("> " + e.text.substring(0, 100) + (e.text.length > 100 ? "..." : ""));
-      });
+    /* Same field either way: "Check my grammar" on your own turn, "English
+     * explanation" on the partner's. Label it rather than split the section. */
+    if (checkboxes.explanations) {
+      section(lines, "Recent Explanations", collect(context.recentExplanations, function(e) {
+        var reply = lastExplain(e);
+        return reply ? ("[" + (who(e) === "you" ? "grammar" : "explanation") + "] " + reply) : "";
+      }));
     }
     
-    if (checkboxes.grader && context.recentGraderResults.length) {
-      lines.push("## Recent Grader Results");
-      context.recentGraderResults.forEach(function(g) {
-        lines.push("> " + g.text.substring(0, 100) + (g.text.length > 100 ? "..." : ""));
-      });
+    if (checkboxes.grader) {
+      section(lines, "Recent Grader Results", collect(context.recentGraderResults, gradeLine));
     }
     
-    if (checkboxes.words && context.recentWords.length) {
+    if (checkboxes.words && context.recentWords && context.recentWords.length) {
       lines.push("## Recent Words");
       lines.push(context.recentWords.join(", "));
     }
@@ -170,7 +219,7 @@
         headers: {
           "Authorization": "token " + githubToken,
           "Accept": "application/vnd.github.v3+json",
-          "User-Agent": "HSK-Chat-Issue-Reporter/" + VERSION
+          "User-Agent": "HSK-Chat-Issue-Reporter/" + appVersion()
         },
         body: JSON.stringify({
           title: title,
