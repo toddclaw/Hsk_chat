@@ -24,7 +24,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The same suites the pre-commit hook runs. A branch that fails them is
       # not worth previewing, and main must never publish red.
@@ -163,7 +163,7 @@ jobs:
     if: github.event_name == 'delete' && github.event.ref_type == 'branch' && github.event.ref != 'main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: gh-pages
           fetch-depth: 1
