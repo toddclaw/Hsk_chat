@@ -316,7 +316,7 @@
   function getClient() { return client; }
 
   async function signInWithGitHub(redirectTo) {
-    return client.auth.signInWithOAuth({ provider: "github", options: { redirectTo: redirectTo, scopes: "read:user user:email public_repo" } });
+    return client.auth.signInWithOAuth({ provider: "github", options: { redirectTo: redirectTo } });
   }
   async function signOut() { return client.auth.signOut(); }
   async function getSession() {

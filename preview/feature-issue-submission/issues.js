@@ -205,75 +205,59 @@
     return lines.join("\n\n");
   }
   
-  async function submitToGitHub(category, description, context, checkboxes, githubToken) {
-    var isBug = /bug|error|fail|broken|issue|problem/i.test(description);
-    var labels = ["app-submission", isBug ? "bug" : "enhancement"];
-    
-    var title = "[HSK Chat] " + category;
-    var body = description + "\n\n---\n\n" + formatContextForGitHub(context, checkboxes);
-    
-    var response;
-    try {
-      response = await fetch("https://api.github.com/repos/toddclaw/Hsk_chat/issues", {
-        method: "POST",
-        headers: {
-          "Authorization": "token " + githubToken,
-          "Accept": "application/vnd.github.v3+json",
-          "User-Agent": "HSK-Chat-Issue-Reporter/" + appVersion()
-        },
-        body: JSON.stringify({
-          title: title,
-          body: body,
-          labels: labels
-        })
-      });
-    } catch (networkErr) {
-      throw new Error("Network error. Check your connection and try again.");
-    }
-    
-    if (!response.ok) {
-      // Handle rate limiting
-      if (response.status === 429) {
-        throw new Error("GitHub rate limit exceeded. Please try again in a few minutes.");
-      }
-      // Handle authentication/authorization errors — parse GitHub's
-      // actual message so the user knows what went wrong.
-      if (response.status === 401 || response.status === 403 || response.status === 404) {
-        var body;
-        try {
-          body = await response.json();
-        } catch (e) {
-          body = { message: "Failed to create GitHub issue (status " + response.status + ")" };
-        }
-        var githubMsg = body.message || "Failed to create GitHub issue";
-        if (response.status === 404) {
-          throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
-        }
-        if (response.status === 403) {
-          if (/rate.limit|secondary rate/i.test(githubMsg.toLowerCase())) {
-            throw new Error(githubMsg);
-          }
-          throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
-        }
-        throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
-      }
-      // Other errors
-      var error;
-      try {
-        error = await response.json();
-      } catch (e) {
-        error = { message: "Failed to create GitHub issue (status " + response.status + ")" };
-      }
-      throw new Error(error.message || "Failed to create GitHub issue");
-    }
-    
-    return await response.json();
+  /* A prefilled issue URL, not an API POST. Filing on a public repo needs no
+   * token, no OAuth scope and nothing stored, and the user reads the whole
+   * report on GitHub before anything is published. Signed-out users get bounced
+   * through the login page, whose return_to carries the prefill intact.
+   *
+   * Measured against the live endpoint: GitHub 500s past ~6000 characters of
+   * query string and 414s by 10000. Percent-encoding inflates Chinese ninefold,
+   * so a couple of hundred characters of chat is enough to hit that -- the
+   * budget is therefore spent against the ENCODED length, never the raw one. */
+  var REPO = "toddclaw/Hsk_chat";
+  var URL_BUDGET = 4000;
+
+  /* Slicing mid-character leaves a lone surrogate, and encodeURIComponent
+   * throws URIError on one. Emoji in a description are the way in. */
+  function trimSurrogate(s) {
+    var last = s.charCodeAt(s.length - 1);
+    return (last >= 0xD800 && last <= 0xDBFF) ? s.slice(0, -1) : s;
   }
-  
+
+  function encLen(s) { return encodeURIComponent(s).length; }
+
+  /* Longest prefix whose encoded form fits. Encoded length grows monotonically
+   * with the prefix, so bisect it rather than encoding once per character. */
+  function fit(body, budget) {
+    if (encLen(body) <= budget) return body;
+    var note = "\n\n_(context truncated to fit GitHub's URL limit)_";
+    budget -= encLen(note);
+    if (budget <= 0) return note;
+    var lo = 0, hi = body.length;
+    while (lo < hi) {
+      var mid = (lo + hi + 1) >> 1;
+      if (encLen(trimSurrogate(body.slice(0, mid))) <= budget) lo = mid;
+      else hi = mid - 1;
+    }
+    return trimSurrogate(body.slice(0, lo)) + note;
+  }
+
+  /* Labels only stick for users with push access -- GitHub drops them from
+   * anyone else, exactly as it did on the API. Free to send either way. */
+  function issueUrl(category, description, context, checkboxes) {
+    var isBug = /bug|error|fail|broken|issue|problem/i.test(description);
+    var prefix = "https://github.com/" + REPO + "/issues/new" +
+      "?title=" + encodeURIComponent("[HSK Chat] " + category) +
+      "&labels=" + encodeURIComponent("app-submission," + (isBug ? "bug" : "enhancement")) +
+      "&body=";
+    var body = description + "\n\n---\n\n" + formatContextForGitHub(context, checkboxes);
+    return prefix + encodeURIComponent(fit(body, URL_BUDGET - prefix.length));
+  }
+
   var api = {
     captureContext: captureContext,
     formatContextForGitHub: formatContextForGitHub,
-    submitToGitHub: submitToGitHub,
+    issueUrl: issueUrl,
     smartSample: smartSample
   };
   
