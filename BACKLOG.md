@@ -5,7 +5,7 @@ Each entry says what it is, how it was found, and what would settle it.
 
 ---
 
-## New Drills Activity
+## Mistakes Drills Activity
 
 Use skills: caveman, ponytail, superpowers.  Use superpowers to implement new feature:
 I would like a new activity for drilling my mistakes as accumulated by the
