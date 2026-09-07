@@ -299,6 +299,17 @@ The failed reply or card is dropped first, so the history stays honest.
 
 **Export flashcards** for Pleco or Anki, with the sentence you met each word in.
 
+### Reporting Issues
+
+Found a bug or have a feature request? Use **Settings → Report Issue** to submit directly to GitHub. The app automatically captures:
+
+- System information (browser, version, platform)
+- App state (HSK level, current activity, settings)
+- Data summary (conversation count, vocabulary counts)
+- Recent session data (messages, translations, explanations, grader results, new words)
+
+You can preview and deselect any context items before submitting. Issues are posted to the [GitHub repository](https://github.com/toddclaw/Hsk_chat) with appropriate labels.
+
 ## Settings
 
 Grouped into nine collapsible sections, ordered required-setup first and anything
