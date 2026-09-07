@@ -5,6 +5,21 @@ Each entry says what it is, how it was found, and what would settle it.
 
 ---
 
+## New Drills Activity
+
+Use skills: caveman, ponytail, superpowers.  Use superpowers to implement new feature:
+I would like a new activity for drilling my mistakes as accumulated by the
+grader.  I'd like to see a prioritized list of mistakes categories with the
+numbers from my own data and be able to select one of the categories to drill.
+Then I'd like the teacher to guide me through some practices with that
+particular category and words/grammar/etc I had trouble with.  Only when the
+grader passes my text will it have an impact on my stats.  I'm open to
+suggestions on how to impact the mistakes stats with drills.  Please research
+language pedagogy to explore the best way to update the mistakes counters with
+drills on those mistakes and the grader passing my submissions.
+
+---
+
 ## The "$0.10 a story" figure is wrong, and the right one is not known yet
 
 **Found:** costing the story-time chooser design against a $5/month whole-app budget,
