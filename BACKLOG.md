@@ -379,3 +379,36 @@ implementer nor the reviewer found a code-level cause; both judged it environmen
 first two are the ones with a real chance of confusing a user.
 
 ---
+
+## `browser.test.js` trips a `waitFor` ceiling roughly one run in three
+
+**Found:** 2026-09-07, across a day of commits that touched only Markdown and one
+new module — five first-attempt failures, every one of them a single `waitFor`
+call tripping its ceiling, on a different call site each time.
+
+The suite retries itself once and the pre-commit hook usually goes green on the
+second pass, so this mostly reads as noise. It is not free. On 2026-09-07 both
+attempts failed in CI on the merge of #29 (`chat reply`, then `story runs out at
+five segments`), the Publish job went red, and because the publish job is gated
+on `github.event_name == 'push'` the delete-triggered run beside it published
+nothing. `main` sat unpublished until the run was manually re-run.
+
+**Why the standing explanation no longer holds.** The comment above `waitFor`
+(`test/browser.test.js`) says the measured failures were "never reproducible
+locally" and attributes them to scheduler jitter on CI runners, which is why the
+shared floor was raised to 30000ms. On 2026-09-07 it reproduced locally three
+times on an otherwise idle machine. Whatever this is, "CI runners are loaded" is
+not it.
+
+**What would settle it:** make the failure say more than which label it was
+waiting on. Record, per tripped wait, how long it actually waited and what the
+page state was at the ceiling — if the elapsed time is pinned at 30000 the page
+never reached the state at all, and if it is well under, something is aborting
+the loop early. Then find out whether the tripped waits cluster on the ones that
+wait for a model reply, which would point at the test harness's stubbing rather
+than at the browser.
+
+Resist raising the ceiling again as the first move. 30000ms is already where the
+shared floor was moved to, after individual call sites had each been overridden
+to it for this same reason — a wait that has been lengthened once per call site
+and then once globally is usually hiding a stall rather than a slow machine.
