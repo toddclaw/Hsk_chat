@@ -20,6 +20,46 @@ drills on those mistakes and the grader passing my submissions.
 
 ---
 
+## The grader reports only failures, so transfer is invisible
+
+**Found:** designing the Mistakes Drills Activity, 2026-09-07, working out whether a
+correct sentence written in ordinary chat should earn credit against a mistake
+category. It cannot, and the reason is structural.
+
+`HSKPrompt.grade()` returns `errors: [{tag, note}]` — one entry per mistake, `[]`
+when the sentence is fine. A clean message therefore asserts only that *nothing was
+wrong*. It does not say the sentence contained a measure word, or a correct 把
+construction, so a pass cannot be attributed to any of the seventeen tags. Most
+clean messages contain none of the structures in question at all.
+
+Two things follow. First, drill credit can only come from inside a drill, where the
+tag is known because the learner chose it — spontaneous correct use in free
+conversation, which is *transfer* and the entire point of drilling, earns nothing.
+Second, there is no positive signal to track progress against: the app can only ever
+count what went wrong, so a learner who genuinely improves shows up as an absence.
+
+**What would settle it:** add a `used` array to the grade schema, naming the tags the
+sentence employed correctly, and credit those the way drill passes are credited.
+
+Three things make this more than a schema edit:
+
+- **It is on the hot path.** The grader runs on every message the learner sends. Any
+  added output costs tokens on all of them, and the story-cost item below is already
+  the binding constraint on this budget.
+- **The model may manufacture successes.** `grade()` already carries a measured
+  counter-instruction because a model told a sentence may be wrong grades everything
+  correct. Asking it to list what went *right* invites the mirror failure — claiming
+  a 把 construction in a sentence that has none. Measure the false-positive rate
+  against hand-marked sentences before trusting the number, and do not assume the
+  symmetric prompt behaves symmetrically.
+- **Absence is not evidence.** A tag missing from `used` must not count as a failure,
+  or every sentence becomes a failure at sixteen categories at once.
+
+Until then the mistake count falls two ways only: old failures leaving the rolling
+window, and spaced drill passes capped at one a day.
+
+---
+
 ## The "$0.10 a story" figure is wrong, and the right one is not known yet
 
 **Found:** costing the story-time chooser design against a $5/month whole-app budget,
