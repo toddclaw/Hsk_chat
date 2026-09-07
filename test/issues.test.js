@@ -202,81 +202,61 @@ describe("full-turn preview", function() {
   });
 });
 
-// --- async tests for submitToGitHub error handling -----------------------
-describe("submitToGitHub error handling", function() {
-  var originalFetch;
+// --- prefilled issue URL --------------------------------------------------
+describe("issueUrl", function() {
+  /* Measured against the live endpoint: 6000 characters of query string still
+   * loads, 7000 500s, 10000 414s. Stay well under the first failure. */
+  var CEILING = 6000;
 
-  function stubFetch(status, body) {
-    return function() {
-      return Promise.resolve({
-        ok: status >= 200 && status < 300,
-        status: status,
-        json: function() { return Promise.resolve(body); }
-      });
-    };
+  function parse(url) {
+    var q = url.slice(url.indexOf("?") + 1);
+    var out = {};
+    q.split("&").forEach(function(pair) {
+      var i = pair.indexOf("=");
+      out[pair.slice(0, i)] = decodeURIComponent(pair.slice(i + 1));
+    });
+    return out;
   }
 
-  it("404 with Not Found mentions signing back in to grant issue permission", function() {
-    originalFetch = global.fetch;
-    global.fetch = stubFetch(404, { message: "Not Found" });
-    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
-      function() {
-        throw new Error("should have thrown for 404");
-      },
-      function(err) {
-        assert(err.message.includes("sign out") || err.message.includes("grant") || err.message.includes("permission"),
-          "404 message should mention signing back in or granting permission, got: " + err.message);
-      }
-    ).then(function() {
-      global.fetch = originalFetch;
-    });
+  it("points at the repo's new-issue form and prefills title and body", function() {
+    var url = HSKIssues.issueUrl("UX issue", "the thing is broken", {}, {});
+    assert(url.indexOf("https://github.com/toddclaw/Hsk_chat/issues/new?") === 0,
+      "should target the new-issue form, got: " + url);
+    var q = parse(url);
+    assert(q.title === "[HSK Chat] UX issue", "title, got: " + q.title);
+    assert(q.body.indexOf("the thing is broken") === 0, "body should lead with the description");
   });
 
-  it("403 surfaces GitHub message and includes sign-in guidance for scope issues", function() {
-    originalFetch = global.fetch;
-    global.fetch = stubFetch(403, { message: "Resource not accessible by personal access token" });
-    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
-      function() {
-        throw new Error("should have thrown for 403");
-      },
-      function(err) {
-        assert(err.message.includes("Resource not accessible by personal access token"),
-          "403 message should surface GitHub message, got: " + err.message);
-        assert(err.message.includes("sign out") || err.message.includes("grant") || err.message.includes("permission"),
-          "403 scope-related message should mention signing back in, got: " + err.message);
-      }
-    ).then(function() {
-      global.fetch = originalFetch;
-    });
+  it("labels a bug report bug and everything else enhancement", function() {
+    assert(parse(HSKIssues.issueUrl("c", "it is broken", {}, {})).labels === "app-submission,bug");
+    assert(parse(HSKIssues.issueUrl("c", "please add dark mode", {}, {})).labels === "app-submission,enhancement");
   });
 
-  it("429 yields the rate-limit message", function() {
-    originalFetch = global.fetch;
-    global.fetch = stubFetch(429, { message: "rate limit" });
-    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
-      function() {
-        throw new Error("should have thrown for 429");
-      },
-      function(err) {
-        assert(err.message.includes("rate limit"),
-          "429 message should mention rate limit, got: " + err.message);
-      }
-    ).then(function() {
-      global.fetch = originalFetch;
-    });
+  /* The one that matters for this app: percent-encoding inflates Chinese
+   * ninefold, so a body budgeted by raw length sails past GitHub's limit. */
+  it("keeps a long Chinese conversation under the URL ceiling", function() {
+    var history = [];
+    for (var i = 0; i < 400; i++) {
+      history.push({ role: "user", created_at: new Date().toISOString(),
+        text: "我今天去了商店买东西然后回家吃饭", translation: "I went shopping today" });
+    }
+    var ctx = HSKIssues.captureContext({ history: history });
+    var url = HSKIssues.issueUrl("bug", "翻译坏了", ctx,
+      { system: true, appState: true, submissions: true, translations: true });
+    assert(url.length <= CEILING,
+      "encoded URL must stay under " + CEILING + ", got " + url.length);
+    assert(url.indexOf("truncated") !== -1, "a clipped body should say so");
   });
 
-  it("201 success returns the parsed JSON response", function() {
-    originalFetch = global.fetch;
-    global.fetch = stubFetch(201, { html_url: "https://github.com/toddclaw/Hsk_chat/issues/1" });
-    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
-      function(result) {
-        assert(result.html_url === "https://github.com/toddclaw/Hsk_chat/issues/1",
-          "201 should return parsed JSON with html_url");
-      }
-    ).then(function() {
-      global.fetch = originalFetch;
-    });
+  it("does not split an emoji into a lone surrogate", function() {
+    var url = HSKIssues.issueUrl("bug", "broken " + new Array(3000).join("😀"), {}, {});
+    assert(url.length <= CEILING, "emoji body must still fit, got " + url.length);
+    assert(decodeURIComponent(url).indexOf("\uFFFD") === -1, "no replacement characters");
+  });
+
+  it("survives a body that is nothing but oversized context", function() {
+    var url = HSKIssues.issueUrl("bug", new Array(9000).join("中"), {}, {});
+    assert(url.length <= CEILING, "got " + url.length);
   });
 });
 

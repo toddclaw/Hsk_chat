@@ -764,14 +764,10 @@ footer{
   <div id="issueSection" class="sheet-section" style="display:none">
     <h3>Report Issue</h3>
     <p style="font-size:13px; color:var(--dim); margin-bottom:12px">
-      Submit bugs, feature requests, or UX issues directly to GitHub. Context about your session is captured automatically.
+      Report bugs, feature requests, or UX issues. Context about your session is captured automatically.
     </p>
     <div style="background:#2a343e; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; color:var(--dim)">
-      <b style="color:var(--ink)">Note:</b> This will create an issue under your GitHub account. Your conversation text and session data will be visible publicly on GitHub.
-    </div>
-    <div id="issueGitHubStatus" style="background:#2c5a3f; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; display:none">
-      <b style="color:#5ecb8b">✓</b> Signed in to GitHub
-      <div style="color:var(--dim); font-size:11px; margin-top:4px">If submitting fails, sign out and sign back in to grant reporting permission.</div>
+      <b style="color:var(--ink)">Note:</b> This opens GitHub with the report filled in — nothing is posted until you press <b style="color:var(--ink)">Submit new issue</b> there. You will need a GitHub account, and whatever you post is public.
     </div>
     
     <div style="margin-bottom:12px">
@@ -802,7 +798,7 @@ footer{
     </div>
     
     <div class="issueActions">
-      <button id="submitIssueBtn" class="primary" type="button" style="flex:1">Submit to GitHub</button>
+      <button id="submitIssueBtn" class="primary" type="button" style="flex:1">Open GitHub to Submit</button>
       <button id="cancelIssueBtn" type="button" style="flex:1">Cancel</button>
     </div>
     
@@ -1010,7 +1006,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v85 — 2026-09-07";
+const VERSION   = "v87 — 2026-09-07";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2587,12 +2583,7 @@ async function ensureSyncClient() {
     const user = (session && session.user) || null;
     const isNewSignIn = user && (!syncUser || syncUser.id !== user.id);
     syncUser = user;
-    
-    // Store GitHub provider token for issue submission
-    if (session && session.provider_token) {
-      localStorage.setItem("github_provider_token", session.provider_token);
-    }
-    
+
     renderSyncSection();
     if (isNewSignIn) setTimeout(() => pullAndMerge(), 0);
   });
@@ -5321,21 +5312,15 @@ var contextPreview = document.getElementById("contextPreview");
 var submitIssueBtn = document.getElementById("submitIssueBtn");
 var cancelIssueBtn = document.getElementById("cancelIssueBtn");
 var issueStatus = document.getElementById("issueStatus");
-var issueGitHubStatus = document.getElementById("issueGitHubStatus");
 
-function updateGitHubStatus() {
-  if (!issueGitHubStatus) return;
-  var hasToken = localStorage.getItem("github_provider_token") !== null;
-  issueGitHubStatus.style.display = hasToken ? "block" : "none";
-}
+/* Earlier versions stashed a GitHub OAuth token here to POST issues through
+ * the API. Nothing reads it now, so purge it -- a credential no longer used is
+ * a credential worth not keeping. */
+localStorage.removeItem("github_provider_token");
 
 if (issueSectionBtn) {
   issueSectionBtn.onclick = function() {
-    var wasHidden = issueSection.style.display !== "block";
-    issueSection.style.display = wasHidden ? "block" : "none";
-    if (wasHidden) {
-      updateGitHubStatus();
-    }
+    issueSection.style.display = issueSection.style.display === "block" ? "none" : "block";
   };
 }
 
@@ -5371,56 +5356,33 @@ if (contextPreviewBtn) {
 }
 
 if (submitIssueBtn) {
-  submitIssueBtn.onclick = async function() {
+  submitIssueBtn.onclick = function() {
     var category = document.getElementById("issueCategory").value.trim();
     var description = document.getElementById("issueDescription").value.trim();
-    
+
     if (!category || !description) {
       issueStatus.innerHTML = "<span style='color:var(--bad)'>Please fill in both category and description</span>";
       return;
     }
-    
-    submitIssueBtn.disabled = true;
-    submitIssueBtn.textContent = "Submitting...";
-    
-    try {
-      // Try to get GitHub token from localStorage (stored after OAuth sign-in)
-      var githubToken = localStorage.getItem("github_provider_token");
-      
-      if (!githubToken) {
-        // Fallback: try to get from session (may not have provider_token)
-        var sessionResult = await HSKSync.getSession();
-        if (sessionResult && sessionResult.provider_token) {
-          githubToken = sessionResult.provider_token;
-        }
-      }
-      
-      if (!githubToken) {
-        throw new Error("Please sign in with GitHub first (Settings → Sync & Backup). If already signed in, try signing out and back in.");
-      }
-      
-      if (typeof HSKIssues === "undefined") {
-        throw new Error("Issue module not loaded. Please refresh the page.");
-      }
-      
-      var context = HSKIssues.captureContext();
-      var checkboxes = {};
-      document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
-        checkboxes[cb.dataset.ctx] = cb.checked;
-      });
-      
-      var issue = await HSKIssues.submitToGitHub(category, description, context, checkboxes, githubToken);
-      
-      issueStatus.innerHTML = "✓ Issue submitted! <a href='" + issue.html_url + "' target='_blank'>View on GitHub</a>";
-      document.getElementById("issueCategory").value = "";
-      document.getElementById("issueDescription").value = "";
-      hideContextPreview();
-    } catch (err) {
-      issueStatus.innerHTML = "<span style='color:var(--bad)'>Error: " + escapeHtml(err.message) + "</span>";
-    } finally {
-      submitIssueBtn.disabled = false;
-      submitIssueBtn.textContent = "Submit to GitHub";
+    if (typeof HSKIssues === "undefined") {
+      issueStatus.innerHTML = "<span style='color:var(--bad)'>Issue module not loaded. Please refresh the page.</span>";
+      return;
     }
+
+    var checkboxes = {};
+    document.querySelectorAll("#contextCheckboxes input").forEach(function(cb) {
+      checkboxes[cb.dataset.ctx] = cb.checked;
+    });
+
+    /* Opened synchronously inside the click. Anything opened after an await has
+     * lost the user gesture and the browser blocks it as a popup. */
+    var url = HSKIssues.issueUrl(category, description, HSKIssues.captureContext(), checkboxes);
+    window.open(url, "_blank", "noopener");
+
+    issueStatus.textContent = "Opened GitHub with your report filled in — press \u201CSubmit new issue\u201D there to post it.";
+    document.getElementById("issueCategory").value = "";
+    document.getElementById("issueDescription").value = "";
+    hideContextPreview();
   };
 }
 

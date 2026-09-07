@@ -549,7 +549,9 @@ function freshSync() {
   check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
     "and the single push still carries grade");
 
-  // --- signInWithGitHub passes the public_repo scope ------------------
+  /* Sign-in is for sync only. Issues are filed through a prefilled github.com
+   * URL that needs no token, so asking for public_repo -- write access to every
+   * public repo the user owns -- would be scope the app cannot justify. */
   await (async () => {
     var captured = null;
     var fakeClient = {
@@ -567,10 +569,10 @@ function freshSync() {
     FreshSync.configure("https://example.invalid", "publishable");
     await FreshSync.signInWithGitHub("https://example.invalid/redirect");
     global.window = origWindow;
-    check(captured && captured.options && captured.options.scopes &&
-          captured.options.scopes.indexOf("public_repo") !== -1,
-      "signInWithGitHub requests the public_repo scope for issue creation",
-      captured ? "scopes=" + JSON.stringify(captured.options.scopes) : "no scopes captured");
+    var scopes = (captured && captured.options && captured.options.scopes) || "";
+    check(scopes.indexOf("public_repo") === -1 && scopes.indexOf("repo") === -1,
+      "signInWithGitHub never asks for repo write scope",
+      "scopes=" + JSON.stringify(scopes));
   })();
 
   console.log(`\n${pass} passed, ${fail} failed`);
