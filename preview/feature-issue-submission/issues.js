@@ -187,9 +187,26 @@
       if (response.status === 429) {
         throw new Error("GitHub rate limit exceeded. Please try again in a few minutes.");
       }
-      // Handle authentication errors
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("GitHub authentication failed. Please sign in again (Settings → Sync & Backup).");
+      // Handle authentication/authorization errors — parse GitHub's
+      // actual message so the user knows what went wrong.
+      if (response.status === 401 || response.status === 403 || response.status === 404) {
+        var body;
+        try {
+          body = await response.json();
+        } catch (e) {
+          body = { message: "Failed to create GitHub issue (status " + response.status + ")" };
+        }
+        var githubMsg = body.message || "Failed to create GitHub issue";
+        if (response.status === 404) {
+          throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
+        }
+        if (response.status === 403) {
+          if (/rate.limit|secondary rate/i.test(githubMsg.toLowerCase())) {
+            throw new Error(githubMsg);
+          }
+          throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
+        }
+        throw new Error(githubMsg + " — Sign out and sign back in from Settings → Sync & backup so the app can request issue-creation permission.");
       }
       // Other errors
       var error;
