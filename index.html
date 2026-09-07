@@ -770,7 +770,8 @@ footer{
       <b style="color:var(--ink)">Note:</b> This will create an issue under your GitHub account. Your conversation text and session data will be visible publicly on GitHub.
     </div>
     <div id="issueGitHubStatus" style="background:#2c5a3f; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:12px; font-size:12px; display:none">
-      <b style="color:#5ecb8b">✓</b> GitHub connected
+      <b style="color:#5ecb8b">✓</b> Signed in to GitHub
+      <div style="color:var(--dim); font-size:11px; margin-top:4px">If submitting fails, sign out and sign back in to grant reporting permission.</div>
     </div>
     
     <div style="margin-bottom:12px">
@@ -1009,7 +1010,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v83 — 2026-09-05";
+const VERSION   = "v84 — 2026-09-06";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -5408,7 +5409,7 @@ if (submitIssueBtn) {
       document.getElementById("issueDescription").value = "";
       contextPreview.style.display = "none";
     } catch (err) {
-      issueStatus.innerHTML = "<span style='color:var(--bad)'>Error: " + err.message + "</span>";
+      issueStatus.innerHTML = "<span style='color:var(--bad)'>Error: " + escapeHtml(err.message) + "</span>";
     } finally {
       submitIssueBtn.disabled = false;
       submitIssueBtn.textContent = "Submit to GitHub";

@@ -3,12 +3,25 @@ var assert = require("assert");
 var pass = 0;
 var fail = 0;
 var failures = [];
+var asyncTests = [];
 
 function runTest(name, fn) {
   try {
-    fn();
-    pass++;
-    console.log("  ✓ " + name);
+    var result = fn();
+    if (result && typeof result.then === "function") {
+      asyncTests.push(result.then(function() {
+        pass++;
+        console.log("  ✓ " + name);
+      }).catch(function(err) {
+        fail++;
+        failures.push({ name: name, error: err.message });
+        console.log("  ✗ " + name);
+        console.log("    " + err.message);
+      }));
+    } else {
+      pass++;
+      console.log("  ✓ " + name);
+    }
   } catch (err) {
     fail++;
     failures.push({ name: name, error: err.message });
@@ -104,38 +117,119 @@ describe("smartSample helper", function() {
     var oneMinAgo = new Date(now.getTime() - 1 * 60 * 1000);
     var threeMinAgo = new Date(now.getTime() - 3 * 60 * 1000);
     var fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    
+
     var items = [
       { text: "oldest", created_at: fiveMinAgo.toISOString(), role: "user" },
       { text: "middle", created_at: threeMinAgo.toISOString(), role: "user" },
       { text: "recent", created_at: oneMinAgo.toISOString(), role: "user" }
     ];
-    
+
     var sampled = HSKIssues.smartSample(items, 2);
-    
+
     assert(sampled.length >= 1, "should include at least most recent item, got " + sampled.length);
     assert(sampled.some(function(s) { return s.text === "recent"; }), "should include most recent");
   });
-  
+
   it("handles empty items", function() {
     var sampled = HSKIssues.smartSample([], "created_at", 2);
     assert(sampled.length === 0);
   });
-  
+
   it("handles null items", function() {
     var sampled = HSKIssues.smartSample(null, "created_at", 2);
     assert(sampled.length === 0);
   });
 });
 
-console.log("\n---");
-console.log("Pass: " + pass);
-console.log("Fail: " + fail);
+// --- async tests for submitToGitHub error handling -----------------------
+describe("submitToGitHub error handling", function() {
+  var originalFetch;
 
-if (fail > 0) {
-  console.log("\nFailures:");
-  for (var i = 0; i < failures.length; i++) {
-    console.log("  " + failures[i].name + ": " + failures[i].error);
+  function stubFetch(status, body) {
+    return function() {
+      return Promise.resolve({
+        ok: status >= 200 && status < 300,
+        status: status,
+        json: function() { return Promise.resolve(body); }
+      });
+    };
   }
-  process.exit(1);
-}
+
+  it("404 with Not Found mentions signing back in to grant issue permission", function() {
+    originalFetch = global.fetch;
+    global.fetch = stubFetch(404, { message: "Not Found" });
+    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
+      function() {
+        throw new Error("should have thrown for 404");
+      },
+      function(err) {
+        assert(err.message.includes("sign out") || err.message.includes("grant") || err.message.includes("permission"),
+          "404 message should mention signing back in or granting permission, got: " + err.message);
+      }
+    ).then(function() {
+      global.fetch = originalFetch;
+    });
+  });
+
+  it("403 surfaces GitHub message and includes sign-in guidance for scope issues", function() {
+    originalFetch = global.fetch;
+    global.fetch = stubFetch(403, { message: "Resource not accessible by personal access token" });
+    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
+      function() {
+        throw new Error("should have thrown for 403");
+      },
+      function(err) {
+        assert(err.message.includes("Resource not accessible by personal access token"),
+          "403 message should surface GitHub message, got: " + err.message);
+        assert(err.message.includes("sign out") || err.message.includes("grant") || err.message.includes("permission"),
+          "403 scope-related message should mention signing back in, got: " + err.message);
+      }
+    ).then(function() {
+      global.fetch = originalFetch;
+    });
+  });
+
+  it("429 yields the rate-limit message", function() {
+    originalFetch = global.fetch;
+    global.fetch = stubFetch(429, { message: "rate limit" });
+    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
+      function() {
+        throw new Error("should have thrown for 429");
+      },
+      function(err) {
+        assert(err.message.includes("rate limit"),
+          "429 message should mention rate limit, got: " + err.message);
+      }
+    ).then(function() {
+      global.fetch = originalFetch;
+    });
+  });
+
+  it("201 success returns the parsed JSON response", function() {
+    originalFetch = global.fetch;
+    global.fetch = stubFetch(201, { html_url: "https://github.com/toddclaw/Hsk_chat/issues/1" });
+    return HSKIssues.submitToGitHub("bug", "test desc", {}, {}, "tok").then(
+      function(result) {
+        assert(result.html_url === "https://github.com/toddclaw/Hsk_chat/issues/1",
+          "201 should return parsed JSON with html_url");
+      }
+    ).then(function() {
+      global.fetch = originalFetch;
+    });
+  });
+});
+
+// Wait for async tests before printing the summary
+Promise.all(asyncTests).then(function() {
+  console.log("\n---");
+  console.log("Pass: " + pass);
+  console.log("Fail: " + fail);
+
+  if (fail > 0) {
+    console.log("\nFailures:");
+    for (var i = 0; i < failures.length; i++) {
+      console.log("  " + failures[i].name + ": " + failures[i].error);
+    }
+    process.exit(1);
+  }
+});

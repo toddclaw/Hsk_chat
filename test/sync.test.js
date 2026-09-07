@@ -549,6 +549,30 @@ function freshSync() {
   check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
     "and the single push still carries grade");
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
+  // --- signInWithGitHub passes the public_repo scope ------------------
+  await (async () => {
+    var captured = null;
+    var fakeClient = {
+      auth: {
+        signInWithOAuth: function(opts) {
+          captured = opts;
+          return Promise.resolve({});
+        }
+      }
+    };
+    var fakeSupabase = { createClient: function() { return fakeClient; } };
+    var origWindow = global.window;
+    global.window = { supabase: fakeSupabase };
+    var FreshSync = require("../sync.js");
+    FreshSync.configure("https://example.invalid", "publishable");
+    await FreshSync.signInWithGitHub("https://example.invalid/redirect");
+    global.window = origWindow;
+    check(captured && captured.options && captured.options.scopes &&
+          captured.options.scopes.indexOf("public_repo") !== -1,
+      "signInWithGitHub requests the public_repo scope for issue creation",
+      captured ? "scopes=" + JSON.stringify(captured.options.scopes) : "no scopes captured");
+  })();
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
 })();
