@@ -549,6 +549,32 @@ function freshSync() {
   check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
     "and the single push still carries grade");
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
+  /* Sign-in is for sync only. Issues are filed through a prefilled github.com
+   * URL that needs no token, so asking for public_repo -- write access to every
+   * public repo the user owns -- would be scope the app cannot justify. */
+  await (async () => {
+    var captured = null;
+    var fakeClient = {
+      auth: {
+        signInWithOAuth: function(opts) {
+          captured = opts;
+          return Promise.resolve({});
+        }
+      }
+    };
+    var fakeSupabase = { createClient: function() { return fakeClient; } };
+    var origWindow = global.window;
+    global.window = { supabase: fakeSupabase };
+    var FreshSync = require("../sync.js");
+    FreshSync.configure("https://example.invalid", "publishable");
+    await FreshSync.signInWithGitHub("https://example.invalid/redirect");
+    global.window = origWindow;
+    var scopes = (captured && captured.options && captured.options.scopes) || "";
+    check(scopes.indexOf("public_repo") === -1 && scopes.indexOf("repo") === -1,
+      "signInWithGitHub never asks for repo write scope",
+      "scopes=" + JSON.stringify(scopes));
+  })();
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
 })();

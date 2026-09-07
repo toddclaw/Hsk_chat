@@ -89,6 +89,75 @@ jobs:
           echo "### Published" >> "$GITHUB_STEP_SUMMARY"
           echo "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/${{ steps.dest.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Update latest preview redirect
+        if: steps.dest.outputs.dir != '.'
+        run: |
+          # Copy scripts to site directory (they're in the source checkout, not gh-pages)
+          mkdir -p ../site/.github/scripts
+          cp .github/scripts/*.py ../site/.github/scripts/
+          
+          cd ../site
+          
+          # Update recent-branches.json
+          python3 .github/scripts/update-branches.py \
+            preview/recent-branches.json \
+            "$branch" \
+            "$safe" \
+            "${GITHUB_SHA::7}"
+          
+          # Get latest branch info
+          latest_info=$(python3 .github/scripts/get-latest-branch.py preview/recent-branches.json)
+          latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
+          latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
+          latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
+          
+          if [ -n "$latest_safe" ]; then
+            # Generate redirect index.html
+            python3 .github/scripts/generate-redirect.py \
+              preview/index.html \
+              "$latest_safe" \
+              "$latest_branch" \
+              "$latest_commit" \
+              "${{ github.repository_owner }}" \
+              "${{ github.event.repository.name }}"
+          fi
+          
+          git add -A
+          git diff --quiet --cached || git commit -m "Update latest preview redirect ($branch)"
+          git push origin HEAD:gh-pages
+
+      - name: Verify GitHub Pages deployment
+        run: |
+          echo "Waiting 30 seconds for GitHub Pages to process..."
+          sleep 30
+          
+          base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          
+          if [ "${{ steps.dest.outputs.dir }}" = "." ]; then
+            test_url="$base_url/"
+          else
+            test_url="$base_url/${{ steps.dest.outputs.url }}"
+          fi
+          
+          echo "Verifying deployment at: $test_url"
+          
+          for i in 1 2 3; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$test_url" || echo "000")
+            if [ "$status" = "200" ]; then
+              echo "✓ Deployment verified successfully (attempt $i)"
+              echo "url=$test_url" >> "$GITHUB_STEP_SUMMARY"
+              echo "status=$status" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Attempt $i: Got status $status, retrying in $((i * 10)) seconds..."
+            sleep $((i * 10))
+          done
+          
+          echo "::error::Deployment verification failed after 3 attempts"
+          echo "Expected URL: $test_url"
+          echo "Last status: $status"
+          exit 1
+
   cleanup:
     # Deleting a branch takes its preview with it, so they do not pile up.
     if: github.event_name == 'delete' && github.event.ref_type == 'branch' && github.event.ref != 'main'
@@ -98,18 +167,64 @@ jobs:
         with:
           ref: gh-pages
           fetch-depth: 1
-      - name: Remove the preview
+      - name: Remove the preview and update redirect
         run: |
+          # Copy scripts to site directory (they're in the source checkout, not gh-pages)
+          mkdir -p ../site/.github/scripts
+          cp .github/scripts/*.py ../site/.github/scripts/ 2>/dev/null || true
+          
+          cd ../site
           safe=$(printf '%s' "${{ github.event.ref }}" | tr '/' '-')
           if [ -d "preview/$safe" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git rm -r --quiet "preview/$safe"
-            git commit -m "Remove preview for deleted branch ${{ github.event.ref }}"
-
+            
+            # Update recent-branches.json - remove deleted branch
+            python3 .github/scripts/cleanup-branch.py \
+              preview/recent-branches.json \
+              "${{ github.event.ref }}"
+            
+            # Regenerate index.html with new latest
+            latest_info=$(python3 .github/scripts/get-latest-branch.py preview/recent-branches.json 2>/dev/null || echo "")
+            latest_safe=$(echo "$latest_info" | cut -d'|' -f1)
+            latest_branch=$(echo "$latest_info" | cut -d'|' -f2)
+            latest_commit=$(echo "$latest_info" | cut -d'|' -f3)
+            
+            if [ -n "$latest_safe" ]; then
+              python3 .github/scripts/generate-redirect.py \
+                preview/index.html \
+                "$latest_safe" \
+                "$latest_branch" \
+                "$latest_commit" \
+                "${{ github.repository_owner }}" \
+                "${{ github.event.repository.name }}"
+            else
+              # No branches left, remove the index
+              rm -f preview/index.html preview/recent-branches.json
+            fi
+            
+            git add -A
+            git commit -m "Remove preview for deleted branch ${{ github.event.ref }} and update redirect"
+            
             # Rebase on top of any concurrent main publish so we never
             # overwrite it — see Hsk_chat#24 for the race source.
             git fetch origin gh-pages --depth=1                  # freshen ref
             git rebase origin/gh-pages                           # stack on any new commits
             git push origin HEAD:gh-pages
+            
+            # Verify the cleanup was deployed
+            echo "Waiting 20 seconds for GitHub Pages to process cleanup..."
+            sleep 20
+            
+            base_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+            preview_url="$base_url/preview/"
+            
+            echo "Verifying preview index at: $preview_url"
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$preview_url" || echo "000")
+            if [ "$status" = "200" ]; then
+              echo "✓ Preview index verified successfully"
+            else
+              echo "::warning::Preview index returned status $status (may be OK if no previews remain)"
+            fi
           fi
