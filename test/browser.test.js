@@ -3242,6 +3242,85 @@ check(usedGroups && usedGroups.first === "\u7684",
       return sec && sec.style.display === "none";`);
     check(issueSectionHidden, "Issue section hides when Cancel clicked");
 
+    /* ------------------------------------------------- the mistakes drill */
+    /* The chooser lists the learner's own categories, and choosing one writes
+     * the marker that everything else reads off. Seeded through
+     * hsk1chat.chatMsgs -- one object keyed by chat id -- the way every other
+     * seeded scenario above does it.
+     *
+     * Dated now(), not a fixed date: mistakes.js ages a failure out after
+     * MISTAKE_WINDOW_DAYS, so a hard-coded timestamp would make this test
+     * start passing vacuously once it fell out of the window. */
+    await exec(`
+      var cid = "99999999-7777-4777-8777-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-7777-4777-8777-999999999999": [
+        { id: "88888888-7777-4777-8777-888888888888", role: "user",
+          text: "我有三个书", created_at: now,
+          grade: { ok: false, better: "我有三本书",
+                   errors: [{ tag: "measure-word", note: "use ben for books" }] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    /* callModel is stubbed before the activity opens, not after: startActivity()
+     * withholds the opening turn for a drill, but a stub that arrives late
+     * would leave any other path free to reach the network. */
+    await exec(`
+      window.callModel = function () { return Promise.resolve("你有几本书？"); };
+      window.startActivity("drill");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the drill chooser to appear");
+    const drillBtn = await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("measure word") === 0) return b[i].textContent;
+      }
+      return "";`);
+    check(drillBtn.indexOf("measure word") === 0,
+      "the chooser offers the category the grader logged", drillBtn);
+    check(drillBtn.indexOf("(1)") !== -1,
+      "with the learner's own count beside it", drillBtn);
+    check(await exec(`return document.querySelector('#input').disabled;`) === true,
+      "and the composer is closed until a category is chosen");
+
+    /* Choosing writes the marker and opens the composer. callModel is stubbed
+     * first: startDrillWith() calls openingTurn(), which would otherwise reach
+     * the network. */
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("measure word") === 0) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drill") return true; } }
+      return false; })()`, "the drill marker to be written");
+    check(await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drill") return m[k[i]][j].text; } }
+      return "";`) === "measure-word",
+      "choosing a category writes a drill marker naming it");
+    check(await exec(`return document.querySelector('#input').disabled;`) === false,
+      "and the composer opens once a category is chosen");
+    check((await exec(`return document.querySelector('#starters').textContent;`))
+            .indexOf("1 of 6") !== -1,
+      "and the control counts the drill down from the setting's default",
+      await exec(`return document.querySelector('#starters').textContent;`));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
