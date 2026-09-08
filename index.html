@@ -1409,6 +1409,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       storySegment: (ctx && ctx.storySegment) || null,
       storyPhase: (ctx && ctx.storyPhase) || null,
       storyTopic: currentActivity() === "story" ? storyTopic() : "",
+      drillTag: currentActivity() === "drill" ? drillTag() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
       opening: S.history.length === 0,
@@ -1441,6 +1442,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storySegment: (ctx && ctx.storySegment) || null,
     storyPhase: (ctx && ctx.storyPhase) || null,
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
+    drillTag: currentActivity() === "drill" ? drillTag() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
     opening: S.history.length === 0,
@@ -2155,7 +2157,7 @@ function renderAll() {
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
       'chat for a while, then switch back here.</div>';
   }
-  if (!S.history.some(t => t.role !== "topic")) {
+  if (!S.history.some(t => t.role !== "topic" && t.role !== "drill")) {
     /* Two sub-states share this branch for story time: no topic yet (the
      * chooser is on screen, nothing to tap) and a topic just picked but the
      * request for segment 1 was interrupted before it landed (the "Start the
@@ -2168,6 +2170,9 @@ function renderAll() {
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
     } else if (currentActivity() === "twenty") {
       hintText = 'Pick who thinks of something, below.';
+    } else if (currentActivity() === "drill") {
+      hintText = drillTag() ? 'Write a sentence in Chinese.'
+                            : 'Pick a mistake to practice, below.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2436,7 +2441,7 @@ function startActivity(id) {
   /* Same withholding as story time, for the same reason: nothing is
    * generated until the learner has chosen a role, since the role decides
    * what the model is even allowed to say. */
-  if (act.gen !== "segments" && id !== "chat" && id !== "twenty") openingTurn();
+  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" && id !== "drill") openingTurn();
   return c;
 }
 
@@ -3503,6 +3508,32 @@ function anyStoryQuestion() {
 function storyTopic() {
   const t = S.history.find(m => m.role === "topic");
   return (t && t.text) || "";
+}
+
+/* The category this conversation drills, "" before one is chosen. Read off the
+ * transcript rather than held in a variable, same as storyTopic(). */
+function drillTag() { return HSKMistakes.drillTagOf(S.history); }
+
+/* Attempts used and passed so far. An attempt is a graded message of the
+ * learner's, pass or fail -- counting only passes would mean a bad run never
+ * ends. */
+function drillTold() { return S.history.filter(t => t.role === "user").length; }
+function drillPassed() {
+  return S.history.filter(t => t.role === "user" && t.grade && t.grade.ok).length;
+}
+function drillDone() { return drillTold() >= S.drillTurns; }
+
+/* Choosing a category is what starts the drill: the marker goes in the
+ * transcript, then the partner opens. Nothing is generated -- and nothing is
+ * spent -- until the learner has picked, the same withholding story time and
+ * 20 Questions use. */
+function startDrillWith(tag) {
+  if (!tag || drillTag()) return;
+  S.history.push({ role: "drill", text: tag, id: newMessageId(),
+                   created_at: new Date().toISOString() });
+  persist();
+  renderStarters();
+  openingTurn();
 }
 
 /* `hist` defaults to S.history for every ordinary caller (the chooser's own
@@ -4597,7 +4628,8 @@ function renderComposer() {
   const c = currentChat();
   const listening = (currentActivity() === "story" && !anyStoryQuestion() &&
     !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS)) ||
-    (currentActivity() === "twenty" && !(c && c.side));
+    (currentActivity() === "twenty" && !(c && c.side)) ||
+    (currentActivity() === "drill" && (!drillTag() || drillDone()));
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -4611,6 +4643,49 @@ function sampleOf(list, n) {
     const t = a[i]; a[i] = a[j]; a[j] = t;
   }
   return a.slice(0, n);
+}
+
+/* The prioritized list of mistake categories, with the learner's own numbers --
+ * the same rows Settings shows, given a screen and made tappable. The example
+ * and its correction are shown HERE and never sent to the model: RESEARCH.md,
+ * "Sharpening a prompt rule by naming the failure". */
+function renderDrillChooser(box) {
+  if (!S.grader) {
+    box.innerHTML = '<div class="note">Checking is off, so nothing is being logged ' +
+      'to practice. Turn the grader on in Settings.</div>';
+    return;
+  }
+  const all = mistakeCounts();
+  const open = all.filter(m => m.n > 0);
+  if (!open.length) {
+    box.innerHTML = '<div class="note">' + (all.length
+      ? "Nothing outstanding \u2014 every category you have drilled is clear."
+      : "Nothing logged yet. Messages you send are checked as you go.") + "</div>";
+    return;
+  }
+  open.slice(0, 5).forEach(m => {
+    const b = document.createElement("button");
+    b.className = "story";
+    b.textContent = HSKPrompt.TAG_LABEL[m.tag] + " (" + m.n + ")";
+    b.title = m.eg + (m.better ? " \u2192 " + m.better : "");
+    b.onclick = () => startDrillWith(m.tag);
+    box.appendChild(b);
+  });
+}
+
+/* Before a category is chosen this is the chooser; after it, a progress line.
+ * There is no "next" button -- the learner advances a drill by writing, unlike
+ * story time where the partner does the producing. */
+function renderDrillControl(box) {
+  if (S.busy) return;
+  if (!drillTag()) return renderDrillChooser(box);
+  const note = document.createElement("div");
+  note.className = "note";
+  const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
+  note.textContent = drillDone()
+    ? label + " \u2014 done. " + drillPassed() + " of " + drillTold() + " passed."
+    : label + " \u2014 " + (drillTold() + 1) + " of " + S.drillTurns;
+  box.appendChild(note);
 }
 
 /* The chooser. Curated ideas, topics already read, a box, and make-something-up
@@ -4741,6 +4816,7 @@ function renderStarters() {
    * strip for its own control instead. */
   if (currentActivity() === "story") return renderStoryControl(box);
   if (currentActivity() === "twenty") return renderTwentyControl(box);
+  if (currentActivity() === "drill") return renderDrillControl(box);
   if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
