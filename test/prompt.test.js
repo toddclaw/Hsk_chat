@@ -906,5 +906,30 @@ check(P.build({ level: 1, label: "HSK 1", length: "medium", activity: "chat" })
         .indexOf("先说你自己的事") !== -1,
   "chat keeps the full medium rule -- this is scoped to twenty, not global");
 
+// --- the mistakes drill -----------------------------------------------------
+check(!!P.ACTIVITIES.drill, "there is a drill activity");
+check(P.ACTIVITIES.drill.gen === "turn" && P.ACTIVITIES.drill.converse === true,
+  "the drill is an ordinary back-and-forth, not segments");
+check(P.ERROR_TAGS.every(t => !!P.TAG_ZH[t]),
+  "every error tag has a Chinese name for the drill prompt to use",
+  P.ERROR_TAGS.filter(t => !P.TAG_ZH[t]).join(" "));
+
+const drillRules = P.activityRules({ activity: "drill", drillTag: "measure-word" });
+check(drillRules.length === 1, "a drill emits exactly one rule");
+check(drillRules[0].indexOf(P.TAG_ZH["measure-word"]) !== -1,
+  "and it names the structure being practised", drillRules[0]);
+
+/* RESEARCH.md, "Sharpening a prompt rule by naming the failure": putting a
+ * wrong form in a prompt primed the model to reproduce it, 0/8 to 3/8. The
+ * TAGS table's examples all contain one, so the drill prompt must not reach
+ * for them. */
+const wrongForms = ["三个书", "很高兴了", "他不有钱", "他比我很高", "我看音乐"];
+check(wrongForms.every(w => drillRules[0].indexOf(w) === -1),
+  "and contains no example of a wrong form");
+check(P.activityRules({ activity: "drill", drillTag: "" }).length === 0,
+  "no category chosen means no drill rule at all");
+check(P.activityRules({ activity: "drill", drillTag: "no-such-tag" }).length === 0,
+  "an unknown category emits no rule rather than a broken one");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
