@@ -939,6 +939,7 @@ footer{
 <script src="md.js"></script>
 <script src="time.js"></script>
 <script src="pace.js"></script>
+<script src="mistakes.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
 <script src="issues.js"></script>
@@ -1006,7 +1007,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v87 — 2026-09-07";
+const VERSION   = "v88 — 2026-09-07";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4908,36 +4909,19 @@ function renderNextProgress() {
 function renderProgress() { renderGoalProgress(); renderNextProgress(); }
 
 /* Counted across every conversation, not just the open one: a recurring mistake
- * is recurring precisely because it spans them. Scanned rather than stored --
- * the grades are already on the messages, and a running tally kept beside them
- * would be a second source of truth to drift. */
+ * is recurring precisely because it spans them. The arithmetic -- the aging
+ * window, the one-credit-a-day cap -- lives in mistakes.js so it can be tested
+ * without a browser. */
 const MISTAKES_SHOWN = 3;
 
 function mistakeCounts() {
-  const byTag = new Map();
-  Object.keys(S.chatMsgs || {}).forEach(cid => {
-    (S.chatMsgs[cid] || []).forEach(t => {
-      if (t.role !== "user" || !t.grade || !t.grade.errors) return;
-      t.grade.errors.forEach(e => {
-        if (!HSKPrompt.TAG_LABEL[e.tag]) return;      // unknown tags never count
-        const hit = byTag.get(e.tag) ||
-          { tag: e.tag, n: 0, eg: "", better: "", note: "" };
-        hit.n++;
-        // The most recent instance, which is the one worth showing back.
-        hit.eg = t.text;
-        hit.better = t.grade.better || "";
-        hit.note = e.note || hit.note;
-        byTag.set(e.tag, hit);
-      });
-    });
-  });
-  return [...byTag.values()].sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag));
+  return HSKMistakes.counts(S.chatMsgs, { tagLabels: HSKPrompt.TAG_LABEL });
 }
 
 function renderMistakes() {
   const box = $("#mistakes");
   if (!box) return;
-  const all = mistakeCounts();
+  const all = mistakeCounts().filter(m => m.n > 0);
   if (!all.length) {
     box.innerHTML = '<div class="note">' + (S.grader
       ? "Nothing logged yet. Messages you send are checked as you go."
