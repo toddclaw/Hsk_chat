@@ -1,0 +1,826 @@
+{
+  "model": "qwen/qwen3-30b-a3b-instruct-2507",
+  "judge": "anthropic/claude-sonnet-4.5",
+  "level": 3,
+  "runs": 6,
+  "when": "2026-09-08T04:04:33.021Z",
+  "rows": [
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你今天出去走走吗？",
+      "cost": 0.00007689705,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天热，所以我把门打开了。我喝了一点水，觉得舒服多了。你今天喝过水了吗？",
+      "cost": 0.00015881745,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 3,
+      "text": "很好，我们用简单的词。你今天喝了几个水？",
+      "cost": 0.0001074913,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气很好，所以我出去走走了。我看到很多花开了，真漂亮。你今天去外面了吗？",
+      "cost": 0.0001068,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天很热，所以我喝了一点水。我刚吃完午饭，现在有点想睡。你午饭吃了什么？",
+      "cost": 0.00021029000000000002,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.00004521,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气很热，所以我喝了好多水。我今天还把作业写完了。你放学后一般做什么？",
+      "cost": 0.00010378,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太热，所以我没有出去。我在家喝完水，觉得凉快了。你今天在家做什么？",
+      "cost": 0.00011139,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天太忙，所以我没有去公园。你今天有去学校吗？",
+      "cost": 0.00004389,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去公园走了一会儿。我看到很多花开了，真漂亮。你喜欢去公园吗？",
+      "cost": 0.00009744,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走了一会儿。我走得很远，觉得很开心。你喜欢出去走吗？",
+      "cost": 0.000115,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天热，所以我把门打开了。你家门是向里的吗？",
+      "cost": 0.00009306000000000001,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢花吗？",
+      "cost": 0.00009606,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走了一会儿。走得很累，但很开心。你今天出去玩了吗？",
+      "cost": 0.00013495,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气很好，所以我把作业写完了。你今天做了什么？",
+      "cost": 0.0000484,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走了一会儿。我看到很多花，开得很漂亮。你今天去哪了？",
+      "cost": 0.00010167,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到一只小猫，它很可爱。你见过小猫吗？",
+      "cost": 0.00014353,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我把作业写完了。你今天做了什么？",
+      "cost": 0.0000435,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你最喜欢什么花？",
+      "cost": 0.00012597,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天很热，所以我喝了好多水。我刚把水喝完，身体不那么热了。你今天喝水了吗？",
+      "cost": 0.0001237,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.0000498,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到一只小猫把球踢到了树上。你今天去哪里了？",
+      "cost": 0.00012419999999999998,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太热，所以我没有去公园。我在家把空调开了，觉得凉快。你今天做了什么？",
+      "cost": 0.0001224,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为太累，所以我没有吃饭。你吃饭了吗？",
+      "cost": 0.00015209000000000002,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢春天吗？",
+      "cost": 0.00012352,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走了一会儿。走得很开心。你今天出去玩了吗？",
+      "cost": 0.0001351,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天热，所以我把门打开了。你家的门是关着的还是开着的？",
+      "cost": 0.0001049,
+      "label": "NO"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花，颜色很好。你今天去了哪里？",
+      "cost": 0.00012541,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走了一会儿。走得很累，但很开心。你今天出去玩了吗？",
+      "cost": 0.00010971,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我出去玩了。你今天做了什么？",
+      "cost": 0.00006409,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气很好，所以我去公园走了很久。我看到很多花，开得真漂亮。你周末喜欢去哪里？",
+      "cost": 0.0000513,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天很热，所以我把水喝完了。我很喜欢水果。你喜欢吃什么水果？",
+      "cost": 0.00005133,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.0000453,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你今天出去走走吗？",
+      "cost": 0.00012701,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我出去了。我买了水果，吃了一个苹果。你今天做了什么？",
+      "cost": 0.00007722,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.00004521,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气很好，所以我出去走走。我看到很多花，还用手机照了照片。你最喜欢什么季节？",
+      "cost": 0.0001093,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天太热，所以我没有出去。我在家把空调开了，觉得舒服多了。你喜欢在家做什么？",
+      "cost": 0.00005262,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天太热，所以我没有去公园。我在家把作业写完了。你喜欢在家做什么？",
+      "cost": 0.0000497,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去公园走了很久。我看到很多花，很漂亮。你周末喜欢去哪里？",
+      "cost": 0.00012083,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天天气好，所以我出去走走了。我走得很慢，但觉得很开心。你今天做了什么？",
+      "cost": 0.00017935,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天热，所以我把门打开了。你家的门是关着的吗？",
+      "cost": 0.00007642115,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我去公园走了很久。我看到很多人在拍照。你周末喜欢做什么？",
+      "cost": 0.00002524095,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。走得很累，但很开心。你今天出去走走吗？",
+      "cost": 0.00013525,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我出去玩了。你今天做了什么？",
+      "cost": 0.00006409,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天很热，所以我把门开了。我刚喝了一口水，觉得舒服多了。你今天做了什么？",
+      "cost": 0.00012312,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到一只小猫，它很可爱。你见过小猫吗？",
+      "cost": 0.00006180075,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.0000499,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气很好，所以我去公园走路了。我看到很多花开了，真漂亮。你周末喜欢去哪里？",
+      "cost": 0.00010206000000000001,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "你好！今天我去了超市，买了一些水果。你今天买了什么？",
+      "cost": 0.00005034,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.00004521,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去公园走了。我看到很多花开了，真漂亮。你周末一般做什么？",
+      "cost": 0.00010268,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天很热，所以我没有出去。我在家把空调开了，觉得舒服多了。你今天做了什么？",
+      "cost": 0.00002928645,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "很好，你注意到了。我们用简单的词。今天你有吃午饭吗？",
+      "cost": 0.00007684145,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我去了公园。我在那儿看了一会儿书，还吃了个苹果。你今天做了什么？",
+      "cost": 0.00004668,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你今天出去走走吗？",
+      "cost": 0.0001223,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天热，所以我把门开了。你家的门是开着的吗？",
+      "cost": 0.00007126995,
+      "label": "NO"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去公园走了一会儿。我看到很多花开得真漂亮。你最喜欢什么花？",
+      "cost": 0.00010188,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太阳好，所以我很开心。我去了公园，看到花都开了。你今天开心吗？",
+      "cost": 0.00008674275,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气热，所以我把空调打开了。你家有空调吗？",
+      "cost": 0.0000241308,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去公园走了。我看到很多花开了，真漂亮。你周末喜欢去哪里玩？",
+      "cost": 0.00007716315,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": false,
+      "attempts": 3,
+      "text": "因为今天天气热，所以我把空调打开了。我喝了一杯水，感觉舒服多了。你今天喝了多少水？",
+      "violations": [
+        "杯",
+        "感觉"
+      ],
+      "cost": 0.00018557,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我去公园看了一只小鸟。你喜欢看动物吗？",
+      "cost": 0.00006474,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我去公园走了很久。我看到了很多花，真漂亮。你周末喜欢去哪里？",
+      "cost": 0.00004608,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天很热，所以我喝了好多水。我刚把冰箱里的水拿出来了。你今天喝水了吗？",
+      "cost": 0.00005274,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.0000498,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢出去走走吗？",
+      "cost": 0.00011961,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天很热，所以我没有去公园。我在家把空调打开了，觉得舒服多了。你喜欢在家里做什么？",
+      "cost": 0.00011082,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天太忙，所以我没有去公园。你今天去了哪里？",
+      "cost": 0.00002384145,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花，觉得很开心。你今天做了什么？",
+      "cost": 0.0001058,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天热，所以我把门打开了。我最喜欢喝冷水。你呢？",
+      "cost": 0.00022671,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天热，所以我把门打开了。你家的门是大的吗？",
+      "cost": 0.00008125560000000001,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气很好，所以我去公园了。我在公园里玩得很开心。你周末喜欢做什么？",
+      "cost": 0.00004548,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气热，所以我把空调打开了。我现在不觉得热了。你喜欢开空调吗？",
+      "cost": 0.00013523000000000002,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我出去玩了。你今天做了什么？",
+      "cost": 0.00006409,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢春天吗？",
+      "cost": 0.00012352,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气很热，所以我把水喝完了。我刚吃完一个苹果，觉得很好吃。你今天吃了什么？",
+      "cost": 0.00005373,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "opening",
+      "tag": "measure-word",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "cost": 0.00002514465,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢春天吗？",
+      "cost": 0.0001184,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 1,
+      "text": "因为今天天气好，所以我出去了。我买了水果，吃了两个。你今天做了什么？",
+      "cost": 0.0000572,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "opening",
+      "tag": "aspect-le",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太热了，我喝了一口水。你喝了吗？",
+      "cost": 0.00009541,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天天气好，所以我出去了。回来后，我吃了一个苹果。你今天去了哪里？",
+      "cost": 0.00016306705,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "negation-bu-mei",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太热，所以我没有出去。我在家把空调打开，觉得凉快了。你今天在家做什么了？",
+      "cost": 0.00011641,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "negation-bu-mei",
+      "validated": false,
+      "attempts": 3,
+      "text": "因为今天太忙，所以我没去公园。你昨天去公园了吗？",
+      "violations": [
+        "没"
+      ],
+      "cost": 0.0001007148,
+      "label": "REQUIRES"
+    },
+    {
+      "arm": "chat",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我去了公园。我看到很多人在走来走去。你周末喜欢去哪里？",
+      "cost": 0.00009968,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢春天吗？",
+      "cost": 0.000141,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "comparison-bi",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天太热，所以我把门打开了。你家的门是开着的吗？",
+      "cost": 0.00012138,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "chat",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天天气好，所以我出去走走了。我看到很多花开了，真漂亮。你喜欢春天吗？",
+      "cost": 0.0001184,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "converse",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 3,
+      "text": "因为今天天气好，所以我出去走走。走得很远，有点累。你今天走远了吗？",
+      "cost": 0.00018690000000000002,
+      "label": "OPTIONAL"
+    },
+    {
+      "arm": "opening",
+      "tag": "de-particles",
+      "validated": true,
+      "attempts": 2,
+      "text": "因为今天热，所以我把门打开了。你家的门是关着的吗？",
+      "cost": 0.00007671745,
+      "label": "OPTIONAL"
+    }
+  ]
+}
