@@ -95,6 +95,70 @@ constant we would revisit if anyone measured retention directly, which we have n
 the mechanism, not a display setting. That made it a prompt change, which meant measuring it.
 See [Measurements we ran](#measurements-we-ran).
 
+## Drilling a mistake category
+
+**Informed by the literature; the numbers themselves are not measured.**
+`MISTAKE_WINDOW_DAYS = 90`, one credit per category per calendar day, and a
+default drill length of 6 sentences (settable 3–10).
+
+The grader files every error under one of seventeen fixed tags, and the Mistakes
+drill practises whichever category the learner is accruing most. That raises a
+question the taxonomy alone does not answer: **what should a correct sentence do
+to the count?**
+
+**One correct production does not mean the error is gone.** Backsliding — the
+reappearance of interlanguage features that appeared eradicated — is well
+attested, and L2 development is U-shaped rather than linear. A design where one
+pass clears a category would be measuring the wrong thing: it would report
+success at exactly the moment the evidence is weakest.
+
+**Spaced practice beats massed practice, specifically for error correction.**
+Kim & Webb’s delayed post-test had the spaced group outperform the massed group on
+error analysis and correction; Suzuki & DeKeyser find the same for the
+proceduralization of morphology. Conti’s summary of the corrective-feedback
+literature is that a rule needs "masses of spaced practice across a wide range of
+contexts".
+
+This is awkward for the feature, and the awkwardness is the point: **a drill
+session is massed practice by construction.** Six sentences in one sitting is the
+condition that loses. So credit is *spaced* rather than *counted* — ten passes in
+one session are worth what one is, and returning across a week is what clears a
+category. That cap is also what makes drill length a free choice: since session
+length cannot move the stats, the setting can be whatever suits the learner
+without becoming a way to farm the number.
+
+The aging window does the other half. Without it the count rises from ordinary
+chat and falls only from drills, so a learner who simply stops making a mistake
+watches the number freeze — punishing the outcome the feature exists to produce.
+With it, improvement shows on its own and needs no drill-specific logic.
+
+Together: `shown = max(0, failures_in_window − distinct_credit_days)`, floored at
+zero so a well-drilled category leaves the list rather than going negative.
+Nothing is stored; both terms are derived by scanning the graded messages, so
+there is no second tally to drift.
+
+**What is not evidenced.** No source gives a mastery criterion in encounters for
+a grammatical error category, which is the same honest gap this file already
+records for `PROMOTE_AT`.
+
+- **90 days is a guess.** Nothing in the reading gives a forgetting horizon for
+  an error category, and it is the only constant here with no citation behind
+  it. It is a defensible order of magnitude — long enough that a twice-a-week
+  learner keeps a meaningful history, short enough that last spring’s errors stop
+  dominating the list — and should be revisited against real data once anyone has
+  a year of it.
+- **The per-day cap is a floor, not a measurement.** One credit a day is
+  defensible from the spacing literature but no study sets it. If drilling turns
+  out to feel unrewarding, that cap is the knob.
+
+Changing either number means updating this file.
+
+**What is not counted.** Correct spontaneous use in free conversation is better
+evidence than any drill pass, and it earns nothing, because the grader reports
+failures only — `errors: []` means "nothing was wrong here", not "this was used
+correctly". Transfer is therefore invisible to the arithmetic. Tracked as its own
+BACKLOG item, "The grader reports only failures, so transfer is invisible".
+
 ## Knowing when to change level
 
 This is the part with the most research behind it and the most room to get wrong.
@@ -729,6 +793,63 @@ D4 remains in question. This is reported, not acted on: the fix (content vocabul
 declared cast, a narrower curated pool, a stronger repair strategy, or accepting the rate) is a
 design decision, not this task's to make.
 
+### The drill prompt against an unguided partner
+
+**Measured.** `tools/drill-ab.js`, `qwen/qwen3-30b-a3b-instruct-2507` at HSK 3,
+judge `anthropic/claude-sonnet-4.5`, five categories (量词, 了, 不/没, 比, 的/地/得),
+name-free, arms interleaved within each run.
+
+The drill’s whole claim is **elicitation**: the partner steers so the target
+structure has to appear in the *learner’s* own answer. So the counter is not "did
+the partner mention 量词" — a partner that explains the rule in English would score
+full marks for doing the one thing D10 says a drill is not. The judge is shown the
+partner’s turn and asked whether a natural, direct answer would have to **use**
+the structure: REQUIRES / OPTIONAL / NO.
+
+Four candidate arms, because the first run’s drill replies were plain chat
+reproducing the prompt’s own worked example almost verbatim — the identical
+failure `prompt.js` already records for 20 Questions, where "a few-shot example is
+a stronger signal than a numbered rule". `converse` is the shipped drill;
+`quiet` sets `act.converse` false, dropping rule 5’s "answer, share your own
+thing, ask a new question"; `bare` also strips the chat few-shot; `opening` adds
+an explicit first-turn instruction, the fix `tools/twenty-ab.js` landed for the
+same defect.
+
+Pooled over three runs (n per arm in parentheses):
+
+| arm | REQUIRES | rate |
+| --- | --- | --- |
+| chat — the shipped app, no drill rule | 4/65 | 6% |
+| `converse` — the drill as shipped | 10/65 | **15%** |
+| `quiet` — no turn-taking rule | 10/35 | 29% |
+| `bare` — also no chat few-shot | 8/35 | 23% |
+| `opening` — explicit first turn | 13/50 | 26% |
+
+**The rule earns its place: it beats an unguided partner in every run**, and the
+contrast is clean within each — 4/20 vs 1/20, then 5/30 vs **0/30**. Validation is
+untouched: 29/30 and 29/30 in the last run, against chat’s 30/30.
+
+**None of the three candidates beat it by enough to ship.** `quiet` led its first
+run 6/15 to 1/15 and then *tied* at 4/20; `opening` led at 7/20 and then matched
+`converse` at 6/30. DEVELOPING.md’s rule from the story-time pooling is that one
+run resolves a threefold difference and not a 1.4× one, and that is exactly what
+this is. The shipped prompt stands unchanged; the variants are recorded here so
+the next person does not re-derive them.
+
+**Two honest limits.**
+
+- **This measures the opening turn only.** The seed is a bare 你好。, which is the
+  turn most primed by the prompt’s worked example and the hardest case for any
+  rule. Mid-drill behaviour, once the exchange is under way, is not measured and
+  is plausibly better.
+- **Two categories never elicited, in any arm, in any run.** 比 scored 0
+  REQUIRES across all 4 arms and all 3 runs, and 的/地/得 scored 1. A comparison
+  or a complement-marker is hard to *force* through a question in a way a
+  measure word is not — "你家有几个人？" compels 量词; no equally natural question
+  compels 比. The drill is therefore uneven across the taxonomy, and the count it
+  subtracts from is not, which is worth knowing before anyone reads a cleared
+  category as evidence.
+
 ## Things that did not work
 
 Kept because a rejected idea that looks reasonable will be proposed again.
@@ -779,6 +900,12 @@ Stated plainly so nobody cites this file for more than it holds.
 - **The English thresholds are applied to Chinese unchanged.** The 95%/98% coverage figures
   and the encounter counts come from L2 English research. Zipfian structure transfers well;
   whether the specific numbers do is unestablished.
+- **The drill’s two constants are the least evidenced numbers in this file.** 90 days
+  has no citation at all, and no study sets the per-day credit cap at one. See
+  [Drilling a mistake category](#drilling-a-mistake-category).
+- **The drill does not work equally across the taxonomy.** 比 and 的/地/得 were
+  never elicited in measurement, while 量词 and 了 were. The arithmetic treats all
+  seventeen categories alike; the prompt does not.
 - **Nothing here is tested against learners.** Every measurement is of model behavior. The
   pedagogy is drawn from published research; the app has not run a study of its own.
 
@@ -820,6 +947,21 @@ Stated plainly so nobody cites this file for more than it holds.
   the Lexical Frequency Profile.
 - [Bridging the gap between receptive and productive
   competence](https://www.cambridge.org/elt/blog/2015/08/27/bridging-gap-receptive-productive-competence/). Cambridge English.
+
+**Error correction, backsliding and spaced practice**
+
+- [The U-shaped course of development](https://worldenglishes.lmc.gatech.edu/u-shaped-course-of-development/)
+  — backsliding and the non-linearity of L2 development.
+- Stemberger, J. [U-shaped learning and restrictions on error
+  correction](https://roa.rutgers.edu/files/472-1101/472-1101-STEMBERGER-0-0.PDF).
+- Kim, S. & Webb, S. (2014). [The effects of spaced vs. massed distribution instruction on L2
+  grammar learning](https://www.sciencedirect.com/science/article/abs/pii/S0346251X14000219).
+  *System* 42 — the delayed post-test favours spaced on error correction specifically.
+- Suzuki, Y. & DeKeyser, R. (2017). [Effects of distributed practice on the proceduralization
+  of morphology](https://yuichisuzuki.net/wp-content/uploads/2023/04/Suzuki-DeKeyser-2017-LTR.pdf).
+  *Language Teaching Research*.
+- Conti, G. (2018). [Focused error correction](https://gianfrancoconti.com/2018/05/17/focused-error-correction-how-you-can-make-a-time-consuming-necessity-more-effective-and-manageable/)
+  — "masses of spaced practice across a wide range of contexts".
 
 **Zipf's law, and Chinese**
 

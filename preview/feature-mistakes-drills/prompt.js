@@ -346,6 +346,19 @@
       note: "Ghost Words: practice words you've learned but never used. " +
         "The partner asks questions that need these words in the answer."
     },
+    drill: {
+      label: "Mistakes",
+      /* Built per-category in activityRules(), the way story time's phase
+       * rules and 20 Questions' role rules are -- the text depends on which
+       * category was chosen, which a static array cannot express. */
+      rules: null,
+      names: null,
+      reuse: null,
+      gen: "turn",
+      converse: true,
+      note: "Mistakes: practice a category the grader keeps flagging. " +
+        "Pick one below; the partner asks questions that need it in the answer."
+    },
     story: {
       label: "Story time",
       rules: [
@@ -470,6 +483,22 @@
         convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
         convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
         convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
+    } else if (opts.activity === "drill") {
+      /* Elicitation, not explanation. Ghost Words already showed that asking
+       * the partner to steer the conversation so a target must appear in the
+       * learner's OWN answer is what produces practice -- a partner that
+       * merely mentions the structure is input, not production.
+       *
+       * Names the structure and never a wrong form: RESEARCH.md, "Sharpening
+       * a prompt rule by naming the failure". */
+      var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
+      if (zh) {
+        rules.push(convert("学生今天要练习「") + convert(zh) + convert("」。") +
+          convert("请你问一些问题，让学生必须用这个说法来回答。一次只问一个问题，问题要短。") +
+          convert("学生说对了，就说很好，再问下一个。") +
+          convert("学生说得不对，就用正确的说法说一次，然后再问一个差不多的问题。") +
+          convert("不要用英文，也不要讲语法规则。"));
+      }
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
     }
@@ -725,29 +754,35 @@
    * precisely the failure that makes a mistake ledger useless. A code and a
    * two-word gloss are not enough to pick between seventeen headings; a
    * wrong-to-right pair is. */
+  /* The fourth column is the Chinese name of the structure, used ONLY by the
+   * drill prompt. The third column cannot serve: every example in it contains
+   * a wrong form, and RESEARCH.md measured that putting one in a prompt primes
+   * the model to reproduce it. */
   var TAGS = [
-    ["measure-word",           "measure word",             "三个书 → 三本书"],
-    ["aspect-le",              "了",                        "很高兴了 → 很高兴"],
-    ["aspect-guo",             "过",                        "我去过了那儿吗 → 我去过那儿吗"],
-    ["aspect-zhe",             "着",                        "他站着了 → 他站着"],
-    ["aspect-zai",             "在 / 正在",                 "我在吃饭了 → 我在吃饭"],
-    ["negation-bu-mei",        "不 vs 没",                  "他不有钱 → 他没有钱"],
-    ["de-particles",           "的 / 地 / 得",              "他说的很好 → 他说得很好"],
-    ["word-order-adverbial",   "adverbial word order",      "我去商店昨天 → 我昨天去商店"],
-    ["word-order-attributive", "attributive word order",    "朋友的我 → 我的朋友"],
-    ["comparison-bi",          "比 comparison",             "他比我很高 → 他比我高"],
-    ["ba-construction",        "把 construction",           "我把书看 → 我把书看完了"],
-    ["bei-construction",       "被 construction",           "书被我看 → 书被我看完了"],
-    ["connective",             "connectives",               "因为下雨，我不去 → 因为下雨，所以我不去"],
-    ["wrong-word",             "wrong word",                "我看音乐 → 我听音乐"],
-    ["wrong-sense",            "right word, wrong sense",   "我很开车 → 我常开车"],
-    ["wrong-character",        "wrong character",           "我的马妈 → 我的妈妈"],
-    ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水"]
+    ["measure-word",           "measure word",             "三个书 → 三本书",        "量词"],
+    ["aspect-le",              "了",                        "很高兴了 → 很高兴",      "了"],
+    ["aspect-guo",             "过",                        "我去过了那儿吗 → 我去过那儿吗", "过"],
+    ["aspect-zhe",             "着",                        "他站着了 → 他站着",      "着"],
+    ["aspect-zai",             "在 / 正在",                 "我在吃饭了 → 我在吃饭",  "在／正在"],
+    ["negation-bu-mei",        "不 vs 没",                  "他不有钱 → 他没有钱",    "不和没"],
+    ["de-particles",           "的 / 地 / 得",              "他说的很好 → 他说得很好", "的、地、得"],
+    ["word-order-adverbial",   "adverbial word order",      "我去商店昨天 → 我昨天去商店", "状语的位置"],
+    ["word-order-attributive", "attributive word order",    "朋友的我 → 我的朋友",    "定语的位置"],
+    ["comparison-bi",          "比 comparison",             "他比我很高 → 他比我高",  "比字句"],
+    ["ba-construction",        "把 construction",           "我把书看 → 我把书看完了", "把字句"],
+    ["bei-construction",       "被 construction",           "书被我看 → 书被我看完了", "被字句"],
+    ["connective",             "connectives",               "因为下雨，我不去 → 因为下雨，所以我不去", "关联词"],
+    ["wrong-word",             "wrong word",                "我看音乐 → 我听音乐",    "用词"],
+    ["wrong-sense",            "right word, wrong sense",   "我很开车 → 我常开车",    "词的意思"],
+    ["wrong-character",        "wrong character",           "我的马妈 → 我的妈妈",    "同音字"],
+    ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水",  "地道的说法"]
   ];
 
   var ERROR_TAGS = TAGS.map(function (r) { return r[0]; });
   var TAG_LABEL = {};
   TAGS.forEach(function (r) { TAG_LABEL[r[0]] = r[1]; });
+  var TAG_ZH = {};
+  TAGS.forEach(function (r) { TAG_ZH[r[0]] = r[3]; });
 
   /* The four categories the detail view shows as icons. Each is a different
    * repair: a wrong word is looked up, a wrong rule is learned, a wrong order
@@ -938,7 +973,8 @@
               build: build, activityRules: activityRules,
               translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
               titlePrompt: titlePrompt,
-              ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
+              ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
+              GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
