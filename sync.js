@@ -250,7 +250,7 @@
    * just a matter of remembering to leave them out. */
   var PREFS_KEYS = [
     "level", "goalLevel", "model", "teachModel", "storyModel", "twentyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
-    "attempts", "anki", "font", "starters", "script", "speechRate",
+    "attempts", "drillTurns", "anki", "font", "starters", "script", "speechRate",
     "freeOnly", "modelSort", "favModels", "favOnly", "grader", "pace", "budget", "teachPrompts"
   ];
 
