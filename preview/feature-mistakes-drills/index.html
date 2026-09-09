@@ -543,11 +543,13 @@ footer{
       <div class="note">Each try is another API call. One means no repairs at all: a reply that
       breaks the level goes straight to 我不知道。</div>
 
-    <label for="drillTurns">Sentences in a drill</label>
+    <label for="drillTurns">Correct sentences to finish a drill</label>
       <select id="drillTurns"></select>
-      <div class="note">How many sentences one <b>Mistakes</b> drill asks you for. Longer
-      is more practice, not more credit — a category counts down by at most one a day
-      however much you drill it, because spacing is what makes a correction stick.</div>
+      <div class="note">How many times you have to get the sentence right before a
+      <b>Drills</b> session is done. It may take more tries than that — only the correct
+      ones count, and you can stop early. Longer is more practice, not more credit: a
+      category counts down by at most one a day however much you drill it, because
+      spacing is what makes a correction stick.</div>
 
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
@@ -1013,13 +1015,13 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v88 — 2026-09-07";
+const VERSION   = "v89 — 2026-09-08";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
 const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
-const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // sentences in one drill
+const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // correct sentences to finish a drill
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
@@ -1119,7 +1121,7 @@ const S = {
   replyLength: store.get(K.length, "short"),  // short | medium | long
   prompt:  store.get(K.prompt, ""),           // "" = track the generated default
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
-  drillTurns: store.get(K.drillTurns, 6),     // sentences in one mistake drill
+  drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
@@ -1410,6 +1412,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       storyPhase: (ctx && ctx.storyPhase) || null,
       storyTopic: currentActivity() === "story" ? storyTopic() : "",
       drillTag: currentActivity() === "drill" ? drillTag() : "",
+      drillEg: currentActivity() === "drill" ? drillExample() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
       opening: S.history.length === 0,
@@ -1443,6 +1446,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storyPhase: (ctx && ctx.storyPhase) || null,
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
     drillTag: currentActivity() === "drill" ? drillTag() : "",
+    drillEg: currentActivity() === "drill" ? drillExample() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
     opening: S.history.length === 0,
@@ -1731,11 +1735,14 @@ function reuseFor(activity) {
 }
 
 async function turn(ctx) {
-  /* Offer next-level words only when a credit has been earned.
-   * Ghost Words (focused) does NOT introduce new words — it practices existing ones. */
+  /* Offer next-level words only when a credit has been earned — and not at all
+   * in an activity that practises what the learner already has. Ghost Words and
+   * Drills both say so on their own row (`newWords: false`) rather than being
+   * named here, so the next one that needs it needs no edit to this line. */
   const isFocused = currentActivity() === "focused";
+  const noNew = HSKPrompt.activityFor(currentActivity()).newWords === false;
   const b = levelBudget();
-  const offer = (!isFocused && S.pace.on && b.credits > 0)
+  const offer = (!noNew && S.pace.on && b.credits > 0)
     ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
     : [];
   const reuse = reuseFor(currentActivity());
@@ -1981,9 +1988,17 @@ function renderNotice(turnObj) {
   return el;
 }
 
+/* Pseudo-messages carrying an activity's setup rather than anything anyone
+ * said: story time's topic, a drill's category, the sentence it is working on,
+ * and the marker that ends it. They ride messages.role/text so they sync with
+ * the transcript and cost no schema (D2), which means every reader of the
+ * transcript has to know to skip them -- here, and in the is-the-log-empty
+ * check in renderAll(). */
+const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillEnd"]);
+
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
-  if (turnObj.role === "topic") return null;
+  if (MARKER_ROLES.has(turnObj.role)) return null;
   const el = document.createElement("div");
   el.className = "msg " + (turnObj.role === "user" ? "user" : "bot");
 
@@ -2157,7 +2172,33 @@ function renderAll() {
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
       'chat for a while, then switch back here.</div>';
   }
-  if (!S.history.some(t => t.role !== "topic" && t.role !== "drill")) {
+  /* Drills banner, like Ghost Words': what you are drilling stays on screen for
+   * the whole conversation, because "which mistake was this again" is the
+   * question the activity exists to answer. Everything here is shown and never
+   * sent -- the learner's own wrong sentence above all (D9). */
+  function drillBanner() {
+    if (currentActivity() !== "drill" || !drillTag()) return "";
+    const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
+    /* ponytail: a full scan of every graded message per render, in this one
+     * activity. The same scan Settings does on open; move it behind a cache if
+     * a long history ever makes a drill render feel slow. */
+    const rows = (mistakeCounts().filter(m => m.tag === drillTag())[0] || {}).recent || [];
+    const target = drillExample();
+    const head = '<div class="hint"><b>Drills · ' + escapeHtml(label) + '</b><br>' +
+      (target
+        ? 'Get this right ' + S.drillTurns + ' times:<br>' +
+          '<b style="color:var(--accent);font-size:22px">' + escapeHtml(target) + '</b><br>'
+        : 'Practising ' + escapeHtml(label) + ' \u2014 ' + S.drillTurns +
+          ' correct sentences.<br>');
+    const others = rows.filter(r => r.better !== target).slice(0, 2).map(r =>
+      '<span style="color:var(--dim)">' + escapeHtml(r.eg) +
+      (r.better ? ' \u2192 ' + escapeHtml(r.better) : "") + '</span>').join("<br>");
+    const note = rows.filter(r => r.better === target)[0];
+    return head + (note && note.note
+        ? '<span style="color:var(--dim)">' + escapeHtml(note.note) + '</span><br>' : "") +
+      (others ? '<br>Also flagged:<br>' + others : "") + '</div>';
+  }
+  if (!S.history.some(t => !MARKER_ROLES.has(t.role))) {
     /* Two sub-states share this branch for story time: no topic yet (the
      * chooser is on screen, nothing to tap) and a topic just picked but the
      * request for segment 1 was interrupted before it landed (the "Start the
@@ -2171,8 +2212,8 @@ function renderAll() {
     } else if (currentActivity() === "twenty") {
       hintText = 'Pick who thinks of something, below.';
     } else if (currentActivity() === "drill") {
-      hintText = drillTag() ? 'Write a sentence in Chinese.'
-                            : 'Pick a mistake to practice, below.';
+      if (drillTag()) { log.innerHTML = drillBanner(); return; }
+      hintText = 'Pick a mistake to drill, below.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2184,7 +2225,7 @@ function renderAll() {
     log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
-  log.innerHTML = ghostBanner();
+  log.innerHTML = ghostBanner() + drillBanner();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
@@ -2447,6 +2488,9 @@ function startActivity(id) {
 
 function openChat(id) {
   const leaving = S.chatId;
+  // A category tapped in one conversation's chooser is not a choice made in the
+  // next one's, and it would open that one halfway through picking.
+  drillPick = "";
   if (!S.chatMsgs[id]) S.chatMsgs[id] = [];
   S.chatId = id;
   S.history = S.chatMsgs[id];
@@ -3002,15 +3046,23 @@ function openGrade(turnObj) {
  * missing one -- it becomes a "top mistake" nobody can drill. */
 const KNOWN_TAGS = new Set(HSKPrompt.ERROR_TAGS);
 
+/* The outermost braces, parsed. Models fence JSON, preface it, and apologise
+ * after it however firmly told not to. */
+function jsonIn(raw) {
+  const a = String(raw || "").indexOf("{"), b = String(raw || "").lastIndexOf("}");
+  if (a === -1 || b <= a) return null;
+  try {
+    const g = JSON.parse(raw.slice(a, b + 1));
+    return g && typeof g === "object" ? g : null;
+  } catch (e) { return null; }
+}
+
 /* Models fence JSON, preface it, and apologise after it however firmly told
  * not to. Take the outermost braces and try; a failure is reported as a failure
  * rather than silently scoring the sentence correct. */
 function parseGrade(raw) {
-  const a = String(raw || "").indexOf("{"), b = String(raw || "").lastIndexOf("}");
-  if (a === -1 || b <= a) return null;
-  let g;
-  try { g = JSON.parse(raw.slice(a, b + 1)); } catch (e) { return null; }
-  if (!g || typeof g !== "object") return null;
+  const g = jsonIn(raw);
+  if (!g) return null;
   const cats = {};
   HSKPrompt.GRADE_CATS.forEach(c => {
     // Absent reads as fine: a model that omits a category is not accusing it.
@@ -3032,11 +3084,33 @@ async function gradeTurn(turnObj) {
   turnObj.grading = true;
   renderAll();
   try {
+    /* What is being drilled, read BEFORE the await: switching conversation
+     * mid-grade must not attach this one's verdict to another one's target. */
+    const tag = currentActivity() === "drill" ? drillTag() : "";
+    const eg = tag ? drillExample() : "";
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
     }) }], 600, teachingModel());
     const g = parseGrade(reply);
+    /* Inside a drill, a second and much smaller call asks the one question the
+     * grader cannot answer alongside its own: was the structure being drilled
+     * attempted, and was it right, judged apart from everything else in the
+     * sentence. Measured (tools/grade-target-ab.js): asked as an extra field on
+     * the grader's answer, the two verdicts fused and the partial-credit case
+     * came back wrong 9 times in 15; asked separately, 15/15.
+     *
+     * Its own try: a failed target check must leave the grade standing. Absent,
+     * mistakes.js falls back to the whole-sentence verdict, which is what every
+     * message graded before this existed does too. */
+    if (g && tag) {
+      try {
+        const t = jsonIn(await callModel([{ role: "user", content: HSKPrompt.drillCheck({
+          text: turnObj.text, label: levelLabel(), drillTag: tag, drillEg: eg
+        }) }], 120, teachingModel()));
+        if (t) g.target = { used: t.used === true, ok: t.ok === true };
+      } catch (e) { console.warn("[drill check] " + ((e && e.message) || e)); }
+    }
     /* A grade that could not be read is stored as such. Left absent it would
      * be retried on every render, and shown as a tick it would be a lie. */
     turnObj.grade = g || { unreadable: true, at: new Date().toISOString() };
@@ -3510,28 +3584,63 @@ function storyTopic() {
   return (t && t.text) || "";
 }
 
+/* The category tapped in the chooser, before a specific sentence has been
+ * picked. Deliberately NOT stored: a half-made choice is not a drill, and
+ * nothing should survive a reload until the learner has actually started one. */
+let drillPick = "";
+
 /* The category this conversation drills, "" before one is chosen. Read off the
  * transcript rather than held in a variable, same as storyTopic(). */
 function drillTag() { return HSKMistakes.drillTagOf(S.history); }
 
-/* Attempts used and passed so far. An attempt is a graded message of the
- * learner's, pass or fail -- counting only passes would mean a bad run never
- * ends. */
+/* The corrected sentence this drill is working towards, "" when the category
+ * is being drilled on its own. Read off the transcript, like drillTag(). */
+function drillExample() { return HSKMistakes.drillExampleOf(S.history); }
+
+/* Attempts made, and how many of them landed the structure being drilled.
+ *
+ * The goal is passes, not attempts: six correct uses of one pattern, however
+ * many tries that takes. So the two numbers are both shown -- "3 of 6 correct,
+ * attempt 11" -- because a session where they diverge is the interesting one.
+ *
+ * A pass is judged on the target alone (HSKMistakes.credited), so a sentence
+ * that gets 就 right and 了 wrong advances the drill it is actually in. */
 function drillTold() { return S.history.filter(t => t.role === "user").length; }
 function drillPassed() {
-  return S.history.filter(t => t.role === "user" && t.grade && t.grade.ok).length;
+  return S.history.filter(t => t.role === "user" && t.grade &&
+                               HSKMistakes.credited(t.grade)).length;
 }
-function drillDone() { return drillTold() >= S.drillTurns; }
-
-/* Choosing a category is what starts the drill: the marker goes in the
- * transcript, then the partner opens. Nothing is generated -- and nothing is
- * spent -- until the learner has picked, the same withholding story time and
- * 20 Questions use. */
-function startDrillWith(tag) {
-  if (!tag || drillTag()) return;
-  S.history.push({ role: "drill", text: tag, id: newMessageId(),
+/* Stopping early is the escape hatch for a run that will not come good --
+ * without one, a goal of passes has no floor on a bad day. Stored as a marker
+ * so it survives a reload and a sync, like every other fact about a drill. */
+function drillEnded() { return S.history.some(t => t.role === "drillEnd"); }
+function drillDone() { return drillPassed() >= S.drillTurns || drillEnded(); }
+function endDrill() {
+  if (!drillTag() || drillEnded()) return;
+  S.history.push({ role: "drillEnd", text: "", id: newMessageId(),
                    created_at: new Date().toISOString() });
   persist();
+  renderAll();
+  renderStarters();
+}
+
+/* Choosing a category AND one of your own sentences in it is what starts the
+ * drill: the markers go in the transcript, then the partner opens. Nothing is
+ * generated -- and nothing is spent -- until the learner has picked, the same
+ * withholding story time and 20 Questions use.
+ *
+ * `eg` is the CORRECTION of a sentence they got wrong, never the wrong version:
+ * it is going to a model, and RESEARCH.md measured what naming a wrong form
+ * does to the reply. It may be "" when the grader offered no correction, which
+ * drills the category alone -- what this activity did before examples existed. */
+function startDrillWith(tag, eg) {
+  if (!tag || drillTag()) return;
+  const at = new Date().toISOString();
+  S.history.push({ role: "drill", text: tag, id: newMessageId(), created_at: at });
+  if (eg) S.history.push({ role: "drillEg", text: eg, id: newMessageId(), created_at: at });
+  drillPick = "";
+  persist();
+  renderAll();
   renderStarters();
   openingTurn();
 }
@@ -4663,14 +4772,49 @@ function renderDrillChooser(box) {
       : "Nothing logged yet. Messages you send are checked as you go.") + "</div>";
     return;
   }
+  const picked = open.filter(m => m.tag === drillPick)[0];
+  if (!picked) return renderCategoryChoices(box, open);
+  renderExampleChoices(box, picked);
+}
+
+/* Step one: which category. The learner's most recent sentence in it goes on
+ * the button, not in a `title` -- a tooltip is invisible on a phone, which is
+ * where this app is used, so "what am I about to drill" was unanswerable. */
+function renderCategoryChoices(box, open) {
   open.slice(0, 5).forEach(m => {
     const b = document.createElement("button");
     b.className = "story";
-    b.textContent = HSKPrompt.TAG_LABEL[m.tag] + " (" + m.n + ")";
-    b.title = m.eg + (m.better ? " \u2192 " + m.better : "");
-    b.onclick = () => startDrillWith(m.tag);
+    b.innerHTML = '<b>' + escapeHtml(HSKPrompt.TAG_LABEL[m.tag]) + " (" + m.n + ")</b>" +
+      (m.eg ? '<br><span style="color:var(--dim)">' + escapeHtml(m.eg) + "</span>" : "");
+    b.onclick = () => { drillPick = m.tag; renderStarters(); };
     box.appendChild(b);
   });
+}
+
+/* Step two: which of your own mistakes in it. Entries whose grade carried no
+ * correction cannot be drilled towards anything, so a category with none of
+ * them starts on itself rather than showing an empty list. */
+function renderExampleChoices(box, m) {
+  const egs = (m.recent || []).filter(r => r.better);
+  if (!egs.length) return startDrillWith(m.tag, "");
+  const head = document.createElement("div");
+  head.className = "note";
+  head.textContent = "Which " + HSKPrompt.TAG_LABEL[m.tag] + " mistake? " +
+    S.drillTurns + " correct sentences finishes it.";
+  box.appendChild(head);
+  egs.forEach(r => {
+    const b = document.createElement("button");
+    b.className = "story";
+    b.innerHTML = '<span style="color:var(--dim)">' + escapeHtml(r.eg) + "</span><br><b>" +
+      escapeHtml(r.better) + "</b>" +
+      (r.note ? '<br><span style="color:var(--dim)">' + escapeHtml(r.note) + "</span>" : "");
+    b.onclick = () => startDrillWith(m.tag, r.better);
+    box.appendChild(b);
+  });
+  const back = document.createElement("button");
+  back.textContent = "\u2190 another category";
+  back.onclick = () => { drillPick = ""; renderStarters(); };
+  box.appendChild(back);
 }
 
 /* Before a category is chosen this is the chooser; after it, a progress line.
@@ -4682,10 +4826,19 @@ function renderDrillControl(box) {
   const note = document.createElement("div");
   note.className = "note";
   const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
+  /* Both numbers, because the goal is passes and the cost is attempts: "3 of 6
+   * correct, attempt 11" is the honest report of a session that is going badly,
+   * and a single number would hide it. */
   note.textContent = drillDone()
-    ? label + " \u2014 done. " + drillPassed() + " of " + drillTold() + " passed."
-    : label + " \u2014 " + (drillTold() + 1) + " of " + S.drillTurns;
+    ? label + " \u2014 done. " + drillPassed() + " correct in " + drillTold() + "."
+    : label + " \u2014 " + drillPassed() + " of " + S.drillTurns + " correct" +
+      (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "");
   box.appendChild(note);
+  if (drillDone()) return;
+  const stop = document.createElement("button");
+  stop.textContent = "End drill";
+  stop.onclick = endDrill;
+  box.appendChild(stop);
 }
 
 /* The chooser. Curated ideas, topics already read, a box, and make-something-up

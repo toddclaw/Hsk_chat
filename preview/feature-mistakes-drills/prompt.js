@@ -343,11 +343,17 @@
       reuse: "unused",
       gen: "turn",
       converse: true,
+      /* Practice of what the learner already has. A word they have never seen
+       * is a second thing to get wrong in a sentence that is already hard, and
+       * the activity's whole claim is production of the known. Declared here
+       * rather than branched on in turn() so the next activity that wants it
+       * says so on its own row. */
+      newWords: false,
       note: "Ghost Words: practice words you've learned but never used. " +
         "The partner asks questions that need these words in the answer."
     },
     drill: {
-      label: "Mistakes",
+      label: "Drills",
       /* Built per-category in activityRules(), the way story time's phase
        * rules and 20 Questions' role rules are -- the text depends on which
        * category was chosen, which a static array cannot express. */
@@ -356,8 +362,9 @@
       reuse: null,
       gen: "turn",
       converse: true,
-      note: "Mistakes: practice a category the grader keeps flagging. " +
-        "Pick one below; the partner asks questions that need it in the answer."
+      newWords: false,                       // as Ghost Words, and for the same reason
+      note: "Drills: work one mistake the grader keeps flagging until you get " +
+        "it right six times. Pick a category and one of your own sentences below."
     },
     story: {
       label: "Story time",
@@ -493,7 +500,16 @@
        * a prompt rule by naming the failure". */
       var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
       if (zh) {
-        rules.push(convert("学生今天要练习「") + convert(zh) + convert("」。") +
+        /* The one sentence being drilled, and only ever the CORRECTED version
+         * of it -- the learner's own wrong sentence stays on screen and never
+         * reaches a model (D9). Passed verbatim, like a story topic: it is
+         * stored text in the learner's own script, not app-authored Chinese,
+         * so convert() has no business rewriting it. */
+        var egRule = opts.drillEg
+          ? convert("学生要练习的句子是这样的：「") + opts.drillEg + convert("」。") +
+            convert("请你问的问题，要让学生说出差不多的句子。")
+          : "";
+        rules.push(convert("学生今天要练习「") + convert(zh) + convert("」。") + egRule +
           convert("请你问一些问题，让学生必须用这个说法来回答。一次只问一个问题，问题要短。") +
           convert("学生说对了，就说很好，再问下一个。") +
           convert("学生说得不对，就用正确的说法说一次，然后再问一个差不多的问题。") +
@@ -783,6 +799,8 @@
   TAGS.forEach(function (r) { TAG_LABEL[r[0]] = r[1]; });
   var TAG_ZH = {};
   TAGS.forEach(function (r) { TAG_ZH[r[0]] = r[3]; });
+  var TAG_EG = {};
+  TAGS.forEach(function (r) { TAG_EG[r[0]] = r[2]; });
 
   /* The four categories the detail view shows as icons. Each is a different
    * repair: a wrong word is looked up, a wrong rule is learned, a wrong order
@@ -795,6 +813,52 @@
     { key: "order",   label: "word order",  zh: "语序" },
     { key: "natural", label: "naturalness", zh: "地道" }
   ];
+
+  /* The verdict on the structure being drilled, asked in its OWN call.
+   *
+   * It began as an extra field on grade(), which is the obvious design and the
+   * wrong one. Measured (tools/grade-target-ab.js): asked alongside the
+   * seventeen-tag verdict, the model fused the two. A sentence using the
+   * drilled structure correctly but wrong somewhere else -- the entire case
+   * partial credit exists for -- came back ok:false 9 times in 15, and
+   * sharpening the wording moved that not at all. It also cost the tag ledger
+   * accuracy, 34/59 against 42/59 for the same fixtures graded without it.
+   *
+   * This is the lesson README.md already records about the partner and the
+   * grader: holding a conversation and diagnosing a mistake are different jobs,
+   * and a small model does them badly at once. Judging one structure and
+   * judging a whole sentence are two more.
+   *
+   * So grade() is left exactly as it was -- every tag measurement in
+   * RESEARCH.md still describes the string the app sends -- and the drill asks
+   * its own question, about one structure, with nothing else in the prompt to
+   * fuse with.
+   *
+   * `used` exists because the cheapest way to pass a drill is to write a
+   * sentence that never reaches for the structure at all. */
+  function drillCheck(opts) {
+    var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
+    if (!zh) return "";
+    return "A student of Chinese at " + opts.label + " is practising one " +
+      "structure: " + zh + " (" + (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n" +
+      (opts.drillEg ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
+      "\nThe student then wrote: " + opts.text + "\n\n" +
+      "For reference, a typical mistake with it and its fix: " +
+      TAG_EG[opts.drillTag] + "\n\n" +
+      "Answer two questions about " + zh + " in that sentence, and nothing else. " +
+      "Ignore every other part of it -- other grammar, wrong words, whether the " +
+      "sentence is natural. Those are being judged separately and must not " +
+      "change your answer here.\n\n" +
+      "used  -- did the student ATTEMPT " + zh + " here at all? true even if they " +
+      "got it wrong: a wrong attempt is still an attempt. false when the " +
+      "sentence contains nothing of the kind -- not a wrong version, but none at " +
+      "all -- however good that sentence is, and even if " + zh + " would have " +
+      "fitted it well.\n" +
+      "ok    -- was that attempt correct? false if the student reached for " + zh +
+      " and got it wrong.\n\n" +
+      "Reply with only this JSON object, no prose and no code fence:\n" +
+      '{"used":true,"ok":true}';
+  }
 
   function grade(opts) {
     var tags = TAGS.map(function (r) {
@@ -971,9 +1035,11 @@
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
-              translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
+                        translate: translate, explain: explain, grade: grade,
+              drillCheck: drillCheck, castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
+              TAG_EG: TAG_EG,
               GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;

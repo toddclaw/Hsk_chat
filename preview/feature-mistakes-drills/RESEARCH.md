@@ -137,6 +137,28 @@ zero so a well-drilled category leaves the list rather than going negative.
 Nothing is stored; both terms are derived by scanning the graded messages, so
 there is no second tally to drift.
 
+**A credit is earned on the structure, not on the sentence.** A drill works one
+specific mistake, and a learner practising 就 who slips on 了 has made progress
+on 就 — a whole-sentence pass/fail cannot say so, and originally did not: credit
+required `grade.ok`. It now requires that the drilled structure was *attempted
+and correct*, judged apart from everything else in the sentence, with the 了
+mistake still counted as a failure under its own tag. Nothing is forgiven; it is
+only attributed to the structure it belongs to. The measurement that makes this
+possible, and the one that nearly made it useless, is
+[Judging the drilled structure on its own](#judging-the-drilled-structure-on-its-own).
+
+Requiring *attempted* is what stops the obvious exploit. Without it the cheapest
+way to finish a drill is to write six easy sentences that never reach for the
+structure at all, and the arithmetic would read that as mastery.
+
+**The goal is passes, not attempts.** A session ends after
+`drillTurns` correct uses of the chosen sentence, however many tries that takes,
+with a stop button for a run that will not come good. This does not change what
+a session is worth: the per-day cap still applies, so six passes in one sitting
+count once. The 6 is a target the learner can see, not a lever on the
+arithmetic — which is also what stops "keep writing until six land" being a way
+to farm the number.
+
 **What is not evidenced.** No source gives a mastery criterion in encounters for
 a grammatical error category, which is the same honest gap this file already
 records for `PROMOTE_AT`.
@@ -150,6 +172,10 @@ records for `PROMOTE_AT`.
 - **The per-day cap is a floor, not a measurement.** One credit a day is
   defensible from the spacing literature but no study sets it. If drilling turns
   out to feel unrewarding, that cap is the knob.
+- **Six passes is a round number.** Nothing in the reading sets a within-session
+  criterion either; it is the same gap, one level down. It is a setting (3–10)
+  precisely because it is not evidenced, and because the per-day cap means
+  moving it cannot distort the ledger.
 
 Changing either number means updating this file.
 
@@ -850,6 +876,92 @@ the next person does not re-derive them.
   subtracts from is not, which is worth knowing before anyone reads a cleared
   category as evidence.
 
+### Judging the drilled structure on its own
+
+**Measured.** `tools/grade-target-ab.js`, same model and level, 20 hand-written
+fixtures over five tags, 3 repeats. Rows in `tools/grade-target-ab-results.md`.
+
+Partial credit needs one thing the grader could not previously say: was *this
+structure* used, and was it right, ignoring everything else in the sentence.
+Four kinds of fixture, each with a known answer — the structure used correctly,
+used wrongly, used correctly in a sentence wrong somewhere else, and a correct
+sentence avoiding it entirely. The third is the case partial credit exists for;
+the fourth is the free pass it has to refuse.
+
+**Asked as an extra field on `grade()`, it does not work.** The two verdicts
+fuse. A sentence with the target right and another error came back `ok:false`
+**9 times in 15**, and 5 of 15 dodges scored as used. Sharpening the wording —
+naming the trap, telling it twice to ignore the rest of the sentence — moved
+that not at all: still 9 of 15, with `used` improved and the whole thing net
+*worse*, 38/60 against 40/59. It also cost the tag ledger accuracy, 34/59
+against 42/59 for the same fixtures graded without the extra field.
+
+**Asked in its own call, it works.** One structure, one question, nothing else
+in the prompt to fuse with: the partial-credit case went to **15/15** and dodges
+to 15/15 immediately. This is the lesson README.md already records about the
+partner and the grader — holding a conversation and diagnosing a mistake are
+different jobs, and a small model does them badly at once. Judging one structure
+and judging a whole sentence are two more.
+
+Two wording faults remained, and both were worth fixing:
+
+| wording | good | bad | other | dodge | both right |
+|---|---|---|---|---|---|
+| field on `grade()` | 14/14 | 12/15 | 6/15 | 15/15 | 40/59 |
+| field on `grade()`, sharpened | 11/14 | 9/15 | 6/15 | 15/15 | 38/59 |
+| own call | 15/15 | 4/15 | 15/15 | 15/15 | 41/60 |
+| own call, `used` = *attempted* | 13/13 | 13/15 | 10/14 | 10/14 | 46/56 |
+| **shipped**, plus "nothing of the kind" | **15/15** | 12/15 | **15/15** | 12/15 | **54/60** |
+
+(`ok` correctness shown; `used` and the per-kind counts are in the results file.)
+
+- **"Used" reads as "used correctly" unless you say otherwise.** A wrong attempt
+  scored `used:false`, which denies credit for the right reason by accident and
+  denies it for correct sentences too: 没 correctly used scored `used:false`
+  because the tag's Chinese name is 不和没 and the model checked for both. Saying
+  *attempted, right or wrong* fixed the whole column.
+- **…which then let dodges in.** "Attempt" is generous enough that a sentence
+  with no measure word anywhere read as attempting one. Both clauses together —
+  attempted even if wrong, false when there is *nothing of the kind* present —
+  is what the app ships.
+
+**What still fails.** 我很喜欢看书 scores as a measure-word attempt every time,
+and 今天比昨天很冷 — the textbook 比 error — is called correct 2 times in 3. So
+the remaining error is roughly 3 in 15 toward *over*-crediting, which is the
+direction to fail in: a learner is occasionally given a pass they did not earn,
+rather than denied one they did. Denials of correct target use are 0/30.
+
+**`grade()` itself is now untouched by drilling.** Its string is identical in and
+out of a drill, so every tag measurement in this file still describes what the
+app sends — a property the rejected design did not have.
+
+### Whether a six-pass goal grinds
+
+**Measured, thinly.** `tools/grade-target-ab.js --loop`, 4 repeats over the same
+five tags: a real partner turn, a student model answering it naturally at level,
+then the target check. 18–20 samples an arm; rows in
+`tools/drill-loop-results.md`.
+
+This bounds the *partner's* contribution, not a learner's error rate — a model
+answering at HSK 3 makes far fewer mistakes than the person this is for. What it
+can say is how often a partner turn leads to a reply that uses the target at all.
+
+| arm | passes | turns per pass | a 6-pass goal is about |
+|---|---|---|---|
+| the chosen sentence in the prompt | 7/18 | 2.6 | 15 turns |
+| the category alone | 5/20 | 4.0 | 24 turns |
+
+**Naming the specific sentence helps**, which is the A/B for that prompt edit,
+though at n=18 this is a direction and not a number.
+
+**The unevenness from the section above is worse under a goal.** 比, 的/地/得 and
+不/没 scored **0** passes in every arm and every run; 量词 and 了 carried the
+whole total. A learner who picks one of the first three and is told to get six
+right is being asked for something the partner does not set up. The stop button
+is the answer for now, and this is the strongest argument for the item-style
+prompt the design deferred: when the partner cannot elicit the structure,
+handing the learner a cue directly is the thing that would work.
+
 ## Things that did not work
 
 Kept because a rejected idea that looks reasonable will be proposed again.
@@ -905,7 +1017,13 @@ Stated plainly so nobody cites this file for more than it holds.
   [Drilling a mistake category](#drilling-a-mistake-category).
 - **The drill does not work equally across the taxonomy.** 比 and 的/地/得 were
   never elicited in measurement, while 量词 and 了 were. The arithmetic treats all
-  seventeen categories alike; the prompt does not.
+  seventeen categories alike; the prompt does not. Under a pass goal this is
+  sharper still: three of five categories scored zero passes end to end
+  ([Whether a six-pass goal grinds](#whether-a-six-pass-goal-grinds)).
+- **The target check over-credits about 1 sentence in 5.** Two fixtures fool it
+  every time, and the arithmetic has no second opinion. It fails toward
+  generosity by design, but a cleared category is weaker evidence than the
+  number suggests.
 - **Nothing here is tested against learners.** Every measurement is of model behavior. The
   pedagogy is drawn from published research; the app has not run a study of its own.
 
