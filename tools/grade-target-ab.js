@@ -67,7 +67,18 @@ const arg = (name, dflt) => {
 };
 const RUNS = Number(arg("runs", 3));
 const LEVEL = Number(arg("level", 3));
-const MODEL = arg("model", "qwen/qwen3-30b-a3b-instruct-2507");
+/* The TEACHING model, because grade() and drillCheck() are both called through
+ * teachingModel() in the app (index.html 3094, 3114) and it defaults to
+ * TEACH_MODEL, not to the partner's model. Runs recorded in
+ * grade-target-ab-results.md predate this and used the 30B partner model, so
+ * they understate what the app actually does -- tools/drill-word-ab.js measured
+ * the same prompts on both and the gap was large.
+ *
+ * --loop needs BOTH: the partner turn is a real conversation turn and runs on
+ * the chat model, while the check on the student's reply runs on the teaching
+ * one, exactly as the app splits them. */
+const MODEL = arg("model", "qwen/qwen3-235b-a22b-2507");
+const CHAT_MODEL = arg("chat-model", "qwen/qwen3-30b-a3b-instruct-2507");
 const CONCURRENCY = Number(arg("concurrency", 4));
 const LOOP = args.indexOf("--loop") !== -1;
 /* The partner rule gained the specific sentence, which is itself a prompt edit
@@ -122,11 +133,11 @@ const EXPECT = {
   dodge: { used: false, ok: null }   // ok is not meaningful when unused
 };
 
-async function call(messages, maxTokens, temperature) {
+async function call(messages, maxTokens, temperature, model) {
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages: messages, max_tokens: maxTokens,
+    body: JSON.stringify({ model: model || MODEL, messages: messages, max_tokens: maxTokens,
                            temperature: temperature, usage: { include: true } })
   });
   const body = await r.json().catch(() => ({}));
@@ -186,12 +197,12 @@ async function loopOne(tag, eg) {
                                    activity: "drill", drillTag: tag, drillEg: eg,
                                    opening: true });
   const partner = await call([{ role: "system", content: system },
-                              { role: "user", content: "你好。" }], 200, 0.7);
+                              { role: "user", content: "你好。" }], 200, 0.7, CHAT_MODEL);
   const student = await call([
     { role: "system", content: "You are a student of Chinese at " + LABEL +
       ". Answer the teacher in one short Chinese sentence. Reply with the " +
       "sentence and nothing else." },
-    { role: "user", content: partner.text }], 100, 0.7);
+    { role: "user", content: partner.text }], 100, 0.7, CHAT_MODEL);
   const g = parseGrade((await call([{ role: "user", content: HSKPrompt.drillCheck({
     text: student.text, label: LABEL, drillTag: tag, drillEg: eg
   }) }], 120, 0)).text);
@@ -238,7 +249,8 @@ const pad = (s, n) => String(s) + " ".repeat(Math.max(1, n - String(s).length));
       });
     }
   }
-  console.error("model=" + MODEL + " level=" + LEVEL + " runs=" + RUNS +
+  console.error("model=" + MODEL + (LOOP ? " chat=" + CHAT_MODEL : "") +
+    " level=" + LEVEL + " runs=" + RUNS +
     " samples=" + tasks.length +
     (LOOP ? " (loop: 3 calls each, example=" + (NOEG ? "no" : "yes") + ")" : ""));
   const rows = (await pool(tasks, CONCURRENCY)).filter(r => r && !r.error);
