@@ -229,6 +229,24 @@ check(lexCounts({
 }).filter(r => r.tag === "wrong-word")[0].credits === 0,
   "a grade that could not be read credits nothing");
 
+/* A verdict that was never meaningful must not be consulted, and one was
+ * stored: the first release asked the target question for these tags too, so
+ * transcripts carry target:{used:true,ok:false} on sentences that were fine. */
+check(M.credited({ ok: true, errors: [], target: { used: true, ok: false } },
+                 "wrong-word", ["wrong-word"]) === true,
+  "a stored target is ignored for a tag that names an error");
+check(M.credited({ ok: true, errors: [], target: { used: true, ok: false } },
+                 "measure-word", ["wrong-word"]) === false,
+  "and still decides it for a tag that names a structure");
+check(M.counts({
+  c1: [wrong("wrong-word", daysAgo(5))],
+  c2: [drillMarker("wrong-word"),
+       { role: "user", text: "我觉得可以", created_at: daysAgo(1),
+         grade: { ok: true, errors: [], target: { used: true, ok: false } } }]
+}, { tagLabels: LEX, now: NOW, errorClassTags: ["wrong-word"] })
+  .filter(r => r.tag === "wrong-word")[0].credits === 1,
+  "counts() takes the list the same way it takes the labels");
+
 // --- drillTagOf -------------------------------------------------------------
 check(M.drillTagOf([drillMarker("aspect-le"), right(daysAgo(1))]) === "aspect-le",
   "drillTagOf reads the marker");
