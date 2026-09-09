@@ -75,16 +75,25 @@
    * easily as a real attempt. The per-day cap bounds what that can do to the
    * ledger; if it becomes a way to feel productive without practising, the
    * answer is a minimum-effort check, not a stricter rule here. */
-  function credited(grade, tag) {
+  function credited(grade, tag, errorClassTags) {
     if (!grade || grade.unreadable) return false;
+    var errorClass = (errorClassTags || []).indexOf(tag) !== -1;
     var t = grade.target;
-    if (t && typeof t === "object") return t.used === true && t.ok === true;
+    /* Skipped for an error-class tag even when one is stored. The first release
+     * asked the question for those tags too, so transcripts already carry
+     * verdicts that were meaningless when written; consulting them would leave
+     * a correct sentence uncredited forever. Which list this is comes from the
+     * caller, the same way tagLabels does -- this file stays free of prompt.js. */
+    if (!errorClass && t && typeof t === "object") {
+      return t.used === true && t.ok === true;
+    }
     return !(grade.errors || []).some(function (e) { return e && e.tag === tag; });
   }
 
   function counts(chatMsgs, opts) {
     opts = opts || {};
     var labels = opts.tagLabels || {};
+    var errorClassTags = opts.errorClassTags || [];
     var now = opts.now || Date.now();
     var cutoff = now - (opts.windowDays || WINDOW_DAYS) * DAY;
     var byTag = {};
@@ -120,7 +129,7 @@
                           note: e.note || "", at: when });
         });
 
-        if (drill && labels[drill] && credited(t.grade, drill)) {
+        if (drill && labels[drill] && credited(t.grade, drill, errorClassTags)) {
           if (!creditDays[drill]) creditDays[drill] = {};
           creditDays[drill][dayKey(t.created_at)] = true;
         }

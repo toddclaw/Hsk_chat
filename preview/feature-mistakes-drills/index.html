@@ -1015,7 +1015,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v90 — 2026-09-08";
+const VERSION   = "v91 — 2026-09-08";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3613,7 +3613,7 @@ function drillTold() { return S.history.filter(t => t.role === "user").length; }
 function drillPassed() {
   const tag = drillTag();
   return S.history.filter(t => t.role === "user" && t.grade &&
-                               HSKMistakes.credited(t.grade, tag)).length;
+    HSKMistakes.credited(t.grade, tag, HSKPrompt.ERROR_CLASS_TAGS)).length;
 }
 
 /* Why the last sentence did not count, in a few words, or "" when it did.
@@ -3625,11 +3625,12 @@ function drillPassed() {
 function drillWhyNot() {
   const tag = drillTag();
   const last = S.history.filter(t => t.role === "user" && t.grade).pop();
-  if (!last || HSKMistakes.credited(last.grade, tag)) return "";
+  if (!last || HSKMistakes.credited(last.grade, tag, HSKPrompt.ERROR_CLASS_TAGS)) return "";
   const zh = HSKPrompt.TAG_ZH[tag] || "";
   const label = HSKPrompt.TAG_LABEL[tag] || tag;
   if (last.grade.unreadable) return "the last one could not be checked";
-  const t = last.grade.target;
+  // Same skip as credited(): a stored verdict for these tags means nothing.
+  const t = HSKPrompt.ERROR_CLASS_TAGS.indexOf(tag) === -1 ? last.grade.target : null;
   if (t && !t.used) return "the last one did not use " + zh;
   if (t) return "the last one used " + zh + ", but not correctly";
   return "the last one still had a " + label + " mistake";
@@ -5179,7 +5180,8 @@ function renderProgress() { renderGoalProgress(); renderNextProgress(); }
 const MISTAKES_SHOWN = 3;
 
 function mistakeCounts() {
-  return HSKMistakes.counts(S.chatMsgs, { tagLabels: HSKPrompt.TAG_LABEL });
+  return HSKMistakes.counts(S.chatMsgs, { tagLabels: HSKPrompt.TAG_LABEL,
+                                          errorClassTags: HSKPrompt.ERROR_CLASS_TAGS });
 }
 
 function renderMistakes() {
