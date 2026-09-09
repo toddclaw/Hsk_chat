@@ -3451,6 +3451,97 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(wordLog.indexOf("drillWord") === -1 && wordLog.indexOf("wrong-word") === -1,
       "and the markers are never rendered as messages", wordLog);
 
+    /* --------------------------------- bringing older chats up to the grader */
+    /* Two eras, two gaps: a turn from before the grader existed carries no
+     * verdict, and a turn graded before v92 carries error-class tags with no
+     * word. The button counts both, costs them differently, and a run fills
+     * each in place. A third message is already complete and must be left
+     * alone -- the count is the check that it was. */
+    await exec(`
+      var cid = "99999999-5555-4555-8555-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-5555-4555-8555-999999999999": [
+        { id: "66666666-5555-4555-8555-666666666661", role: "user",
+          text: "我有三个书", created_at: now },
+        { id: "66666666-5555-4555-8555-666666666662", role: "user",
+          text: "我觉得行", created_at: now,
+          grade: { ok: false, better: "我觉得可以",
+                   errors: [{ tag: "wrong-word", note: "not right here" }] } },
+        { id: "66666666-5555-4555-8555-666666666663", role: "user",
+          text: "我很好", created_at: now,
+          grade: { ok: true, better: "", errors: [] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.renderMigrate", "the app");
+    /* One stub for both calls, told apart by the prompt: the extraction says
+     * "Name the ONE word", the grader asks for an errors array. */
+    await exec(`
+      window.migrateCalls = { grade: 0, word: 0 };
+      window.callModel = function (msgs) {
+        var p = msgs && msgs[0] && msgs[0].content || "";
+        if (p.indexOf("Name the ONE word") !== -1) {
+          window.migrateCalls.word++;
+          return Promise.resolve('{"wrong":"行","right":"可以"}');
+        }
+        window.migrateCalls.grade++;
+        return Promise.resolve(JSON.stringify({ ok: false, meant: "", better: "我有三本书",
+          cats: { word: true, grammar: false, order: true, natural: true },
+          errors: [{ tag: "measure-word", note: "use ben" }] }));
+      };
+      window.renderMigrate();
+      return true;`);
+    check(await exec(`return document.querySelector('#migrateBox').style.display !== "none";`) === true,
+      "the migration offer appears when older chats need work");
+    const migLabel = await exec(`return document.querySelector('#migrateGrades').textContent;`);
+    check(migLabel.indexOf("2 messages") !== -1,
+      "counting the two that need it and not the one already done", migLabel);
+    check(/\$0\.\d\d/.test(migLabel),
+      "with a cost estimated from those counts, not a fixed number", migLabel);
+
+    await exec(`document.querySelector('#migrateGrades').click(); return true;`);
+    await waitFor(`document.querySelector('#migrateBox').style.display === "none"`,
+      "the run to finish and the offer to withdraw");
+    const migCalls = await exec(`return JSON.stringify(window.migrateCalls);`);
+    check(JSON.parse(migCalls).grade === 1,
+      "the ungraded message is graded exactly once", migCalls);
+    check(JSON.parse(migCalls).word === 1,
+      "and only the already-graded one costs an extraction", migCalls);
+
+    const migMsgs = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var a = m["99999999-5555-4555-8555-999999999999"] || [];
+      return JSON.stringify({
+        graded: !!(a[0] && a[0].grade && (a[0].grade.errors || [])[0]),
+        tag: a[0] && a[0].grade && (a[0].grade.errors || [])[0] &&
+             a[0].grade.errors[0].tag,
+        word: a[1] && a[1].grade && (a[1].grade.errors || [])[0] &&
+              a[1].grade.errors[0].word,
+        untouched: !!(a[2] && a[2].grade && a[2].grade.ok === true)
+      });`);
+    check(JSON.parse(migMsgs).graded === true &&
+          JSON.parse(migMsgs).tag === "measure-word",
+      "the turn from before the grader now carries a verdict", migMsgs);
+    check(JSON.parse(migMsgs).word === "行",
+      "and the turn graded before v92 now names the word to drill", migMsgs);
+    check(JSON.parse(migMsgs).untouched === true,
+      "while a message already complete is left exactly as it was", migMsgs);
+
+    /* The ledger is the point of all of it: both mistakes must now be there. */
+    const migLedger = await exec(`
+      var rows = window.mistakeCounts();
+      return JSON.stringify(rows.map(function (r) {
+        return r.tag + ":" + (r.words || []).map(function (w) { return w.word; }).join(","); }));`);
+    check(migLedger.indexOf("measure-word") !== -1 &&
+          migLedger.indexOf("wrong-word:行") !== -1,
+      "and both reach the mistake list, the word one drillable", migLedger);
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

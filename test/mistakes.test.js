@@ -364,5 +364,51 @@ check(M.credited({ ok: false, errors: [{ tag: "wrong-word" }] },
                  "wrong-word", ["wrong-word"], "行") === false,
   "a transcript with no stored verdict falls back to tag absence");
 
+// --- needsMigration ---------------------------------------------------------
+// Two kinds of work, counted separately because they cost differently: a
+// message with no grade needs the full grader, a message graded before the
+// word extraction existed needs only the cheap extraction.
+const CLASS = ["wrong-word", "wrong-sense", "wrong-character", "unnatural"];
+const need = msgs => M.needsMigration(msgs, CLASS);
+
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1) }] }).grades === 1,
+  "a user message with no grade needs grading");
+check(need({ c1: [{ role: "assistant", text: "x" }] }).grades === 0,
+  "the partner's own turns are not graded");
+check(need({ c1: [right(daysAgo(1))] }).grades === 0,
+  "a graded message does not need grading again");
+
+const oldClass = {
+  c1: [{ role: "user", text: "我觉得行", created_at: daysAgo(1),
+         grade: { ok: false, better: "我觉得可以",
+                  errors: [{ tag: "wrong-word", note: "n" }] } }]
+};
+check(need(oldClass).words === 1,
+  "an error-class error with no word needs the extraction");
+check(need(oldClass).grades === 0,
+  "and does not need re-grading -- the grade stands");
+
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { ok: false, better: "y",
+             errors: [{ tag: "wrong-word", note: "n", word: "行" }] } }] }).words === 0,
+  "an error that already carries a word is done");
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { ok: false, better: "y",
+             errors: [{ tag: "measure-word", note: "n" }] } }] }).words === 0,
+  "a structural tag names what to practise already and needs no extraction");
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { ok: false, better: "",
+             errors: [{ tag: "wrong-word", note: "n" }] } }] }).words === 0,
+  "with no correction there is nothing to extract the word from");
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { unreadable: true } }] }).words === 0,
+  "an unreadable grade is not work either");
+check(need({}).grades === 0 && need({}).words === 0,
+  "an empty history needs nothing");
+// Resumability: the counts fall as work lands, so a second press continues.
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1) },
+                  right(daysAgo(1))] }).grades === 1,
+  "a part-done history counts only what is left");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
