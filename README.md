@@ -758,13 +758,15 @@ source of truth to drift out of step.
 
 # Activities
 
-The header's first control is what kind of session this is. Three of them:
+The header's first control is what kind of session this is:
 
 | | What it is | Who speaks first |
 |---|---|---|
 | **Chat** | open conversation, the app as it always was | you |
-| **Focused chat** | the partner steers toward words you were taught and have never once written | the partner |
+| **Ghost Words** | the partner steers toward words you were taught and have never once written | the partner |
 | **Story time** | a five-part story at your level, then questions about it | the partner |
+| **20 Questions** | one of you thinks of something, the other guesses | either |
+| **Drills** | one mistake the grader keeps flagging, until you get it right six times | the partner |
 
 **Choosing an activity starts a new conversation.** It is not a mode switch on the one you
 are in — an activity is fixed when a conversation is created, so a transcript never mixes a
@@ -772,15 +774,47 @@ story with a chat, and the chat you left is one tap away under 💬. The chat li
 row with its activity, because a list of mixed session types is unreadable without it.
 
 Conversation starters only appear in **Chat**. They are openers for the *learner*, and the
-other two open with the partner speaking first — offering one there would invite you to talk
+others open with the partner speaking first — offering one there would invite you to talk
 over a story that has not started.
 
-**Focused chat** draws its words from the same list the progress panel calls *never used*:
+**Ghost Words** draws its words from the same list the progress panel calls *never used*:
 words the app introduced through pacing that you have not yet written yourself. That list
 already existed, already sorted commonest-first, so the activity is one extra rule and a
 different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
 maintaining per level and would fight the word goal whenever the two disagreed. The words pull
 the conversation somewhere on their own.
+
+**Drills** works one mistake at a time. The chooser lists the categories you are actually
+accruing, with your own most recent sentence in each; picking one asks a second question —
+*which* of your last three mistakes in it — and that specific sentence is what the session is
+about. It stays on screen for the whole conversation, and the partner is steered to ask
+questions that need it.
+
+```
+Drills · measure word
+Get this right 6 times:
+我有三本书
+use ben for books
+```
+
+**The goal is six correct uses, not six sentences.** It may take you eleven tries; only the
+correct ones count, and the control bar shows both — `3 of 6 correct · attempt 11`. **End
+drill** stops a run that will not come good, which matters more than it sounds: `RESEARCH.md`
+measures three categories where the partner cannot reliably set the structure up at all.
+
+**Getting the drilled thing right is what counts, not the whole sentence.** Drilling 就 and
+slipping on 了 credits the 就 and still logs the 了 under its own tag. That verdict comes from
+its own small model call rather than from the grader's answer — asked as one more field on the
+grader, the two questions fused and the partial-credit case came back wrong nine times in
+fifteen. Writing an easy sentence that avoids the structure earns nothing: the check asks
+whether you *attempted* it, not just whether nothing went wrong.
+
+Like Ghost Words, Drills introduces no new words. A word you have never seen is one more thing
+to get wrong in a sentence that is already hard.
+
+A drill still credits a category **at most once a day**, however many sentences you land. That
+is the spacing rule the whole feature is built on, and it is why the goal is a setting you can
+move without distorting anything.
 
 **Story time** generates **five segments of about ninety characters**, each as its own turn,
 and then asks you about what it just told you. The segment size is not a stylistic choice and

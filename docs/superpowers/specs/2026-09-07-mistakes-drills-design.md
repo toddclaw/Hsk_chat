@@ -74,6 +74,29 @@ one rather than a tuned number.
 | D9 | The drill prompt describes the **target structure** and shows only correct forms. The learner's own wrong sentence appears in the chooser UI and never in the prompt | RESEARCH.md, "Sharpening a prompt rule by naming the failure": putting the learner's error in the prompt took a failure from 0/8 to 3/8 because naming the bad output primed the model to reproduce it. This is the single easiest way to get this feature wrong. |
 | D10 | The partner **elicits**, it does not lecture | Ghost Words already has the mechanism for steering a conversation so target forms must appear in the learner's own output; that is production practice, which is what a drill is for. |
 
+
+## Revisions, 2026-09-08
+
+Todd asked for four changes after using it: a better name, no new words mid-drill,
+far more direction about what is being drilled, and partial credit from the grader.
+The session shape changed with them.
+
+| # | Decision | Rationale |
+|---|---|---|
+| D11 | The activity is called **Drills**. The id stays `drill` | A rename of `label` only, so stored `conversations.activity` values need no migration and no sync probe. |
+| D12 | Drills introduces **no new words**, like Ghost Words. Both say so with `newWords: false` on their activity row | A word the learner has never seen is a second thing to get wrong in a sentence that is already hard, and the activity practises production of the known. Declared on the row rather than branched on in `turn()`, so the next activity that wants it edits nothing. |
+| D13 | The chooser has **two steps**: category, then which of the learner's own recent mistakes in it. `mistakes.js` keeps the last **3** per tag rather than the latest one | "I know I picked a category and I'd like that reflected back" — one example is not a choice, and the drilled sentence is what the banner then keeps on screen. Only the *correction* is ever sent to a model; the learner's own wrong sentence stays in the UI, which is D9 unchanged. |
+| D14 | A drill ends at **`drillTurns` correct uses of the chosen sentence**, not `drillTurns` attempts, with an always-available **End drill** button | The learner's goal is six correct uses however many tries it takes. The button is the floor: a goal of passes has none otherwise, and RESEARCH.md's loop measurement found three of five categories where the partner does not set the structure up at all. |
+| D15 | Credit is judged on the **drilled structure alone** — attempted, and correct — replacing D4's `grade.ok` | Getting 就 right while slipping on 了 is progress on 就. The 了 mistake still counts as a failure under its own tag. Requiring *attempted* is what stops six dodges finishing a drill. |
+| D16 | That verdict is asked in **its own model call**, not as a field on `grade()` | Measured, and the reverse of the obvious design. As an extra field the two verdicts fused: the partial-credit case came back wrong 9 times in 15 and the tag ledger lost accuracy with it. In its own call, 15/15. RESEARCH.md, "Judging the drilled structure on its own". Cost: one extra small call per drill sentence, in an activity that is opt-in. |
+| D17 | Three more pseudo-messages carry the state: `drillEg`, `drillEnd`, beside the existing `drill` | Same trick as D2, same reason: `messages.role`/`text` already sync, and `contextFor()`/`windowed()` already skip them. Still no `db/schema.sql` change. They are collected in `MARKER_ROLES`, which `renderMessage()` also needed — the `drill` marker was rendering as a bot bubble. |
+| D18 | The per-day credit cap is **unchanged** | The pass goal is a session target the learner can see, not a lever on the ledger. Six passes in one sitting still credit once, which is what keeps drill length a free setting. |
+
+**Not done, and deliberately.** Retry-the-same-sentence-until-right, ghost-words
+partial credit (its own BACKLOG entry, and a different activity), and item-style
+sessions. The last is now better evidenced than it was: see RESEARCH.md, "Whether
+a six-pass goal grinds".
+
 ## The counting, precisely
 
 For each tag, over every graded user message in every conversation:

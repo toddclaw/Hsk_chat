@@ -3291,13 +3291,35 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec(`return document.querySelector('#input').disabled;`) === true,
       "and the composer is closed until a category is chosen");
 
-    /* Choosing writes the marker and opens the composer. callModel is stubbed
-     * first: startDrillWith() calls openingTurn(), which would otherwise reach
-     * the network. */
+    /* Choosing a category does NOT start anything: the drill is on one specific
+     * sentence, so the chooser has a second step offering the learner's own
+     * mistakes in that category. Nothing is stored until they pick one. */
     await exec(`
       var b = document.querySelectorAll('#starters button');
       for (var i = 0; i < b.length; i++) {
         if (b[i].textContent.indexOf("measure word") === 0) { b[i].click(); break; } }
+      return true;`);
+    const egStep = await exec(`return document.querySelector('#starters').textContent;`);
+    check(egStep.indexOf("\u6211\u6709\u4e09\u4e2a\u4e66") !== -1 &&
+          egStep.indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1,
+      "step two offers the learner's own sentence and its correction", egStep);
+    check(egStep.indexOf("use ben for books") !== -1,
+      "with the grader's note on what the rule was", egStep);
+    check(await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m), n = 0;
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drill") n++; } }
+      return n;`) === 0,
+      "and picking a category alone stores nothing");
+
+    /* Picking the sentence writes both markers and opens the composer.
+     * callModel is stubbed already: startDrillWith() calls openingTurn(). */
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1) { b[i].click(); break; } }
       return true;`);
     await waitFor(`(function () {
       var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
@@ -3306,20 +3328,45 @@ check(usedGroups && usedGroups.first === "\u7684",
         for (var j = 0; j < m[k[i]].length; j++) {
           if (m[k[i]][j].role === "drill") return true; } }
       return false; })()`, "the drill marker to be written");
-    check(await exec(`
+    const markers = await exec(`
       var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
-      var k = Object.keys(m);
+      var k = Object.keys(m), out = {};
       for (var i = 0; i < k.length; i++) {
         for (var j = 0; j < m[k[i]].length; j++) {
-          if (m[k[i]][j].role === "drill") return m[k[i]][j].text; } }
-      return "";`) === "measure-word",
-      "choosing a category writes a drill marker naming it");
+          var t = m[k[i]][j];
+          if (t.role === "drill" || t.role === "drillEg") out[t.role] = t.text; } }
+      return JSON.stringify(out);`);
+    check(JSON.parse(markers).drill === "measure-word",
+      "choosing writes a drill marker naming the category", markers);
+    check(JSON.parse(markers).drillEg === "\u6211\u6709\u4e09\u672c\u4e66",
+      "and a second marker holding the corrected sentence -- never the wrong one",
+      markers);
     check(await exec(`return document.querySelector('#input').disabled;`) === false,
-      "and the composer opens once a category is chosen");
+      "and the composer opens once the drill has started");
+    const control = await exec(`return document.querySelector('#starters').textContent;`);
+    check(control.indexOf("0 of 6 correct") !== -1,
+      "the control counts CORRECT sentences, not attempts", control);
+    check(control.indexOf("End drill") !== -1,
+      "and offers a way out of a run that will not come good", control);
+    check((await exec(`return document.querySelector('#log').textContent;`))
+            .indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1,
+      "the banner keeps the sentence being drilled on screen");
+    /* The marker rows are setup, not conversation: rendering them would put
+     * "measure-word" in the log as though the partner had said it. */
+    check((await exec(`return document.querySelector('#log').textContent;`))
+            .indexOf("measure-word") === -1,
+      "and the markers themselves are never rendered as messages");
+
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("End drill") !== -1) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`document.querySelector('#input').disabled === true`,
+      "ending the drill to close the composer");
     check((await exec(`return document.querySelector('#starters').textContent;`))
-            .indexOf("1 of 6") !== -1,
-      "and the control counts the drill down from the setting's default",
-      await exec(`return document.querySelector('#starters').textContent;`));
+            .indexOf("done") !== -1,
+      "and the control reports the run as done");
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

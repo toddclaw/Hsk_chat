@@ -931,5 +931,64 @@ check(P.activityRules({ activity: "drill", drillTag: "" }).length === 0,
 check(P.activityRules({ activity: "drill", drillTag: "no-such-tag" }).length === 0,
   "an unknown category emits no rule rather than a broken one");
 
+// Drills is the learner-facing name; the id stays `drill`, so stored
+// conversations need no migration.
+check(P.ACTIVITIES.drill.label === "Drills", "the activity is called Drills",
+  P.ACTIVITIES.drill.label);
+
+/* Neither Ghost Words nor Drills introduces vocabulary: both are practice of
+ * what the learner already has, and a new word mid-drill is a second thing to
+ * get wrong. Declared on the row so the next activity that needs it says so
+ * itself rather than growing another branch in turn(). */
+check(P.ACTIVITIES.focused.newWords === false && P.ACTIVITIES.drill.newWords === false,
+  "Ghost Words and Drills both decline new words");
+check(P.ACTIVITIES.chat.newWords !== false && P.ACTIVITIES.story.newWords !== false &&
+      P.ACTIVITIES.twenty.newWords !== false,
+  "and no other activity does");
+
+// The specific sentence being drilled, chosen from the learner's own mistakes.
+// Only the CORRECTION travels: their wrong version stays in the UI.
+const EG = "\u6211\u5df2\u7ecf\u5403\u4e86\u996d";
+const drillEgRules = P.activityRules({ activity: "drill", drillTag: "aspect-le", drillEg: EG });
+check(drillEgRules.length === 1, "an example still emits exactly one rule");
+check(drillEgRules[0].indexOf(EG) !== -1,
+  "and the partner is shown the corrected sentence to steer towards", drillEgRules[0]);
+check(drillEgRules[0].indexOf(P.TAG_ZH["aspect-le"]) !== -1,
+  "alongside the structure's name");
+check(P.activityRules({ activity: "drill", drillTag: "aspect-le" })[0].length > 0,
+  "a category with no example chosen still drills the category");
+
+// --- the drill's own verdict, asked in its own call --------------------------
+/* Measured, tools/grade-target-ab.js: as an extra field on grade() the two
+ * verdicts fused -- a sentence with the target right and another error came
+ * back wrong 9 times in 15, and sharpening the wording did not move it. Asked
+ * separately: 15/15. So grade() must stay a prompt about the whole sentence,
+ * and this one must stay a prompt about one structure. */
+const DC = P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "aspect-le", drillEg: EG });
+check(DC.indexOf(EG) !== -1, "the check shows the sentence being drilled");
+check(DC.indexOf(P.TAG_ZH["aspect-le"]) !== -1, "named by its structure");
+check(/"used":true,"ok":true/.test(DC), "and asks for the two flags the app parses");
+check(/a wrong attempt is still an attempt/.test(DC),
+  "used means attempted, right or wrong -- read as 'used correctly' it denied " +
+  "credit for correct sentences");
+check(/nothing of the kind/.test(DC),
+  "and a sentence with none of the structure is used:false, which is what stops " +
+  "a dodge scoring");
+check(/must not\s+change your answer here/.test(DC.replace(/\s+/g, " ")) ||
+      /must not change your answer here/.test(DC),
+  "other mistakes are explicitly out of scope -- this is the partial credit");
+check(DC.indexOf(P.TAG_EG["aspect-le"]) !== -1,
+  "the tag's own worked pair is shown, as grade() already does for all seventeen");
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "" }) === "",
+  "and no category means no check at all");
+
+/* The grader prompt itself must not move: every tag measurement in RESEARCH.md
+ * was taken against this exact string, in and out of a drill alike. */
+check(!/"used"/.test(G) && !/practising one structure/.test(G),
+  "grade() is untouched by drilling");
+check(P.ERROR_TAGS.every(t => !!P.TAG_EG[t]),
+  "every tag has a worked pair for the drill check to quote",
+  P.ERROR_TAGS.filter(t => !P.TAG_EG[t]).join(" "));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

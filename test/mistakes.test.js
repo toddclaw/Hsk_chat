@@ -113,6 +113,79 @@ const egAcross = find(counts({
 check(egAcross.eg === "新的句子",
   "and is the most recent across conversations regardless of key order", egAcross.eg);
 
+// --- the recent examples the drill chooser shows ----------------------------
+const three = find(counts({
+  c1: [wrong("measure-word", daysAgo(9), "第三句"), wrong("measure-word", daysAgo(5), "第二句"),
+       wrong("measure-word", daysAgo(1), "第一句"), wrong("measure-word", daysAgo(20), "第四句")]
+}), "measure-word");
+check(three.recent.length === 3, "at most three recent examples are kept",
+  String(three.recent.length));
+check(three.recent.map(r => r.eg).join(" ") === "第一句 第二句 第三句",
+  "and they are newest first", three.recent.map(r => r.eg).join(" "));
+check(three.recent[0].better === "正确的说法" && three.recent[0].note === "the rule",
+  "each carries its correction and the grader's note");
+check(three.recent[0].eg === three.eg,
+  "the single example is the head of the list, so old callers see no change");
+
+// --- drillExampleOf ---------------------------------------------------------
+const egMarker = text => ({ role: "drillEg", text: text });
+check(M.drillExampleOf([drillMarker("aspect-le"), egMarker("我已经吃了饭")]) === "我已经吃了饭",
+  "drillExampleOf reads the chosen correction");
+check(M.drillExampleOf([drillMarker("aspect-le")]) === "",
+  "drillExampleOf is empty when no example was chosen");
+
+// --- credit judged on the target, not the whole sentence --------------------
+// The grader's verdict on the drilled structure specifically. `ok` is the
+// whole-sentence verdict, which partial credit deliberately ignores.
+const onTarget = (when, opts) => ({
+  role: "user", text: "我写的句子", created_at: when,
+  grade: Object.assign({ ok: false, errors: [{ tag: "aspect-le", note: "了" }] }, opts)
+});
+
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"),
+       onTarget(daysAgo(1), { target: { used: true, ok: true } })]
+}), "measure-word").credits === 1,
+  "the target used correctly credits even though the sentence failed elsewhere");
+
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"),
+       onTarget(daysAgo(1), { target: { used: true, ok: false } })]
+}), "measure-word").credits === 0,
+  "the target used wrongly credits nothing");
+
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"),
+       onTarget(daysAgo(1), { ok: true, errors: [], target: { used: false, ok: true } })]
+}), "measure-word").credits === 0,
+  "a correct sentence that dodges the target credits nothing");
+
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5)), wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"),
+       onTarget(daysAgo(2), { target: { used: true, ok: true } }),
+       onTarget(daysAgo(1), { target: { used: true, ok: true } })]
+}), "measure-word").credits === 2,
+  "target credit is still capped at one a day, so two days credit twice");
+
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5)), wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"),
+       onTarget(daysAgo(1), { target: { used: true, ok: true } }),
+       onTarget(daysAgo(1), { target: { used: true, ok: true } })]
+}), "measure-word").credits === 1,
+  "and six passes in one sitting are worth what one is");
+
+// Rows graded before the target field existed keep the credits they earned.
+check(find(counts({
+  c1: [wrong("measure-word", daysAgo(5))],
+  c2: [drillMarker("measure-word"), right(daysAgo(1))]
+}), "measure-word").credits === 1,
+  "a legacy pass with no target field still credits on grade.ok");
+
 // --- drillTagOf -------------------------------------------------------------
 check(M.drillTagOf([drillMarker("aspect-le"), right(daysAgo(1))]) === "aspect-le",
   "drillTagOf reads the marker");
