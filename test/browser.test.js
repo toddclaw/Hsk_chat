@@ -3368,6 +3368,89 @@ check(usedGroups && usedGroups.first === "\u7684",
             .indexOf("done") !== -1,
       "and the control reports the run as done");
 
+    /* ------------------------------------------- drilling one word, not a tag */
+    /* The four tags that name a class of error hold unrelated mistakes: this
+     * seed is one "wrong word" list with 行 and 认识 in it, which is the case
+     * that motivated the word target. The chooser's second step must offer the
+     * WORDS, the marker must record which, and the banner must headline it.
+     *
+     * The `word` on each error is what nameDrillWords() writes at grade time;
+     * seeding it directly keeps this test off the network, the same way the
+     * measure-word block above seeds a grade rather than earning one. */
+    await exec(`
+      var cid = "99999999-6666-4666-8666-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-6666-4666-8666-999999999999": [
+        { id: "77777777-6666-4666-8666-777777777771", role: "user",
+          text: "\u6211\u89c9\u5f97\u884c", created_at: now,
+          grade: { ok: false, better: "\u6211\u89c9\u5f97\u53ef\u4ee5",
+                   errors: [{ tag: "wrong-word", note: "xing is not right here",
+                              word: "\u884c" }] } },
+        { id: "77777777-6666-4666-8666-777777777772", role: "user",
+          text: "\u6211\u8ba4\u8bc6\u4ed6\u660e\u5929\u6765", created_at: now,
+          grade: { ok: false, better: "\u6211\u542c\u8bf4\u4ed6\u660e\u5929\u6765",
+                   errors: [{ tag: "wrong-word", note: "renshi is for people",
+                              word: "\u8ba4\u8bc6" }] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    await exec(`
+      window.callModel = function () { return Promise.resolve("\u4f60\u597d\u5417\uff1f"); };
+      window.startActivity("drill");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the drill chooser to appear");
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("wrong word") === 0) { b[i].click(); break; } }
+      return true;`);
+    const wordBtns = await exec(`
+      var b = document.querySelectorAll('#starters button'), out = [];
+      for (var i = 0; i < b.length; i++) out.push(b[i].textContent);
+      return JSON.stringify(out);`);
+    check(wordBtns.indexOf("\u884c") !== -1 && wordBtns.indexOf("\u8ba4\u8bc6") !== -1,
+      "step two offers each word the grader named, not one whole sentence",
+      wordBtns);
+
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("\u884c") === 0) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillWord") return true; } }
+      return false; })()`, "the drillWord marker to be written");
+    const wordMarkers = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), out = {};
+      var k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "drill" || t.role === "drillWord") out[t.role] = t.text; } }
+      return JSON.stringify(out);`);
+    check(JSON.parse(wordMarkers).drill === "wrong-word" &&
+          JSON.parse(wordMarkers).drillWord === "\u884c",
+      "choosing a word records the tag AND the word", wordMarkers);
+
+    const wordLog = await exec(`return document.querySelector('#log').textContent;`);
+    check(wordLog.indexOf("\u884c") !== -1,
+      "the banner headlines the word being drilled", wordLog);
+    check(wordLog.indexOf("\u6211\u89c9\u5f97\u884c") !== -1,
+      "and keeps the learner's own wrong sentence on screen", wordLog);
+    check(wordLog.indexOf("\u8ba4\u8bc6") === -1,
+      "but not the other word's mistakes, which are a different drill", wordLog);
+    check(wordLog.indexOf("drillWord") === -1 && wordLog.indexOf("wrong-word") === -1,
+      "and the markers are never rendered as messages", wordLog);
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

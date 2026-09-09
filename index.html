@@ -1015,7 +1015,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v91 — 2026-09-08";
+const VERSION   = "v92 — 2026-09-09";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1413,6 +1413,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       storyTopic: currentActivity() === "story" ? storyTopic() : "",
       drillTag: currentActivity() === "drill" ? drillTag() : "",
       drillEg: currentActivity() === "drill" ? drillExample() : "",
+      drillWord: currentActivity() === "drill" ? drillWord() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
       opening: S.history.length === 0,
@@ -1447,6 +1448,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     storyTopic: currentActivity() === "story" ? storyTopic() : "",
     drillTag: currentActivity() === "drill" ? drillTag() : "",
     drillEg: currentActivity() === "drill" ? drillExample() : "",
+    drillWord: currentActivity() === "drill" ? drillWord() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
     opening: S.history.length === 0,
@@ -1994,7 +1996,7 @@ function renderNotice(turnObj) {
  * the transcript and cost no schema (D2), which means every reader of the
  * transcript has to know to skip them -- here, and in the is-the-log-empty
  * check in renderAll(). */
-const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillEnd"]);
+const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord", "drillEnd"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -2182,21 +2184,34 @@ function renderAll() {
     /* ponytail: a full scan of every graded message per render, in this one
      * activity. The same scan Settings does on open; move it behind a cache if
      * a long history ever makes a drill render feel slow. */
-    const rows = (mistakeCounts().filter(m => m.tag === drillTag())[0] || {}).recent || [];
+    const cat = mistakeCounts().filter(m => m.tag === drillTag())[0] || {};
+    const word = drillWord();
+    /* A word drill shows that word's own history, not the category's: the
+     * category holds unrelated errors, which is the whole reason the word is
+     * the target. */
+    const w = word && (cat.words || []).filter(x => x.word === word)[0];
+    const rows = (w ? w.recent : cat.recent) || [];
     const target = drillExample();
     const head = '<div class="hint"><b>Drills · ' + escapeHtml(label) + '</b><br>' +
-      (target
+      (word
+        ? 'Use this correctly ' + S.drillTurns + ' times, in ' + S.drillTurns +
+          ' different sentences:<br>' +
+          '<b style="color:var(--accent);font-size:26px">' + escapeHtml(word) + '</b><br>'
+        : target
         ? 'Get this right ' + S.drillTurns + ' times:<br>' +
           '<b style="color:var(--accent);font-size:22px">' + escapeHtml(target) + '</b><br>'
         : 'Practising ' + escapeHtml(label) + ' \u2014 ' + S.drillTurns +
           ' correct sentences.<br>');
-    const others = rows.filter(r => r.better !== target).slice(0, 2).map(r =>
-      '<span style="color:var(--dim)">' + escapeHtml(r.eg) +
+    /* Every one of the learner's own mistakes with this word, wrong then right.
+     * Shown and never sent: the wrong version stays in the UI (D9). */
+    const others = (word ? rows : rows.filter(r => r.better !== target)).slice(0, 3)
+      .map(r => '<span style="color:var(--dim)">' + escapeHtml(r.eg) +
       (r.better ? ' \u2192 ' + escapeHtml(r.better) : "") + '</span>').join("<br>");
-    const note = rows.filter(r => r.better === target)[0];
+    const note = word ? rows[0] : rows.filter(r => r.better === target)[0];
     return head + (note && note.note
         ? '<span style="color:var(--dim)">' + escapeHtml(note.note) + '</span><br>' : "") +
-      (others ? '<br>Also flagged:<br>' + others : "") + '</div>';
+      (others ? '<br>' + (word ? 'What you wrote before:' : 'Also flagged:') +
+        '<br>' + others : "") + '</div>';
   }
   if (!S.history.some(t => !MARKER_ROLES.has(t.role))) {
     /* Two sub-states share this branch for story time: no topic yet (the
@@ -3079,6 +3094,55 @@ function parseGrade(raw) {
            cats: cats, errors: errors, at: new Date().toISOString() };
 }
 
+/* Which word each error-class mistake is about, asked once per mistake and
+ * stored on the error entry.
+ *
+ * Four of the seventeen tags name a class of error rather than a structure, and
+ * a class of error is not something a drill can point at: "wrong word" holds
+ * 行 for 可以 and 认识 for 听说 in the same list, and drilling the category
+ * practises neither. A word IS something to point at, so the chooser offers
+ * 行 and drillCheck() can ask a question that has an answer -- measured at
+ * 37/39 against the 1/3 the same question scored asked as 用词
+ * (tools/drill-word-ab.js, RESEARCH.md "Drilling a word rather than a
+ * category").
+ *
+ * Its own call, and here rather than at drill start, for two separate reasons.
+ * Its own call because a second question bolted onto grade() fuses with the
+ * first and costs the tag ledger accuracy. Here because the chooser RANKS
+ * words, and a ranking cannot be built from an extraction that has not happened
+ * yet -- deferring it would mean a burst of calls every time the chooser opens.
+ *
+ * Only the four tags: the other thirteen already name what to practise, so
+ * asking would spend a call to be told 了 is about 了. Only when there is a
+ * correction to compare against, which is what makes the word findable.
+ *
+ * `word` may honestly come back empty -- the model refuses 6/6 where no single
+ * word is at fault -- and then the mistake keeps behaving exactly as it did
+ * before this existed. So does a failed call: this is best-effort and must
+ * never cost the learner their grade. */
+async function nameDrillWords(g, text) {
+  if (!g.better || !text) return;
+  const targets = (g.errors || []).filter(
+    e => HSKPrompt.ERROR_CLASS_TAGS.indexOf(e.tag) !== -1);
+  for (const e of targets) {
+    try {
+      const w = jsonIn(await callModel([{ role: "user", content: HSKPrompt.drillWord({
+        label: levelLabel(), text: text, better: g.better, note: e.note
+      }) }], 120, teachingModel()));
+      /* Copied, never invented: the prompt says character for character, and a
+       * word that appears in neither sentence is a rewrite the chooser must not
+       * offer. Cheap to verify here and impossible to undo once stored. */
+      const wrong = String((w && w.wrong) || "").trim();
+      if (wrong && text.indexOf(wrong) !== -1) e.word = wrong;
+      /* `right` is asked for and deliberately not stored. The chooser shows the
+       * whole corrected SENTENCE beside the word, which is what makes a mistake
+       * recognisable, and the replacement word alone has no reader. It stays in
+       * the prompt because that is the prompt that was measured at 33/33, and
+       * dropping the field would be an unmeasured prompt change for nothing. */
+    } catch (err) { console.warn("[drill word] " + ((err && err.message) || err)); }
+  }
+}
+
 async function gradeTurn(turnObj) {
   if (!S.grader || turnObj.role !== "user" || turnObj.grade) return;
   turnObj.grading = true;
@@ -3088,6 +3152,7 @@ async function gradeTurn(turnObj) {
      * mid-grade must not attach this one's verdict to another one's target. */
     const tag = currentActivity() === "drill" ? drillTag() : "";
     const eg = tag ? drillExample() : "";
+    const word = tag ? drillWord() : "";
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
@@ -3107,7 +3172,8 @@ async function gradeTurn(turnObj) {
      * then there is nothing to ask and no call to spend: mistakes.js credits
      * those on the absence of the tag itself. */
     const check = tag ? HSKPrompt.drillCheck({
-      text: turnObj.text, label: levelLabel(), drillTag: tag, drillEg: eg }) : "";
+      text: turnObj.text, label: levelLabel(), drillTag: tag, drillEg: eg,
+      drillWord: word }) : "";
     if (g && check) {
       try {
         const t = jsonIn(await callModel([{ role: "user", content: check }],
@@ -3115,6 +3181,7 @@ async function gradeTurn(turnObj) {
         if (t) g.target = { used: t.used === true, ok: t.ok === true };
       } catch (e) { console.warn("[drill check] " + ((e && e.message) || e)); }
     }
+    if (g) await nameDrillWords(g, turnObj.text);
     /* A grade that could not be read is stored as such. Left absent it would
      * be retried on every render, and shown as a tick it would be a lie. */
     turnObj.grade = g || { unreadable: true, at: new Date().toISOString() };
@@ -3601,6 +3668,11 @@ function drillTag() { return HSKMistakes.drillTagOf(S.history); }
  * is being drilled on its own. Read off the transcript, like drillTag(). */
 function drillExample() { return HSKMistakes.drillExampleOf(S.history); }
 
+/* The one word this drill practises, "" for a drill on the category alone.
+ * Read off the transcript, like drillTag(). Written by the chooser from the
+ * word the grader's extraction put on the mistake. */
+function drillWord() { return HSKMistakes.drillWordOf(S.history); }
+
 /* Attempts made, and how many of them landed the structure being drilled.
  *
  * The goal is passes, not attempts: six correct uses of one pattern, however
@@ -3611,9 +3683,9 @@ function drillExample() { return HSKMistakes.drillExampleOf(S.history); }
  * that gets 就 right and 了 wrong advances the drill it is actually in. */
 function drillTold() { return S.history.filter(t => t.role === "user").length; }
 function drillPassed() {
-  const tag = drillTag();
+  const tag = drillTag(), word = drillWord();
   return S.history.filter(t => t.role === "user" && t.grade &&
-    HSKMistakes.credited(t.grade, tag, HSKPrompt.ERROR_CLASS_TAGS)).length;
+    HSKMistakes.credited(t.grade, tag, HSKPrompt.ERROR_CLASS_TAGS, word)).length;
 }
 
 /* Why the last sentence did not count, in a few words, or "" when it did.
@@ -3623,14 +3695,17 @@ function drillPassed() {
  * missed, misused, or the check failed. A grade and a drill are two different
  * verdicts on one sentence, and the app was only ever showing one of them. */
 function drillWhyNot() {
-  const tag = drillTag();
+  const tag = drillTag(), word = drillWord();
   const last = S.history.filter(t => t.role === "user" && t.grade).pop();
-  if (!last || HSKMistakes.credited(last.grade, tag, HSKPrompt.ERROR_CLASS_TAGS)) return "";
-  const zh = HSKPrompt.TAG_ZH[tag] || "";
+  if (!last || HSKMistakes.credited(last.grade, tag, HSKPrompt.ERROR_CLASS_TAGS, word))
+    return "";
+  const zh = word || HSKPrompt.TAG_ZH[tag] || "";
   const label = HSKPrompt.TAG_LABEL[tag] || tag;
   if (last.grade.unreadable) return "the last one could not be checked";
-  // Same skip as credited(): a stored verdict for these tags means nothing.
-  const t = HSKPrompt.ERROR_CLASS_TAGS.indexOf(tag) === -1 ? last.grade.target : null;
+  /* Same skip as credited(): a stored verdict means nothing for these tags --
+   * unless a word names the target, which is a thing the check can answer. */
+  const t = word || HSKPrompt.ERROR_CLASS_TAGS.indexOf(tag) === -1
+    ? last.grade.target : null;
   if (t && !t.used) return "the last one did not use " + zh;
   if (t) return "the last one used " + zh + ", but not correctly";
   return "the last one still had a " + label + " mistake";
@@ -3658,11 +3733,16 @@ function endDrill() {
  * it is going to a model, and RESEARCH.md measured what naming a wrong form
  * does to the reply. It may be "" when the grader offered no correction, which
  * drills the category alone -- what this activity did before examples existed. */
-function startDrillWith(tag, eg) {
+function startDrillWith(tag, eg, word) {
   if (!tag || drillTag()) return;
   const at = new Date().toISOString();
   S.history.push({ role: "drill", text: tag, id: newMessageId(), created_at: at });
   if (eg) S.history.push({ role: "drillEg", text: eg, id: newMessageId(), created_at: at });
+  /* A third marker, same trick and same reason as the other two: messages.role
+   * and messages.text already sync and contextFor()/windowed() already skip
+   * them, so no db/schema.sql change and no sync probe. */
+  if (word) S.history.push({ role: "drillWord", text: word,
+                             id: newMessageId(), created_at: at });
   drillPick = "";
   persist();
   renderAll();
@@ -4816,17 +4896,41 @@ function renderCategoryChoices(box, open) {
   });
 }
 
-/* Step two: which of your own mistakes in it. Entries whose grade carried no
- * correction cannot be drilled towards anything, so a category with none of
- * them starts on itself rather than showing an empty list. */
+/* Step two: which mistake in it, offered as WORDS where the grader named one.
+ *
+ * A category is not a drillable unit for the four tags that name a class of
+ * error: one "wrong word" list held 行 for 可以, an extra 人, and 认识 for 听说
+ * -- three unrelated errors under one heading, and a drill on the heading
+ * practises none of them. So where the extraction named a word, the button says
+ * the word and the drill targets it.
+ *
+ * Mistakes recorded before the extraction existed carry no word and still offer
+ * the sentence they always did, so there is no backfill and no migration; a
+ * category part-way through the changeover simply shows both kinds. Entries
+ * whose grade carried no correction cannot be drilled towards anything, so a
+ * category with neither starts on itself rather than showing an empty list. */
 function renderExampleChoices(box, m) {
+  const words = m.words || [];
   const egs = (m.recent || []).filter(r => r.better);
-  if (!egs.length) return startDrillWith(m.tag, "");
+  if (!words.length && !egs.length) return startDrillWith(m.tag, "");
   const head = document.createElement("div");
   head.className = "note";
   head.textContent = "Which " + HSKPrompt.TAG_LABEL[m.tag] + " mistake? " +
-    S.drillTurns + " correct sentences finishes it.";
+    S.drillTurns + (words.length ? " correct uses finishes it."
+                                 : " correct sentences finishes it.");
   box.appendChild(head);
+  words.forEach(w => {
+    const b = document.createElement("button");
+    b.className = "story";
+    /* The word is the target and reads as one. Under it, the learner's own
+     * mistake in the shape this chooser has always used, wrong then right. */
+    b.innerHTML = '<b style="font-size:20px">' + escapeHtml(w.word) + "</b>" +
+      (w.n > 1 ? ' <span style="color:var(--dim)">×' + w.n + "</span>" : "") +
+      (w.eg ? '<br><span style="color:var(--dim)">' + escapeHtml(w.eg) +
+        (w.better ? " → " + escapeHtml(w.better) : "") + "</span>" : "");
+    b.onclick = () => startDrillWith(m.tag, w.better, w.word);
+    box.appendChild(b);
+  });
   egs.forEach(r => {
     const b = document.createElement("button");
     b.className = "story";

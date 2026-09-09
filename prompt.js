@@ -498,18 +498,37 @@
        *
        * Names the structure and never a wrong form: RESEARCH.md, "Sharpening
        * a prompt rule by naming the failure". */
-      var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
+      /* A word drill names the word. The category cannot serve: 用词 tells the
+       * partner to elicit "word choice", which is not something a question can
+       * be built around, and it is why a drill on one of those four tags used
+       * to fall back to re-eliciting one whole sentence. RESEARCH.md,
+       * "Drilling a word rather than a category". */
+      var zh = opts.drillWord || (opts.drillTag ? TAG_ZH[opts.drillTag] : null);
       if (zh) {
         /* The one sentence being drilled, and only ever the CORRECTED version
          * of it -- the learner's own wrong sentence stays on screen and never
          * reaches a model (D9). Passed verbatim, like a story topic: it is
          * stored text in the learner's own script, not app-authored Chinese,
          * so convert() has no business rewriting it. */
-        var egRule = opts.drillEg
+        /* Only a CATEGORY drill gets the sentence. A word drill deliberately
+         * does not: "make the student say roughly this sentence" is six
+         * elicitations of one string, which is massed repetition of a sentence
+         * rather than the varied practice across contexts the spacing
+         * literature actually supports (RESEARCH.md, "Drilling a mistake
+         * category"). The partner needs the word; the learner's own examples
+         * stay on screen in the banner, where they are a memory aid and not an
+         * instruction to a model. */
+        var egRule = opts.drillEg && !opts.drillWord
           ? convert("学生要练习的句子是这样的：「") + opts.drillEg + convert("」。") +
             convert("请你问的问题，要让学生说出差不多的句子。")
           : "";
-        rules.push(convert("学生今天要练习「") + convert(zh) + convert("」。") + egRule +
+        /* The word is the learner's own, passed verbatim like a story topic --
+         * stored text in their script, not app-authored Chinese, so convert()
+         * has no business rewriting it. The category name is app-authored and
+         * still converts. */
+        rules.push(convert("学生今天要练习「") +
+          (opts.drillWord ? opts.drillWord + convert("」这个词。")
+                          : convert(zh) + convert("」。")) + egRule +
           convert("请你问一些问题，让学生必须用这个说法来回答。一次只问一个问题，问题要短。") +
           convert("学生说对了，就说很好，再问下一个。") +
           convert("学生说得不对，就用正确的说法说一次，然后再问一个差不多的问题。") +
@@ -827,6 +846,58 @@
     { key: "natural", label: "naturalness", zh: "地道" }
   ];
 
+  /* Which WORD to drill, extracted from one mistake the learner already made.
+   *
+   * The seventeen tags were built to label errors, and four of them
+   * (ERROR_CLASS_TAGS) name a class of error rather than anything a learner can
+   * reach for. RESEARCH.md, "Judging the drilled structure on its own", records
+   * where that ends: \u540c\u97f3\u5b57 scored used:false 3 times in 3, so the drill could
+   * never be finished, and \u7528\u8bcd managed 1/3. The drill for those four became
+   * "write sentences without this kind of error", with a whole sentence standing
+   * in for a target.
+   *
+   * A word is a target. This call names it, once, so the chooser can offer
+   * \u884c under "wrong word" and drillCheck() can ask a question that has an answer.
+   *
+   * Its own call, and at GRADE time rather than at drill start, for two separate
+   * reasons. Its own call because the same measurement above found that bolting
+   * a second question onto grade() fuses the two verdicts and costs the tag
+   * ledger accuracy, 34/59 against 42/59. At grade time because the chooser
+   * ranks words, and a ranking cannot be built from an extraction that has not
+   * happened yet -- doing it lazily would mean a burst of calls every time the
+   * chooser opens, repeated.
+   *
+   * The learner's own wrong sentence reaches a model here, which D9 otherwise
+   * forbids. It is in the position grade() already puts it in -- the thing being
+   * judged, not an example inside a rule -- and this call writes no Chinese that
+   * anyone reads. D9's hazard is a PARTNER primed to reproduce a bad form in its
+   * own output; there is no such output here. Measured all the same:
+   * tools/drill-word-ab.js.
+   *
+   * Either field may be empty on its own. A correction that deletes a word
+   * leaves nothing in its place; one that adds a word replaced nothing. */
+  function drillWord(opts) {
+    return "A student of Chinese at " + opts.label + " wrote a sentence with a " +
+      "mistake in it. Name the ONE word they should practise.\n\n" +
+      "The student wrote: " + opts.text + "\n" +
+      "Corrected: " + (opts.better || "") + "\n" +
+      (opts.note ? "What was wrong: " + opts.note + "\n" : "") +
+      "\nReply with only this JSON object, no prose and no code fence:\n" +
+      '{"wrong":"","right":""}\n\n' +
+      "wrong -- the word in the STUDENT'S sentence that is at fault, copied from " +
+      "it character for character.\n" +
+      "right -- the word standing in its place in the corrected sentence, copied " +
+      "from that one character for character. Empty when the correction simply " +
+      "removes the faulty word and puts nothing there.\n\n" +
+      "Copy, never translate and never rewrite. A word you did not copy from one " +
+      "of those two sentences is wrong even when it is a better word.\n\n" +
+      "Both empty when no single word is at fault -- when the mistake is the " +
+      "order of the words, or a particle, or the sentence rebuilt as a whole. " +
+      "Two empty strings are a better answer than a guess: this picks what the " +
+      "student drills for the next six sentences, and a wrong pick sends them to " +
+      "practise something they already do correctly.";
+  }
+
   /* The verdict on the structure being drilled, asked in its OWN call.
    *
    * It began as an extra field on grade(), which is the obvious design and the
@@ -850,24 +921,45 @@
    * `used` exists because the cheapest way to pass a drill is to write a
    * sentence that never reaches for the structure at all. */
   function drillCheck(opts) {
+    /* A word drill names the WORD and skips the tag entirely. This is what lets
+     * the four error-class tags be drilled at all: "did you use \u884c, and was
+     * it right" is answerable where "did you attempt a wrong word" was not, and
+     * RESEARCH.md measured the latter at 1/3 for exactly that reason -- the
+     * prompt told the model to ignore wrong words in the same breath as asking
+     * about them. With a word as the subject that contradiction is gone.
+     *
+     * The wording below is the measured wording, unchanged: `used` = attempted,
+     * right or wrong, and false only when there is nothing of the kind present.
+     * Only the subject moves. TAG_EG is dropped in the word arm because it is
+     * an example about the tag, not about this word, and the tag is no longer
+     * what is being asked. */
+    var word = opts.drillWord || "";
     var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
-    if (!zh || ERROR_CLASS_TAGS.indexOf(opts.drillTag) !== -1) return "";
+    if (!word && (!zh || ERROR_CLASS_TAGS.indexOf(opts.drillTag) !== -1)) return "";
+    var subject = word ? "\u300c" + word + "\u300d" : zh;
     return "A student of Chinese at " + opts.label + " is practising one " +
-      "structure: " + zh + " (" + (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n" +
+      (word ? "word: " + subject + ".\n"
+            : "structure: " + subject + " (" +
+              (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n") +
       (opts.drillEg ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
       "\nThe student then wrote: " + opts.text + "\n\n" +
-      "For reference, a typical mistake with it and its fix: " +
-      TAG_EG[opts.drillTag] + "\n\n" +
-      "Answer two questions about " + zh + " in that sentence, and nothing else. " +
+      (word ? "" : "For reference, a typical mistake with it and its fix: " +
+        TAG_EG[opts.drillTag] + "\n\n") +
+      "Answer two questions about " + subject + " in that sentence, and nothing else. " +
+      /* The measured wording, shared by both arms. "Ignore wrong words" while
+       * asking about a word reads like the contradiction RESEARCH.md blamed for
+       * \u7528\u8bcd scoring 1/3, and rewording it for the word arm was tried: 0/18
+       * against 1/18 on wrong uses, which is no difference. The clause is not
+       * what `ok` fails on (tools/drill-word-ab.js, --only check). */
       "Ignore every other part of it -- other grammar, wrong words, whether the " +
       "sentence is natural. Those are being judged separately and must not " +
       "change your answer here.\n\n" +
-      "used  -- did the student ATTEMPT " + zh + " here at all? true even if they " +
+      "used  -- did the student ATTEMPT " + subject + " here at all? true even if they " +
       "got it wrong: a wrong attempt is still an attempt. false when the " +
       "sentence contains nothing of the kind -- not a wrong version, but none at " +
-      "all -- however good that sentence is, and even if " + zh + " would have " +
+      "all -- however good that sentence is, and even if " + subject + " would have " +
       "fitted it well.\n" +
-      "ok    -- was that attempt correct? false if the student reached for " + zh +
+      "ok    -- was that attempt correct? false if the student reached for " + subject +
       " and got it wrong.\n\n" +
       "Reply with only this JSON object, no prose and no code fence:\n" +
       '{"used":true,"ok":true}';
@@ -1049,7 +1141,8 @@
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
-              drillCheck: drillCheck, castPrompt: castPrompt,
+              drillCheck: drillCheck, drillWord: drillWord,
+              castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
               TAG_EG: TAG_EG, ERROR_CLASS_TAGS: ERROR_CLASS_TAGS,

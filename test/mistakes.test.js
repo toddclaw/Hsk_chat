@@ -253,5 +253,116 @@ check(M.drillTagOf([drillMarker("aspect-le"), right(daysAgo(1))]) === "aspect-le
 check(M.drillTagOf([right(daysAgo(1))]) === "",
   "drillTagOf is empty for an ordinary conversation");
 
+// --- drilling one word rather than the whole category -----------------------
+// RESEARCH.md, "Drilling a word rather than a category". The grader's error
+// entry may carry the word it is about; a tag whose errors carry none keeps
+// behaving exactly as it did before the field existed.
+const LEX2 = { "wrong-word": "wrong word" };
+const wrongWord = (word, when, text) => ({
+  role: "user", text: text || "我说错了", created_at: when,
+  grade: { ok: false, better: "正确的说法",
+           errors: [{ tag: "wrong-word", note: "the rule", word: word }] }
+});
+const wordDrill = (tag, word) => [{ role: "drill", text: tag },
+                                  { role: "drillWord", text: word }];
+const wordsOf = (rows, tag) => (rows.filter(r => r.tag === tag)[0] || {}).words || [];
+const lex = (msgs, over) => M.counts(msgs, Object.assign(
+  { tagLabels: LEX2, now: NOW, errorClassTags: ["wrong-word"] }, over || {}));
+
+check(M.drillWordOf(wordDrill("wrong-word", "行")) === "行",
+  "drillWordOf reads the marker");
+check(M.drillWordOf([{ role: "drill", text: "wrong-word" }]) === "",
+  "drillWordOf is empty for a drill on the category alone");
+
+const threeWords = { c1: [wrongWord("行", daysAgo(9)), wrongWord("认识", daysAgo(3)),
+                          wrongWord("行", daysAgo(8))] };
+check(wordsOf(lex(threeWords), "wrong-word").length === 2,
+  "two distinct words under one tag become two entries");
+check(wordsOf(lex(threeWords), "wrong-word")[0].word === "认识",
+  "words sort by recency, not by count",
+  JSON.stringify(wordsOf(lex(threeWords), "wrong-word").map(w => w.word)));
+check(wordsOf(lex(threeWords), "wrong-word").filter(w => w.word === "行")[0].n === 2,
+  "a word missed twice counts twice");
+check(lex(threeWords).filter(r => r.tag === "wrong-word")[0].n === 3,
+  "the tag total is unchanged by the split");
+
+check(wordsOf(lex({ c1: [wrong("wrong-word", daysAgo(2))] }), "wrong-word").length === 0,
+  "an error with no word makes no word entry");
+
+// A pass on the drilled word credits the word AND the category it sits under:
+// without the second, a category could never fall from a word drill.
+const drilled = {
+  c1: [wrongWord("行", daysAgo(9)), wrongWord("认识", daysAgo(8))],
+  c2: wordDrill("wrong-word", "行").concat([
+    { role: "user", text: "三点行吗", created_at: daysAgo(2),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } }])
+};
+check(wordsOf(lex(drilled), "wrong-word").filter(w => w.word === "行")[0].n === 0,
+  "a pass on the drilled word clears that word");
+check(wordsOf(lex(drilled), "wrong-word").filter(w => w.word === "认识")[0].n === 1,
+  "and leaves the other word under the same tag alone");
+check(lex(drilled).filter(r => r.tag === "wrong-word")[0].n === 1,
+  "the category falls by one too");
+
+// The per-day cap, one level down: it now bounds a word, not a category.
+const twice = {
+  c1: [wrongWord("行", daysAgo(9)), wrongWord("行", daysAgo(8))],
+  c2: wordDrill("wrong-word", "行").concat([
+    { role: "user", text: "三点行吗", created_at: daysAgo(2),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } },
+    { role: "user", text: "这样也行", created_at: daysAgo(2),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } }])
+};
+check(wordsOf(lex(twice), "wrong-word").filter(w => w.word === "行")[0].n === 1,
+  "two passes on one day credit a word once");
+
+// Two words drilled on the same day are two practices, not one massed session.
+const twoWordsOneDay = {
+  c1: [wrongWord("行", daysAgo(9)), wrongWord("认识", daysAgo(8))],
+  c2: wordDrill("wrong-word", "行").concat([
+    { role: "user", text: "三点行吗", created_at: daysAgo(2),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } }]),
+  c3: wordDrill("wrong-word", "认识").concat([
+    { role: "user", text: "我认识他", created_at: daysAgo(2),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } }])
+};
+check(lex(twoWordsOneDay).filter(r => r.tag === "wrong-word")[0].n === 0,
+  "two different words drilled the same day credit separately");
+
+// A category drilled on its own and a word under it drilled separately both
+// credit the same tag. Assigning rather than adding would drop one of them,
+// and which one would depend on key order.
+const mixed = {
+  c1: [wrongWord("行", daysAgo(9)), wrong("wrong-word", daysAgo(8))],
+  c2: wordDrill("wrong-word", "行").concat([
+    { role: "user", text: "三点行吗", created_at: daysAgo(3),
+      grade: { ok: true, errors: [], target: { used: true, ok: true } } }]),
+  c3: [{ role: "drill", text: "wrong-word" },
+       { role: "user", text: "我说对了", created_at: daysAgo(2),
+         grade: { ok: true, errors: [] } }]
+};
+check(lex(mixed).filter(r => r.tag === "wrong-word")[0].credits === 2,
+  "a category drill and a word drill under it both credit the tag",
+  JSON.stringify(lex(mixed).filter(r => r.tag === "wrong-word")[0]));
+check(lex(mixed).filter(r => r.tag === "wrong-word")[0].n === 0,
+  "so two failures under it clear");
+
+// credited(): an error-class tag gets no exemption once a word names the target.
+check(M.credited({ ok: true, errors: [], target: { used: true, ok: false } },
+                 "wrong-word", ["wrong-word"], "行") === false,
+  "a wrong use of the drilled word earns nothing, error-class tag or not");
+check(M.credited({ ok: true, errors: [], target: { used: false, ok: false } },
+                 "wrong-word", ["wrong-word"], "行") === false,
+  "a sentence that dodges the drilled word earns nothing");
+check(M.credited({ ok: true, errors: [], target: { used: true, ok: true } },
+                 "wrong-word", ["wrong-word"], "行") === true,
+  "an attempted and correct use of the drilled word earns a credit");
+check(M.credited({ ok: true, errors: [], target: { used: true, ok: false } },
+                 "wrong-word", ["wrong-word"]) === true,
+  "without a word the error-class fallback is unchanged: tag absence is credit");
+check(M.credited({ ok: false, errors: [{ tag: "wrong-word" }] },
+                 "wrong-word", ["wrong-word"], "行") === false,
+  "a transcript with no stored verdict falls back to tag absence");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
