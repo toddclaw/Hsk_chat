@@ -177,7 +177,25 @@ records for `PROMOTE_AT`.
   precisely because it is not evidenced, and because the per-day cap means
   moving it cannot distort the ledger.
 
-Changing either number means updating this file.
+**When a word is the target, the cap counts words.** A drill on 行 and a drill
+on 认识 on the same afternoon are two practices, not one massed session on "word
+choice" — the spacing finding is about repetition of the same item, and the item
+is now the word. So the cap is one credit per *word* per calendar day, and a
+word drill credits its category too, or a category could never fall from the
+drills actually done under it. This raises how much a learner can clear in a day
+in proportion to how many distinct words are open, which is the intended reading
+and not a loophole: each word still needs its own separate days.
+
+**The window is unchanged at 90 days, and it fits words less well.** A category
+accumulates over three months; a word does not, so per-word counts are 1s and 2s
+and ranking on them barely discriminates. The list of words under a category is
+therefore ordered by **recency** rather than by count — the most recent mistake
+is the one the learner remembers making. Whether 90 days is the right horizon
+for something that sparse is unmeasured, and is the same honest gap the window
+already had; changing it and the cap in the same breath would make neither
+legible.
+
+Changing any of these numbers means updating this file.
 
 **What is not counted.** Correct spontaneous use in free conversation is better
 evidence than any drill pass, and it earns nothing, because the grader reports
@@ -878,8 +896,20 @@ the next person does not re-derive them.
 
 ### Judging the drilled structure on its own
 
-**Measured.** `tools/grade-target-ab.js`, same model and level, 20 hand-written
-fixtures over five tags, 3 repeats. Rows in `tools/grade-target-ab-results.md`.
+**Measured.** `tools/grade-target-ab.js`, 20 hand-written fixtures over five
+tags, 3 repeats. Rows in `tools/grade-target-ab-results.md`.
+
+**The wordings below were compared on the partner model, which is not the model
+that answers them.** `grade()` and `drillCheck()` both go through
+`teachingModel()`, so the app asks `TEACH_MODEL`. The contrasts between wordings
+still hold — the arms interleaved within each run, which is the only comparison
+this file ever claimed — but every absolute figure in the table understates the
+shipped behaviour. Re-measured where it belongs, the shipped wording scores
+**56/60** rather than 54/60 and the tag ledger **45/60** rather than 42/60, and
+the two failures block 5 recorded (a dodge read as an attempt, 今天比昨天很冷
+called correct) are both gone. What remains is 不和没, whose Chinese name is a
+pair the model checks both halves of — a `TAG_ZH` naming problem, not a wording
+one.
 
 Partial credit needs one thing the grader could not previously say: was *this
 structure* used, and was it right, ignoring everything else in the sentence.
@@ -957,9 +987,88 @@ The generalisation worth keeping: **a taxonomy built for labelling errors does
 not automatically support drilling them.** Thirteen of these tags name something
 to practise; four name something to avoid, and they need different arithmetic.
 
+**That conclusion is about the taxonomy, and it survives. The remedy has
+changed.** Those four tags cannot be asked the question *as tags* — but a tag is
+not the only thing a drill can point at. Naming the specific word instead makes
+the same question answerable, and the next section is the measurement.
+
 **`grade()` itself is now untouched by drilling.** Its string is identical in and
 out of a drill, so every tag measurement in this file still describes what the
 app sends — a property the rejected design did not have.
+
+### Drilling a word rather than a category
+
+**Measured.** `tools/drill-word-ab.js`, 11 extraction fixtures and 13 check
+fixtures, 3 repeats, both models. Rows in `tools/drill-word-ab-results.md`.
+
+The section above leaves four tags with no target: 用词, 词的意思, 同音字 and
+地道的说法 name a class of error, so the drill for them became "write sentences
+without this kind of error" and a whole corrected sentence stood in for a
+structure. In use that is worse than it sounds. One learner's 用词 list held
+三 unrelated errors — 行 where 可以 belonged, an extra 人 in 同事人, and 认识
+where 听说 belonged — and the drill that follows practises none of them: it
+re-elicits one sentence six times and credits any sentence carrying no 用词 tag,
+so 行 never reaches the partner, is never checked and is never counted.
+
+**A word is a target where a class of error is not.** "Did you use 行, and was
+it right" is answerable; "did you attempt a wrong word" is not. So a second
+small call (`prompt.js` `drillWord()`) names the word, from the learner's own
+sentence and its correction, and `drillCheck()` takes that word as its subject
+instead of the tag's Chinese name.
+
+| | names the word | refuses when it should | `drillCheck` both fields |
+| --- | --- | --- | --- |
+| teaching model | **27/27** | **6/6** | **37/39** |
+| partner model | 27/27 | 0/6 | 21/39 |
+
+On the model the app uses this is 100% on both extraction fields and 95% on the
+verdict, against the 1/3 the same question scored asked as 用词. **All four tags
+become drillable**, and `used` — the clause that stops six dodges finishing a
+drill — is 39/39 on both models.
+
+**Its own call, and at grade time.** Its own call for the reason the section
+above establishes: a second question bolted onto `grade()` fuses with the first
+and costs the tag ledger accuracy. At grade time rather than at drill start
+because the chooser ranks words, and a ranking cannot be built from an
+extraction that has not happened yet — doing it lazily would mean a burst of
+calls each time the chooser opens, repeated. The word rides in the `grade`
+`jsonb` that already syncs, so nothing is stored that was not stored before.
+
+**The learner's wrong sentence reaches a model here**, which D9 otherwise
+forbids. It is in the position `grade()` already puts it in — the thing being
+judged, not an example inside a rule — and the call writes no Chinese that
+anyone reads. D9's hazard is a partner primed to reproduce a bad form in its own
+output; there is no such output here.
+
+**Three things this measurement changed about the design, all in the same
+direction.** Each was a conclusion drawn on the partner model and reversed by
+running it where the app runs it:
+
+- Extraction looked like it needed a gate excluding 地道的说法, because it would
+  not refuse: 给我水 → 请给我一杯水 came back `{"wrong":"水"}`, which drills a
+  word the learner uses correctly. On the teaching model it refuses 6/6 and no
+  gate is needed.
+- The verdict looked unusable — every wrong use of the drilled word scored
+  `ok:true`, 0/18 — which would have made credit collapse to `used` alone and
+  finished a drill on six sentences containing the word in any form. On the
+  teaching model that is 16/18.
+- The obvious cause of that 0/18 — `drillCheck` telling the model to *ignore
+  wrong words* in the same breath as asking about a word, the very contradiction
+  this file blames for 用词's 1/3 — was measured and is **not** the cause.
+  Rewording moved it 0/18 to 1/18, and on the teaching model made it slightly
+  worse. One wording serves both arms.
+
+The generalisation, which is the same one this file already records for story
+time: **when a prompt fails, measure the model before rewriting the prompt.**
+Six wordings of a story prompt failed where a more capable model succeeded
+untouched, and here a prompt that reads as broken is fine and a prompt that
+reads as contradictory does not matter.
+
+**What is not evidenced.** The extraction fixtures are hand-written and the two
+refusal cases are both 地道的说法; a 用词 mistake with no single culprit would
+still get a confident answer, and none is in the set. The one remaining check
+failure, 我觉得这个东西很行, is the weakest fixture in it — 很行 is marginal
+rather than plainly wrong — so 16/18 may understate by one.
 
 ### Whether a six-pass goal grinds
 
