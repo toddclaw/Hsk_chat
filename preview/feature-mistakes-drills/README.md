@@ -809,6 +809,16 @@ grader, the two questions fused and the partial-credit case came back wrong nine
 fifteen. Writing an easy sentence that avoids the structure earns nothing: the check asks
 whether you *attempted* it, not just whether nothing went wrong.
 
+**Four of the seventeen categories work differently**, because they name a kind of mistake
+rather than a structure: *wrong word*, *right word wrong sense*, *wrong character* and
+*unnatural phrasing*. You cannot "use a homophone mistake correctly" — attempting one is the
+mistake — so for those the drill is to write sentences without that error, and a sentence the
+grader flags nothing of that kind in counts. No extra call is made for them.
+
+When a sentence does not count, the control bar says why — *did not use 了*, *used 了, but not
+correctly*, *still had a wrong word mistake*. A grade and a drill are two different verdicts on
+one sentence, and a green tick above a counter that will not move is not an explanation.
+
 Like Ghost Words, Drills introduces no new words. A word you have never seen is one more thing
 to get wrong in a sentence that is already hard.
 

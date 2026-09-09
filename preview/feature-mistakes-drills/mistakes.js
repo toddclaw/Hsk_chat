@@ -59,13 +59,27 @@
    * `used` is what stops a dodge scoring: a simple correct sentence that never
    * reaches for the structure is not evidence about it.
    *
-   * Messages graded before `target` existed fall back to the whole-sentence
-   * verdict, so credits already earned do not vanish on upgrade. */
-  function credited(grade) {
-    if (!grade) return false;
+   * No verdict is asked for -- or possible -- when the tag names a class of
+   * error rather than a structure (prompt.js ERROR_CLASS_TAGS: wrong word,
+   * wrong sense, wrong character, unnatural). "Did you attempt a homophone
+   * mistake" has no useful answer; the drill for those is to write sentences
+   * WITHOUT that error, which the grader's own tags already report. So the
+   * fallback is the absence of that tag, which is the same partial-credit
+   * principle read the other way round: judged on the thing being drilled and
+   * not on the whole sentence.
+   *
+   * The fallback also covers messages graded before `target` existed, and the
+   * rare case of the check itself failing.
+   *
+   * ponytail: for those four tags a very short safe sentence earns credit as
+   * easily as a real attempt. The per-day cap bounds what that can do to the
+   * ledger; if it becomes a way to feel productive without practising, the
+   * answer is a minimum-effort check, not a stricter rule here. */
+  function credited(grade, tag) {
+    if (!grade || grade.unreadable) return false;
     var t = grade.target;
     if (t && typeof t === "object") return t.used === true && t.ok === true;
-    return grade.ok === true;
+    return !(grade.errors || []).some(function (e) { return e && e.tag === tag; });
   }
 
   function counts(chatMsgs, opts) {
@@ -106,7 +120,7 @@
                           note: e.note || "", at: when });
         });
 
-        if (drill && labels[drill] && credited(t.grade)) {
+        if (drill && labels[drill] && credited(t.grade, drill)) {
           if (!creditDays[drill]) creditDays[drill] = {};
           creditDays[drill][dayKey(t.created_at)] = true;
         }
