@@ -931,6 +931,32 @@ the remaining error is roughly 3 in 15 toward *over*-crediting, which is the
 direction to fail in: a learner is occasionally given a pass they did not earn,
 rather than denied one they did. Denials of correct target use are 0/30.
 
+**Four of the seventeen tags cannot be asked this question at all.** Found in
+use, not in measurement: the fixtures above are all grammatical, and 用词, 词的
+意思, 同音字 and 地道的说法 name a *class of error* rather than a structure a
+learner can reach for. Asked anyway, against the real model, on sentences the
+grader had passed:
+
+| tag | credited |
+|---|---|
+| 同音字 wrong-character | **0/3** — `used:false` every time |
+| 用词 wrong-word | 1/3 |
+| 量词, 了, 比字句 | 3/3 |
+
+Nobody *attempts* a wrong character; attempting one is the mistake. That drill
+could never be finished. 用词 is worse than useless, because the prompt tells the
+model to ignore wrong words in the same breath as asking about them.
+
+So those four get no check and no call. The drill for them is to write sentences
+*without* that error, which the grader's own tags already report, and credit is
+the absence of the tag. That is the same partial-credit principle read the other
+way round — judged on the thing being drilled, not on the whole sentence — and it
+is why `credited()` takes the tag.
+
+The generalisation worth keeping: **a taxonomy built for labelling errors does
+not automatically support drilling them.** Thirteen of these tags name something
+to practise; four name something to avoid, and they need different arithmetic.
+
 **`grade()` itself is now untouched by drilling.** Its string is identical in and
 out of a drill, so every tag measurement in this file still describes what the
 app sends — a property the rejected design did not have.
@@ -1020,6 +1046,10 @@ Stated plainly so nobody cites this file for more than it holds.
   seventeen categories alike; the prompt does not. Under a pass goal this is
   sharper still: three of five categories scored zero passes end to end
   ([Whether a six-pass goal grinds](#whether-a-six-pass-goal-grinds)).
+- **The error-class tags have no dodge protection.** For the four that name an
+  error rather than a structure, a very short safe sentence credits as easily as
+  a real attempt — there is no "did you attempt it" to ask. The per-day cap
+  bounds what that does to the ledger.
 - **The target check over-credits about 1 sentence in 5.** Two fixtures fool it
   every time, and the arithmetic has no second opinion. It fails toward
   generosity by design, but a cleared category is weaker evidence than the

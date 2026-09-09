@@ -186,6 +186,49 @@ check(find(counts({
 }), "measure-word").credits === 1,
   "a legacy pass with no target field still credits on grade.ok");
 
+// --- tags that name an error rather than a structure ------------------------
+/* wrong-word, wrong-character and friends get no target check at all -- see
+ * prompt.js ERROR_CLASS_TAGS. Credit for them is the absence of that tag's own
+ * error, which is the same partial-credit principle: judged on the thing being
+ * drilled, not on the whole sentence. */
+const LEX = { "wrong-word": "wrong word", "aspect-le": "了" };
+const lexCounts = (chatMsgs) =>
+  M.counts(chatMsgs, { tagLabels: LEX, now: NOW });
+
+// The reported bug: a green tick, no target field, and no credit.
+check(lexCounts({
+  c1: [wrong("wrong-word", daysAgo(5))],
+  c2: [drillMarker("wrong-word"),
+       { role: "user", text: "我觉得可以", created_at: daysAgo(1),
+         grade: { ok: true, errors: [] } }]
+}).filter(r => r.tag === "wrong-word")[0].credits === 1,
+  "a sentence with no error of the drilled tag credits it");
+
+check(lexCounts({
+  c1: [wrong("wrong-word", daysAgo(5))],
+  c2: [drillMarker("wrong-word"), wrong("wrong-word", daysAgo(1))]
+}).filter(r => r.tag === "wrong-word")[0].credits === 0,
+  "and a sentence that makes that very mistake again credits nothing");
+
+/* Partial credit, the whole point, in the lexical direction: the drilled tag is
+ * clean and another one is not. */
+check(lexCounts({
+  c1: [wrong("wrong-word", daysAgo(5))],
+  c2: [drillMarker("wrong-word"),
+       { role: "user", text: "我觉得可以了", created_at: daysAgo(1),
+         grade: { ok: false, errors: [{ tag: "aspect-le", note: "了" }] } }]
+}).filter(r => r.tag === "wrong-word")[0].credits === 1,
+  "an error under a DIFFERENT tag does not block the drilled tag's credit");
+
+// An unreadable grade says nothing about anything.
+check(lexCounts({
+  c1: [wrong("wrong-word", daysAgo(5))],
+  c2: [drillMarker("wrong-word"),
+       { role: "user", text: "?", created_at: daysAgo(1),
+         grade: { unreadable: true } }]
+}).filter(r => r.tag === "wrong-word")[0].credits === 0,
+  "a grade that could not be read credits nothing");
+
 // --- drillTagOf -------------------------------------------------------------
 check(M.drillTagOf([drillMarker("aspect-le"), right(daysAgo(1))]) === "aspect-le",
   "drillTagOf reads the marker");

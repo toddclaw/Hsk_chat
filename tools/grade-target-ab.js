@@ -31,6 +31,11 @@
  * Name-free, per CLAUDE.md: every fixture uses 我 / 他 / 老师 and no personal
  * name, so nothing here turns on characters above the level.
  *
+ * Every fixture is a STRUCTURAL tag, and that is now a property rather than an
+ * oversight: the four tags naming a class of error (prompt.js ERROR_CLASS_TAGS)
+ * get no check at all, because asking one cost a real drill its only way to
+ * finish. Adding one of them here should fail -- drillCheck() returns "".
+ *
  *   node tools/grade-target-ab.js [--runs 3] [--model <id>]
  *
  * --loop instead runs the whole activity: partner turn, a student model

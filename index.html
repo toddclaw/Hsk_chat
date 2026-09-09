@@ -1015,7 +1015,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v89 — 2026-09-08";
+const VERSION   = "v90 — 2026-09-08";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3103,11 +3103,15 @@ async function gradeTurn(turnObj) {
      * Its own try: a failed target check must leave the grade standing. Absent,
      * mistakes.js falls back to the whole-sentence verdict, which is what every
      * message graded before this existed does too. */
-    if (g && tag) {
+    /* Empty for the four tags that name an error rather than a structure, and
+     * then there is nothing to ask and no call to spend: mistakes.js credits
+     * those on the absence of the tag itself. */
+    const check = tag ? HSKPrompt.drillCheck({
+      text: turnObj.text, label: levelLabel(), drillTag: tag, drillEg: eg }) : "";
+    if (g && check) {
       try {
-        const t = jsonIn(await callModel([{ role: "user", content: HSKPrompt.drillCheck({
-          text: turnObj.text, label: levelLabel(), drillTag: tag, drillEg: eg
-        }) }], 120, teachingModel()));
+        const t = jsonIn(await callModel([{ role: "user", content: check }],
+                                         120, teachingModel()));
         if (t) g.target = { used: t.used === true, ok: t.ok === true };
       } catch (e) { console.warn("[drill check] " + ((e && e.message) || e)); }
     }
@@ -3607,8 +3611,28 @@ function drillExample() { return HSKMistakes.drillExampleOf(S.history); }
  * that gets 就 right and 了 wrong advances the drill it is actually in. */
 function drillTold() { return S.history.filter(t => t.role === "user").length; }
 function drillPassed() {
+  const tag = drillTag();
   return S.history.filter(t => t.role === "user" && t.grade &&
-                               HSKMistakes.credited(t.grade)).length;
+                               HSKMistakes.credited(t.grade, tag)).length;
+}
+
+/* Why the last sentence did not count, in a few words, or "" when it did.
+ *
+ * Without this the counter simply refuses to move: a green tick on the message
+ * and 0 of 6 underneath it, with no way to tell whether the structure was
+ * missed, misused, or the check failed. A grade and a drill are two different
+ * verdicts on one sentence, and the app was only ever showing one of them. */
+function drillWhyNot() {
+  const tag = drillTag();
+  const last = S.history.filter(t => t.role === "user" && t.grade).pop();
+  if (!last || HSKMistakes.credited(last.grade, tag)) return "";
+  const zh = HSKPrompt.TAG_ZH[tag] || "";
+  const label = HSKPrompt.TAG_LABEL[tag] || tag;
+  if (last.grade.unreadable) return "the last one could not be checked";
+  const t = last.grade.target;
+  if (t && !t.used) return "the last one did not use " + zh;
+  if (t) return "the last one used " + zh + ", but not correctly";
+  return "the last one still had a " + label + " mistake";
 }
 /* Stopping early is the escape hatch for a run that will not come good --
  * without one, a goal of passes has no floor on a bad day. Stored as a marker
@@ -4829,10 +4853,12 @@ function renderDrillControl(box) {
   /* Both numbers, because the goal is passes and the cost is attempts: "3 of 6
    * correct, attempt 11" is the honest report of a session that is going badly,
    * and a single number would hide it. */
+  const why = drillDone() ? "" : drillWhyNot();
   note.textContent = drillDone()
     ? label + " \u2014 done. " + drillPassed() + " correct in " + drillTold() + "."
     : label + " \u2014 " + drillPassed() + " of " + S.drillTurns + " correct" +
-      (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "");
+      (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "") +
+      (why ? " \u00b7 " + why : "");
   box.appendChild(note);
   if (drillDone()) return;
   const stop = document.createElement("button");

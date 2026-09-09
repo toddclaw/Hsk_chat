@@ -982,6 +982,23 @@ check(DC.indexOf(P.TAG_EG["aspect-le"]) !== -1,
 check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "" }) === "",
   "and no category means no check at all");
 
+/* Four of the seventeen tags name a class of error, not a structure, and the
+ * check is meaningless for them: nobody ATTEMPTS a wrong character, so 同音字
+ * scored used:false 3 times in 3 and that drill could never be finished. 用词
+ * was worse than useless -- the prompt says "ignore wrong words" while asking
+ * about wrong words, and a sentence the grader passed scored ok:false 2 in 3. */
+P.ERROR_CLASS_TAGS.forEach(t => {
+  check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: t }) === "",
+    "no target check for " + t + ", which names an error and not a structure");
+});
+check(P.ERROR_CLASS_TAGS.join(",") ===
+      "wrong-word,wrong-sense,wrong-character,unnatural",
+  "the four are the lexical and naturalness tags", P.ERROR_CLASS_TAGS.join(","));
+check(P.ERROR_CLASS_TAGS.every(t => P.ERROR_TAGS.indexOf(t) !== -1),
+  "and every one of them is a real tag");
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "measure-word" }) !== "",
+  "while a structure the learner can reach for still gets one");
+
 /* The grader prompt itself must not move: every tag measurement in RESEARCH.md
  * was taken against this exact string, in and out of a drill alike. */
 check(!/"used"/.test(G) && !/practising one structure/.test(G),

@@ -92,6 +92,9 @@ The session shape changed with them.
 | D17 | Three more pseudo-messages carry the state: `drillEg`, `drillEnd`, beside the existing `drill` | Same trick as D2, same reason: `messages.role`/`text` already sync, and `contextFor()`/`windowed()` already skip them. Still no `db/schema.sql` change. They are collected in `MARKER_ROLES`, which `renderMessage()` also needed — the `drill` marker was rendering as a bot bubble. |
 | D18 | The per-day credit cap is **unchanged** | The pass goal is a session target the learner can see, not a lever on the ledger. Six passes in one sitting still credit once, which is what keeps drill length a free setting. |
 
+| D19 | The four tags that name a **class of error** (`wrong-word`, `wrong-sense`, `wrong-character`, `unnatural`) get no target check. Credit for them is the **absence of that tag** | Found in use. "Did you attempt a homophone mistake" has no useful answer — 同音字 scored `used:false` 3 times in 3, so that drill could never be finished, and `wrong-word` asks the model to ignore wrong words in the same breath. Thirteen tags name something to practise; four name something to avoid. A taxonomy built for labelling errors does not automatically support drilling them. |
+| D20 | The control bar says **why** a sentence did not count | A grade and a drill are two verdicts on one sentence, and the app showed one: a green tick over a counter that would not move. |
+
 **Not done, and deliberately.** Retry-the-same-sentence-until-right, ghost-words
 partial credit (its own BACKLOG entry, and a different activity), and item-style
 sessions. The last is now better evidenced than it was: see RESEARCH.md, "Whether

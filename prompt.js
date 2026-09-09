@@ -802,6 +802,19 @@
   var TAG_EG = {};
   TAGS.forEach(function (r) { TAG_EG[r[0]] = r[2]; });
 
+  /* Four of the seventeen name a CLASS OF ERROR rather than a structure the
+   * learner can reach for, and drillCheck()'s question is meaningless for them.
+   * Measured against the real model: 同音字 scored used:false 3 times in 3 --
+   * nobody attempts a wrong character, attempting one IS the mistake -- so that
+   * drill could never be finished. 用词 was worse, because the check tells the
+   * model to ignore wrong words in the same breath as asking about them, and a
+   * sentence the grader had passed came back ok:false 2 times in 3.
+   *
+   * For these, the drill is "write sentences without this kind of error", and
+   * the grader's own tags already answer it. mistakes.js credits them on the
+   * absence of that tag rather than on a verdict nobody can give. */
+  var ERROR_CLASS_TAGS = ["wrong-word", "wrong-sense", "wrong-character", "unnatural"];
+
   /* The four categories the detail view shows as icons. Each is a different
    * repair: a wrong word is looked up, a wrong rule is learned, a wrong order
    * is a pattern, and unnatural-but-correct is a collocation. Keeping the last
@@ -838,7 +851,7 @@
    * sentence that never reaches for the structure at all. */
   function drillCheck(opts) {
     var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
-    if (!zh) return "";
+    if (!zh || ERROR_CLASS_TAGS.indexOf(opts.drillTag) !== -1) return "";
     return "A student of Chinese at " + opts.label + " is practising one " +
       "structure: " + zh + " (" + (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n" +
       (opts.drillEg ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
@@ -1039,7 +1052,7 @@
               drillCheck: drillCheck, castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
-              TAG_EG: TAG_EG,
+              TAG_EG: TAG_EG, ERROR_CLASS_TAGS: ERROR_CLASS_TAGS,
               GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
