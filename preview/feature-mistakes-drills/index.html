@@ -763,6 +763,15 @@ footer{
         <button id="checkUpdate">Check for update</button>
       </div>
 
+    <div id="migrateBox" style="display:none;margin-top:14px">
+      <label>Older chats</label>
+      <div class="note" id="migrateNote"></div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="migrateGrades"></button>
+        <button id="migrateStop" style="display:none">Stop</button>
+      </div>
+    </div>
+
   </details>
 
   <button id="issueSectionBtn" type="button" style="width:100%; text-align:left; padding:12px; background:none; border:none; border-top:1px solid var(--line); color:var(--ink)">
@@ -1015,7 +1024,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v92 — 2026-09-09";
+const VERSION   = "v93 — 2026-09-09";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1651,9 +1660,13 @@ const EXPLAIN_CONTEXT = 4;
 
 /* The turns immediately before this one, oldest first. Notices are UI, not
  * conversation, and are skipped for the same reason windowed() skips them. */
-function contextFor(turnObj) {
+function contextFor(turnObj, msgs) {
   if (!turnObj || !turnObj.id) return [];
-  const real = S.history.filter(t => t.role === "user" || t.role === "assistant");
+  /* `msgs` names the conversation the turn belongs to. Every ordinary caller
+   * omits it and gets S.history, which is the same thing; the migration passes
+   * it explicitly because it grades messages in conversations the learner is
+   * not currently looking at, and S.history would attach the wrong context. */
+  const real = (msgs || S.history).filter(t => t.role === "user" || t.role === "assistant");
   const i = real.findIndex(t => t.id === turnObj.id);
   if (i <= 0) return [];
   return real.slice(Math.max(0, i - EXPLAIN_CONTEXT), i)
@@ -4792,6 +4805,147 @@ async function renderVersion() {
     "<tr><td>" + r[0] + "</td><td>" + escapeHtml(r[1]) + "</td></tr>").join("") + "</table>";
 }
 
+/* Bringing older chats up to what the grader can now say.
+ *
+ * Two eras left two gaps. Conversations from before the grader existed carry no
+ * verdict at all, so nothing in them reaches the mistake ledger. Conversations
+ * graded before the word extraction (v92) carry verdicts whose error-class tags
+ * name a category and nothing to drill -- 用词 rather than 行.
+ *
+ * The second gap is much the cheaper to close, and closing it changes nothing
+ * the learner has already seen: the grade stands, and only the word is added.
+ * So the two are counted and priced separately, and a history that only needs
+ * words costs almost nothing to bring forward.
+ *
+ * Rough, and deliberately so: the real figure comes from recordCost() as the
+ * run proceeds, so the estimate only has to be the right order of magnitude to
+ * let someone decide. Both are measured medians -- the grade call is the
+ * 600-token one, the extraction 120. */
+const MIGRATE_GRADE_COST = 0.0002;
+const MIGRATE_WORD_COST  = 0.00003;
+/* Sync is queued every this many messages rather than per message: a run over a
+ * few hundred turns marks every one of them dirty, and one queue per message
+ * would push several hundred sync passes at the database for no benefit. */
+const MIGRATE_SYNC_EVERY = 25;
+
+/* Its own formatter rather than the one renderCost() uses, which rounds to
+ * whole cents: a history needing only words costs a fraction of one, and
+ * "$0.00" beside a button that is about to spend money reads as broken. */
+const migrateMoney = n => "$" + (n < 0.1 ? n.toFixed(3) : n.toFixed(2));
+
+let migrateCancel = false;
+let migrateRunning = false;
+
+/* Shown only when the grader is on and there is work. Off, the ledger it feeds
+ * is not being kept, so offering to spend money filling it makes no sense. */
+function renderMigrate() {
+  const box = $("#migrateBox");
+  if (!box) return;
+  if (migrateRunning) return;                     // the run owns the label
+  const need = S.grader
+    ? HSKMistakes.needsMigration(S.chatMsgs, HSKPrompt.ERROR_CLASS_TAGS)
+    : { grades: 0, words: 0 };
+  const total = need.grades + need.words;
+  if (!total) { box.style.display = "none"; return; }
+  box.style.display = "";
+  const cost = need.grades * MIGRATE_GRADE_COST + need.words * MIGRATE_WORD_COST;
+  $("#migrateNote").textContent =
+    "Not all your chats have been through the current grader. " +
+    (need.grades ? need.grades + " message" + (need.grades === 1 ? "" : "s") +
+      " never graded" : "") +
+    (need.grades && need.words ? "; " : "") +
+    (need.words ? need.words + " graded before mistakes named a word" : "") + ".";
+  $("#migrateGrades").textContent =
+    "Process " + total + " message" + (total === 1 ? "" : "s") +
+    " (~" + migrateMoney(cost) + ")";
+  $("#migrateGrades").disabled = false;
+  $("#migrateStop").style.display = "none";
+}
+
+/* The work, collected BEFORE anything is written. Grading a message changes
+ * whether it still needs grading, so a loop that re-scanned as it went would be
+ * walking a list that shrinks under it. */
+function migrateWork() {
+  const out = [];
+  Object.keys(S.chatMsgs || {}).forEach(cid => {
+    (S.chatMsgs[cid] || []).forEach(t => {
+      if (!t || t.role !== "user") return;
+      if (!t.grade) { out.push({ cid: cid, turn: t, kind: "grade" }); return; }
+      if (t.grade.unreadable || !t.grade.better) return;
+      if ((t.grade.errors || []).some(e =>
+            e && !e.word && HSKPrompt.ERROR_CLASS_TAGS.indexOf(e.tag) !== -1)) {
+        out.push({ cid: cid, turn: t, kind: "word" });
+      }
+    });
+  });
+  return out;
+}
+
+/* Serial, not concurrent. It matches how gradeTurn() already behaves, it keeps
+ * the running cost line attributable to this button rather than racing live
+ * grading, and a few hundred small calls fired at once is how a rate limit is
+ * found. Slow is the correct trade here: the alternative to waiting is not
+ * having the history at all. */
+async function migrateGrades() {
+  if (migrateRunning) return;
+  const work = migrateWork();
+  if (!work.length) return renderMigrate();
+  migrateRunning = true; migrateCancel = false;
+  const btn = $("#migrateGrades"), stop = $("#migrateStop");
+  btn.disabled = true;
+  stop.style.display = "";
+  const before = HSKTime.totals(S.cost).total || 0;
+  let done = 0, failed = 0;
+  const show = () => {
+    const spent = Math.max(0, (HSKTime.totals(S.cost).total || 0) - before);
+    btn.textContent = "Processed " + done + " of " + work.length +
+      " — " + migrateMoney(spent) + (failed ? " (" + failed + " failed)" : "");
+  };
+  show();
+  try {
+    for (const w of work) {
+      if (migrateCancel) break;
+      try {
+        if (w.kind === "grade") {
+          /* The message's OWN conversation and level, not the one on screen. A
+           * turn written at HSK 2 is not graded honestly against HSK 5's
+           * vocabulary, and contextFor() would otherwise hand it whichever
+           * chat happens to be open. No drill target: a drill conversation
+           * already has grades and lands in the word half instead. */
+          const msgs = S.chatMsgs[w.cid] || [];
+          const chat = chatById(w.cid);
+          const label = levelLabel(chat && chat.level);
+          const reply = await callModel([{ role: "user",
+            content: teachPromptFor("grade", { text: w.turn.text, level: label,
+              recent: "", context: contextFor(w.turn, msgs) }) }],
+            600, teachingModel());
+          const g = parseGrade(reply);
+          if (g) { await nameDrillWords(g, w.turn.text); w.turn.grade = g; }
+          else failed++;
+        } else {
+          await nameDrillWords(w.turn.grade, w.turn.text);
+        }
+      } catch (e) {
+        failed++;
+        console.warn("[migrate] " + ((e && e.message) || e));
+      }
+      done++;
+      if (done % MIGRATE_SYNC_EVERY === 0) { saveChats(); queueSync("messages"); }
+      show();
+    }
+  } finally {
+    /* Whatever landed is kept, cancelled or not: needsMigration() derives the
+     * remaining work by scanning, so pressing again resumes rather than
+     * restarts, and a half-finished run is simply a shorter next one. */
+    saveChats();
+    queueSync("messages");
+    migrateRunning = false;
+    stop.style.display = "none";
+    renderMigrate();
+    renderAll();
+  }
+}
+
 async function checkUpdate() {
   const btn = $("#checkUpdate");
   btn.disabled = true; btn.textContent = "Checking…";
@@ -5565,6 +5719,7 @@ function renderSectionNotes() {
 
 $("#btnSet").onclick = () => {
   renderSectionNotes();
+  renderMigrate();
   renderChatTime();
   renderCost();
   /* A first run opens Settings precisely because there is no key, so the one
@@ -6051,6 +6206,8 @@ $("#favOnly").onchange = e => {
 $("#refreshModels").onclick = e => refreshModels(e.currentTarget);
 $("#modelReload").onclick = e => refreshModels(e.currentTarget);
 $("#checkUpdate").onclick = checkUpdate;
+$("#migrateGrades").onclick = migrateGrades;
+$("#migrateStop").onclick = () => { migrateCancel = true; };
 $("#clearHistory").onclick = () => {
   if (!confirm("Delete the messages in this conversation?\n\n" +
       "The conversation itself stays in the list. To remove it entirely, use " +

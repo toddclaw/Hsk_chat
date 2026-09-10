@@ -110,6 +110,42 @@
     return !(grade.errors || []).some(function (e) { return e && e.tag === tag; });
   }
 
+  /* How much of the history predates the current grader, counted in two kinds
+   * of work because they cost two very different amounts.
+   *
+   *   grades  a user message never graded at all -- the app ran without a
+   *           grader before it had one, and those turns carry no verdict.
+   *   words   a message graded before the word extraction existed, whose
+   *           error-class errors therefore name a category and nothing to
+   *           drill. Only the cheap extraction call is needed; the grade
+   *           itself stands, so nothing the learner has already seen changes.
+   *
+   * Derived by scanning, like everything else here, and deliberately not a
+   * stored "migrated to v92" flag. A flag is a second source of truth to drift,
+   * and this way the job resumes for free: a message that has been done no
+   * longer matches, so pressing the button again continues rather than
+   * restarts.
+   *
+   * `better` is required for the word half because the extraction compares the
+   * two sentences to find the word. An error with no correction beside it has
+   * nothing to extract from and is not counted as work. */
+  function needsMigration(chatMsgs, errorClassTags) {
+    var classTags = errorClassTags || [];
+    var out = { grades: 0, words: 0 };
+    Object.keys(chatMsgs || {}).forEach(function (cid) {
+      (chatMsgs[cid] || []).forEach(function (t) {
+        if (!t || t.role !== "user") return;
+        if (!t.grade) { out.grades++; return; }
+        if (t.grade.unreadable || !t.grade.better) return;
+        var any = (t.grade.errors || []).some(function (e) {
+          return e && !e.word && classTags.indexOf(e.tag) !== -1;
+        });
+        if (any) out.words++;
+      });
+    });
+    return out;
+  }
+
   function counts(chatMsgs, opts) {
     opts = opts || {};
     var labels = opts.tagLabels || {};
@@ -236,6 +272,7 @@
   }
 
   var api = { counts: counts, credited: credited,
+              needsMigration: needsMigration,
               drillTagOf: drillTagOf, drillExampleOf: drillExampleOf,
               drillWordOf: drillWordOf,
               WINDOW_DAYS: WINDOW_DAYS, RECENT_SHOWN: RECENT_SHOWN };
