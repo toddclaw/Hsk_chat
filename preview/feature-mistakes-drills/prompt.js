@@ -941,7 +941,14 @@
       (word ? "word: " + subject + ".\n"
             : "structure: " + subject + " (" +
               (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n") +
-      (opts.drillEg ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
+      /* Only a CATEGORY drill gets this line. For a word drill the sentence is
+       * the CORRECTION of a mistake with that word, and correcting a wrong word
+       * is what REMOVES it -- so the line read "a correct sentence using 行"
+       * above a sentence with no 行 anywhere in it. Measured over the 13
+       * sentences of one real 行 drill, 3 repeats (RESEARCH.md, "A correction is
+       * not an example of the word it corrects"): `used` 39/39 either way, `ok`
+       * 25/27 with the line and 27/27 without. */
+      (opts.drillEg && !word ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
       "\nThe student then wrote: " + opts.text + "\n\n" +
       (word ? "" : "For reference, a typical mistake with it and its fix: " +
         TAG_EG[opts.drillTag] + "\n\n") +
@@ -963,6 +970,40 @@
       " and got it wrong.\n\n" +
       "Reply with only this JSON object, no prose and no code fence:\n" +
       '{"used":true,"ok":true}';
+  }
+
+  /* How to use the word being drilled, in English, on request.
+   *
+   * The banner already shows the word and the learner's own mistakes with it,
+   * which answers "which mistake was this" and not "how does this word work".
+   * The partner cannot answer the second: its rules forbid it talking grammar
+   * or using English at all, so a drill had nowhere to be told.
+   *
+   * Its own prompt rather than explain(): explain() judges a SENTENCE and opens
+   * with one of three verdict lines, which is the wrong shape and the wrong
+   * question for a word.
+   *
+   * The learner's own sentence is deliberately NOT sent, neither the wrong one
+   * nor its correction. The wrong one is what D9 forbids near a model that is
+   * about to write Chinese, and the correction cannot stand in for it: for a
+   * wrong-word drill the correction is the sentence with the drilled word taken
+   * OUT, which is the same false premise RESEARCH.md records for drillCheck.
+   * The word and the level are enough.
+   *
+   * Measured before shipping, 5 words x 3 at HSK 3 (行 了 条 就 把): 221-392
+   * characters back, examples in level 15/15 against the level's own list, and
+   * both examples actually used the word 15/15 -- so no validate-and-retry loop
+   * here, unlike the partner's replies. The decoration rules are explain()'s,
+   * for the measured reason recorded there: models answer in Markdown nobody
+   * asked for and it is pure output cost. */
+  function wordTip(opts) {
+    return "A student of Chinese at " + opts.label + " is about to practise one " +
+      "word: " + opts.word + ".\n\nIn English, tell them how to use it. At most three " +
+      "short sentences: what it means, the pattern it goes in, and the mistake " +
+      "learners make with it. Then two example sentences in Chinese, one per line, " +
+      "each with its English on the same line after a dash. Use only words at " +
+      opts.label + " or below in the examples, and use " + opts.word + " in both.\n\n" +
+      "No headings, no bullet lists, no bold, and no closing encouragement.";
   }
 
   function grade(opts) {
@@ -1141,7 +1182,7 @@
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
-              drillCheck: drillCheck, drillWord: drillWord,
+              drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
               castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
