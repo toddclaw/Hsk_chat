@@ -95,6 +95,114 @@ constant we would revisit if anyone measured retention directly, which we have n
 the mechanism, not a display setting. That made it a prompt change, which meant measuring it.
 See [Measurements we ran](#measurements-we-ran).
 
+## Drilling a mistake category
+
+**Informed by the literature; the numbers themselves are not measured.**
+`MISTAKE_WINDOW_DAYS = 90`, one credit per category per calendar day, and a
+default drill length of 6 sentences (settable 3–10).
+
+The grader files every error under one of seventeen fixed tags, and the Mistakes
+drill practises whichever category the learner is accruing most. That raises a
+question the taxonomy alone does not answer: **what should a correct sentence do
+to the count?**
+
+**One correct production does not mean the error is gone.** Backsliding — the
+reappearance of interlanguage features that appeared eradicated — is well
+attested, and L2 development is U-shaped rather than linear. A design where one
+pass clears a category would be measuring the wrong thing: it would report
+success at exactly the moment the evidence is weakest.
+
+**Spaced practice beats massed practice, specifically for error correction.**
+Kim & Webb’s delayed post-test had the spaced group outperform the massed group on
+error analysis and correction; Suzuki & DeKeyser find the same for the
+proceduralization of morphology. Conti’s summary of the corrective-feedback
+literature is that a rule needs "masses of spaced practice across a wide range of
+contexts".
+
+This is awkward for the feature, and the awkwardness is the point: **a drill
+session is massed practice by construction.** Six sentences in one sitting is the
+condition that loses. So credit is *spaced* rather than *counted* — ten passes in
+one session are worth what one is, and returning across a week is what clears a
+category. That cap is also what makes drill length a free choice: since session
+length cannot move the stats, the setting can be whatever suits the learner
+without becoming a way to farm the number.
+
+The aging window does the other half. Without it the count rises from ordinary
+chat and falls only from drills, so a learner who simply stops making a mistake
+watches the number freeze — punishing the outcome the feature exists to produce.
+With it, improvement shows on its own and needs no drill-specific logic.
+
+Together: `shown = max(0, failures_in_window − distinct_credit_days)`, floored at
+zero so a well-drilled category leaves the list rather than going negative.
+Nothing is stored; both terms are derived by scanning the graded messages, so
+there is no second tally to drift.
+
+**A credit is earned on the structure, not on the sentence.** A drill works one
+specific mistake, and a learner practising 就 who slips on 了 has made progress
+on 就 — a whole-sentence pass/fail cannot say so, and originally did not: credit
+required `grade.ok`. It now requires that the drilled structure was *attempted
+and correct*, judged apart from everything else in the sentence, with the 了
+mistake still counted as a failure under its own tag. Nothing is forgiven; it is
+only attributed to the structure it belongs to. The measurement that makes this
+possible, and the one that nearly made it useless, is
+[Judging the drilled structure on its own](#judging-the-drilled-structure-on-its-own).
+
+Requiring *attempted* is what stops the obvious exploit. Without it the cheapest
+way to finish a drill is to write six easy sentences that never reach for the
+structure at all, and the arithmetic would read that as mastery.
+
+**The goal is passes, not attempts.** A session ends after
+`drillTurns` correct uses of the chosen sentence, however many tries that takes,
+with a stop button for a run that will not come good. This does not change what
+a session is worth: the per-day cap still applies, so six passes in one sitting
+count once. The 6 is a target the learner can see, not a lever on the
+arithmetic — which is also what stops "keep writing until six land" being a way
+to farm the number.
+
+**What is not evidenced.** No source gives a mastery criterion in encounters for
+a grammatical error category, which is the same honest gap this file already
+records for `PROMOTE_AT`.
+
+- **90 days is a guess.** Nothing in the reading gives a forgetting horizon for
+  an error category, and it is the only constant here with no citation behind
+  it. It is a defensible order of magnitude — long enough that a twice-a-week
+  learner keeps a meaningful history, short enough that last spring’s errors stop
+  dominating the list — and should be revisited against real data once anyone has
+  a year of it.
+- **The per-day cap is a floor, not a measurement.** One credit a day is
+  defensible from the spacing literature but no study sets it. If drilling turns
+  out to feel unrewarding, that cap is the knob.
+- **Six passes is a round number.** Nothing in the reading sets a within-session
+  criterion either; it is the same gap, one level down. It is a setting (3–10)
+  precisely because it is not evidenced, and because the per-day cap means
+  moving it cannot distort the ledger.
+
+**When a word is the target, the cap counts words.** A drill on 行 and a drill
+on 认识 on the same afternoon are two practices, not one massed session on "word
+choice" — the spacing finding is about repetition of the same item, and the item
+is now the word. So the cap is one credit per *word* per calendar day, and a
+word drill credits its category too, or a category could never fall from the
+drills actually done under it. This raises how much a learner can clear in a day
+in proportion to how many distinct words are open, which is the intended reading
+and not a loophole: each word still needs its own separate days.
+
+**The window is unchanged at 90 days, and it fits words less well.** A category
+accumulates over three months; a word does not, so per-word counts are 1s and 2s
+and ranking on them barely discriminates. The list of words under a category is
+therefore ordered by **recency** rather than by count — the most recent mistake
+is the one the learner remembers making. Whether 90 days is the right horizon
+for something that sparse is unmeasured, and is the same honest gap the window
+already had; changing it and the cap in the same breath would make neither
+legible.
+
+Changing any of these numbers means updating this file.
+
+**What is not counted.** Correct spontaneous use in free conversation is better
+evidence than any drill pass, and it earns nothing, because the grader reports
+failures only — `errors: []` means "nothing was wrong here", not "this was used
+correctly". Transfer is therefore invisible to the arithmetic. Tracked as its own
+BACKLOG item, "The grader reports only failures, so transfer is invisible".
+
 ## Knowing when to change level
 
 This is the part with the most research behind it and the most room to get wrong.
@@ -729,6 +837,381 @@ D4 remains in question. This is reported, not acted on: the fix (content vocabul
 declared cast, a narrower curated pool, a stronger repair strategy, or accepting the rate) is a
 design decision, not this task's to make.
 
+### The drill prompt against an unguided partner
+
+**Measured.** `tools/drill-ab.js`, `qwen/qwen3-30b-a3b-instruct-2507` at HSK 3,
+judge `anthropic/claude-sonnet-4.5`, five categories (量词, 了, 不/没, 比, 的/地/得),
+name-free, arms interleaved within each run.
+
+The drill’s whole claim is **elicitation**: the partner steers so the target
+structure has to appear in the *learner’s* own answer. So the counter is not "did
+the partner mention 量词" — a partner that explains the rule in English would score
+full marks for doing the one thing D10 says a drill is not. The judge is shown the
+partner’s turn and asked whether a natural, direct answer would have to **use**
+the structure: REQUIRES / OPTIONAL / NO.
+
+Four candidate arms, because the first run’s drill replies were plain chat
+reproducing the prompt’s own worked example almost verbatim — the identical
+failure `prompt.js` already records for 20 Questions, where "a few-shot example is
+a stronger signal than a numbered rule". `converse` is the shipped drill;
+`quiet` sets `act.converse` false, dropping rule 5’s "answer, share your own
+thing, ask a new question"; `bare` also strips the chat few-shot; `opening` adds
+an explicit first-turn instruction, the fix `tools/twenty-ab.js` landed for the
+same defect.
+
+Pooled over three runs (n per arm in parentheses):
+
+| arm | REQUIRES | rate |
+| --- | --- | --- |
+| chat — the shipped app, no drill rule | 4/65 | 6% |
+| `converse` — the drill as shipped | 10/65 | **15%** |
+| `quiet` — no turn-taking rule | 10/35 | 29% |
+| `bare` — also no chat few-shot | 8/35 | 23% |
+| `opening` — explicit first turn | 13/50 | 26% |
+
+**The rule earns its place: it beats an unguided partner in every run**, and the
+contrast is clean within each — 4/20 vs 1/20, then 5/30 vs **0/30**. Validation is
+untouched: 29/30 and 29/30 in the last run, against chat’s 30/30.
+
+**None of the three candidates beat it by enough to ship.** `quiet` led its first
+run 6/15 to 1/15 and then *tied* at 4/20; `opening` led at 7/20 and then matched
+`converse` at 6/30. DEVELOPING.md’s rule from the story-time pooling is that one
+run resolves a threefold difference and not a 1.4× one, and that is exactly what
+this is. The shipped prompt stands unchanged; the variants are recorded here so
+the next person does not re-derive them.
+
+**Two honest limits.**
+
+- **This measures the opening turn only.** The seed is a bare 你好。, which is the
+  turn most primed by the prompt’s worked example and the hardest case for any
+  rule. Mid-drill behaviour, once the exchange is under way, is not measured and
+  is plausibly better.
+- **Two categories never elicited, in any arm, in any run.** 比 scored 0
+  REQUIRES across all 4 arms and all 3 runs, and 的/地/得 scored 1. A comparison
+  or a complement-marker is hard to *force* through a question in a way a
+  measure word is not — "你家有几个人？" compels 量词; no equally natural question
+  compels 比. The drill is therefore uneven across the taxonomy, and the count it
+  subtracts from is not, which is worth knowing before anyone reads a cleared
+  category as evidence.
+
+### Judging the drilled structure on its own
+
+**Measured.** `tools/grade-target-ab.js`, 20 hand-written fixtures over five
+tags, 3 repeats. Rows in `tools/grade-target-ab-results.md`.
+
+**The wordings below were compared on the partner model, which is not the model
+that answers them.** `grade()` and `drillCheck()` both go through
+`teachingModel()`, so the app asks `TEACH_MODEL`. The contrasts between wordings
+still hold — the arms interleaved within each run, which is the only comparison
+this file ever claimed — but every absolute figure in the table understates the
+shipped behaviour. Re-measured where it belongs, the shipped wording scores
+**56/60** rather than 54/60 and the tag ledger **45/60** rather than 42/60, and
+the two failures block 5 recorded (a dodge read as an attempt, 今天比昨天很冷
+called correct) are both gone. What remains is 不和没, whose Chinese name is a
+pair the model checks both halves of — a `TAG_ZH` naming problem, not a wording
+one.
+
+Partial credit needs one thing the grader could not previously say: was *this
+structure* used, and was it right, ignoring everything else in the sentence.
+Four kinds of fixture, each with a known answer — the structure used correctly,
+used wrongly, used correctly in a sentence wrong somewhere else, and a correct
+sentence avoiding it entirely. The third is the case partial credit exists for;
+the fourth is the free pass it has to refuse.
+
+**Asked as an extra field on `grade()`, it does not work.** The two verdicts
+fuse. A sentence with the target right and another error came back `ok:false`
+**9 times in 15**, and 5 of 15 dodges scored as used. Sharpening the wording —
+naming the trap, telling it twice to ignore the rest of the sentence — moved
+that not at all: still 9 of 15, with `used` improved and the whole thing net
+*worse*, 38/60 against 40/59. It also cost the tag ledger accuracy, 34/59
+against 42/59 for the same fixtures graded without the extra field.
+
+**Asked in its own call, it works.** One structure, one question, nothing else
+in the prompt to fuse with: the partial-credit case went to **15/15** and dodges
+to 15/15 immediately. This is the lesson README.md already records about the
+partner and the grader — holding a conversation and diagnosing a mistake are
+different jobs, and a small model does them badly at once. Judging one structure
+and judging a whole sentence are two more.
+
+Two wording faults remained, and both were worth fixing:
+
+| wording | good | bad | other | dodge | both right |
+|---|---|---|---|---|---|
+| field on `grade()` | 14/14 | 12/15 | 6/15 | 15/15 | 40/59 |
+| field on `grade()`, sharpened | 11/14 | 9/15 | 6/15 | 15/15 | 38/59 |
+| own call | 15/15 | 4/15 | 15/15 | 15/15 | 41/60 |
+| own call, `used` = *attempted* | 13/13 | 13/15 | 10/14 | 10/14 | 46/56 |
+| **shipped**, plus "nothing of the kind" | **15/15** | 12/15 | **15/15** | 12/15 | **54/60** |
+
+(`ok` correctness shown; `used` and the per-kind counts are in the results file.)
+
+- **"Used" reads as "used correctly" unless you say otherwise.** A wrong attempt
+  scored `used:false`, which denies credit for the right reason by accident and
+  denies it for correct sentences too: 没 correctly used scored `used:false`
+  because the tag's Chinese name is 不和没 and the model checked for both. Saying
+  *attempted, right or wrong* fixed the whole column.
+- **…which then let dodges in.** "Attempt" is generous enough that a sentence
+  with no measure word anywhere read as attempting one. Both clauses together —
+  attempted even if wrong, false when there is *nothing of the kind* present —
+  is what the app ships.
+
+**What still fails.** 我很喜欢看书 scores as a measure-word attempt every time,
+and 今天比昨天很冷 — the textbook 比 error — is called correct 2 times in 3. So
+the remaining error is roughly 3 in 15 toward *over*-crediting, which is the
+direction to fail in: a learner is occasionally given a pass they did not earn,
+rather than denied one they did. Denials of correct target use are 0/30.
+
+**Four of the seventeen tags cannot be asked this question at all.** Found in
+use, not in measurement: the fixtures above are all grammatical, and 用词, 词的
+意思, 同音字 and 地道的说法 name a *class of error* rather than a structure a
+learner can reach for. Asked anyway, against the real model, on sentences the
+grader had passed:
+
+| tag | credited |
+|---|---|
+| 同音字 wrong-character | **0/3** — `used:false` every time |
+| 用词 wrong-word | 1/3 |
+| 量词, 了, 比字句 | 3/3 |
+
+Nobody *attempts* a wrong character; attempting one is the mistake. That drill
+could never be finished. 用词 is worse than useless, because the prompt tells the
+model to ignore wrong words in the same breath as asking about them.
+
+So those four get no check and no call. The drill for them is to write sentences
+*without* that error, which the grader's own tags already report, and credit is
+the absence of the tag. That is the same partial-credit principle read the other
+way round — judged on the thing being drilled, not on the whole sentence — and it
+is why `credited()` takes the tag.
+
+The generalisation worth keeping: **a taxonomy built for labelling errors does
+not automatically support drilling them.** Thirteen of these tags name something
+to practise; four name something to avoid, and they need different arithmetic.
+
+**That conclusion is about the taxonomy, and it survives. The remedy has
+changed.** Those four tags cannot be asked the question *as tags* — but a tag is
+not the only thing a drill can point at. Naming the specific word instead makes
+the same question answerable, and the next section is the measurement.
+
+**`grade()` itself is now untouched by drilling.** Its string is identical in and
+out of a drill, so every tag measurement in this file still describes what the
+app sends — a property the rejected design did not have.
+
+### Drilling a word rather than a category
+
+**Measured.** `tools/drill-word-ab.js`, 11 extraction fixtures and 13 check
+fixtures, 3 repeats, both models. Rows in `tools/drill-word-ab-results.md`.
+
+The section above leaves four tags with no target: 用词, 词的意思, 同音字 and
+地道的说法 name a class of error, so the drill for them became "write sentences
+without this kind of error" and a whole corrected sentence stood in for a
+structure. In use that is worse than it sounds. One learner's 用词 list held
+三 unrelated errors — 行 where 可以 belonged, an extra 人 in 同事人, and 认识
+where 听说 belonged — and the drill that follows practises none of them: it
+re-elicits one sentence six times and credits any sentence carrying no 用词 tag,
+so 行 never reaches the partner, is never checked and is never counted.
+
+**A word is a target where a class of error is not.** "Did you use 行, and was
+it right" is answerable; "did you attempt a wrong word" is not. So a second
+small call (`prompt.js` `drillWord()`) names the word, from the learner's own
+sentence and its correction, and `drillCheck()` takes that word as its subject
+instead of the tag's Chinese name.
+
+| | names the word | refuses when it should | `drillCheck` both fields |
+| --- | --- | --- | --- |
+| teaching model | **27/27** | **6/6** | **37/39** |
+| partner model | 27/27 | 0/6 | 21/39 |
+
+On the model the app uses this is 100% on both extraction fields and 95% on the
+verdict, against the 1/3 the same question scored asked as 用词. **All four tags
+become drillable**, and `used` — the clause that stops six dodges finishing a
+drill — is 39/39 on both models.
+
+**Its own call, and at grade time.** Its own call for the reason the section
+above establishes: a second question bolted onto `grade()` fuses with the first
+and costs the tag ledger accuracy. At grade time rather than at drill start
+because the chooser ranks words, and a ranking cannot be built from an
+extraction that has not happened yet — doing it lazily would mean a burst of
+calls each time the chooser opens, repeated. The word rides in the `grade`
+`jsonb` that already syncs, so nothing is stored that was not stored before.
+
+**The learner's wrong sentence reaches a model here**, which D9 otherwise
+forbids. It is in the position `grade()` already puts it in — the thing being
+judged, not an example inside a rule — and the call writes no Chinese that
+anyone reads. D9's hazard is a partner primed to reproduce a bad form in its own
+output; there is no such output here.
+
+**Three things this measurement changed about the design, all in the same
+direction.** Each was a conclusion drawn on the partner model and reversed by
+running it where the app runs it:
+
+- Extraction looked like it needed a gate excluding 地道的说法, because it would
+  not refuse: 给我水 → 请给我一杯水 came back `{"wrong":"水"}`, which drills a
+  word the learner uses correctly. On the teaching model it refuses 6/6 and no
+  gate is needed.
+- The verdict looked unusable — every wrong use of the drilled word scored
+  `ok:true`, 0/18 — which would have made credit collapse to `used` alone and
+  finished a drill on six sentences containing the word in any form. On the
+  teaching model that is 16/18.
+- The obvious cause of that 0/18 — `drillCheck` telling the model to *ignore
+  wrong words* in the same breath as asking about a word, the very contradiction
+  this file blames for 用词's 1/3 — was measured and is **not** the cause.
+  Rewording moved it 0/18 to 1/18, and on the teaching model made it slightly
+  worse. One wording serves both arms.
+
+The generalisation, which is the same one this file already records for story
+time: **when a prompt fails, measure the model before rewriting the prompt.**
+Six wordings of a story prompt failed where a more capable model succeeded
+untouched, and here a prompt that reads as broken is fine and a prompt that
+reads as contradictory does not matter.
+
+**What is not evidenced.** The extraction fixtures are hand-written and the two
+refusal cases are both 地道的说法; a 用词 mistake with no single culprit would
+still get a confident answer, and none is in the set. The one remaining check
+failure, 我觉得这个东西很行, is the weakest fixture in it — 很行 is marginal
+rather than plainly wrong — so 16/18 may understate by one.
+
+### A correction is not an example of the word it corrects
+
+**Measured.** The 13 sentences of one real 行 drill, 3 repeats an arm, teaching
+model at the temperature the app sends (0.7). Arms: `drillCheck` with the
+`drillEg` line the app passed, and without it.
+
+The chooser hands a word drill the CORRECTION of a mistake with that word, and
+correcting a wrong word is exactly what removes it — so the check was reading
+"A correct sentence using 行:" above 我觉得可以, which contains no 行 at all. The
+A/B in the section above never saw this: `tools/drill-word-ab.js` calls
+`drillCheck` without a `drillEg`, so it measured a prompt the app does not send.
+
+| arm | `used` right | `ok` right | would credit |
+|---|---|---|---|
+| with the correction (shipped to v93) | 39/39 | 25/27 | 22/39 |
+| without it (v94) | 39/39 | **27/27** | 26/39 |
+
+`used` does not care; `ok` does, by two samples in 27. Small, and in the only
+direction available — the line was false for every word drill ever started. A
+category drill keeps it, where the sentence really does use the structure.
+
+### When the correction is the sentence
+
+**Measured.** The 9 corrections the grader produced during that same session,
+graded back, 3 repeats: **24/27 pass**. All three failures are one sentence,
+为什么“看电影”是一个游戏？, returned `unnatural` 3 times in 3 with `better`
+character-for-character the sentence being judged.
+
+So "the grader will not accept its own better sentence" is not a general
+weakness of the grader — it is one specific self-contradiction, and a
+deterministic one. `parseGrade()` now treats an identical `better` as no
+correction at all: no cross, no red category, no entry in the mistake ledger and
+no word in the drill chooser. Recomputed in the same place and for the same
+reason `ok` is: a verdict that contradicts itself must not reach the screen.
+
+What this does not fix is a *different* correction the grader would also reject;
+nothing in the 27 says how often that happens, only that it was not what
+happened here.
+
+### A tip about the word, on request
+
+**Measured.** 5 words at HSK 3 — 行 了 条 就 把 — 3 repeats each, teaching model.
+
+A drill was the one place in the app with nowhere to ask how the word works. The
+partner cannot answer: its rules forbid English and forbid talking about grammar,
+which is what makes it a partner and not a textbook. The banner asks instead, on
+a tap, and the answer is stored as a marker so the call is spent once per drill.
+
+| | result |
+|---|---|
+| examples inside the level's own list | 15/15 |
+| both examples actually use the word | 15/15 |
+| length | 221–392 characters |
+| cost | $0.00006 a call |
+
+15/15 on the level is why there is **no validate-and-retry loop** here, unlike the
+partner's replies — the one place in the app that asks a model for Chinese and
+then simply trusts it. If a later model regresses on that, the loop is the fix.
+
+**No sentence of the learner's is sent with it**, right or wrong. The wrong one is
+what D9 keeps away from a model about to write Chinese, and the correction cannot
+stand in for it: for a wrong-word drill the correction is the sentence with the
+drilled word taken out, the same false premise the section above records for
+`drillCheck`. The word and the level are enough.
+
+**What is not evidenced.** Whether the tips are *good* — 15/15 says they are at
+level and on topic, not that the grammar in them is right. One 了 sample from an
+earlier run gave advice its own example contradicted. A regenerate button is the
+cheap answer if that turns out to be common.
+
+### Whether a six-pass goal grinds
+
+**Measured, thinly.** `tools/grade-target-ab.js --loop`, 4 repeats over the same
+five tags: a real partner turn, a student model answering it naturally at level,
+then the target check. 18–20 samples an arm; rows in
+`tools/drill-loop-results.md`.
+
+This bounds the *partner's* contribution, not a learner's error rate — a model
+answering at HSK 3 makes far fewer mistakes than the person this is for. What it
+can say is how often a partner turn leads to a reply that uses the target at all.
+
+| arm | passes | turns per pass | a 6-pass goal is about |
+|---|---|---|---|
+| the chosen sentence in the prompt | 7/18 | 2.6 | 15 turns |
+| the category alone | 5/20 | 4.0 | 24 turns |
+
+**Naming the specific sentence helps**, which is the A/B for that prompt edit,
+though at n=18 this is a direction and not a number.
+
+**The unevenness from the section above is worse under a goal.** 比, 的/地/得 and
+不/没 scored **0** passes in every arm and every run; 量词 and 了 carried the
+whole total. A learner who picks one of the first three and is told to get six
+right is being asked for something the partner does not set up. The stop button
+is the answer for now, and this is the strongest argument for the item-style
+prompt the design deferred: when the partner cannot elicit the structure,
+handing the learner a cue directly is the thing that would work.
+
+### The grammar check writes Chinese of its own
+
+**Measured**, from a reported session. Asked how to use 不行, the follow-up answered
+with 这个路晚上开车不行，太黑了 — wrong measure word for 路. The learner then wrote
+that sentence himself and the app marked him down for the measure word it had just
+taught him. Unlike the partner's replies, nothing validates or retries the Chinese a
+teaching call writes.
+
+**A prompt rule aimed at it did nothing.** Four arms, 6 conversations each, every
+Chinese sentence the tutor wrote put through the app's own `grade()`:
+
+| arm | tutor sentences the grader passes |
+| --- | --- |
+| shipped | 10/11 |
+| + "write in English" | 12/14 |
+| + "your Chinese must be correct; check measure words" | 10/11 — and it produced 这个路 itself |
+| both | 12/13 |
+
+The rule written against this exact failure reproduced this exact failure. This file
+already records the generalisation twice: when a prompt fails, measure the model.
+
+**The metric had to be fixed before the model arms meant anything**, the same lesson
+DEVELOPING.md records for story time. The first counter scored sentence fragments and
+trailing quote marks as sentences, and it counted an `unnatural` verdict on
+你太累了，开车不行 as a fault — which is the grader disagreeing with the phrase the
+tutor was asked to demonstrate, not the tutor writing bad Chinese. Rebuilt to separate
+hard faults (wrong word, measure word, word order) from naturalness opinion:
+
+| | English | no hard fault | clean and natural | measure-word errors | $/3 turns |
+| --- | --- | --- | --- | --- | --- |
+| `qwen3-235b` (shipped) | 8/8 | 12/12 | 4/12 | 0/16 | $0.0003 |
+| `moonshotai/kimi-k2.5` | 7/7 | 17/17 | 15/17 | 0/19 | $0.0132 |
+| `deepseek/deepseek-v4-pro` | 2/2 | 3/3 | 3/3 | 0/4 | $0.0064 |
+
+**No hard fault in 32 sentences and no measure-word error in 39, on any model.** The
+reported failure is real — it was seen twice — and it is rarer than a run this size
+can measure. Nothing was changed on the strength of this: the only column that
+separates the arms is naturalness opinion, and it costs 44× per conversation.
+`deepseek-v4-pro` returned empty on 7 runs even at 3000 tokens, so read its column as
+n=2.
+
+**What is not evidenced.** Whether a validate-and-retry loop over teaching Chinese —
+the thing the partner has and the tutor does not — would catch this. It is the obvious
+next move if the failure is seen again, and it was not measured here.
+
 ## Things that did not work
 
 Kept because a rejected idea that looks reasonable will be proposed again.
@@ -745,6 +1228,23 @@ simultaneously. It did, on a real account.
 
 Reading and production are now the same function over two different word sets. One scale, two
 honest readings.
+
+### Telling the grammar check to answer in English
+
+**Measured, and a null result.** One reported explanation came back entirely in
+Chinese, to a learner asking for a grammar check at HSK 3. The candidate fix was one
+line — "Write your explanation in English." — in the shared tail of `explain()`.
+
+| arm | answered in English |
+| --- | --- |
+| shipped | 100/100 |
+| + the rule | 100/100 |
+
+Two fixtures, interleaved, 100 samples an arm. Pooled with the smaller runs around it
+the shipped prompt answers in English **109 times in 110**, so the failure is a ~1%
+tail and the rule has nothing to improve. Not shipped: a rule that cannot be shown to
+do anything is a line that has to win against the model's habit on every later call,
+for no measured benefit.
 
 ### Sharpening a prompt rule by naming the failure
 
@@ -779,6 +1279,22 @@ Stated plainly so nobody cites this file for more than it holds.
 - **The English thresholds are applied to Chinese unchanged.** The 95%/98% coverage figures
   and the encounter counts come from L2 English research. Zipfian structure transfers well;
   whether the specific numbers do is unestablished.
+- **The drill’s two constants are the least evidenced numbers in this file.** 90 days
+  has no citation at all, and no study sets the per-day credit cap at one. See
+  [Drilling a mistake category](#drilling-a-mistake-category).
+- **The drill does not work equally across the taxonomy.** 比 and 的/地/得 were
+  never elicited in measurement, while 量词 and 了 were. The arithmetic treats all
+  seventeen categories alike; the prompt does not. Under a pass goal this is
+  sharper still: three of five categories scored zero passes end to end
+  ([Whether a six-pass goal grinds](#whether-a-six-pass-goal-grinds)).
+- **The error-class tags have no dodge protection.** For the four that name an
+  error rather than a structure, a very short safe sentence credits as easily as
+  a real attempt — there is no "did you attempt it" to ask. The per-day cap
+  bounds what that does to the ledger.
+- **The target check over-credits about 1 sentence in 5.** Two fixtures fool it
+  every time, and the arithmetic has no second opinion. It fails toward
+  generosity by design, but a cleared category is weaker evidence than the
+  number suggests.
 - **Nothing here is tested against learners.** Every measurement is of model behavior. The
   pedagogy is drawn from published research; the app has not run a study of its own.
 
@@ -820,6 +1336,21 @@ Stated plainly so nobody cites this file for more than it holds.
   the Lexical Frequency Profile.
 - [Bridging the gap between receptive and productive
   competence](https://www.cambridge.org/elt/blog/2015/08/27/bridging-gap-receptive-productive-competence/). Cambridge English.
+
+**Error correction, backsliding and spaced practice**
+
+- [The U-shaped course of development](https://worldenglishes.lmc.gatech.edu/u-shaped-course-of-development/)
+  — backsliding and the non-linearity of L2 development.
+- Stemberger, J. [U-shaped learning and restrictions on error
+  correction](https://roa.rutgers.edu/files/472-1101/472-1101-STEMBERGER-0-0.PDF).
+- Kim, S. & Webb, S. (2014). [The effects of spaced vs. massed distribution instruction on L2
+  grammar learning](https://www.sciencedirect.com/science/article/abs/pii/S0346251X14000219).
+  *System* 42 — the delayed post-test favours spaced on error correction specifically.
+- Suzuki, Y. & DeKeyser, R. (2017). [Effects of distributed practice on the proceduralization
+  of morphology](https://yuichisuzuki.net/wp-content/uploads/2023/04/Suzuki-DeKeyser-2017-LTR.pdf).
+  *Language Teaching Research*.
+- Conti, G. (2018). [Focused error correction](https://gianfrancoconti.com/2018/05/17/focused-error-correction-how-you-can-make-a-time-consuming-necessity-more-effective-and-manageable/)
+  — "masses of spaced practice across a wide range of contexts".
 
 **Zipf's law, and Chinese**
 
