@@ -110,6 +110,8 @@ check(snap.teachModel === "big/model" && snap.model === "x/y",
   "prefsSnapshot carries the teaching model alongside the chat model");
 check(Sync.PREFS_KEYS.indexOf("teachModel") !== -1, "PREFS_KEYS names teachModel");
 check(Sync.PREFS_KEYS.indexOf("teachPrompts") !== -1, "PREFS_KEYS names teachPrompts");
+check(Sync.PREFS_KEYS.indexOf("drillTurns") !== -1,
+  "drillTurns syncs -- it is a preference, not a per-device counter");
 
 /* chatTime must NOT be in PREFS_KEYS: that list means "replace with whatever is
  * newer", which for a counter throws away whichever device synced first. It

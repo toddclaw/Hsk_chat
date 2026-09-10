@@ -5,7 +5,7 @@ Each entry says what it is, how it was found, and what would settle it.
 
 ---
 
-## New Drills Activity
+## Mistakes Drills Activity
 
 Use skills: caveman, ponytail, superpowers.  Use superpowers to implement new feature:
 I would like a new activity for drilling my mistakes as accumulated by the
@@ -17,6 +17,46 @@ grader passes my text will it have an impact on my stats.  I'm open to
 suggestions on how to impact the mistakes stats with drills.  Please research
 language pedagogy to explore the best way to update the mistakes counters with
 drills on those mistakes and the grader passing my submissions.
+
+---
+
+## The grader reports only failures, so transfer is invisible
+
+**Found:** designing the Mistakes Drills Activity, 2026-09-07, working out whether a
+correct sentence written in ordinary chat should earn credit against a mistake
+category. It cannot, and the reason is structural.
+
+`HSKPrompt.grade()` returns `errors: [{tag, note}]` — one entry per mistake, `[]`
+when the sentence is fine. A clean message therefore asserts only that *nothing was
+wrong*. It does not say the sentence contained a measure word, or a correct 把
+construction, so a pass cannot be attributed to any of the seventeen tags. Most
+clean messages contain none of the structures in question at all.
+
+Two things follow. First, drill credit can only come from inside a drill, where the
+tag is known because the learner chose it — spontaneous correct use in free
+conversation, which is *transfer* and the entire point of drilling, earns nothing.
+Second, there is no positive signal to track progress against: the app can only ever
+count what went wrong, so a learner who genuinely improves shows up as an absence.
+
+**What would settle it:** add a `used` array to the grade schema, naming the tags the
+sentence employed correctly, and credit those the way drill passes are credited.
+
+Three things make this more than a schema edit:
+
+- **It is on the hot path.** The grader runs on every message the learner sends. Any
+  added output costs tokens on all of them, and the story-cost item below is already
+  the binding constraint on this budget.
+- **The model may manufacture successes.** `grade()` already carries a measured
+  counter-instruction because a model told a sentence may be wrong grades everything
+  correct. Asking it to list what went *right* invites the mirror failure — claiming
+  a 把 construction in a sentence that has none. Measure the false-positive rate
+  against hand-marked sentences before trusting the number, and do not assume the
+  symmetric prompt behaves symmetrically.
+- **Absence is not evidence.** A tag missing from `used` must not count as a failure,
+  or every sentence becomes a failure at sixteen categories at once.
+
+Until then the mistake count falls two ways only: old failures leaving the rolling
+window, and spaced drill passes capped at one a day.
 
 ---
 
@@ -339,3 +379,36 @@ implementer nor the reviewer found a code-level cause; both judged it environmen
 first two are the ones with a real chance of confusing a user.
 
 ---
+
+## `browser.test.js` trips a `waitFor` ceiling roughly one run in three
+
+**Found:** 2026-09-07, across a day of commits that touched only Markdown and one
+new module — five first-attempt failures, every one of them a single `waitFor`
+call tripping its ceiling, on a different call site each time.
+
+The suite retries itself once and the pre-commit hook usually goes green on the
+second pass, so this mostly reads as noise. It is not free. On 2026-09-07 both
+attempts failed in CI on the merge of #29 (`chat reply`, then `story runs out at
+five segments`), the Publish job went red, and because the publish job is gated
+on `github.event_name == 'push'` the delete-triggered run beside it published
+nothing. `main` sat unpublished until the run was manually re-run.
+
+**Why the standing explanation no longer holds.** The comment above `waitFor`
+(`test/browser.test.js`) says the measured failures were "never reproducible
+locally" and attributes them to scheduler jitter on CI runners, which is why the
+shared floor was raised to 30000ms. On 2026-09-07 it reproduced locally three
+times on an otherwise idle machine. Whatever this is, "CI runners are loaded" is
+not it.
+
+**What would settle it:** make the failure say more than which label it was
+waiting on. Record, per tripped wait, how long it actually waited and what the
+page state was at the ceiling — if the elapsed time is pinned at 30000 the page
+never reached the state at all, and if it is well under, something is aborting
+the loop early. Then find out whether the tripped waits cluster on the ones that
+wait for a model reply, which would point at the test harness's stubbing rather
+than at the browser.
+
+Resist raising the ceiling again as the first move. 30000ms is already where the
+shared floor was moved to, after individual call sites had each been overridden
+to it for this same reason — a wait that has been lengthened once per call site
+and then once globally is usually hiding a stall rather than a slow machine.

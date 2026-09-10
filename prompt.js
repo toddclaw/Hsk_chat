@@ -343,8 +343,28 @@
       reuse: "unused",
       gen: "turn",
       converse: true,
+      /* Practice of what the learner already has. A word they have never seen
+       * is a second thing to get wrong in a sentence that is already hard, and
+       * the activity's whole claim is production of the known. Declared here
+       * rather than branched on in turn() so the next activity that wants it
+       * says so on its own row. */
+      newWords: false,
       note: "Ghost Words: practice words you've learned but never used. " +
         "The partner asks questions that need these words in the answer."
+    },
+    drill: {
+      label: "Drills",
+      /* Built per-category in activityRules(), the way story time's phase
+       * rules and 20 Questions' role rules are -- the text depends on which
+       * category was chosen, which a static array cannot express. */
+      rules: null,
+      names: null,
+      reuse: null,
+      gen: "turn",
+      converse: true,
+      newWords: false,                       // as Ghost Words, and for the same reason
+      note: "Drills: work one mistake the grader keeps flagging until you get " +
+        "it right six times. Pick a category and one of your own sentences below."
     },
     story: {
       label: "Story time",
@@ -470,6 +490,50 @@
         convert("你心里想的是「") + secret + convert("」。学生问你是非问题，") +
         convert("只回答「是」或「不是」（可以简单地多说一点，但是不要自己说出这个东西是什么）。") +
         convert("如果学生猜对了，或者说不猜了，你才可以说出「") + secret + convert("」。"));
+    } else if (opts.activity === "drill") {
+      /* Elicitation, not explanation. Ghost Words already showed that asking
+       * the partner to steer the conversation so a target must appear in the
+       * learner's OWN answer is what produces practice -- a partner that
+       * merely mentions the structure is input, not production.
+       *
+       * Names the structure and never a wrong form: RESEARCH.md, "Sharpening
+       * a prompt rule by naming the failure". */
+      /* A word drill names the word. The category cannot serve: 用词 tells the
+       * partner to elicit "word choice", which is not something a question can
+       * be built around, and it is why a drill on one of those four tags used
+       * to fall back to re-eliciting one whole sentence. RESEARCH.md,
+       * "Drilling a word rather than a category". */
+      var zh = opts.drillWord || (opts.drillTag ? TAG_ZH[opts.drillTag] : null);
+      if (zh) {
+        /* The one sentence being drilled, and only ever the CORRECTED version
+         * of it -- the learner's own wrong sentence stays on screen and never
+         * reaches a model (D9). Passed verbatim, like a story topic: it is
+         * stored text in the learner's own script, not app-authored Chinese,
+         * so convert() has no business rewriting it. */
+        /* Only a CATEGORY drill gets the sentence. A word drill deliberately
+         * does not: "make the student say roughly this sentence" is six
+         * elicitations of one string, which is massed repetition of a sentence
+         * rather than the varied practice across contexts the spacing
+         * literature actually supports (RESEARCH.md, "Drilling a mistake
+         * category"). The partner needs the word; the learner's own examples
+         * stay on screen in the banner, where they are a memory aid and not an
+         * instruction to a model. */
+        var egRule = opts.drillEg && !opts.drillWord
+          ? convert("学生要练习的句子是这样的：「") + opts.drillEg + convert("」。") +
+            convert("请你问的问题，要让学生说出差不多的句子。")
+          : "";
+        /* The word is the learner's own, passed verbatim like a story topic --
+         * stored text in their script, not app-authored Chinese, so convert()
+         * has no business rewriting it. The category name is app-authored and
+         * still converts. */
+        rules.push(convert("学生今天要练习「") +
+          (opts.drillWord ? opts.drillWord + convert("」这个词。")
+                          : convert(zh) + convert("」。")) + egRule +
+          convert("请你问一些问题，让学生必须用这个说法来回答。一次只问一个问题，问题要短。") +
+          convert("学生说对了，就说很好，再问下一个。") +
+          convert("学生说得不对，就用正确的说法说一次，然后再问一个差不多的问题。") +
+          convert("不要用英文，也不要讲语法规则。"));
+      }
     } else {
       (act.rules || []).forEach(function (r) { rules.push(convert(r)); });
     }
@@ -725,29 +789,50 @@
    * precisely the failure that makes a mistake ledger useless. A code and a
    * two-word gloss are not enough to pick between seventeen headings; a
    * wrong-to-right pair is. */
+  /* The fourth column is the Chinese name of the structure, used ONLY by the
+   * drill prompt. The third column cannot serve: every example in it contains
+   * a wrong form, and RESEARCH.md measured that putting one in a prompt primes
+   * the model to reproduce it. */
   var TAGS = [
-    ["measure-word",           "measure word",             "三个书 → 三本书"],
-    ["aspect-le",              "了",                        "很高兴了 → 很高兴"],
-    ["aspect-guo",             "过",                        "我去过了那儿吗 → 我去过那儿吗"],
-    ["aspect-zhe",             "着",                        "他站着了 → 他站着"],
-    ["aspect-zai",             "在 / 正在",                 "我在吃饭了 → 我在吃饭"],
-    ["negation-bu-mei",        "不 vs 没",                  "他不有钱 → 他没有钱"],
-    ["de-particles",           "的 / 地 / 得",              "他说的很好 → 他说得很好"],
-    ["word-order-adverbial",   "adverbial word order",      "我去商店昨天 → 我昨天去商店"],
-    ["word-order-attributive", "attributive word order",    "朋友的我 → 我的朋友"],
-    ["comparison-bi",          "比 comparison",             "他比我很高 → 他比我高"],
-    ["ba-construction",        "把 construction",           "我把书看 → 我把书看完了"],
-    ["bei-construction",       "被 construction",           "书被我看 → 书被我看完了"],
-    ["connective",             "connectives",               "因为下雨，我不去 → 因为下雨，所以我不去"],
-    ["wrong-word",             "wrong word",                "我看音乐 → 我听音乐"],
-    ["wrong-sense",            "right word, wrong sense",   "我很开车 → 我常开车"],
-    ["wrong-character",        "wrong character",           "我的马妈 → 我的妈妈"],
-    ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水"]
+    ["measure-word",           "measure word",             "三个书 → 三本书",        "量词"],
+    ["aspect-le",              "了",                        "很高兴了 → 很高兴",      "了"],
+    ["aspect-guo",             "过",                        "我去过了那儿吗 → 我去过那儿吗", "过"],
+    ["aspect-zhe",             "着",                        "他站着了 → 他站着",      "着"],
+    ["aspect-zai",             "在 / 正在",                 "我在吃饭了 → 我在吃饭",  "在／正在"],
+    ["negation-bu-mei",        "不 vs 没",                  "他不有钱 → 他没有钱",    "不和没"],
+    ["de-particles",           "的 / 地 / 得",              "他说的很好 → 他说得很好", "的、地、得"],
+    ["word-order-adverbial",   "adverbial word order",      "我去商店昨天 → 我昨天去商店", "状语的位置"],
+    ["word-order-attributive", "attributive word order",    "朋友的我 → 我的朋友",    "定语的位置"],
+    ["comparison-bi",          "比 comparison",             "他比我很高 → 他比我高",  "比字句"],
+    ["ba-construction",        "把 construction",           "我把书看 → 我把书看完了", "把字句"],
+    ["bei-construction",       "被 construction",           "书被我看 → 书被我看完了", "被字句"],
+    ["connective",             "connectives",               "因为下雨，我不去 → 因为下雨，所以我不去", "关联词"],
+    ["wrong-word",             "wrong word",                "我看音乐 → 我听音乐",    "用词"],
+    ["wrong-sense",            "right word, wrong sense",   "我很开车 → 我常开车",    "词的意思"],
+    ["wrong-character",        "wrong character",           "我的马妈 → 我的妈妈",    "同音字"],
+    ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水",  "地道的说法"]
   ];
 
   var ERROR_TAGS = TAGS.map(function (r) { return r[0]; });
   var TAG_LABEL = {};
   TAGS.forEach(function (r) { TAG_LABEL[r[0]] = r[1]; });
+  var TAG_ZH = {};
+  TAGS.forEach(function (r) { TAG_ZH[r[0]] = r[3]; });
+  var TAG_EG = {};
+  TAGS.forEach(function (r) { TAG_EG[r[0]] = r[2]; });
+
+  /* Four of the seventeen name a CLASS OF ERROR rather than a structure the
+   * learner can reach for, and drillCheck()'s question is meaningless for them.
+   * Measured against the real model: 同音字 scored used:false 3 times in 3 --
+   * nobody attempts a wrong character, attempting one IS the mistake -- so that
+   * drill could never be finished. 用词 was worse, because the check tells the
+   * model to ignore wrong words in the same breath as asking about them, and a
+   * sentence the grader had passed came back ok:false 2 times in 3.
+   *
+   * For these, the drill is "write sentences without this kind of error", and
+   * the grader's own tags already answer it. mistakes.js credits them on the
+   * absence of that tag rather than on a verdict nobody can give. */
+  var ERROR_CLASS_TAGS = ["wrong-word", "wrong-sense", "wrong-character", "unnatural"];
 
   /* The four categories the detail view shows as icons. Each is a different
    * repair: a wrong word is looked up, a wrong rule is learned, a wrong order
@@ -760,6 +845,166 @@
     { key: "order",   label: "word order",  zh: "语序" },
     { key: "natural", label: "naturalness", zh: "地道" }
   ];
+
+  /* Which WORD to drill, extracted from one mistake the learner already made.
+   *
+   * The seventeen tags were built to label errors, and four of them
+   * (ERROR_CLASS_TAGS) name a class of error rather than anything a learner can
+   * reach for. RESEARCH.md, "Judging the drilled structure on its own", records
+   * where that ends: \u540c\u97f3\u5b57 scored used:false 3 times in 3, so the drill could
+   * never be finished, and \u7528\u8bcd managed 1/3. The drill for those four became
+   * "write sentences without this kind of error", with a whole sentence standing
+   * in for a target.
+   *
+   * A word is a target. This call names it, once, so the chooser can offer
+   * \u884c under "wrong word" and drillCheck() can ask a question that has an answer.
+   *
+   * Its own call, and at GRADE time rather than at drill start, for two separate
+   * reasons. Its own call because the same measurement above found that bolting
+   * a second question onto grade() fuses the two verdicts and costs the tag
+   * ledger accuracy, 34/59 against 42/59. At grade time because the chooser
+   * ranks words, and a ranking cannot be built from an extraction that has not
+   * happened yet -- doing it lazily would mean a burst of calls every time the
+   * chooser opens, repeated.
+   *
+   * The learner's own wrong sentence reaches a model here, which D9 otherwise
+   * forbids. It is in the position grade() already puts it in -- the thing being
+   * judged, not an example inside a rule -- and this call writes no Chinese that
+   * anyone reads. D9's hazard is a PARTNER primed to reproduce a bad form in its
+   * own output; there is no such output here. Measured all the same:
+   * tools/drill-word-ab.js.
+   *
+   * Either field may be empty on its own. A correction that deletes a word
+   * leaves nothing in its place; one that adds a word replaced nothing. */
+  function drillWord(opts) {
+    return "A student of Chinese at " + opts.label + " wrote a sentence with a " +
+      "mistake in it. Name the ONE word they should practise.\n\n" +
+      "The student wrote: " + opts.text + "\n" +
+      "Corrected: " + (opts.better || "") + "\n" +
+      (opts.note ? "What was wrong: " + opts.note + "\n" : "") +
+      "\nReply with only this JSON object, no prose and no code fence:\n" +
+      '{"wrong":"","right":""}\n\n' +
+      "wrong -- the word in the STUDENT'S sentence that is at fault, copied from " +
+      "it character for character.\n" +
+      "right -- the word standing in its place in the corrected sentence, copied " +
+      "from that one character for character. Empty when the correction simply " +
+      "removes the faulty word and puts nothing there.\n\n" +
+      "Copy, never translate and never rewrite. A word you did not copy from one " +
+      "of those two sentences is wrong even when it is a better word.\n\n" +
+      "Both empty when no single word is at fault -- when the mistake is the " +
+      "order of the words, or a particle, or the sentence rebuilt as a whole. " +
+      "Two empty strings are a better answer than a guess: this picks what the " +
+      "student drills for the next six sentences, and a wrong pick sends them to " +
+      "practise something they already do correctly.";
+  }
+
+  /* The verdict on the structure being drilled, asked in its OWN call.
+   *
+   * It began as an extra field on grade(), which is the obvious design and the
+   * wrong one. Measured (tools/grade-target-ab.js): asked alongside the
+   * seventeen-tag verdict, the model fused the two. A sentence using the
+   * drilled structure correctly but wrong somewhere else -- the entire case
+   * partial credit exists for -- came back ok:false 9 times in 15, and
+   * sharpening the wording moved that not at all. It also cost the tag ledger
+   * accuracy, 34/59 against 42/59 for the same fixtures graded without it.
+   *
+   * This is the lesson README.md already records about the partner and the
+   * grader: holding a conversation and diagnosing a mistake are different jobs,
+   * and a small model does them badly at once. Judging one structure and
+   * judging a whole sentence are two more.
+   *
+   * So grade() is left exactly as it was -- every tag measurement in
+   * RESEARCH.md still describes the string the app sends -- and the drill asks
+   * its own question, about one structure, with nothing else in the prompt to
+   * fuse with.
+   *
+   * `used` exists because the cheapest way to pass a drill is to write a
+   * sentence that never reaches for the structure at all. */
+  function drillCheck(opts) {
+    /* A word drill names the WORD and skips the tag entirely. This is what lets
+     * the four error-class tags be drilled at all: "did you use \u884c, and was
+     * it right" is answerable where "did you attempt a wrong word" was not, and
+     * RESEARCH.md measured the latter at 1/3 for exactly that reason -- the
+     * prompt told the model to ignore wrong words in the same breath as asking
+     * about them. With a word as the subject that contradiction is gone.
+     *
+     * The wording below is the measured wording, unchanged: `used` = attempted,
+     * right or wrong, and false only when there is nothing of the kind present.
+     * Only the subject moves. TAG_EG is dropped in the word arm because it is
+     * an example about the tag, not about this word, and the tag is no longer
+     * what is being asked. */
+    var word = opts.drillWord || "";
+    var zh = opts.drillTag ? TAG_ZH[opts.drillTag] : null;
+    if (!word && (!zh || ERROR_CLASS_TAGS.indexOf(opts.drillTag) !== -1)) return "";
+    var subject = word ? "\u300c" + word + "\u300d" : zh;
+    return "A student of Chinese at " + opts.label + " is practising one " +
+      (word ? "word: " + subject + ".\n"
+            : "structure: " + subject + " (" +
+              (TAG_LABEL[opts.drillTag] || opts.drillTag) + ").\n") +
+      /* Only a CATEGORY drill gets this line. For a word drill the sentence is
+       * the CORRECTION of a mistake with that word, and correcting a wrong word
+       * is what REMOVES it -- so the line read "a correct sentence using 行"
+       * above a sentence with no 行 anywhere in it. Measured over the 13
+       * sentences of one real 行 drill, 3 repeats (RESEARCH.md, "A correction is
+       * not an example of the word it corrects"): `used` 39/39 either way, `ok`
+       * 25/27 with the line and 27/27 without. */
+      (opts.drillEg && !word ? "A correct sentence using it: " + opts.drillEg + "\n" : "") +
+      "\nThe student then wrote: " + opts.text + "\n\n" +
+      (word ? "" : "For reference, a typical mistake with it and its fix: " +
+        TAG_EG[opts.drillTag] + "\n\n") +
+      "Answer two questions about " + subject + " in that sentence, and nothing else. " +
+      /* The measured wording, shared by both arms. "Ignore wrong words" while
+       * asking about a word reads like the contradiction RESEARCH.md blamed for
+       * \u7528\u8bcd scoring 1/3, and rewording it for the word arm was tried: 0/18
+       * against 1/18 on wrong uses, which is no difference. The clause is not
+       * what `ok` fails on (tools/drill-word-ab.js, --only check). */
+      "Ignore every other part of it -- other grammar, wrong words, whether the " +
+      "sentence is natural. Those are being judged separately and must not " +
+      "change your answer here.\n\n" +
+      "used  -- did the student ATTEMPT " + subject + " here at all? true even if they " +
+      "got it wrong: a wrong attempt is still an attempt. false when the " +
+      "sentence contains nothing of the kind -- not a wrong version, but none at " +
+      "all -- however good that sentence is, and even if " + subject + " would have " +
+      "fitted it well.\n" +
+      "ok    -- was that attempt correct? false if the student reached for " + subject +
+      " and got it wrong.\n\n" +
+      "Reply with only this JSON object, no prose and no code fence:\n" +
+      '{"used":true,"ok":true}';
+  }
+
+  /* How to use the word being drilled, in English, on request.
+   *
+   * The banner already shows the word and the learner's own mistakes with it,
+   * which answers "which mistake was this" and not "how does this word work".
+   * The partner cannot answer the second: its rules forbid it talking grammar
+   * or using English at all, so a drill had nowhere to be told.
+   *
+   * Its own prompt rather than explain(): explain() judges a SENTENCE and opens
+   * with one of three verdict lines, which is the wrong shape and the wrong
+   * question for a word.
+   *
+   * The learner's own sentence is deliberately NOT sent, neither the wrong one
+   * nor its correction. The wrong one is what D9 forbids near a model that is
+   * about to write Chinese, and the correction cannot stand in for it: for a
+   * wrong-word drill the correction is the sentence with the drilled word taken
+   * OUT, which is the same false premise RESEARCH.md records for drillCheck.
+   * The word and the level are enough.
+   *
+   * Measured before shipping, 5 words x 3 at HSK 3 (行 了 条 就 把): 221-392
+   * characters back, examples in level 15/15 against the level's own list, and
+   * both examples actually used the word 15/15 -- so no validate-and-retry loop
+   * here, unlike the partner's replies. The decoration rules are explain()'s,
+   * for the measured reason recorded there: models answer in Markdown nobody
+   * asked for and it is pure output cost. */
+  function wordTip(opts) {
+    return "A student of Chinese at " + opts.label + " is about to practise one " +
+      "word: " + opts.word + ".\n\nIn English, tell them how to use it. At most three " +
+      "short sentences: what it means, the pattern it goes in, and the mistake " +
+      "learners make with it. Then two example sentences in Chinese, one per line, " +
+      "each with its English on the same line after a dash. Use only words at " +
+      opts.label + " or below in the examples, and use " + opts.word + " in both.\n\n" +
+      "No headings, no bullet lists, no bold, and no closing encouragement.";
+  }
 
   function grade(opts) {
     var tags = TAGS.map(function (r) {
@@ -936,9 +1181,13 @@
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
-              translate: translate, explain: explain, grade: grade, castPrompt: castPrompt,
+                        translate: translate, explain: explain, grade: grade,
+              drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
+              castPrompt: castPrompt,
               titlePrompt: titlePrompt,
-              ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, GRADE_CATS: GRADE_CATS };
+              ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
+              TAG_EG: TAG_EG, ERROR_CLASS_TAGS: ERROR_CLASS_TAGS,
+              GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

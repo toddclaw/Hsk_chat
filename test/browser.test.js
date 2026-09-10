@@ -3242,6 +3242,424 @@ check(usedGroups && usedGroups.first === "\u7684",
       return sec && sec.style.display === "none";`);
     check(issueSectionHidden, "Issue section hides when Cancel clicked");
 
+    /* ------------------------------------------------- the mistakes drill */
+    /* The chooser lists the learner's own categories, and choosing one writes
+     * the marker that everything else reads off. Seeded through
+     * hsk1chat.chatMsgs -- one object keyed by chat id -- the way every other
+     * seeded scenario above does it.
+     *
+     * Dated now(), not a fixed date: mistakes.js ages a failure out after
+     * MISTAKE_WINDOW_DAYS, so a hard-coded timestamp would make this test
+     * start passing vacuously once it fell out of the window. */
+    await exec(`
+      var cid = "99999999-7777-4777-8777-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-7777-4777-8777-999999999999": [
+        { id: "88888888-7777-4777-8777-888888888888", role: "user",
+          text: "我有三个书", created_at: now,
+          grade: { ok: false, better: "我有三本书",
+                   errors: [{ tag: "measure-word", note: "use ben for books" }] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    /* callModel is stubbed before the activity opens, not after: startActivity()
+     * withholds the opening turn for a drill, but a stub that arrives late
+     * would leave any other path free to reach the network. */
+    await exec(`
+      window.callModel = function () { return Promise.resolve("你有几本书？"); };
+      window.startActivity("drill");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the drill chooser to appear");
+    const drillBtn = await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("measure word") === 0) return b[i].textContent;
+      }
+      return "";`);
+    check(drillBtn.indexOf("measure word") === 0,
+      "the chooser offers the category the grader logged", drillBtn);
+    check(drillBtn.indexOf("(1)") !== -1,
+      "with the learner's own count beside it", drillBtn);
+    check(await exec(`return document.querySelector('#input').disabled;`) === true,
+      "and the composer is closed until a category is chosen");
+
+    /* Choosing a category does NOT start anything: the drill is on one specific
+     * sentence, so the chooser has a second step offering the learner's own
+     * mistakes in that category. Nothing is stored until they pick one. */
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("measure word") === 0) { b[i].click(); break; } }
+      return true;`);
+    const egStep = await exec(`return document.querySelector('#starters').textContent;`);
+    check(egStep.indexOf("\u6211\u6709\u4e09\u4e2a\u4e66") !== -1 &&
+          egStep.indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1,
+      "step two offers the learner's own sentence and its correction", egStep);
+    check(egStep.indexOf("use ben for books") !== -1,
+      "with the grader's note on what the rule was", egStep);
+    check(await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m), n = 0;
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drill") n++; } }
+      return n;`) === 0,
+      "and picking a category alone stores nothing");
+
+    /* Picking the sentence writes both markers and opens the composer.
+     * callModel is stubbed already: startDrillWith() calls openingTurn(). */
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drill") return true; } }
+      return false; })()`, "the drill marker to be written");
+    const markers = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var k = Object.keys(m), out = {};
+      for (var i = 0; i < k.length; i++) {
+        for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "drill" || t.role === "drillEg") out[t.role] = t.text; } }
+      return JSON.stringify(out);`);
+    check(JSON.parse(markers).drill === "measure-word",
+      "choosing writes a drill marker naming the category", markers);
+    check(JSON.parse(markers).drillEg === "\u6211\u6709\u4e09\u672c\u4e66",
+      "and a second marker holding the corrected sentence -- never the wrong one",
+      markers);
+    check(await exec(`return document.querySelector('#input').disabled;`) === false,
+      "and the composer opens once the drill has started");
+    const control = await exec(`return document.querySelector('#starters').textContent;`);
+    check(control.indexOf("0 of 6 correct") !== -1,
+      "the control counts CORRECT sentences, not attempts", control);
+    check(control.indexOf("End drill") !== -1,
+      "and offers a way out of a run that will not come good", control);
+    check((await exec(`return document.querySelector('#log').textContent;`))
+            .indexOf("\u6211\u6709\u4e09\u672c\u4e66") !== -1,
+      "the banner keeps the sentence being drilled on screen");
+    /* The marker rows are setup, not conversation: rendering them would put
+     * "measure-word" in the log as though the partner had said it. */
+    check((await exec(`return document.querySelector('#log').textContent;`))
+            .indexOf("measure-word") === -1,
+      "and the markers themselves are never rendered as messages");
+
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("End drill") !== -1) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`document.querySelector('#input').disabled === true`,
+      "ending the drill to close the composer");
+    check((await exec(`return document.querySelector('#starters').textContent;`))
+            .indexOf("done") !== -1,
+      "and the control reports the run as done");
+
+    /* ------------------------------------------- drilling one word, not a tag */
+    /* The four tags that name a class of error hold unrelated mistakes: this
+     * seed is one "wrong word" list with 行 and 认识 in it, which is the case
+     * that motivated the word target. The chooser's second step must offer the
+     * WORDS, the marker must record which, and the banner must headline it.
+     *
+     * The `word` on each error is what nameDrillWords() writes at grade time;
+     * seeding it directly keeps this test off the network, the same way the
+     * measure-word block above seeds a grade rather than earning one. */
+    await exec(`
+      var cid = "99999999-6666-4666-8666-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-6666-4666-8666-999999999999": [
+        { id: "77777777-6666-4666-8666-777777777771", role: "user",
+          text: "\u6211\u89c9\u5f97\u884c", created_at: now,
+          grade: { ok: false, better: "\u6211\u89c9\u5f97\u53ef\u4ee5",
+                   errors: [{ tag: "wrong-word", note: "xing is not right here",
+                              word: "\u884c" }] } },
+        { id: "77777777-6666-4666-8666-777777777772", role: "user",
+          text: "\u6211\u8ba4\u8bc6\u4ed6\u660e\u5929\u6765", created_at: now,
+          grade: { ok: false, better: "\u6211\u542c\u8bf4\u4ed6\u660e\u5929\u6765",
+                   errors: [{ tag: "wrong-word", note: "renshi is for people",
+                              word: "\u8ba4\u8bc6" }] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.startActivity", "the app");
+    await exec(`
+      window.callModel = function () { return Promise.resolve("\u4f60\u597d\u5417\uff1f"); };
+      window.startActivity("drill");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the drill chooser to appear");
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("wrong word") === 0) { b[i].click(); break; } }
+      return true;`);
+    const wordBtns = await exec(`
+      var b = document.querySelectorAll('#starters button'), out = [];
+      for (var i = 0; i < b.length; i++) out.push(b[i].textContent);
+      return JSON.stringify(out);`);
+    check(wordBtns.indexOf("\u884c") !== -1 && wordBtns.indexOf("\u8ba4\u8bc6") !== -1,
+      "step two offers each word the grader named, not one whole sentence",
+      wordBtns);
+    /* The word is the choice; the sentence it came from is in the banner for
+     * the whole drill. On the button too it made each option four lines tall
+     * and put a grey sentence on an accent-blue bubble, which is unreadable. */
+    const wordPill = JSON.parse(wordBtns).filter(t => t.indexOf("\u884c") === 0)[0] || "";
+    check(wordPill.indexOf("\u6211\u89c9\u5f97\u884c") === -1,
+      "and carries the word alone, not the sentence the banner already shows",
+      wordPill);
+
+    await exec(`
+      var b = document.querySelectorAll('#starters button');
+      for (var i = 0; i < b.length; i++) {
+        if (b[i].textContent.indexOf("\u884c") === 0) { b[i].click(); break; } }
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillWord") return true; } }
+      return false; })()`, "the drillWord marker to be written");
+    const wordMarkers = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), out = {};
+      var k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "drill" || t.role === "drillWord") out[t.role] = t.text; } }
+      return JSON.stringify(out);`);
+    check(JSON.parse(wordMarkers).drill === "wrong-word" &&
+          JSON.parse(wordMarkers).drillWord === "\u884c",
+      "choosing a word records the tag AND the word", wordMarkers);
+
+    const wordLog = await exec(`return document.querySelector('#log').textContent;`);
+    check(wordLog.indexOf("\u884c") !== -1,
+      "the banner headlines the word being drilled", wordLog);
+    check(wordLog.indexOf("\u6211\u89c9\u5f97\u884c") !== -1,
+      "and keeps the learner's own wrong sentence on screen", wordLog);
+    check(wordLog.indexOf("\u8ba4\u8bc6") === -1,
+      "but not the other word's mistakes, which are a different drill", wordLog);
+    check(wordLog.indexOf("drillWord") === -1 && wordLog.indexOf("wrong-word") === -1,
+      "and the markers are never rendered as messages", wordLog);
+
+    /* ------------------------------------------- how do I use this word, then */
+    /* The partner may not answer that: its rules forbid English and forbid
+     * talking about grammar. So the banner asks, on tap -- one call, stored as
+     * a fourth marker so a reload or a sync keeps it and the call is never
+     * spent twice on one drill. */
+    check(wordLog.indexOf("How do I use \u884c?") !== -1,
+      "the banner offers help with the word being drilled", wordLog);
+    await exec(`
+      window.callModel = function (msgs) {
+        var all = JSON.stringify(msgs);
+        if (all.indexOf("about to practise one word") === -1)
+          return Promise.resolve("\u4f60\u597d\u5417\uff1f");
+        return Promise.resolve("\u884c means okay.\\n\u6211\u89c9\u5f97\u884c \u2013 I think it is okay");
+      };
+      document.querySelector('#drillTipBtn').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillTip") return true; } }
+      return false; })()`, "the tip to be stored as a marker");
+    const tipLog = await exec(`return document.querySelector('#log').textContent;`);
+    check(tipLog.indexOf("\u884c means okay.") !== -1,
+      "tapping it puts the answer in the banner", tipLog);
+    check(tipLog.indexOf("How do I use") === -1,
+      "and the button is gone once it is answered", tipLog);
+    check(tipLog.indexOf("drillTip") === -1,
+      "the tip marker is not rendered as a message either", tipLog);
+    /* Asked once. The marker is what the banner reads on every later render,
+     * so a second drill turn must not spend the call again. */
+    const tipCount = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m), n = 0;
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillTip") n++; } }
+      return n;`);
+    check(tipCount === 1, "exactly one tip is stored", String(tipCount));
+
+    /* ------------------------------- a credit the learner can actually see */
+    /* The verdict lands on the message; the progress line lives in the
+     * starters strip. gradeTurn() and runTurn() both ended with renderAll()
+     * and nothing else, so nothing in a drill ever re-rendered that strip:
+     * a whole session read "0 of 6 correct" with every credit already stored
+     * in localStorage. Reported from a real fourteen-sentence 行 drill.
+     *
+     * Stubbed by prompt, because a graded turn is three different calls: the
+     * partner reply, the grade, and the drill's own target check. */
+    const drillStub = `
+      window.callModel = function (msgs) {
+        var all = JSON.stringify(msgs);
+        if (all.indexOf("Answer two questions about") !== -1)
+          return Promise.resolve('{"used":true,"ok":true}');
+        if (all.indexOf("You are grading one sentence") !== -1)
+          return Promise.resolve(GRADE);
+        return Promise.resolve("\u597d\u7684\u3002");
+      };`;
+    await exec(drillStub.replace("GRADE", `'{"ok":true,"meant":"fine","better":"",` +
+      `"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}'`) + `
+      document.querySelector('#input').value =
+        "\u4f60\u8ddf\u6211\u4e00\u8d77\u53bb\u516c\u56ed\u884c\u4e0d\u884c\uff1f";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.grade && t.grade.target) return true; } }
+      return false; })()`, "the drill's target check to land");
+    /* Bounded and caught: a stuck counter is the bug this covers, and it
+     * should be reported as one failed check rather than as a dead run. */
+    try {
+      await waitFor(`document.querySelector('#starters').textContent.indexOf("1 of 6") !== -1`,
+        "the drill counter", 6000);
+    } catch (e) { /* asserted below */ }
+    const drillLine = await exec(`return document.querySelector('#starters').textContent;`);
+    check(drillLine.indexOf("1 of 6") !== -1,
+      "a credited sentence moves the drill counter with no reload", drillLine);
+
+    /* --------------------------- a correction identical to what was written */
+    /* The grader does this: 为什么“看电影”是一个游戏？ came back unnatural 3 times
+     * in 3 with `better` character-for-character the sentence it was judging.
+     * There is no edit to make, so there is no mistake -- and left standing it
+     * is a cross on the message, a red category, a mistake in the ledger and a
+     * word in the drill chooser that were never wrong. */
+    await exec(drillStub.replace("GRADE",
+      `'{"ok":false,"meant":"x","better":"\u6211\u4eca\u5929\u884c",` +
+      `"cats":{"word":true,"grammar":true,"order":true,"natural":false},` +
+      `"errors":[{"tag":"unnatural","note":"not natural"}]}'`) + `
+      document.querySelector('#input').value = "\u6211\u4eca\u5929\u884c";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.text === "\u6211\u4eca\u5929\u884c" && t.grade)
+            return true; } }
+      return false; })()`, "the second sentence to be graded");
+    const sameGrade = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.text === "\u6211\u4eca\u5929\u884c" && t.grade)
+            return JSON.stringify(t.grade); } }
+      return "{}";`);
+    const sg = JSON.parse(sameGrade);
+    check(sg.ok === true && (sg.errors || []).length === 0 && !sg.better,
+      "a correction identical to the sentence is no correction, so no mistake",
+      sameGrade);
+    check(sg.cats && sg.cats.natural === true,
+      "and no category is marked as the problem either", sameGrade);
+
+    /* --------------------------------- bringing older chats up to the grader */
+    /* Two eras, two gaps: a turn from before the grader existed carries no
+     * verdict, and a turn graded before v92 carries error-class tags with no
+     * word. The button counts both, costs them differently, and a run fills
+     * each in place. A third message is already complete and must be left
+     * alone -- the count is the check that it was. */
+    await exec(`
+      var cid = "99999999-5555-4555-8555-999999999999";
+      var now = new Date().toISOString();
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "seed", activity: "chat", level: 1,
+          created_at: now, updated_at: now }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "99999999-5555-4555-8555-999999999999": [
+        { id: "66666666-5555-4555-8555-666666666661", role: "user",
+          text: "我有三个书", created_at: now },
+        { id: "66666666-5555-4555-8555-666666666662", role: "user",
+          text: "我觉得行", created_at: now,
+          grade: { ok: false, better: "我觉得可以",
+                   errors: [{ tag: "wrong-word", note: "not right here" }] } },
+        { id: "66666666-5555-4555-8555-666666666663", role: "user",
+          text: "我很好", created_at: now,
+          grade: { ok: true, better: "", errors: [] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.renderMigrate", "the app");
+    /* One stub for both calls, told apart by the prompt: the extraction says
+     * "Name the ONE word", the grader asks for an errors array. */
+    await exec(`
+      window.migrateCalls = { grade: 0, word: 0 };
+      window.callModel = function (msgs) {
+        var p = msgs && msgs[0] && msgs[0].content || "";
+        if (p.indexOf("Name the ONE word") !== -1) {
+          window.migrateCalls.word++;
+          return Promise.resolve('{"wrong":"行","right":"可以"}');
+        }
+        window.migrateCalls.grade++;
+        return Promise.resolve(JSON.stringify({ ok: false, meant: "", better: "我有三本书",
+          cats: { word: true, grammar: false, order: true, natural: true },
+          errors: [{ tag: "measure-word", note: "use ben" }] }));
+      };
+      window.renderMigrate();
+      return true;`);
+    check(await exec(`return document.querySelector('#migrateBox').style.display !== "none";`) === true,
+      "the migration offer appears when older chats need work");
+    const migLabel = await exec(`return document.querySelector('#migrateGrades').textContent;`);
+    check(migLabel.indexOf("2 messages") !== -1,
+      "counting the two that need it and not the one already done", migLabel);
+    check(/\$0\.\d\d/.test(migLabel),
+      "with a cost estimated from those counts, not a fixed number", migLabel);
+
+    await exec(`document.querySelector('#migrateGrades').click(); return true;`);
+    await waitFor(`document.querySelector('#migrateBox').style.display === "none"`,
+      "the run to finish and the offer to withdraw");
+    const migCalls = await exec(`return JSON.stringify(window.migrateCalls);`);
+    check(JSON.parse(migCalls).grade === 1,
+      "the ungraded message is graded exactly once", migCalls);
+    check(JSON.parse(migCalls).word === 1,
+      "and only the already-graded one costs an extraction", migCalls);
+
+    const migMsgs = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      var a = m["99999999-5555-4555-8555-999999999999"] || [];
+      return JSON.stringify({
+        graded: !!(a[0] && a[0].grade && (a[0].grade.errors || [])[0]),
+        tag: a[0] && a[0].grade && (a[0].grade.errors || [])[0] &&
+             a[0].grade.errors[0].tag,
+        word: a[1] && a[1].grade && (a[1].grade.errors || [])[0] &&
+              a[1].grade.errors[0].word,
+        untouched: !!(a[2] && a[2].grade && a[2].grade.ok === true)
+      });`);
+    check(JSON.parse(migMsgs).graded === true &&
+          JSON.parse(migMsgs).tag === "measure-word",
+      "the turn from before the grader now carries a verdict", migMsgs);
+    check(JSON.parse(migMsgs).word === "行",
+      "and the turn graded before v92 now names the word to drill", migMsgs);
+    check(JSON.parse(migMsgs).untouched === true,
+      "while a message already complete is left exactly as it was", migMsgs);
+
+    /* The ledger is the point of all of it: both mistakes must now be there. */
+    const migLedger = await exec(`
+      var rows = window.mistakeCounts();
+      return JSON.stringify(rows.map(function (r) {
+        return r.tag + ":" + (r.words || []).map(function (w) { return w.word; }).join(","); }));`);
+    check(migLedger.indexOf("measure-word") !== -1 &&
+          migLedger.indexOf("wrong-word:行") !== -1,
+      "and both reach the mistake list, the word one drillable", migLedger);
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

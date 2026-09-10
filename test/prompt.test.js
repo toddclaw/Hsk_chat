@@ -906,5 +906,141 @@ check(P.build({ level: 1, label: "HSK 1", length: "medium", activity: "chat" })
         .indexOf("先说你自己的事") !== -1,
   "chat keeps the full medium rule -- this is scoped to twenty, not global");
 
+// --- the mistakes drill -----------------------------------------------------
+check(!!P.ACTIVITIES.drill, "there is a drill activity");
+check(P.ACTIVITIES.drill.gen === "turn" && P.ACTIVITIES.drill.converse === true,
+  "the drill is an ordinary back-and-forth, not segments");
+check(P.ERROR_TAGS.every(t => !!P.TAG_ZH[t]),
+  "every error tag has a Chinese name for the drill prompt to use",
+  P.ERROR_TAGS.filter(t => !P.TAG_ZH[t]).join(" "));
+
+const drillRules = P.activityRules({ activity: "drill", drillTag: "measure-word" });
+check(drillRules.length === 1, "a drill emits exactly one rule");
+check(drillRules[0].indexOf(P.TAG_ZH["measure-word"]) !== -1,
+  "and it names the structure being practised", drillRules[0]);
+
+/* RESEARCH.md, "Sharpening a prompt rule by naming the failure": putting a
+ * wrong form in a prompt primed the model to reproduce it, 0/8 to 3/8. The
+ * TAGS table's examples all contain one, so the drill prompt must not reach
+ * for them. */
+const wrongForms = ["三个书", "很高兴了", "他不有钱", "他比我很高", "我看音乐"];
+check(wrongForms.every(w => drillRules[0].indexOf(w) === -1),
+  "and contains no example of a wrong form");
+check(P.activityRules({ activity: "drill", drillTag: "" }).length === 0,
+  "no category chosen means no drill rule at all");
+check(P.activityRules({ activity: "drill", drillTag: "no-such-tag" }).length === 0,
+  "an unknown category emits no rule rather than a broken one");
+
+// Drills is the learner-facing name; the id stays `drill`, so stored
+// conversations need no migration.
+check(P.ACTIVITIES.drill.label === "Drills", "the activity is called Drills",
+  P.ACTIVITIES.drill.label);
+
+/* Neither Ghost Words nor Drills introduces vocabulary: both are practice of
+ * what the learner already has, and a new word mid-drill is a second thing to
+ * get wrong. Declared on the row so the next activity that needs it says so
+ * itself rather than growing another branch in turn(). */
+check(P.ACTIVITIES.focused.newWords === false && P.ACTIVITIES.drill.newWords === false,
+  "Ghost Words and Drills both decline new words");
+check(P.ACTIVITIES.chat.newWords !== false && P.ACTIVITIES.story.newWords !== false &&
+      P.ACTIVITIES.twenty.newWords !== false,
+  "and no other activity does");
+
+// The specific sentence being drilled, chosen from the learner's own mistakes.
+// Only the CORRECTION travels: their wrong version stays in the UI.
+const EG = "\u6211\u5df2\u7ecf\u5403\u4e86\u996d";
+const drillEgRules = P.activityRules({ activity: "drill", drillTag: "aspect-le", drillEg: EG });
+check(drillEgRules.length === 1, "an example still emits exactly one rule");
+check(drillEgRules[0].indexOf(EG) !== -1,
+  "and the partner is shown the corrected sentence to steer towards", drillEgRules[0]);
+check(drillEgRules[0].indexOf(P.TAG_ZH["aspect-le"]) !== -1,
+  "alongside the structure's name");
+check(P.activityRules({ activity: "drill", drillTag: "aspect-le" })[0].length > 0,
+  "a category with no example chosen still drills the category");
+
+// --- the drill's own verdict, asked in its own call --------------------------
+/* Measured, tools/grade-target-ab.js: as an extra field on grade() the two
+ * verdicts fused -- a sentence with the target right and another error came
+ * back wrong 9 times in 15, and sharpening the wording did not move it. Asked
+ * separately: 15/15. So grade() must stay a prompt about the whole sentence,
+ * and this one must stay a prompt about one structure. */
+const DC = P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "aspect-le", drillEg: EG });
+check(DC.indexOf(EG) !== -1, "the check shows the sentence being drilled");
+check(DC.indexOf(P.TAG_ZH["aspect-le"]) !== -1, "named by its structure");
+check(/"used":true,"ok":true/.test(DC), "and asks for the two flags the app parses");
+check(/a wrong attempt is still an attempt/.test(DC),
+  "used means attempted, right or wrong -- read as 'used correctly' it denied " +
+  "credit for correct sentences");
+check(/nothing of the kind/.test(DC),
+  "and a sentence with none of the structure is used:false, which is what stops " +
+  "a dodge scoring");
+check(/must not\s+change your answer here/.test(DC.replace(/\s+/g, " ")) ||
+      /must not change your answer here/.test(DC),
+  "other mistakes are explicitly out of scope -- this is the partial credit");
+check(DC.indexOf(P.TAG_EG["aspect-le"]) !== -1,
+  "the tag's own worked pair is shown, as grade() already does for all seventeen");
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "" }) === "",
+  "and no category means no check at all");
+
+/* Four of the seventeen tags name a class of error, not a structure, and the
+ * check is meaningless for them: nobody ATTEMPTS a wrong character, so 同音字
+ * scored used:false 3 times in 3 and that drill could never be finished. 用词
+ * was worse than useless -- the prompt says "ignore wrong words" while asking
+ * about wrong words, and a sentence the grader passed scored ok:false 2 in 3. */
+P.ERROR_CLASS_TAGS.forEach(t => {
+  check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: t }) === "",
+    "no target check for " + t + ", which names an error and not a structure");
+});
+check(P.ERROR_CLASS_TAGS.join(",") ===
+      "wrong-word,wrong-sense,wrong-character,unnatural",
+  "the four are the lexical and naturalness tags", P.ERROR_CLASS_TAGS.join(","));
+check(P.ERROR_CLASS_TAGS.every(t => P.ERROR_TAGS.indexOf(t) !== -1),
+  "and every one of them is a real tag");
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "measure-word" }) !== "",
+  "while a structure the learner can reach for still gets one");
+
+/* A word drill: the four error-class tags become drillable because the SUBJECT
+ * moves from the tag to one word (RESEARCH.md, "Drilling a word rather than a
+ * category"), so the check must ask about the word and not mention the tag. */
+const DW = P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "wrong-word",
+                          drillWord: "\u884c", drillEg: EG });
+check(DW.indexOf("\u884c") !== -1 && DW.indexOf("practising one word") !== -1,
+  "a word drill asks about the word", DW);
+check(DW.indexOf(P.TAG_ZH["wrong-word"] || "\u7528\u8bcd") === -1,
+  "and never about the tag, which is the question that scored 1/3", DW);
+check(DW.indexOf(EG) === -1,
+  "a correction is not an example of the word it corrects -- correcting a wrong " +
+  "word is what removes it, so the sentence is withheld from a word drill", DW);
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "measure-word",
+                     drillEg: EG }).indexOf(EG) !== -1,
+  "while a category drill still shows it, where it really does use the structure");
+
+/* The grader prompt itself must not move: every tag measurement in RESEARCH.md
+ * was taken against this exact string, in and out of a drill alike. */
+check(!/"used"/.test(G) && !/practising one structure/.test(G),
+  "grade() is untouched by drilling");
+/* The word tip: help with the word itself, which the partner is forbidden to
+ * give (no English, no grammar talk) and the banner could not. Measured at
+ * 15/15 examples in level and 15/15 using the word, 5 words x 3 -- RESEARCH.md,
+ * "A tip about the word, on request". */
+const WT = P.wordTip({ word: "\u884c", label: "HSK 3" });
+check(WT.indexOf("\u884c") !== -1 && WT.indexOf("HSK 3") !== -1,
+  "the tip names the word and the level", WT);
+check(/use \u884c in both/.test(WT),
+  "and asks for the word in both examples -- a tip whose examples skip it is " +
+  "a tip about nothing", WT);
+check(/No headings, no bullet lists, no bold/.test(WT),
+  "with explain()'s decoration rules, for the reason measured there", WT);
+/* D9, and the same false premise the check prompt had: the correction of a
+ * wrong-word mistake is the sentence with the word taken out. Neither version
+ * of the learner's sentence is an argument here at all. */
+check(P.wordTip.length === 1 && WT.indexOf("wrote") === -1 &&
+      WT.indexOf("sentence they") === -1,
+  "and no sentence of the learner's own, right or wrong, is sent with it", WT);
+
+check(P.ERROR_TAGS.every(t => !!P.TAG_EG[t]),
+  "every tag has a worked pair for the drill check to quote",
+  P.ERROR_TAGS.filter(t => !P.TAG_EG[t]).join(" "));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
