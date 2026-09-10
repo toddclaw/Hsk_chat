@@ -3419,6 +3419,13 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(wordBtns.indexOf("\u884c") !== -1 && wordBtns.indexOf("\u8ba4\u8bc6") !== -1,
       "step two offers each word the grader named, not one whole sentence",
       wordBtns);
+    /* The word is the choice; the sentence it came from is in the banner for
+     * the whole drill. On the button too it made each option four lines tall
+     * and put a grey sentence on an accent-blue bubble, which is unreadable. */
+    const wordPill = JSON.parse(wordBtns).filter(t => t.indexOf("\u884c") === 0)[0] || "";
+    check(wordPill.indexOf("\u6211\u89c9\u5f97\u884c") === -1,
+      "and carries the word alone, not the sentence the banner already shows",
+      wordPill);
 
     await exec(`
       var b = document.querySelectorAll('#starters button');
@@ -3450,6 +3457,117 @@ check(usedGroups && usedGroups.first === "\u7684",
       "but not the other word's mistakes, which are a different drill", wordLog);
     check(wordLog.indexOf("drillWord") === -1 && wordLog.indexOf("wrong-word") === -1,
       "and the markers are never rendered as messages", wordLog);
+
+    /* ------------------------------------------- how do I use this word, then */
+    /* The partner may not answer that: its rules forbid English and forbid
+     * talking about grammar. So the banner asks, on tap -- one call, stored as
+     * a fourth marker so a reload or a sync keeps it and the call is never
+     * spent twice on one drill. */
+    check(wordLog.indexOf("How do I use \u884c?") !== -1,
+      "the banner offers help with the word being drilled", wordLog);
+    await exec(`
+      window.callModel = function (msgs) {
+        var all = JSON.stringify(msgs);
+        if (all.indexOf("about to practise one word") === -1)
+          return Promise.resolve("\u4f60\u597d\u5417\uff1f");
+        return Promise.resolve("\u884c means okay.\\n\u6211\u89c9\u5f97\u884c \u2013 I think it is okay");
+      };
+      document.querySelector('#drillTipBtn').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillTip") return true; } }
+      return false; })()`, "the tip to be stored as a marker");
+    const tipLog = await exec(`return document.querySelector('#log').textContent;`);
+    check(tipLog.indexOf("\u884c means okay.") !== -1,
+      "tapping it puts the answer in the banner", tipLog);
+    check(tipLog.indexOf("How do I use") === -1,
+      "and the button is gone once it is answered", tipLog);
+    check(tipLog.indexOf("drillTip") === -1,
+      "the tip marker is not rendered as a message either", tipLog);
+    /* Asked once. The marker is what the banner reads on every later render,
+     * so a second drill turn must not spend the call again. */
+    const tipCount = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m), n = 0;
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          if (m[k[i]][j].role === "drillTip") n++; } }
+      return n;`);
+    check(tipCount === 1, "exactly one tip is stored", String(tipCount));
+
+    /* ------------------------------- a credit the learner can actually see */
+    /* The verdict lands on the message; the progress line lives in the
+     * starters strip. gradeTurn() and runTurn() both ended with renderAll()
+     * and nothing else, so nothing in a drill ever re-rendered that strip:
+     * a whole session read "0 of 6 correct" with every credit already stored
+     * in localStorage. Reported from a real fourteen-sentence 行 drill.
+     *
+     * Stubbed by prompt, because a graded turn is three different calls: the
+     * partner reply, the grade, and the drill's own target check. */
+    const drillStub = `
+      window.callModel = function (msgs) {
+        var all = JSON.stringify(msgs);
+        if (all.indexOf("Answer two questions about") !== -1)
+          return Promise.resolve('{"used":true,"ok":true}');
+        if (all.indexOf("You are grading one sentence") !== -1)
+          return Promise.resolve(GRADE);
+        return Promise.resolve("\u597d\u7684\u3002");
+      };`;
+    await exec(drillStub.replace("GRADE", `'{"ok":true,"meant":"fine","better":"",` +
+      `"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}'`) + `
+      document.querySelector('#input').value =
+        "\u4f60\u8ddf\u6211\u4e00\u8d77\u53bb\u516c\u56ed\u884c\u4e0d\u884c\uff1f";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.grade && t.grade.target) return true; } }
+      return false; })()`, "the drill's target check to land");
+    /* Bounded and caught: a stuck counter is the bug this covers, and it
+     * should be reported as one failed check rather than as a dead run. */
+    try {
+      await waitFor(`document.querySelector('#starters').textContent.indexOf("1 of 6") !== -1`,
+        "the drill counter", 6000);
+    } catch (e) { /* asserted below */ }
+    const drillLine = await exec(`return document.querySelector('#starters').textContent;`);
+    check(drillLine.indexOf("1 of 6") !== -1,
+      "a credited sentence moves the drill counter with no reload", drillLine);
+
+    /* --------------------------- a correction identical to what was written */
+    /* The grader does this: 为什么“看电影”是一个游戏？ came back unnatural 3 times
+     * in 3 with `better` character-for-character the sentence it was judging.
+     * There is no edit to make, so there is no mistake -- and left standing it
+     * is a cross on the message, a red category, a mistake in the ledger and a
+     * word in the drill chooser that were never wrong. */
+    await exec(drillStub.replace("GRADE",
+      `'{"ok":false,"meant":"x","better":"\u6211\u4eca\u5929\u884c",` +
+      `"cats":{"word":true,"grammar":true,"order":true,"natural":false},` +
+      `"errors":[{"tag":"unnatural","note":"not natural"}]}'`) + `
+      document.querySelector('#input').value = "\u6211\u4eca\u5929\u884c";
+      document.querySelector('#send').click();
+      return true;`);
+    await waitFor(`(function () {
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.text === "\u6211\u4eca\u5929\u884c" && t.grade)
+            return true; } }
+      return false; })()`, "the second sentence to be graded");
+    const sameGrade = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), k = Object.keys(m);
+      for (var i = 0; i < k.length; i++) { for (var j = 0; j < m[k[i]].length; j++) {
+          var t = m[k[i]][j];
+          if (t.role === "user" && t.text === "\u6211\u4eca\u5929\u884c" && t.grade)
+            return JSON.stringify(t.grade); } }
+      return "{}";`);
+    const sg = JSON.parse(sameGrade);
+    check(sg.ok === true && (sg.errors || []).length === 0 && !sg.better,
+      "a correction identical to the sentence is no correction, so no mistake",
+      sameGrade);
+    check(sg.cats && sg.cats.natural === true,
+      "and no category is marked as the problem either", sameGrade);
 
     /* --------------------------------- bringing older chats up to the grader */
     /* Two eras, two gaps: a turn from before the grader existed carries no

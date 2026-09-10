@@ -999,10 +999,45 @@ check(P.ERROR_CLASS_TAGS.every(t => P.ERROR_TAGS.indexOf(t) !== -1),
 check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "measure-word" }) !== "",
   "while a structure the learner can reach for still gets one");
 
+/* A word drill: the four error-class tags become drillable because the SUBJECT
+ * moves from the tag to one word (RESEARCH.md, "Drilling a word rather than a
+ * category"), so the check must ask about the word and not mention the tag. */
+const DW = P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "wrong-word",
+                          drillWord: "\u884c", drillEg: EG });
+check(DW.indexOf("\u884c") !== -1 && DW.indexOf("practising one word") !== -1,
+  "a word drill asks about the word", DW);
+check(DW.indexOf(P.TAG_ZH["wrong-word"] || "\u7528\u8bcd") === -1,
+  "and never about the tag, which is the question that scored 1/3", DW);
+check(DW.indexOf(EG) === -1,
+  "a correction is not an example of the word it corrects -- correcting a wrong " +
+  "word is what removes it, so the sentence is withheld from a word drill", DW);
+check(P.drillCheck({ text: SENT, label: "HSK 2", drillTag: "measure-word",
+                     drillEg: EG }).indexOf(EG) !== -1,
+  "while a category drill still shows it, where it really does use the structure");
+
 /* The grader prompt itself must not move: every tag measurement in RESEARCH.md
  * was taken against this exact string, in and out of a drill alike. */
 check(!/"used"/.test(G) && !/practising one structure/.test(G),
   "grade() is untouched by drilling");
+/* The word tip: help with the word itself, which the partner is forbidden to
+ * give (no English, no grammar talk) and the banner could not. Measured at
+ * 15/15 examples in level and 15/15 using the word, 5 words x 3 -- RESEARCH.md,
+ * "A tip about the word, on request". */
+const WT = P.wordTip({ word: "\u884c", label: "HSK 3" });
+check(WT.indexOf("\u884c") !== -1 && WT.indexOf("HSK 3") !== -1,
+  "the tip names the word and the level", WT);
+check(/use \u884c in both/.test(WT),
+  "and asks for the word in both examples -- a tip whose examples skip it is " +
+  "a tip about nothing", WT);
+check(/No headings, no bullet lists, no bold/.test(WT),
+  "with explain()'s decoration rules, for the reason measured there", WT);
+/* D9, and the same false premise the check prompt had: the correction of a
+ * wrong-word mistake is the sentence with the word taken out. Neither version
+ * of the learner's sentence is an argument here at all. */
+check(P.wordTip.length === 1 && WT.indexOf("wrote") === -1 &&
+      WT.indexOf("sentence they") === -1,
+  "and no sentence of the learner's own, right or wrong, is sent with it", WT);
+
 check(P.ERROR_TAGS.every(t => !!P.TAG_EG[t]),
   "every tag has a worked pair for the drill check to quote",
   P.ERROR_TAGS.filter(t => !P.TAG_EG[t]).join(" "));

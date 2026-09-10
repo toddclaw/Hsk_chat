@@ -1070,6 +1070,76 @@ still get a confident answer, and none is in the set. The one remaining check
 failure, 我觉得这个东西很行, is the weakest fixture in it — 很行 is marginal
 rather than plainly wrong — so 16/18 may understate by one.
 
+### A correction is not an example of the word it corrects
+
+**Measured.** The 13 sentences of one real 行 drill, 3 repeats an arm, teaching
+model at the temperature the app sends (0.7). Arms: `drillCheck` with the
+`drillEg` line the app passed, and without it.
+
+The chooser hands a word drill the CORRECTION of a mistake with that word, and
+correcting a wrong word is exactly what removes it — so the check was reading
+"A correct sentence using 行:" above 我觉得可以, which contains no 行 at all. The
+A/B in the section above never saw this: `tools/drill-word-ab.js` calls
+`drillCheck` without a `drillEg`, so it measured a prompt the app does not send.
+
+| arm | `used` right | `ok` right | would credit |
+|---|---|---|---|
+| with the correction (shipped to v93) | 39/39 | 25/27 | 22/39 |
+| without it (v94) | 39/39 | **27/27** | 26/39 |
+
+`used` does not care; `ok` does, by two samples in 27. Small, and in the only
+direction available — the line was false for every word drill ever started. A
+category drill keeps it, where the sentence really does use the structure.
+
+### When the correction is the sentence
+
+**Measured.** The 9 corrections the grader produced during that same session,
+graded back, 3 repeats: **24/27 pass**. All three failures are one sentence,
+为什么“看电影”是一个游戏？, returned `unnatural` 3 times in 3 with `better`
+character-for-character the sentence being judged.
+
+So "the grader will not accept its own better sentence" is not a general
+weakness of the grader — it is one specific self-contradiction, and a
+deterministic one. `parseGrade()` now treats an identical `better` as no
+correction at all: no cross, no red category, no entry in the mistake ledger and
+no word in the drill chooser. Recomputed in the same place and for the same
+reason `ok` is: a verdict that contradicts itself must not reach the screen.
+
+What this does not fix is a *different* correction the grader would also reject;
+nothing in the 27 says how often that happens, only that it was not what
+happened here.
+
+### A tip about the word, on request
+
+**Measured.** 5 words at HSK 3 — 行 了 条 就 把 — 3 repeats each, teaching model.
+
+A drill was the one place in the app with nowhere to ask how the word works. The
+partner cannot answer: its rules forbid English and forbid talking about grammar,
+which is what makes it a partner and not a textbook. The banner asks instead, on
+a tap, and the answer is stored as a marker so the call is spent once per drill.
+
+| | result |
+|---|---|
+| examples inside the level's own list | 15/15 |
+| both examples actually use the word | 15/15 |
+| length | 221–392 characters |
+| cost | $0.00006 a call |
+
+15/15 on the level is why there is **no validate-and-retry loop** here, unlike the
+partner's replies — the one place in the app that asks a model for Chinese and
+then simply trusts it. If a later model regresses on that, the loop is the fix.
+
+**No sentence of the learner's is sent with it**, right or wrong. The wrong one is
+what D9 keeps away from a model about to write Chinese, and the correction cannot
+stand in for it: for a wrong-word drill the correction is the sentence with the
+drilled word taken out, the same false premise the section above records for
+`drillCheck`. The word and the level are enough.
+
+**What is not evidenced.** Whether the tips are *good* — 15/15 says they are at
+level and on topic, not that the grammar in them is right. One 了 sample from an
+earlier run gave advice its own example contradicted. A regenerate button is the
+cheap answer if that turns out to be common.
+
 ### Whether a six-pass goal grinds
 
 **Measured, thinly.** `tools/grade-target-ab.js --loop`, 4 repeats over the same

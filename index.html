@@ -230,6 +230,17 @@ header button{padding:8px 10px; flex:0 0 auto}
 /* Story time's control is the action that moves the story on, not one
    suggestion among several, so it does not look like a starter. */
 #starters button.story{background:var(--accent); color:#08111d; font-weight:600}
+/* A second line inside an accent bubble. --dim is a grey picked to recede
+   against a dark panel, and on the blue it is barely there -- which is what the
+   drill chooser was doing to the sentence under each mistake. It darkens
+   instead of lightening. */
+#starters button.story .sub{color:#0d2a4d; font-weight:400}
+/* Two or three lines of text in a 999px pill is a blob: the radius rounds the
+   corners in past the text, which is what the drill chooser's sentence choices
+   were doing. The multi-line ones are cards, and wrap rather than running off
+   the side of a phone. */
+#starters button.card{border-radius:14px; white-space:normal; text-align:left;
+  max-width:min(78vw, 420px); line-height:1.5}
 /* --panel2, not --bg: #starters itself is --panel, so the box needs the
    lighter panel tone for contrast against the bar it sits on, the same
    pairing header select already uses against header's --panel. */
@@ -350,6 +361,11 @@ footer{
 .addrow{display:flex; gap:8px; margin-top:8px}
 .addrow input{flex:1}
 .hint{color:var(--dim); font-size:14px; text-align:center; padding:24px 12px; line-height:1.7}
+/* The word tip inside the drills banner. Model prose, so pre-wrap keeps the two
+   example lines apart, and left-aligned because .hint centres -- two languages
+   a line, centred, is hard to read. */
+.hint .tip{display:inline-block; text-align:left; white-space:pre-wrap;
+  max-width:34em; margin:6px 0; color:var(--ink)}
 /* Issue submission form */
 #issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
 #issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
@@ -1024,7 +1040,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v93 — 2026-09-09";
+const VERSION   = "v94 — 2026-09-09";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2009,7 +2025,8 @@ function renderNotice(turnObj) {
  * the transcript and cost no schema (D2), which means every reader of the
  * transcript has to know to skip them -- here, and in the is-the-log-empty
  * check in renderAll(). */
-const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord", "drillEnd"]);
+const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord",
+                              "drillTip", "drillEnd"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -2215,16 +2232,31 @@ function renderAll() {
           '<b style="color:var(--accent);font-size:22px">' + escapeHtml(target) + '</b><br>'
         : 'Practising ' + escapeHtml(label) + ' \u2014 ' + S.drillTurns +
           ' correct sentences.<br>');
+    /* The word's own how-to, on tap. The partner cannot give this -- its rules
+     * forbid English and forbid talking about grammar at all -- so until now a
+     * drill was the one place in the app with no way to ask how the word works.
+     * Once fetched it stays for the whole drill, like everything else here. */
+    const tip = !word ? ""
+      : drillTip() ? '<div class="tip">' + HSKMd.render(drillTip()) + '</div>'
+      : '<button class="quiet" id="drillTipBtn"' + (drillTipBusy ? " disabled" : "") +
+        '>' + (drillTipBusy ? "\u2026" : "How do I use " + escapeHtml(word) + "?") +
+        '</button>';
     /* Every one of the learner's own mistakes with this word, wrong then right.
      * Shown and never sent: the wrong version stays in the UI (D9). */
     const others = (word ? rows : rows.filter(r => r.better !== target)).slice(0, 3)
       .map(r => '<span style="color:var(--dim)">' + escapeHtml(r.eg) +
       (r.better ? ' \u2192 ' + escapeHtml(r.better) : "") + '</span>').join("<br>");
     const note = word ? rows[0] : rows.filter(r => r.better === target)[0];
-    return head + (note && note.note
-        ? '<span style="color:var(--dim)">' + escapeHtml(note.note) + '</span><br>' : "") +
+    return head + tip + (note && note.note
+        ? '<br><span style="color:var(--dim)">' + escapeHtml(note.note) + '</span><br>' : "") +
       (others ? '<br>' + (word ? 'What you wrote before:' : 'Also flagged:') +
         '<br>' + others : "") + '</div>';
+  }
+  /* The banner is built as a string, so its one button is wired after the
+   * innerHTML lands -- both times, since an empty drill paints it on its own. */
+  function bindTip() {
+    const b = $("#drillTipBtn");
+    if (b) b.onclick = askWordTip;
   }
   if (!S.history.some(t => !MARKER_ROLES.has(t.role))) {
     /* Two sub-states share this branch for story time: no topic yet (the
@@ -2240,7 +2272,7 @@ function renderAll() {
     } else if (currentActivity() === "twenty") {
       hintText = 'Pick who thinks of something, below.';
     } else if (currentActivity() === "drill") {
-      if (drillTag()) { log.innerHTML = drillBanner(); return; }
+      if (drillTag()) { log.innerHTML = drillBanner(); bindTip(); return; }
       hintText = 'Pick a mistake to drill, below.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
@@ -2254,6 +2286,7 @@ function renderAll() {
     return;
   }
   log.innerHTML = ghostBanner() + drillBanner();
+  bindTip();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
   log.scrollTop = log.scrollHeight;
@@ -3088,22 +3121,35 @@ function jsonIn(raw) {
 /* Models fence JSON, preface it, and apologise after it however firmly told
  * not to. Take the outermost braces and try; a failure is reported as a failure
  * rather than silently scoring the sentence correct. */
-function parseGrade(raw) {
+function parseGrade(raw, text) {
   const g = jsonIn(raw);
   if (!g) return null;
+  /* A correction character-for-character identical to the sentence it corrects
+   * is not a correction. The grader does it: 为什么“看电影”是一个游戏？ came back
+   * unnatural 3 times in 3 with `better` exactly the sentence being judged.
+   * Left standing it is a cross on a sentence with no edit to make, a red
+   * category, a mistake in the ledger and a word in the drill chooser that were
+   * never wrong. Recomputed here for the same reason `ok` is: a verdict that
+   * contradicts itself must not reach the screen.
+   *
+   * Trimmed, and nothing more -- half-width against full-width punctuation is a
+   * real difference in Chinese, and normalising it away would swallow the one
+   * edit some of these corrections do make. */
+  const noEdit = !!text && String(g.better || "").trim() === String(text).trim();
   const cats = {};
   HSKPrompt.GRADE_CATS.forEach(c => {
     // Absent reads as fine: a model that omits a category is not accusing it.
-    cats[c.key] = (g.cats || {})[c.key] !== false;
+    cats[c.key] = noEdit || (g.cats || {})[c.key] !== false;
   });
-  const errors = (Array.isArray(g.errors) ? g.errors : [])
+  const errors = noEdit ? [] : (Array.isArray(g.errors) ? g.errors : [])
     .filter(e => e && KNOWN_TAGS.has(e.tag))
     .map(e => ({ tag: e.tag, note: String(e.note || "") }));
   /* ok is recomputed rather than trusted. A model that lists errors and still
    * says ok:true would show a green tick over a red detail sheet. */
   const ok = g.ok !== false && !errors.length &&
     HSKPrompt.GRADE_CATS.every(c => cats[c.key]);
-  return { ok: ok, meant: String(g.meant || ""), better: String(g.better || ""),
+  return { ok: noEdit || ok, meant: String(g.meant || ""),
+           better: noEdit ? "" : String(g.better || ""),
            cats: cats, errors: errors, at: new Date().toISOString() };
 }
 
@@ -3170,7 +3216,7 @@ async function gradeTurn(turnObj) {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
     }) }], 600, teachingModel());
-    const g = parseGrade(reply);
+    const g = parseGrade(reply, turnObj.text);
     /* Inside a drill, a second and much smaller call asks the one question the
      * grader cannot answer alongside its own: was the structure being drilled
      * attempted, and was it right, judged apart from everything else in the
@@ -3205,6 +3251,12 @@ async function gradeTurn(turnObj) {
     delete turnObj.grading;
     persist();
     renderAll();
+    /* The verdict is on the message, but a drill's progress line is in the
+     * starters strip, and nothing here ever re-rendered it: a whole session
+     * read "0 of 6 correct" with every credit already stored. Skipped while a
+     * turn is still running -- renderStarters() blanks the strip when S.busy,
+     * and runTurn()'s own finally renders it again the moment the reply lands. */
+    if (!S.busy) renderStarters();
   }
 }
 
@@ -3686,6 +3738,39 @@ function drillExample() { return HSKMistakes.drillExampleOf(S.history); }
  * word the grader's extraction put on the mistake. */
 function drillWord() { return HSKMistakes.drillWordOf(S.history); }
 
+/* The tip about the word, "" until the learner asks for one. A fourth marker,
+ * same trick and same reason as the other three: `messages.role` and
+ * `messages.text` already sync, and contextFor()/windowed() already skip them,
+ * so no schema change and nothing extra reaches a model. */
+function drillTip() {
+  const t = S.history.find(m => m.role === "drillTip");
+  return (t && t.text) || "";
+}
+
+/* Fetched on tap rather than when the drill starts. Most drills do not need it,
+ * the one that does needs it once, and a drill already withholds every call
+ * until the learner has actually chosen something.
+ *
+ * Stored as a marker, so it survives a reload and a sync and the call is never
+ * spent twice on the same drill. A failure stores nothing, which puts the
+ * button back -- the same bargain gradeTurn() makes with its target check. */
+let drillTipBusy = false;
+async function askWordTip() {
+  const word = drillWord();
+  if (!word || drillTip() || drillTipBusy) return;
+  drillTipBusy = true; renderAll();
+  try {
+    const text = await callModel([{ role: "user", content: HSKPrompt.wordTip({
+      word: word, label: levelLabel() }) }], 400, teachingModel());
+    if (String(text || "").trim()) {
+      S.history.push({ role: "drillTip", text: String(text).trim(),
+                       id: newMessageId(), created_at: new Date().toISOString() });
+      persist();
+    }
+  } catch (e) { console.warn("[word tip] " + ((e && e.message) || e)); }
+  finally { drillTipBusy = false; renderAll(); }
+}
+
 /* Attempts made, and how many of them landed the structure being drilled.
  *
  * The goal is passes, not attempts: six correct uses of one pattern, however
@@ -4063,6 +4148,10 @@ async function runTurn(toGloss, text, ctx) {
     thinking.remove();
     S.busy = false; renderBusy();
     renderAll();
+    /* Paired with renderAll() for the same reason gradeTurn() pairs them: the
+     * strip holds a drill's counter and its End button, and a turn changes
+     * both. Every other caller of renderAll() already calls this beside it. */
+    renderStarters();
     glossWords(toGloss, text);
   }
 }
@@ -4919,7 +5008,7 @@ async function migrateGrades() {
             content: teachPromptFor("grade", { text: w.turn.text, level: label,
               recent: "", context: contextFor(w.turn, msgs) }) }],
             600, teachingModel());
-          const g = parseGrade(reply);
+          const g = parseGrade(reply, w.turn.text);
           if (g) { await nameDrillWords(g, w.turn.text); w.turn.grade = g; }
           else failed++;
         } else {
@@ -5042,9 +5131,9 @@ function renderDrillChooser(box) {
 function renderCategoryChoices(box, open) {
   open.slice(0, 5).forEach(m => {
     const b = document.createElement("button");
-    b.className = "story";
+    b.className = "story card";
     b.innerHTML = '<b>' + escapeHtml(HSKPrompt.TAG_LABEL[m.tag]) + " (" + m.n + ")</b>" +
-      (m.eg ? '<br><span style="color:var(--dim)">' + escapeHtml(m.eg) + "</span>" : "");
+      (m.eg ? '<br><span class="sub">' + escapeHtml(m.eg) + "</span>" : "");
     b.onclick = () => { drillPick = m.tag; renderStarters(); };
     box.appendChild(b);
   });
@@ -5075,22 +5164,21 @@ function renderExampleChoices(box, m) {
   box.appendChild(head);
   words.forEach(w => {
     const b = document.createElement("button");
-    b.className = "story";
-    /* The word is the target and reads as one. Under it, the learner's own
-     * mistake in the shape this chooser has always used, wrong then right. */
+    /* A plain pill, not an accent bubble: the word IS the choice, and every
+     * sentence it came from is in the banner from the moment the drill starts.
+     * Carrying them here too made each option four lines tall on a phone, with
+     * the sentence in a grey that the blue swallowed. */
     b.innerHTML = '<b style="font-size:20px">' + escapeHtml(w.word) + "</b>" +
-      (w.n > 1 ? ' <span style="color:var(--dim)">×' + w.n + "</span>" : "") +
-      (w.eg ? '<br><span style="color:var(--dim)">' + escapeHtml(w.eg) +
-        (w.better ? " → " + escapeHtml(w.better) : "") + "</span>" : "");
+      (w.n > 1 ? ' <span style="color:var(--dim)">×' + w.n + "</span>" : "");
     b.onclick = () => startDrillWith(m.tag, w.better, w.word);
     box.appendChild(b);
   });
   egs.forEach(r => {
     const b = document.createElement("button");
-    b.className = "story";
-    b.innerHTML = '<span style="color:var(--dim)">' + escapeHtml(r.eg) + "</span><br><b>" +
+    b.className = "story card";
+    b.innerHTML = '<span class="sub">' + escapeHtml(r.eg) + "</span><br><b>" +
       escapeHtml(r.better) + "</b>" +
-      (r.note ? '<br><span style="color:var(--dim)">' + escapeHtml(r.note) + "</span>" : "");
+      (r.note ? '<br><span class="sub">' + escapeHtml(r.note) + "</span>" : "");
     b.onclick = () => startDrillWith(m.tag, r.better);
     box.appendChild(b);
   });
