@@ -356,6 +356,37 @@ Redirect discards material the model could in fact have expressed; plan confines
 chosen before the constraint was known. **The prompt was never the problem.** Do not spend
 another run on story-time prompt strategy without first changing the model.
 
+### Re-measured 2026-09-10: what a cheap model buys now
+
+The table above is from the run that chose `claude-sonnet-4.5`. Asked whether story
+time could be moved to something cheaper, the same tool was re-run at HSK 3, 8
+stories an arm, judge `claude-sonnet-5`, `--maxtokens 3000` — all four arms inside
+a few hours of each other, because this file's own rule is that absolute levels do
+not survive across runs.
+
+| | usable | 3+ usable | restarts | out-of-level | mean chars | `[[NEED:]]` | $/story |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-sonnet-4.5` (shipped) | 38/40 | 8/8 | 0 | 2/40 (5%) | 172 | 27 | $0.080 |
+| `moonshotai/kimi-k2.5` | **38/40** | **8/8** | 0 | 2/40 (5%) | 90 | 1 | **$0.056** |
+| `qwen/qwen3.7-plus` | 15/20 | 4/4 | 0 | 5/20 (25%) | 66 | 2 | $0.014 |
+| `deepseek/deepseek-v4-pro` | 4/5 | 1/1 | 0 | 1/5 (20%) | 83 | 1 | $0.029 |
+
+**Kimi matches Sonnet on every quality counter**, which nothing did in the earlier
+run — the gap that made this activity need an expensive model has closed at least
+once. Read the last two rows by their denominators, not their ratios: at 8 stories
+asked, qwen finished 4 and deepseek 1, the rest dying on empty replies even with the
+token floor. A model that completes an eighth of the stories has not scored 4/5.
+
+Two things separate Sonnet and Kimi anyway, and neither is quality of Chinese.
+Sonnet writes 172 characters a segment against the 90 asked for and Kimi writes 90;
+and Sonnet reached for `[[NEED:]]` 27 times against Kimi's 1, which is the channel
+that pre-teaches a word before the paragraph that uses it.
+
+**The saving is a third, not the six-fold the price column promises.** Kimi lists at
+$2.25/M out against Sonnet's $15.00 — 6.6× cheaper per token — and came in 30%
+cheaper per story, because it is a reasoning model and spent roughly seven times the
+tokens getting there. Reasoning tokens are billed as output.
+
 ### Two constraints any per-activity model setting has to carry
 
 Discovered while trying to measure `deepseek-v4-pro`, which at first appeared to fail
@@ -370,6 +401,23 @@ completely — 8 stories out of 8 producing nothing.
   tell it not to address the student, and with no user turn it concludes there is nothing to
   say. `qwen` is unaffected either way, so this is *not* the cause of the one-in-eight empty
   completions measured across every arm — that remains unexplained.
+
+**By 2026 this is the common case, not the exception.** Screening cheap ids for the
+chat partner, at a chat-sized ceiling of 80 tokens:
+
+| | at `max_tokens: 80` |
+| --- | --- |
+| `deepseek/deepseek-v4-flash` | answers normally |
+| `qwen/qwen3.7-flash` | `content: null`, 287 reasoning tokens |
+| `z-ai/glm-5.3-flash` | `content: null` |
+| `qwen/qwen3.5-9b` | `content: null` |
+| `qwen/qwen3.5-flash` | prints its *"Thinking Process:"* as the reply text |
+
+Three of five cheap candidates cannot be dropped into this app at all without a token
+floor, and the fourth would put its scratchpad in front of the learner. The same trap
+voided a first pass at every measurement in this section — 64 chat replies, 7 of 18
+tutor conversations, and 3 story arms out of 4, all returning nothing for this one
+reason. **Screen a candidate with one 80-token call before spending a run on it.**
 
 A harness bug worth naming for the same reason: an empty reply on a *repair* turn was ending
 the whole story, which scored a model down for failing to improve a segment it had already
@@ -407,6 +455,20 @@ Measured across sixteen replies, four conversations, at HSK 2:
 
 Half the listed output price, 44% more expensive in practice. Judge a candidate
 with `usage: {include: true}` and the validator, not with the price column.
+
+**Re-measured 2026-09-10 at HSK 3, 64 replies an arm, and it went the other way.**
+The shipped default is `auto`, which means `with-list` at HSK 1–3, so that is the
+row to read:
+
+| `with-list`, HSK 3 | out-of-level replies | violations | output tokens | $/reply |
+| --- | --- | --- | --- | --- |
+| `qwen3-30b-a3b` (shipped) | 37/64 (58%) | 47 | 21 | $0.00027 |
+| `deepseek-v4-flash` | **22/61 (36%)** | **39** | 84 | **$0.00017** |
+
+Fewer out-of-level replies *and* cheaper per reply, which is the opposite of the
+HSK 2 result above. Both are true: a model that writes four times as much can still
+cost less if the retry loop runs less often. Neither number transfers between levels
+— re-measure at the level the learner is actually at.
 
 The same applies to prompts. `explain()` carries explicit "no headings, no
 bullets, no bold, no emoji" rules because *"keep it concise"* did nothing

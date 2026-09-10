@@ -1167,6 +1167,51 @@ is the answer for now, and this is the strongest argument for the item-style
 prompt the design deferred: when the partner cannot elicit the structure,
 handing the learner a cue directly is the thing that would work.
 
+### The grammar check writes Chinese of its own
+
+**Measured**, from a reported session. Asked how to use 不行, the follow-up answered
+with 这个路晚上开车不行，太黑了 — wrong measure word for 路. The learner then wrote
+that sentence himself and the app marked him down for the measure word it had just
+taught him. Unlike the partner's replies, nothing validates or retries the Chinese a
+teaching call writes.
+
+**A prompt rule aimed at it did nothing.** Four arms, 6 conversations each, every
+Chinese sentence the tutor wrote put through the app's own `grade()`:
+
+| arm | tutor sentences the grader passes |
+| --- | --- |
+| shipped | 10/11 |
+| + "write in English" | 12/14 |
+| + "your Chinese must be correct; check measure words" | 10/11 — and it produced 这个路 itself |
+| both | 12/13 |
+
+The rule written against this exact failure reproduced this exact failure. This file
+already records the generalisation twice: when a prompt fails, measure the model.
+
+**The metric had to be fixed before the model arms meant anything**, the same lesson
+DEVELOPING.md records for story time. The first counter scored sentence fragments and
+trailing quote marks as sentences, and it counted an `unnatural` verdict on
+你太累了，开车不行 as a fault — which is the grader disagreeing with the phrase the
+tutor was asked to demonstrate, not the tutor writing bad Chinese. Rebuilt to separate
+hard faults (wrong word, measure word, word order) from naturalness opinion:
+
+| | English | no hard fault | clean and natural | measure-word errors | $/3 turns |
+| --- | --- | --- | --- | --- | --- |
+| `qwen3-235b` (shipped) | 8/8 | 12/12 | 4/12 | 0/16 | $0.0003 |
+| `moonshotai/kimi-k2.5` | 7/7 | 17/17 | 15/17 | 0/19 | $0.0132 |
+| `deepseek/deepseek-v4-pro` | 2/2 | 3/3 | 3/3 | 0/4 | $0.0064 |
+
+**No hard fault in 32 sentences and no measure-word error in 39, on any model.** The
+reported failure is real — it was seen twice — and it is rarer than a run this size
+can measure. Nothing was changed on the strength of this: the only column that
+separates the arms is naturalness opinion, and it costs 44× per conversation.
+`deepseek-v4-pro` returned empty on 7 runs even at 3000 tokens, so read its column as
+n=2.
+
+**What is not evidenced.** Whether a validate-and-retry loop over teaching Chinese —
+the thing the partner has and the tutor does not — would catch this. It is the obvious
+next move if the failure is seen again, and it was not measured here.
+
 ## Things that did not work
 
 Kept because a rejected idea that looks reasonable will be proposed again.
@@ -1183,6 +1228,23 @@ simultaneously. It did, on a real account.
 
 Reading and production are now the same function over two different word sets. One scale, two
 honest readings.
+
+### Telling the grammar check to answer in English
+
+**Measured, and a null result.** One reported explanation came back entirely in
+Chinese, to a learner asking for a grammar check at HSK 3. The candidate fix was one
+line — "Write your explanation in English." — in the shared tail of `explain()`.
+
+| arm | answered in English |
+| --- | --- |
+| shipped | 100/100 |
+| + the rule | 100/100 |
+
+Two fixtures, interleaved, 100 samples an arm. Pooled with the smaller runs around it
+the shipped prompt answers in English **109 times in 110**, so the failure is a ~1%
+tail and the rule has nothing to improve. Not shipped: a rule that cannot be shown to
+do anything is a line that has to win against the model's habit on every later call,
+for no measured benefit.
 
 ### Sharpening a prompt rule by naming the failure
 
