@@ -5,6 +5,16 @@ Each entry says what it is, how it was found, and what would settle it.
 
 ---
 
+## ghost words: partial credit  grader
+
+The grader during ghost words should also evaluate whether
+ive used the words in question correctly or not.  I'm
+getting many cases where i use a word correctly, but i screw
+up something else and therefore the grader does not pass.
+Also, I really wamt to restate the sentence correctly based
+on the grader feedback.  I'd like some way to keep trying.
+---
+
 ## Mistakes Drills Activity
 
 Use skills: caveman, ponytail, superpowers.  Use superpowers to implement new feature:
