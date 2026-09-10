@@ -1,8 +1,8 @@
 {
-  "model": "qwen/qwen3-30b-a3b-instruct-2507",
-  "level": 1,
+  "model": "deepseek/deepseek-v4-flash",
+  "level": 3,
   "length": "short",
-  "runs": 4,
+  "runs": 8,
   "seeds": [
     "你今天好吗？",
     "你喜欢吃什么？",
@@ -13,101 +13,101 @@
     "你的家在哪儿？",
     "你想去哪儿？"
   ],
-  "when": "2026-08-27T13:07:20.644Z",
+  "when": "2026-09-10T03:56:11.919Z",
   "arms": {
     "without-list": {
       "summary": {
-        "replies": 32,
+        "replies": 64,
         "errors": 0,
-        "outOfLevel": 16,
-        "rate": 0.5,
-        "totalViolations": 31,
+        "outOfLevel": 36,
+        "rate": 0.5625,
+        "totalViolations": 66,
         "truncated": 0,
-        "needsUsed": 0,
-        "meanHan": 12.34375,
-        "meanOutTokens": 11.59375,
-        "cost": 0.0010767964499999998
+        "needsUsed": 4,
+        "meanHan": 30.640625,
+        "meanOutTokens": 122.984375,
+        "cost": 0.0043471438812000005
       },
       "top": [
         [
-          "公园",
-          10
+          "京",
+          12
         ],
         [
-          "出汗",
-          5
-        ],
-        [
-          "杭州",
-          5
-        ],
-        [
-          "每",
+          "味道",
           3
         ],
         [
-          "花",
+          "香",
           3
         ],
         [
-          "树",
-          2
+          "景",
+          3
         ],
         [
-          "最",
-          1
+          "故宫",
+          3
+        ],
+        [
+          "广州",
+          3
+        ],
+        [
+          "旅",
+          3
         ],
         [
           "杯",
-          1
+          2
         ]
       ]
     },
     "with-list": {
       "summary": {
-        "replies": 32,
-        "errors": 0,
-        "outOfLevel": 18,
-        "rate": 0.5625,
-        "totalViolations": 19,
+        "replies": 61,
+        "errors": 3,
+        "outOfLevel": 22,
+        "rate": 0.36065573770491804,
+        "totalViolations": 39,
         "truncated": 0,
         "needsUsed": 0,
-        "meanHan": 13.5625,
-        "meanOutTokens": 12.3125,
-        "cost": 0.0029385937499999994
+        "meanHan": 30.098360655737704,
+        "meanOutTokens": 83.95081967213115,
+        "cost": 0.010386808672800004
       },
       "top": [
         [
-          "每",
-          7
+          "京",
+          5
         ],
         [
-          "出汗",
+          "景",
           4
         ],
         [
-          "安静",
+          "松",
+          4
+        ],
+        [
+          "旅",
+          4
+        ],
+        [
+          "凉",
+          3
+        ],
+        [
+          "样",
+          3
+        ],
+        [
+          "汗",
           2
         ],
         [
-          "面条",
-          1
-        ],
-        [
-          "北京",
-          1
-        ],
-        [
-          "汤",
-          1
-        ],
-        [
-          "渴",
-          1
-        ],
-        [
-          "久",
-          1
+          "美",
+          2
         ]
       ]
     }
@@ -116,854 +116,1680 @@
     {
       "mode": "without-list",
       "seed": "你今天好吗？",
-      "text": "我很好。你今天好吗？",
+      "text": "我很好，谢谢你。今天我有点累，因为我听完了三节中文课。你呢？你最近有没有练习中文？",
       "violations": [],
       "bad": false,
-      "han": 8,
+      "han": 35,
       "needs": 0,
       "truncated": false,
-      "outTokens": 8,
-      "cost": 0.00002191185
+      "outTokens": 197,
+      "cost": 0.00011004
     },
     {
       "mode": "with-list",
       "seed": "你今天好吗？",
-      "text": "我很好。今天天气很好。你今天怎么样？",
+      "text": "我很好，谢谢。今天天气不错，所以我去公园走了一会儿。你呢？你最近在做什么？",
+      "violations": [],
+      "bad": false,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 90,
+      "cost": 0.000329032
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃饺子。你呢，你喜欢吃饺子吗？",
       "violations": [],
       "bad": false,
       "han": 15,
       "needs": 0,
       "truncated": false,
       "outTokens": 12,
-      "cost": 0.00006183
+      "cost": 0.00003744
     },
     {
-      "mode": "without-list",
+      "mode": "with-list",
       "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃苹果。你吃苹果吗？",
+      "text": "我喜欢吃水果，特别是苹果和西瓜。因为水果很甜，对身体也好。你最喜欢的水果是什么？",
       "violations": [],
       "bad": false,
-      "han": 11,
+      "han": 35,
       "needs": 0,
       "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000222498
-    },
-    {
-      "mode": "with-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃米饭。我也喜欢吃面条。你吃午饭了吗？",
-      "violations": [
-        "面条"
-      ],
-      "bad": true,
-      "han": 19,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 14,
-      "cost": 0.00006216795
+      "outTokens": 105,
+      "cost": 0.000232059114
     },
     {
       "mode": "without-list",
       "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天说中文。你今天吃饭了吗？",
-      "violations": [
-        "每"
-      ],
-      "bad": true,
-      "han": 18,
+      "text": "我会说中文，可是说得还不好。因为我在学习，所以每天都会练习。你呢，你学中文学了多长时间了？",
+      "violations": [],
+      "bad": false,
+      "han": 39,
       "needs": 0,
       "truncated": false,
-      "outTokens": 15,
-      "cost": 0.00002331135
+      "outTokens": 183,
+      "cost": 0.00011273
     },
     {
       "mode": "with-list",
       "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天和朋友说话。你今天吃饭了吗？",
+      "text": "当然会，我每天都说中文。你是从什么时候开始学中文的？",
+      "violations": [],
+      "bad": false,
+      "han": 23,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 17,
+      "cost": 0.0001665629
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天不太热，有风。早上我出去走路了，觉得身体很舒服。你那个地方热不热？",
+      "violations": [],
+      "bad": false,
+      "han": 30,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 152,
+      "cost": 0.0001394
+    },
+    {
+      "mode": "with-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，我出门的时候太阳很大，所以出了一点汗。你喜欢热的天气还是凉的天气？",
       "violations": [
-        "每"
+        "汗",
+        "凉"
+      ],
+      "bad": true,
+      "han": 34,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 23,
+      "cost": 0.00051898
+    },
+    {
+      "mode": "without-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般十一点睡觉，因为第二天要早起上班。你几点睡觉？",
+      "violations": [],
+      "bad": false,
+      "han": 23,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 147,
+      "cost": 0.000060872322
+    },
+    {
+      "mode": "with-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般晚上十一点睡觉，因为白天工作比较忙。你呢，你几点睡觉？",
+      "violations": [],
+      "bad": false,
+      "han": 26,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 20,
+      "cost": 0.000054612
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我更喜欢喝茶。因为我觉得茶的味道很香，而且对身体好。但是今天我已经喝了很多咖啡，所以现在想喝水。你平时喜欢喝什么饮料？",
+      "violations": [
+        "味道",
+        "香"
+      ],
+      "bad": true,
+      "han": 53,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 188,
+      "cost": 0.00009546
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我现在不渴，所以不想喝水。我早上刚喝过茶，觉得绿茶很香。你平时喜欢喝茶吗？",
+      "violations": [
+        "香"
+      ],
+      "bad": true,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 27,
+      "cost": 0.000055962
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在北京。那儿很大，有很多好玩的地方。你的家在哪儿？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 1,
+      "truncated": false,
+      "outTokens": 30,
+      "cost": 0.000022338
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在北京。北京是一个很大的城市，有很多好玩的地方。你家在哪儿？",
+      "violations": [
+        "京",
+        "京"
+      ],
+      "bad": true,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 101,
+      "cost": 0.0005075
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "我现在最想去大理，因为那里的风景很漂亮。你想去还是不想去？",
+      "violations": [
+        "理",
+        "景"
+      ],
+      "bad": true,
+      "han": 26,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 135,
+      "cost": 0.000063061
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我想去海边看看。那里的风景很美，你可以慢慢走，很放松。你喜欢去什么地方玩？",
+      "violations": [
+        "景",
+        "美",
+        "松"
+      ],
+      "bad": true,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 106,
+      "cost": 0.00049092
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢你！今天我学了一道新的中国菜，是西红柿炒蛋。你会做中国菜吗？",
+      "violations": [
+        "道",
+        "红柿炒蛋"
+      ],
+      "bad": true,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 125,
+      "cost": 0.00009512
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我今天很好，因为天气很好。我早上喝了一杯茶，觉得很开心。你今天做了什么？",
+      "violations": [
+        "杯"
+      ],
+      "bad": true,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 116,
+      "cost": 0.000110902
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃水果，特别是苹果，因为又甜又脆。昨天我还吃了一个。你呢，你喜欢吃什么水果？",
+      "violations": [
+        "脆"
+      ],
+      "bad": true,
+      "han": 35,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 116,
+      "cost": 0.00009371
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃鸡蛋和米饭，因为好吃也方便。你平时在家做饭吗？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 143,
+      "cost": 0.00036348
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文！因为我是中国人，所以中文说得很好。你呢？你学中文多久了？",
+      "violations": [],
+      "bad": false,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 22,
+      "cost": 0.0000304486
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文。我学了很长时间，现在可以教你了。你学中文多久了？",
+      "violations": [],
+      "bad": false,
+      "han": 26,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 20,
+      "cost": 0.000054702
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天我这里不热，因为早上下了雨。我觉得很凉快。你那里天气怎么样？",
+      "violations": [],
+      "bad": false,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 164,
+      "cost": 0.00010094
+    },
+    {
+      "mode": "with-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，因为夏天来了。我昨天去公园走了一下，流了很多汗。你最近忙不忙？",
+      "violations": [
+        "流",
+        "汗"
+      ],
+      "bad": true,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 105,
+      "cost": 0.00025776
+    },
+    {
+      "mode": "without-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般都是十一点左右睡觉。你呢？要是你早上起得早的话，几点起床？",
+      "violations": [],
+      "bad": false,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 127,
+      "cost": 0.000086698
+    },
+    {
+      "mode": "with-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般晚上十一点左右睡觉。因为白天要上班，所以晚上会早一点休息。你平时几点睡觉呢？",
+      "violations": [],
+      "bad": false,
+      "han": 37,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 27,
+      "cost": 0.000055872
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我想喝水，因为我不太喜欢喝茶，茶喝多了晚上睡不着觉。你呢？平时喜欢喝什么？",
+      "violations": [
+        "觉"
+      ],
+      "bad": true,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 175,
+      "cost": 0.00009091
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我比较喜欢喝水，因为喝水对身体好。不过有时候也会喝茶，特别是和朋友聊天的时候。你呢，你经常喝茶吗？",
+      "violations": [],
+      "bad": false,
+      "han": 43,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 28,
+      "cost": 0.000056142
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在中国的北京。北京很大，有很多好玩的地方。你去过北京吗？",
+      "violations": [
+        "京",
+        "京",
+        "京"
+      ],
+      "bad": true,
+      "han": 27,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 18,
+      "cost": 0.000020178
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在中国的北方，一个不太大的城市。那里冬天很冷，但是夏天很舒服。你喜欢住在什么样的地方？",
+      "violations": [
+        "样"
+      ],
+      "bad": true,
+      "han": 41,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 63,
+      "cost": 0.000132314
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "要是天气好，我就想去北京看看故宫。你最近去过什么地方吗？",
+      "violations": [
+        "京",
+        "故宫"
+      ],
+      "bad": true,
+      "han": 25,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 149,
+      "cost": 0.000066911
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我想去海边。海边的风景很好看，让人觉得很放松。你喜欢在海边做什么？",
+      "violations": [
+        "景",
+        "松"
+      ],
+      "bad": true,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 125,
+      "cost": 0.00023228
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "我今天很好，谢谢你！因为今天天气不错，所以我去公园走了一会儿。你呢？今天做了什么有意思的事情吗？",
+      "violations": [],
+      "bad": false,
+      "han": 42,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 172,
+      "cost": 0.00011392
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我今天很好。因为天气不错，所以我在公园走了一会儿。你觉得运动对身体好吗？",
+      "violations": [],
+      "bad": false,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 89,
+      "cost": 0.000103477
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我最喜欢吃饺子，因为饺子又好吃又有营养。你喜欢吃饺子吗？",
+      "violations": [
+        "营"
+      ],
+      "bad": true,
+      "han": 25,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 141,
+      "cost": 0.0000415739352
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我爱吃苹果，有时候也吃西瓜。你呢，你爱吃什么水果？",
+      "violations": [],
+      "bad": false,
+      "han": 21,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 70,
+      "cost": 0.000134144
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "会。我是中国人，所以中文是我的母语。你学中文多久了？",
+      "violations": [
+        "母语"
+      ],
+      "bad": true,
+      "han": 22,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 153,
+      "cost": 0.000068287
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "会。我每天都在用中文聊天。你是从什么时候开始学中文的？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 17,
+      "cost": 0.000054162
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天天气很热，我流了很多汗。你那里天气怎么样？",
+      "violations": [
+        "流",
+        "汗"
       ],
       "bad": true,
       "han": 20,
       "needs": 0,
       "truncated": false,
       "outTokens": 16,
-      "cost": 0.0001285
-    },
-    {
-      "mode": "without-list",
-      "seed": "今天热吗？",
-      "text": "今天热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00002268405
+      "cost": 0.000019818
     },
     {
       "mode": "with-list",
       "seed": "今天热吗？",
-      "text": "今天很热。我出汗了。你热吗？",
+      "text": "今天很热，我都不想出门。你喜欢热的天气还是凉的天气？",
       "violations": [
-        "出汗"
+        "凉"
       ],
       "bad": true,
-      "han": 11,
+      "han": 23,
       "needs": 0,
       "truncated": false,
-      "outTokens": 13,
-      "cost": 0.00006202305
+      "outTokens": 97,
+      "cost": 0.00022128
     },
     {
       "mode": "without-list",
       "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
+      "text": "我一般十一点睡觉。因为白天很忙，所以晚上想早一点休息。你呢？你每天几点起床？",
       "violations": [],
       "bad": false,
-      "han": 10,
+      "han": 33,
       "needs": 0,
       "truncated": false,
-      "outTokens": 10,
-      "cost": 0.00002229795
+      "outTokens": 90,
+      "cost": 0.000059332
     },
     {
       "mode": "with-list",
       "seed": "你几点睡觉？",
-      "text": "我十一点睡觉。你几点睡觉？",
+      "text": "我一般晚上十一点睡觉。因为白天要上班，所以晚上早睡很重要。你平时几点睡觉呢？",
       "violations": [],
       "bad": false,
-      "han": 11,
+      "han": 34,
       "needs": 0,
       "truncated": false,
-      "outTokens": 9,
-      "cost": 0.00016536
+      "outTokens": 25,
+      "cost": 0.000055512
     },
     {
       "mode": "without-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。你呢？你喜欢喝什么？",
-      "violations": [],
-      "bad": false,
-      "han": 12,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 11,
-      "cost": 0.0000457
-    },
-    {
-      "mode": "with-list",
-      "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我今天喝了很多水。你喝水吗？",
-      "violations": [],
-      "bad": false,
-      "han": 16,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 14,
-      "cost": 0.0001279
-    },
-    {
-      "mode": "without-list",
-      "seed": "你的家在哪儿？",
-      "text": "我家在杭州。你家在哪儿？",
+      "text": "我更喜欢喝茶，因为茶的味道很香。我每天下午都会喝一杯绿茶，觉得喝完以后很舒服。你平时喜欢喝什么饮料？",
       "violations": [
-        "杭州"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000223461
-    },
-    {
-      "mode": "with-list",
-      "seed": "你的家在哪儿？",
-      "text": "我在北京。你家在哪儿？",
-      "violations": [
-        "北京"
-      ],
-      "bad": true,
-      "han": 9,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 9,
-      "cost": 0.000061299
-    },
-    {
-      "mode": "without-list",
-      "seed": "你想去哪儿？",
-      "text": "我想去公园。 \n公园有树，有花。 \n你去公园吗？",
-      "violations": [
-        "公园",
-        "公园",
-        "树",
-        "花",
-        "公园"
-      ],
-      "bad": true,
-      "han": 16,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 19,
-      "cost": 0.00002398725
-    },
-    {
-      "mode": "with-list",
-      "seed": "你想去哪儿？",
-      "text": "我想去学校。我每天去学校。你去学校吗？",
-      "violations": [
-        "每"
-      ],
-      "bad": true,
-      "han": 16,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 15,
-      "cost": 0.000062361
-    },
-    {
-      "mode": "without-list",
-      "seed": "你今天好吗？",
-      "text": "我很好。我吃苹果。你吃了吗？",
-      "violations": [],
-      "bad": false,
-      "han": 11,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00002268405
-    },
-    {
-      "mode": "with-list",
-      "seed": "你今天好吗？",
-      "text": "我很好。你今天好吗？",
-      "violations": [],
-      "bad": false,
-      "han": 8,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 7,
-      "cost": 0.00016432
-    },
-    {
-      "mode": "without-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃苹果。你最喜欢吃什么水果？",
-      "violations": [
-        "最"
-      ],
-      "bad": true,
-      "han": 15,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000222498
-    },
-    {
-      "mode": "with-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃米饭。我喜欢喝汤。你吃什么？",
-      "violations": [
-        "汤"
-      ],
-      "bad": true,
-      "han": 15,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00006178185
-    },
-    {
-      "mode": "without-list",
-      "seed": "你会说中文吗？",
-      "text": "会。我会说中文。你学中文吗？",
-      "violations": [],
-      "bad": false,
-      "han": 11,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 11,
-      "cost": 0.00004146
-    },
-    {
-      "mode": "with-list",
-      "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天和朋友说话。你喜欢说话吗？",
-      "violations": [
-        "每"
-      ],
-      "bad": true,
-      "han": 19,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 15,
-      "cost": 0.0000624573
-    },
-    {
-      "mode": "without-list",
-      "seed": "今天热吗？",
-      "text": "今天热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 11,
-      "cost": 0.00004137
-    },
-    {
-      "mode": "with-list",
-      "seed": "今天热吗？",
-      "text": "今天很热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 11,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 13,
-      "cost": 0.0001275
-    },
-    {
-      "mode": "without-list",
-      "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
-      "violations": [],
-      "bad": false,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 9,
-      "cost": 0.00004077
-    },
-    {
-      "mode": "with-list",
-      "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
-      "violations": [],
-      "bad": false,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000614439
-    },
-    {
-      "mode": "without-list",
-      "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我喝一杯水。你呢？",
-      "violations": [
+        "味道",
+        "香",
         "杯"
       ],
       "bad": true,
-      "han": 11,
+      "han": 45,
       "needs": 0,
       "truncated": false,
-      "outTokens": 11,
-      "cost": 0.00004146
+      "outTokens": 168,
+      "cost": 0.00008846
     },
     {
       "mode": "with-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我今天很热。你渴吗？",
-      "violations": [
-        "渴"
-      ],
-      "bad": true,
-      "han": 12,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 13,
-      "cost": 0.0000620712
-    },
-    {
-      "mode": "without-list",
-      "seed": "你的家在哪儿？",
-      "text": "我家在杭州。我每天坐车去学校。你家在哪儿？",
-      "violations": [
-        "杭州",
-        "每"
-      ],
-      "bad": true,
-      "han": 18,
+      "text": "我想喝水，因为今天天气很热。你平时喜欢喝什么饮料？",
+      "violations": [],
+      "bad": false,
+      "han": 22,
       "needs": 0,
       "truncated": false,
       "outTokens": 17,
-      "cost": 0.00002369745
+      "cost": 0.000054162
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在广州。广州有很多好吃的东西，比如早茶的点心。你去过广州吗？",
+      "violations": [
+        "广州",
+        "广州",
+        "心",
+        "广州"
+      ],
+      "bad": true,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 21,
+      "cost": 0.000020718
     },
     {
       "mode": "with-list",
       "seed": "你的家在哪儿？",
-      "text": "我住在这里。这里很安静。你住在哪里？",
-      "violations": [
-        "安静"
-      ],
-      "bad": true,
-      "han": 15,
+      "text": "我的家在中国的一个小城市。那里很安静，也很漂亮。你的家附近有什么？",
+      "violations": [],
+      "bad": false,
+      "han": 29,
       "needs": 0,
       "truncated": false,
-      "outTokens": 13,
-      "cost": 0.0000620712
+      "outTokens": 199,
+      "cost": 0.000170394
     },
     {
       "mode": "without-list",
       "seed": "你想去哪儿？",
-      "text": "我想去公园。公园有花。你去公园吗？",
+      "text": "我想去海边。因为我喜欢看日落，觉得特别漂亮。你呢，你喜欢看日出还是日落？",
       "violations": [
-        "公园",
-        "公园",
-        "花",
-        "公园"
+        "落",
+        "落"
       ],
       "bad": true,
-      "han": 14,
+      "han": 31,
       "needs": 0,
       "truncated": false,
-      "outTokens": 14,
-      "cost": 0.000023022
+      "outTokens": 158,
+      "cost": 0.000069386
     },
     {
       "mode": "with-list",
       "seed": "你想去哪儿？",
-      "text": "我想去学校。我每天去学校。你呢？",
+      "text": "我想去海边看看。因为海边的风景很美，可以拍照。你喜欢去海边还是山上玩？",
       "violations": [
-        "每"
+        "景",
+        "美"
       ],
       "bad": true,
-      "han": 13,
+      "han": 31,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00016679
+      "outTokens": 129,
+      "cost": 0.00026716
     },
     {
       "mode": "without-list",
       "seed": "你今天好吗？",
-      "text": "我很好。今天天气好。你吃午饭了吗？",
-      "violations": [],
-      "bad": false,
-      "han": 14,
+      "text": "我今天很好。我早上起床以后看了天气，因为今天不下雨，所以我去公园散步了。你呢，昨天做什么了？",
+      "violations": [
+        "散步"
+      ],
+      "bad": true,
+      "han": 40,
       "needs": 0,
       "truncated": false,
-      "outTokens": 13,
-      "cost": 0.0000228771
+      "outTokens": 180,
+      "cost": 0.00011712
     },
     {
       "mode": "with-list",
       "seed": "你今天好吗？",
-      "text": "我很好。你今天好吗？",
-      "violations": [],
-      "bad": false,
-      "han": 8,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 8,
-      "cost": 0.0000610578
-    },
-    {
-      "mode": "without-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃苹果。你喜欢吃什么？",
-      "violations": [],
-      "bad": false,
-      "han": 12,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 7,
-      "cost": 0.0000585
-    },
-    {
-      "mode": "with-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃米饭。我也喜欢吃苹果。你吃什么？",
-      "violations": [],
-      "bad": false,
-      "han": 17,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 12,
-      "cost": 0.0001271
-    },
-    {
-      "mode": "without-list",
-      "seed": "你会说中文吗？",
-      "text": "我会说中文。你学中文吗？",
-      "violations": [],
-      "bad": false,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 9,
-      "cost": 0.00004086
-    },
-    {
-      "mode": "with-list",
-      "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天学习中文。你学中文多久了？",
+      "text": "谢谢，我今天很好。因为天气不错，所以我去了公园散步。你呢，今天做了什么有意思的事？",
       "violations": [
-        "每",
-        "久"
+        "散步"
       ],
       "bad": true,
+      "han": 35,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 166,
+      "cost": 0.000378092
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我很喜欢吃中国菜，特别是饺子和面条。你呢？你最喜欢吃什么？",
+      "violations": [],
+      "bad": false,
+      "han": 25,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 145,
+      "cost": 0.000060429292
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我比较喜欢吃面条和饺子。因为简单又好吃。你平时吃什么？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 157,
+      "cost": 0.0000779555588
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文，也正在学英文。虽然我的中文说得还可以，但是有时候也会遇到不会的词。你学中文多久了？",
+      "violations": [
+        "英文"
+      ],
+      "bad": true,
+      "han": 42,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 153,
+      "cost": 0.000068287
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "当然会！我是中国人，所以中文说得很好。你学了多久中文？",
+      "violations": [],
+      "bad": false,
+      "han": 23,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 17,
+      "cost": 0.000054162
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，所以我开空调了。你在的城市热不热？",
+      "violations": [],
+      "bad": false,
       "han": 19,
       "needs": 0,
       "truncated": false,
       "outTokens": 16,
-      "cost": 0.00006265035
-    },
-    {
-      "mode": "without-list",
-      "seed": "今天热吗？",
-      "text": "今天热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 11,
-      "cost": 0.00006071
+      "cost": 0.000019818
     },
     {
       "mode": "with-list",
       "seed": "今天热吗？",
-      "text": "今天热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 10,
+      "text": "今天天气很热，我在家喝了很多水。你喜欢热的天气还是冷的天气？",
+      "violations": [],
+      "bad": false,
+      "han": 27,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.0001272
+      "outTokens": 128,
+      "cost": 0.00026696
     },
     {
       "mode": "without-list",
       "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
-      "violations": [],
-      "bad": false,
-      "han": 10,
+      "text": "我通常十一点睡觉。我觉得早睡对身体好。你早上几点起床？",
+      "violations": [
+        "通"
+      ],
+      "bad": true,
+      "han": 24,
       "needs": 0,
       "truncated": false,
-      "outTokens": 10,
-      "cost": 0.00002229795
+      "outTokens": 282,
+      "cost": 0.00014032
     },
     {
       "mode": "with-list",
       "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
+      "text": "我一般晚上十一点睡觉，因为白天工作很忙，晚上才能休息。你呢，你每天几点睡觉？",
       "violations": [],
       "bad": false,
-      "han": 10,
+      "han": 33,
       "needs": 0,
       "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000614439
+      "outTokens": 25,
+      "cost": 0.000055512
     },
     {
       "mode": "without-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。你呢？你喜欢喝什么？",
-      "violations": [],
-      "bad": false,
-      "han": 12,
+      "text": "我想喝茶，因为茶的味道比较淡。我每天下午都喝一杯茶。你平时喜欢喝茶还是喝别的饮料？",
+      "violations": [
+        "味道",
+        "淡",
+        "杯"
+      ],
+      "bad": true,
+      "han": 37,
       "needs": 0,
       "truncated": false,
-      "outTokens": 11,
-      "cost": 0.0000457
+      "outTokens": 150,
+      "cost": 0.00008216
     },
     {
       "mode": "with-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我每天喝很多水。你喝什么？",
-      "violations": [
-        "每"
-      ],
-      "bad": true,
-      "han": 15,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 14,
-      "cost": 0.00006226425
-    },
-    {
-      "mode": "without-list",
-      "seed": "你的家在哪儿？",
-      "text": "我家在杭州。你家在哪儿？",
-      "violations": [
-        "杭州"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000223461
-    },
-    {
-      "mode": "with-list",
-      "seed": "你的家在哪儿？",
-      "text": "我住在这里。这里很安静。你家在哪儿？",
-      "violations": [
-        "安静"
-      ],
-      "bad": true,
-      "han": 15,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 13,
-      "cost": 0.00016757
-    },
-    {
-      "mode": "without-list",
-      "seed": "你想去哪儿？",
-      "text": "我想去公园。你去公园吗？",
-      "violations": [
-        "公园",
-        "公园"
-      ],
-      "bad": true,
-      "han": 10,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000222498
-    },
-    {
-      "mode": "with-list",
-      "seed": "你想去哪儿？",
-      "text": "我想去学校。 \n我今天要上课。你呢？",
+      "text": "我想喝水，因为水对身体好。你平时喜欢喝什么？",
       "violations": [],
       "bad": false,
-      "han": 13,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 14,
-      "cost": 0.00006216795
-    },
-    {
-      "mode": "without-list",
-      "seed": "你今天好吗？",
-      "text": "我很好。今天我吃苹果。你吃水果吗？",
-      "violations": [],
-      "bad": false,
-      "han": 14,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 13,
-      "cost": 0.00004197
-    },
-    {
-      "mode": "with-list",
-      "seed": "你今天好吗？",
-      "text": "我很好。你今天好吗？",
-      "violations": [],
-      "bad": false,
-      "han": 8,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 8,
-      "cost": 0.0000610578
-    },
-    {
-      "mode": "without-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃苹果。你吃苹果吗？",
-      "violations": [],
-      "bad": false,
-      "han": 11,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 10,
-      "cost": 0.0000222498
-    },
-    {
-      "mode": "with-list",
-      "seed": "你喜欢吃什么？",
-      "text": "我喜欢吃米饭。我喜欢吃苹果。你吃什么？",
-      "violations": [],
-      "bad": false,
-      "han": 16,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00006178185
-    },
-    {
-      "mode": "without-list",
-      "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天学习中文。你学中文多久了？",
-      "violations": [
-        "每",
-        "久"
-      ],
-      "bad": true,
       "han": 19,
       "needs": 0,
       "truncated": false,
       "outTokens": 15,
-      "cost": 0.00004266
+      "cost": 0.000053802
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我家在北京的一个小区里。虽然城市很大，但是我家旁边有一个小公园。你的家在城市还是农村？",
+      "violations": [
+        "农村"
+      ],
+      "bad": true,
+      "han": 39,
+      "needs": 1,
+      "truncated": false,
+      "outTokens": 39,
+      "cost": 0.000023958
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "error": "empty reply"
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "我最近很想去云南，因为那里的风景很漂亮。你喜欢旅行吗？",
+      "violations": [
+        "云",
+        "景",
+        "旅"
+      ],
+      "bad": true,
+      "han": 24,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 158,
+      "cost": 0.000069386
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我哪儿都想去。最近我去了动物园，看了大熊猫，很开心。你喜欢去什么地方玩？",
+      "violations": [],
+      "bad": false,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 143,
+      "cost": 0.00027276
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "我今天很好，谢谢！虽然有点累，因为昨天晚上睡得比较晚。你呢，今天做了什么有意思的事情吗？",
+      "violations": [],
+      "bad": false,
+      "han": 38,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 147,
+      "cost": 0.00010392
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢你。今天天气不错，我在公园走了一会儿。你最近在做什么？",
+      "violations": [],
+      "bad": false,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 116,
+      "cost": 0.000110902
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃面条，特别是自己手擀的面条。你呢，你喜欢吃中餐还是西餐？",
+      "violations": [
+        "擀",
+        "餐",
+        "餐"
+      ],
+      "bad": true,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 156,
+      "cost": 0.000062378624
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃水果，苹果和西瓜都很甜。你平时喜欢喝什么饮料？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 18,
+      "cost": 0.0001665951
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文，但是学得还不好。我昨天在家看了一场电影，你觉得看电影对学中文有帮助吗？你周末喜欢做什么？",
+      "violations": [
+        "场"
+      ],
+      "bad": true,
+      "han": 45,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 163,
+      "cost": 0.000071037
     },
     {
       "mode": "with-list",
       "seed": "你会说中文吗？",
-      "text": "我会说中文。我每天和朋友说中文。你吃饭了吗？",
+      "text": "我会说中文。因为我是中国人，所以中文是我的语言。你学中文多久了？",
+      "violations": [],
+      "bad": false,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 20,
+      "cost": 0.000054702
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天不热，因为昨天下雨了，所以天气很凉快。你出门的时候觉得热不热？",
+      "violations": [],
+      "bad": false,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 25,
+      "cost": 0.000021438
+    },
+    {
+      "mode": "with-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，因为现在是夏天。我在家开空调，觉得舒服一点。你那里天气怎么样？",
+      "violations": [],
+      "bad": false,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 90,
+      "cost": 0.00021848
+    },
+    {
+      "mode": "without-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般十点半睡觉，因为明天要早起工作。你是早睡早起的人吗？",
+      "violations": [],
+      "bad": false,
+      "han": 26,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 135,
+      "cost": 0.00009282
+    },
+    {
+      "mode": "with-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般晚上十一点睡觉。因为白天要上班，所以晚上才能做自己的事。你习惯早睡还是晚睡？",
+      "violations": [],
+      "bad": false,
+      "han": 37,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 28,
+      "cost": 0.000056052
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我更喜欢喝水。我现在刚刚吃完早饭，所以喝了一些水。你呢？你早上一般吃什么？",
+      "violations": [],
+      "bad": false,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 170,
+      "cost": 0.00008916
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我想喝水。因为今天天气很热，喝水比较舒服。你喜欢喝茶还是喝别的饮料？",
+      "violations": [],
+      "bad": false,
+      "han": 30,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 21,
+      "cost": 0.000054882
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我住在北京。北京的秋天很漂亮。你住在哪个城市？",
       "violations": [
-        "每"
+        "京",
+        "京"
       ],
       "bad": true,
+      "han": 20,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 15,
+      "cost": 0.000019638
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "text": "我家在一个小城市，那里很安静。我觉得家是最舒服的地方。你喜欢在家做什么？",
+      "violations": [],
+      "bad": false,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 154,
+      "cost": 0.000131682
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "我最近看到一张故宫的照片，觉得那里很漂亮。要是能去北京，我就想去看看故宫。你呢，你喜欢去旅行吗？",
+      "violations": [
+        "故宫",
+        "京",
+        "故宫",
+        "旅"
+      ],
+      "bad": true,
+      "han": 42,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 174,
+      "cost": 0.000073786
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我现在很想去海边城市旅行。因为最近工作太累了，所以我想去看看大海放松一下。你觉得去北海怎么样？你喜欢什么样的旅行？",
+      "violations": [
+        "旅",
+        "松",
+        "样",
+        "旅"
+      ],
+      "bad": true,
+      "han": 52,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 147,
+      "cost": 0.00024108
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "你好！虽然今天早上有一点冷，但是我去了公园散步。我觉得在外面走路对身体很好。你平时喜欢去外面运动吗？",
+      "violations": [
+        "散步"
+      ],
+      "bad": true,
+      "han": 45,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 198,
+      "cost": 0.00012432
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢！今天天气不错，我去了公园散步。你呢？今天做了什么事？",
+      "violations": [
+        "散步"
+      ],
+      "bad": true,
+      "han": 27,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 158,
+      "cost": 0.000122452
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃水果，因为水果对身体很好。最近我常常吃葡萄，又甜又好吃。你喜欢吃什么水果？",
+      "violations": [
+        "葡萄"
+      ],
+      "bad": true,
+      "han": 36,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 155,
+      "cost": 0.000062201412
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "error": "empty reply"
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文，因为我是中国人。我从小就说中文。你学中文学了多久？",
+      "violations": [],
+      "bad": false,
+      "han": 27,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 111,
+      "cost": 0.000056737
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文。我住在北京，已经在这里生活了五年。你呢，你学中文多久了？",
+      "violations": [
+        "京"
+      ],
+      "bad": true,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 23,
+      "cost": 0.000055242
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天不太热，因为早上下了雨。我穿了一件外套出门。你那边天气怎么样？",
+      "violations": [
+        "套"
+      ],
+      "bad": true,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 21,
+      "cost": 0.000020718
+    },
+    {
+      "mode": "with-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，所以我一直在家里开空调。你喜欢夏天吗？",
+      "violations": [],
+      "bad": false,
+      "han": 21,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 127,
+      "cost": 0.00026656
+    },
+    {
+      "mode": "without-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般十一点睡觉。早上七点起床，所以不能睡太晚。你觉得早点睡觉对身体好吗？",
+      "violations": [],
+      "bad": false,
+      "han": 33,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 155,
+      "cost": 0.0000667588
+    },
+    {
+      "mode": "with-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般十一点睡觉。因为早上要上班，所以不能睡太晚。你平时几点起床呢？",
+      "violations": [],
+      "bad": false,
+      "han": 30,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 24,
+      "cost": 0.000055332
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我想喝水，因为水对身体好。你平时喜欢喝什么饮料？",
+      "violations": [],
+      "bad": false,
+      "han": 21,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 135,
+      "cost": 0.00007691
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我两个都喜欢，不过现在我想喝水，因为今天天气比较热。你平时喜欢喝什么？",
+      "violations": [],
+      "bad": false,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 22,
+      "cost": 0.000055062
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我家在北京，一个很大的城市。北京有很多好玩的地方，你来过北京吗？",
+      "violations": [
+        "京",
+        "京",
+        "京"
+      ],
+      "bad": true,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 18,
+      "cost": 0.000020178
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "text": "我家在一个小城市，那里有山有水，很漂亮。你住的地方是什么样的？",
+      "violations": [
+        "样"
+      ],
+      "bad": true,
+      "han": 27,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 152,
+      "cost": 0.000157234
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "我还没想好要去哪儿。但是我很想去上海，因为那里有很多高楼。你去过上海吗？",
+      "violations": [
+        "没"
+      ],
+      "bad": true,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 140,
+      "cost": 0.000064436
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我最近想去泰国旅行。听说那里很暖和，东西也很好吃。你喜欢去暖和的地方还是凉快的地方旅行？",
+      "violations": [
+        "泰",
+        "旅",
+        "暖",
+        "暖",
+        "旅"
+      ],
+      "bad": true,
+      "han": 40,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 140,
+      "cost": 0.00027156
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢你！今天天气不错，所以我去公园走了走，觉得很开心。你平时喜欢做什么运动？",
+      "violations": [],
+      "bad": false,
+      "han": 36,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 143,
+      "cost": 0.00010232
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我今天很好，因为天气不错，所以出去走了一会儿。你呢，今天做了什么？",
+      "violations": [],
+      "bad": false,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 104,
+      "cost": 0.000361042
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我最喜欢吃饺子，特别是韭菜鸡蛋馅的。你吃过饺子吗？你喜欢吃什么中国菜？",
+      "violations": [
+        "韭",
+        "馅"
+      ],
+      "bad": true,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 151,
+      "cost": 0.000061492564
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃面条，因为面条很方便，也很好吃。你呢，你更喜欢米饭还是面条？",
+      "violations": [],
+      "bad": false,
+      "han": 29,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 104,
+      "cost": 0.000143664
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我当然会说中文！我是中国人，每天都在用中文。你学中文多久了？",
+      "violations": [],
+      "bad": false,
+      "han": 26,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 164,
+      "cost": 0.000071312
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文，因为我是中国人。你学中文多久了？",
+      "violations": [],
+      "bad": false,
       "han": 19,
       "needs": 0,
       "truncated": false,
-      "outTokens": 16,
-      "cost": 0.00006265035
+      "outTokens": 15,
+      "cost": 0.000053802
     },
     {
       "mode": "without-list",
       "seed": "今天热吗？",
-      "text": "今天热。我出汗了。你出汗吗？",
-      "violations": [
-        "出汗",
-        "出汗"
-      ],
-      "bad": true,
-      "han": 11,
+      "text": "今天我这里很热，太阳很大。我一直在家里喝水。你那边天气怎么样？",
+      "violations": [],
+      "bad": false,
+      "han": 27,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00002268405
+      "outTokens": 19,
+      "cost": 0.000020358
     },
     {
       "mode": "with-list",
       "seed": "今天热吗？",
-      "text": "今天很热。我出汗了。你热吗？",
-      "violations": [
-        "出汗"
-      ],
-      "bad": true,
-      "han": 11,
+      "text": "今天很热，我都不想出门了。你觉得热天好不好？",
+      "violations": [],
+      "bad": false,
+      "han": 19,
       "needs": 0,
       "truncated": false,
-      "outTokens": 13,
-      "cost": 0.00006202305
+      "outTokens": 147,
+      "cost": 0.00024128
     },
     {
       "mode": "without-list",
       "seed": "你几点睡觉？",
-      "text": "我十一点睡觉。你几点睡觉？",
+      "text": "我一般晚上十一点睡觉。因为白天要上班，所以早上七点起床。你呢？你几点睡觉？",
       "violations": [],
       "bad": false,
-      "han": 11,
+      "han": 32,
       "needs": 0,
       "truncated": false,
-      "outTokens": 9,
-      "cost": 0.00005967
+      "outTokens": 169,
+      "cost": 0.000097954
     },
     {
       "mode": "with-list",
       "seed": "你几点睡觉？",
-      "text": "我十点睡觉。你几点睡觉？",
+      "text": "我一般晚上十一点睡觉。因为第二天早上要上班，所以不能睡太晚。你呢，你几点睡觉？",
       "violations": [],
       "bad": false,
-      "han": 10,
+      "han": 34,
       "needs": 0,
       "truncated": false,
-      "outTokens": 9,
-      "cost": 0.00011394
+      "outTokens": 26,
+      "cost": 0.000055692
     },
     {
       "mode": "without-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我今天喝了很多水。你喝了吗？",
+      "text": "我更想喝水，因为我觉得水很健康。不过茶也很好喝。你平时喝不喝咖啡？",
       "violations": [],
       "bad": false,
-      "han": 16,
-      "needs": 0,
+      "han": 29,
+      "needs": 1,
       "truncated": false,
-      "outTokens": 13,
-      "cost": 0.00004206
+      "outTokens": 195,
+      "cost": 0.00009791
     },
     {
       "mode": "with-list",
       "seed": "你想喝茶还是喝水？",
-      "text": "我想喝水。我今天很热。你喝什么？",
+      "text": "我更喜欢喝水，因为水对身体更好。你今天喝什么了？",
       "violations": [],
       "bad": false,
-      "han": 13,
+      "han": 21,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00011493
+      "outTokens": 15,
+      "cost": 0.000053802
     },
     {
       "mode": "without-list",
       "seed": "你的家在哪儿？",
-      "text": "我家在杭州。杭州很漂亮。你家在哪儿？",
+      "text": "我住在北京，因为北京很大，有很多好玩的地方。你的家在哪儿？",
       "violations": [
-        "杭州",
-        "杭州"
+        "京",
+        "京"
       ],
       "bad": true,
-      "han": 15,
+      "han": 25,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00004176
+      "outTokens": 17,
+      "cost": 0.000019998
     },
     {
       "mode": "with-list",
       "seed": "你的家在哪儿？",
-      "text": "我住在这儿。我住的这个房子很大。你住哪儿？",
-      "violations": [
-        "房子"
-      ],
-      "bad": true,
-      "han": 18,
-      "needs": 0,
-      "truncated": false,
-      "outTokens": 16,
-      "cost": 0.00011613
+      "error": "empty reply"
     },
     {
       "mode": "without-list",
       "seed": "你想去哪儿？",
-      "text": "我想去公园。 \n公园有树和花。你想去吗？",
+      "text": "我想去一个漂亮的海边城市。因为那里的风景很美，可以放松心情。你喜欢去海边玩吗？",
       "violations": [
-        "公园",
-        "公园",
-        "树",
-        "花"
+        "景",
+        "美",
+        "松心情"
       ],
       "bad": true,
-      "han": 15,
+      "han": 35,
       "needs": 0,
       "truncated": false,
-      "outTokens": 16,
-      "cost": 0.000047
+      "outTokens": 147,
+      "cost": 0.000066361
     },
     {
       "mode": "with-list",
       "seed": "你想去哪儿？",
-      "text": "我想去超市。我买水果。你去吗？",
-      "violations": [],
-      "bad": false,
-      "han": 12,
+      "text": "我想去云南旅游。那里有很漂亮的风景，而且天气不冷也不热。你最近去过什么好玩的地方吗？",
+      "violations": [
+        "云",
+        "景"
+      ],
+      "bad": true,
+      "han": 38,
       "needs": 0,
       "truncated": false,
-      "outTokens": 12,
-      "cost": 0.00011475
+      "outTokens": 137,
+      "cost": 0.00027036
+    },
+    {
+      "mode": "without-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢你。今天天气很好，所以我很开心。你呢，你今天做了什么？",
+      "violations": [],
+      "bad": false,
+      "han": 27,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 131,
+      "cost": 0.00009752
+    },
+    {
+      "mode": "with-list",
+      "seed": "你今天好吗？",
+      "text": "我很好，谢谢！今天天气不错，所以我去公园走了一会儿。你呢？你最近有没有做什么有意思的事？",
+      "violations": [],
+      "bad": false,
+      "han": 38,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 145,
+      "cost": 0.000118877
+    },
+    {
+      "mode": "without-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃面条，特别是妈妈做的牛肉面，很好吃。你家乡有什么好吃的食物吗？",
+      "violations": [
+        "乡",
+        "食物"
+      ],
+      "bad": true,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 165,
+      "cost": 0.000063973532
+    },
+    {
+      "mode": "with-list",
+      "seed": "你喜欢吃什么？",
+      "text": "我喜欢吃水果，苹果和西瓜都很好吃。你呢，你喜欢吃什么水果？ \n我最近学会做鸡蛋炒饭，很简单，也很好吃。你会做饭吗？",
+      "violations": [
+        "炒"
+      ],
+      "bad": true,
+      "han": 47,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 206,
+      "cost": 0.00038112
+    },
+    {
+      "mode": "without-list",
+      "seed": "你会说中文吗？",
+      "text": "我会说中文，你也会说中文，所以我们可以用中文聊天。你每天在家里做什么？",
+      "violations": [],
+      "bad": false,
+      "han": 31,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 133,
+      "cost": 0.000062787
+    },
+    {
+      "mode": "with-list",
+      "seed": "你会说中文吗？",
+      "text": "会啊，我可以说中文。因为我每天用中文聊天，所以现在说得越来越好了。你学中文多久了？",
+      "violations": [],
+      "bad": false,
+      "han": 36,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 26,
+      "cost": 0.000055782
+    },
+    {
+      "mode": "without-list",
+      "seed": "今天热吗？",
+      "text": "今天很热，我穿了短袖。你那边天气怎么样？",
+      "violations": [
+        "袖"
+      ],
+      "bad": true,
+      "han": 17,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 15,
+      "cost": 0.000019638
+    },
+    {
+      "mode": "with-list",
+      "seed": "今天热吗？",
+      "text": "今天不热，有点凉。我刚从外面回来，觉得挺舒服的。你喜欢热天还是凉快天？",
+      "violations": [
+        "凉"
+      ],
+      "bad": true,
+      "han": 30,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 117,
+      "cost": 0.00026256
+    },
+    {
+      "mode": "without-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般晚上十一点半睡觉。现在还没睡，因为我正在看一本有意思的书。你平时几点睡觉？",
+      "violations": [
+        "没"
+      ],
+      "bad": true,
+      "han": 36,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 150,
+      "cost": 0.0000654188
+    },
+    {
+      "mode": "with-list",
+      "seed": "你几点睡觉？",
+      "text": "我一般晚上十一点睡觉。因为白天工作很忙，所以晚上会看看电视放松一下。你呢？你几点睡觉？",
+      "violations": [
+        "松"
+      ],
+      "bad": true,
+      "han": 38,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 28,
+      "cost": 0.000056052
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我喜欢喝茶，特别是绿茶，因为它很香。可是喝水也很健康。你平时喜欢喝什么茶？",
+      "violations": [
+        "香"
+      ],
+      "bad": true,
+      "han": 32,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 166,
+      "cost": 0.00008776
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想喝茶还是喝水？",
+      "text": "我想喝水，因为今天天气很热，喝水比较解渴。你呢，你喜欢喝什么饮料？",
+      "violations": [
+        "解"
+      ],
+      "bad": true,
+      "han": 28,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 22,
+      "cost": 0.000055062
+    },
+    {
+      "mode": "without-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在北京。北京很大，有很多好玩的地方。你的家在哪儿？",
+      "violations": [],
+      "bad": false,
+      "han": 24,
+      "needs": 1,
+      "truncated": false,
+      "outTokens": 30,
+      "cost": 0.000022338
+    },
+    {
+      "mode": "with-list",
+      "seed": "你的家在哪儿？",
+      "text": "我的家在北京，北京很大也很热闹。你喜欢住在城市吗？",
+      "violations": [
+        "京",
+        "京",
+        "闹"
+      ],
+      "bad": true,
+      "han": 22,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 287,
+      "cost": 0.000168922
+    },
+    {
+      "mode": "without-list",
+      "seed": "你想去哪儿？",
+      "text": "因为今天下雨，所以我没有出门。我在家看完了一本书，觉得很有意思。你喜欢旅行吗？",
+      "violations": [
+        "旅"
+      ],
+      "bad": true,
+      "han": 34,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 176,
+      "cost": 0.000074336
+    },
+    {
+      "mode": "with-list",
+      "seed": "你想去哪儿？",
+      "text": "我还没有想好。如果有时间，我想去中国旅游。你呢，你最近去过什么地方吗？",
+      "violations": [],
+      "bad": false,
+      "han": 30,
+      "needs": 0,
+      "truncated": false,
+      "outTokens": 92,
+      "cost": 0.00025236
     }
   ]
 }
