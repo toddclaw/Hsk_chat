@@ -984,6 +984,7 @@ footer{
 <script src="mistakes.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
+<script src="report.js"></script>
 <script src="issues.js"></script>
 <script>
 "use strict";
@@ -1109,6 +1110,7 @@ const K = {
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
   ghostUses:"hsk1chat.ghostUses",
+  report:"hsk1chat.report", reportAt:"hsk1chat.reportAt",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
@@ -1160,6 +1162,8 @@ const S = {
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
   ghostUses: store.get(K.ghostUses, 3),       // correct uses, on separate days, to retire a ghost word
+  report:  store.get(K.report, ""),           // the last progress report, as written
+  reportAt: store.get(K.reportAt, ""),        // when it was written; the delta baseline
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
@@ -1672,7 +1676,9 @@ const TEACH_PROMPTS = [
   { key: "explainReply", kind: "explain",   own: false,
     label: "English explanation" },
   { key: "grade",        kind: "grade",     own: true,
-    label: "Grader — the ✓ / ✗ on your messages" }
+    label: "Grader — the ✓ / ✗ on your messages" },
+  { key: "report",       kind: "report",    own: true,
+    label: "Progress report" }
 ];
 
 // Recently introduced words, so an explanation can say which are still new.
@@ -1707,6 +1713,11 @@ function defaultTeachPrompt(spec, vars) {
   if (spec.kind === "grade") {
     return HSKPrompt.grade({ text: vars.text, label: vars.level,
                              recent: vars.recent, context: vars.context });
+  }
+  if (spec.kind === "report") {
+    return HSKPrompt.report({ brief: vars.brief, sinceBrief: vars.sinceBrief,
+                              samples: vars.samples, fellBack: vars.fellBack,
+                              label: vars.level });
   }
   return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
                              recent: vars.recent, context: vars.context,
@@ -5503,6 +5514,61 @@ function ghostProgressMap() {
 }
 
 // Everything the progress panel and the collapsed-row summary both need.
+/* Everything report.js needs, gathered from live state in one place.
+ *
+ * Segmentation and the lexicon are this file's business, so the ghost map and
+ * the mistake counts are computed HERE and handed over already counted --
+ * report.js stays pure and node-testable, which is the whole reason it is a
+ * separate file. */
+function reportInput(since) {
+  /* readiness() is null at the top level, where there is no next list to cover.
+   * Its two fractions are `read` and `produce`; the brief calls the second one
+   * `use`, which is what the prompt says to the learner. */
+  const r = readiness();
+  return {
+    chatMsgs: S.chatMsgs, chats: S.chats, learning: S.learning,
+    tags: mistakeCounts(),
+    ghost: ghostProgressMap(), ghostUses: S.ghostUses,
+    level: S.level, goalLevel: S.goalLevel,
+    coverage: { read: (r && r.read) || 0, use: (r && r.produce) || 0 },
+    /* S.chatTime is time on task; S.cost is money. */
+    minutes: Math.round((HSKTime.totals(S.chatTime).total || 0) / 60000),
+    since: since || null, now: Date.now()
+  };
+}
+
+/* One model call, and the stored report replaced only if it succeeds.
+ *
+ * A failed call must leave the previous report standing: a timeout should cost
+ * the learner a retry, not last week's report. Everything that can refuse
+ * before spending a call does so -- a learner with no graded messages gets a
+ * note, not an invented report about nothing. */
+async function writeReport() {
+  const all = HSKReport.brief(reportInput(null));
+  if (!all.messages.graded) {
+    return { ok: false, why: "Chat for a while first \u2014 there is nothing to report on yet." };
+  }
+  const base = HSKReport.baselineFor(S.chatMsgs, S.reportAt || null, Date.now());
+  const since = HSKReport.brief(reportInput(base.since));
+  const samples = HSKReport.pickSamples(
+    HSKReport.gradedTurns(S.chatMsgs, base.since), all.tags);
+  let text;
+  try {
+    text = await callModel([{ role: "user", content: teachPromptFor("report", {
+      brief: all, sinceBrief: since, samples: samples,
+      fellBack: base.fellBack, level: levelLabel()
+    }) }], 700, teachingModel());
+  } catch (e) {
+    return { ok: false, why: "That did not go through \u2014 " + ((e && e.message) || e) };
+  }
+  if (!text || !text.trim()) return { ok: false, why: "The model sent nothing back." };
+  S.report = text.trim() + "\n\n" + HSKReport.chineseLine(since);
+  S.reportAt = new Date().toISOString();
+  store.set(K.report, S.report);
+  store.set(K.reportAt, S.reportAt);
+  return { ok: true };
+}
+
 function readiness() {
   const next = LEVELS.find(l => l.id === S.level + 1);
   if (!next || !S.nextList.length) return null;

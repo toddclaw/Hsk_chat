@@ -114,6 +114,10 @@ check(Sync.PREFS_KEYS.indexOf("drillTurns") !== -1,
   "drillTurns syncs -- it is a preference, not a per-device counter");
 check(Sync.PREFS_KEYS.indexOf("ghostUses") !== -1,
   "the ghost-word threshold travels between devices like every other preference");
+check(Sync.PREFS_KEYS.indexOf("report") !== -1,
+  "the report syncs, so re-reading it on another device costs no call");
+check(Sync.PREFS_KEYS.indexOf("reportAt") !== -1,
+  "and so does its timestamp, or the delta baseline differs per device");
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "and adding it did not let the API key or the transcript into a prefs push");
 

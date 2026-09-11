@@ -881,7 +881,7 @@ return true;
                .querySelector('summary').textContent.match(/Conversation/);`),
       "and so did Clear conversation");
 
-    /* The four teaching prompts, editable like the system prompt. The default is
+    /* Every teaching prompt, editable like the system prompt. The default is
      * shown with its placeholders intact rather than filled against a sample
      * sentence -- the placeholders are the part worth editing. */
     await exec(`document.querySelectorAll('#setSheet .sec')[6].open = true; return true;`);
@@ -893,7 +893,10 @@ return true;
                states: Array.prototype.map.call(
                  document.querySelectorAll('#teachPrompts .note'),
                  function (s) { return s.textContent; }) };`);
-    check(tp.n === 5, "every teaching prompt is exposed, the grader included",
+    check(tp.n === 6, "every teaching prompt is exposed, the grader included",
+      JSON.stringify(tp.ids));
+    check(tp.ids.indexOf("tp_report") !== -1,
+      "the progress report among them: it is a prompt like the rest",
       JSON.stringify(tp.ids));
     check(tp.ids.indexOf("tp_grade") !== -1,
       "including the grader, which is a prompt like the rest and editable like the rest",
