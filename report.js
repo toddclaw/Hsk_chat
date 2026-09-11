@@ -164,8 +164,34 @@
     return out.slice(0, SAMPLES);
   }
 
+  /* One line of Chinese, composed rather than generated.
+   *
+   * Every word below is HSK 1, so the line is legal at every level the app
+   * offers and needs no validator at runtime, no repair loop, no fallback, and
+   * no second model call. report.test.js checks the claim against the real HSK 1
+   * allowlist, which is the only thing standing between a future edit and a
+   * line that breaks the app's one guarantee.
+   *
+   * Digits rather than Chinese numerals: 一..十 would need their own
+   * spelling-out code for 12, and the learner reads digits fluently from the
+   * first day.
+   *
+   * Chosen by what the learner actually did, so it is feedback and not
+   * decoration -- the most specific true thing first. */
+  function chineseLine(b) {
+    b = b || {};
+    var ghost = (b.ghost && b.ghost.retired) || 0;
+    var clean = (b.messages && b.messages.clean) || 0;
+    var minutes = b.minutes || 0;
+
+    if (ghost > 0) return "你学了 " + ghost + " 个新的字。很好！";
+    if (clean > 0) return "你说对了 " + clean + " 个。很好！";
+    if (minutes > 0) return "你今天学中文了。很好！";
+    return "我们学中文吧！";
+  }
+
   var api = { gradedTurns: gradedTurns, brief: brief,
-              baselineFor: baselineFor, pickSamples: pickSamples,
+              baselineFor: baselineFor, pickSamples: pickSamples, chineseLine: chineseLine,
               FLOOR: FLOOR, WINDOW_DAYS: WINDOW_DAYS, SAMPLES: SAMPLES,
               ACTIVITY_IDS: ACTIVITY_IDS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

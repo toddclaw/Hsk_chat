@@ -1,5 +1,7 @@
 /* Progress report aggregation. Run: node test/report.test.js */
 const R = require("../report.js");
+const V = require("../validator.js");
+const HSK1 = require("../data/hsk1.json");
 
 let pass = 0, fail = 0;
 const bad = [];
@@ -166,6 +168,34 @@ check(R.pickSamples(sTurns, []).length > 0,
 check(R.pickSamples(sTurns, [{ tag: "aspect-le", n: 4 }])
   .every(p => typeof p.text === "string" && typeof p.ok === "boolean"),
   "every sample is shaped the same, so the prompt builder needs no special cases");
+
+// --- the Chinese line ------------------------------------------------------
+
+// Every line the module can produce, at HSK 1, checked against the real
+// allowlist. This is what makes "valid by construction" a fact rather than a
+// claim -- there is no runtime validation anywhere in this path, so if a
+// template ever drifts above HSK 1 this is the only thing that will notice.
+/* validate() returns an ARRAY of violations -- empty means legal. It does not
+ * return an object with .ok; that mistake costs an afternoon. */
+const lex1 = V.buildLexicon(HSK1);
+const violations = (line) => V.validate(line, lex1);
+const lines = [
+  R.chineseLine(R.brief(input())),
+  R.chineseLine(R.brief(input({ ghost: { "苹果": { n: 3, last: "x" } },
+                                ghostUses: 3 }))),
+  R.chineseLine(R.brief(input({
+    chatMsgs: { a: [turn(daysAgo(1), true), turn(daysAgo(2), true)] } }))),
+  R.chineseLine(R.brief(input({ minutes: 45 })))
+];
+lines.forEach(function (line, i) {
+  const v = violations(line);
+  check(v.length === 0, "Chinese line " + i + " is inside HSK 1: " + line,
+    JSON.stringify(v.map(x => x.text)));
+});
+check(lines.every(l => l && l.length > 0),
+  "there is always a line, even for a learner who has done nothing yet");
+check(new Set(lines).size > 1,
+  "and it is not the same sentence every time, or it is decoration rather than feedback");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
