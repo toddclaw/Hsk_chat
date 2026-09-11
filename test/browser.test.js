@@ -246,19 +246,6 @@ return true;
           text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
           needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z",
           grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
-        /* Two more clean uses of the same sentence on two more calendar days --
-         * a repeat, not new vocabulary, so it changes no other count in this
-         * fixture. The ghost threshold is S.ghostUses credits on that many
-         * separate days; one clean message used to be enough to retire a word
-         * from the never-used row and no longer is. */
-        { id: "44444444-4444-4444-8444-444444444445", role: "user",
-          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
-          needs: [], attempts: 1, created_at: "2026-01-02T00:00:30.000Z",
-          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
-        { id: "44444444-4444-4444-8444-444444444446", role: "user",
-          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
-          needs: [], attempts: 1, created_at: "2026-01-03T00:00:30.000Z",
-          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
         { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
           text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
           created_at: "2026-01-01T00:01:00.000Z" },
@@ -956,6 +943,39 @@ return true;
       "the collapsed Connection row reports that a key is stored");
 
     /* ------------------------------------------------ level progress */
+
+    /* 可以 needs S.ghostUses (3) credits on 3 separate days to leave the
+     * never-used row now, not one clean message -- so the single typed use in
+     * the seed above is no longer enough on its own. Two more clean uses land
+     * here, in a conversation with no matching hsk1chat.chats row, rather than
+     * as two more turns in the seeded history above: contextFor() windows the
+     * last EXPLAIN_CONTEXT (4) real turns before a target turn, the seeded
+     * history sits exactly at that ceiling for 我也是's grammar-check context,
+     * and two more turns inserted there silently drops 你好 out of it. An
+     * unlisted conversation id is invisible to renderChats() (it walks
+     * S.chats, never S.chatMsgs directly), so it cannot perturb the chat-list
+     * counts asserted further down either -- only readiness() and
+     * producedWords() see it, which is all this section needs. Seeded through
+     * localStorage and a reload, not S.chatMsgs directly, for the reason given
+     * where S.learning is seeded above: the WebDriver sandbox cannot see a
+     * page-level `const`. */
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      m.prodcredit = [
+        { id: "p1", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          created_at: "2026-01-02T00:00:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+        { id: "p2", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          created_at: "2026-01-03T00:00:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } }
+      ];
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      return true;`);
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist");
 
     await exec(`document.querySelector('#btnSet').click(); return true;`);
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
@@ -1903,10 +1923,20 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(gone === true,
       "three credits on three days retires the word from the ghost list");
 
+    /* localStorage alone is not enough: the live S.chatMsgs the page is
+     * running against still holds ghosttest (S itself is unreachable from
+     * here, the same reason seedGhost() above goes through localStorage at
+     * all), and the next newChat() call below autosaves that live object
+     * straight back over whatever this writes -- undoing the delete inside
+     * the same run. A reload is what actually drops it, by rebuilding S from
+     * the now-clean storage. */
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "delete m.ghosttest;" +
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
 
 
     /* --------------------------------------------------- story time, part 1 */
