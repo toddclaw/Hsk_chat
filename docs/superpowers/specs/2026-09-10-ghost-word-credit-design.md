@@ -219,28 +219,41 @@ the cost line after it ships.
 
 ### D8. Counting: a walk, not a tally
 
-Progress for one word is derived by walking that word's messages in timestamp
-order. Nothing is stored, matching the discipline `mistakeCounts()` already
-keeps: a running tally beside the messages would be a second source of truth to
-drift.
+Progress is derived by walking the graded messages in timestamp order. Nothing
+is stored, matching the discipline `mistakeCounts()` already keeps: a running
+tally beside the messages would be a second source of truth to drift.
 
-The walk is `HSKMistakes.ghostProgress(turns, word)`, beside `ghostVerdict()`.
-`index.html` decides *which* turns contain the word — segmentation needs the
-live lexicon and belongs there — and hands over a flat array; `mistakes.js` does
-the arithmetic and stays free of everything above it, the same split
-`needsMigration()` already uses.
+The walk is `HSKMistakes.ghostProgress(turns, wordsOf)`, beside
+`ghostVerdict()`. It walks **every word at once in one pass** and returns
+`{ word: { n, last } }` — `n` the progress, `last` the most recent credited
+`dayKey`. A per-word version would be O(words × messages) and both of those
+grow with use.
+
+`wordsOf(turn)` is supplied by the caller: segmentation needs the live lexicon,
+which is `index.html`'s business, so `mistakes.js` gets a callback and does only
+the arithmetic. Same split `needsMigration()` already uses.
+
+`last` exists for D10, which needs to know whether a word has already been
+credited today.
 
 ```
-progress = 0
-credited = {}                       // dayKey -> true
-for each user message containing the word, oldest first:
-    switch ghostVerdict(message.grade, word):
-      "ok":    day = dayKey(message.created_at)
-               if not credited[day]: credited[day] = true; progress++
-      "wrong": progress = max(0, progress - 1)
-      "none":  nothing
-retired = progress >= GHOST_USES
+progress = {}                       // word -> { n, last }
+credited = {}                       // word -> { dayKey: true }
+for each graded user message, oldest first:
+    day = dayKey(message.created_at)
+    for each distinct word in wordsOf(message):
+        switch ghostVerdict(message.grade, word):
+          "ok":    if not credited[word][day]:
+                       credited[word][day] = true
+                       progress[word].n++
+                       progress[word].last = day
+          "wrong": progress[word].n = max(0, progress[word].n - 1)
+          "none":  nothing
+retired(word) = progress[word].n >= GHOST_USES
 ```
+
+Distinct words per message, so a sentence repeating 说话 three times still
+earns the one credit its day allows.
 
 A day already credited stays credited after a demotion, so failing and then
 succeeding again on the same day does not re-earn that day. Conservative, and it
