@@ -943,7 +943,14 @@
         return k + " " + x.activities[k];
       }).join(", ");
       return name + ":\n" +
-        "- messages graded: " + ((x.messages || {}).graded || 0) +
+        /* "sentences they wrote themselves" rather than "messages graded".
+         * tools/report-ab.js measured the difference: the old label never said
+         * WHOSE sentences these were, and a model with no outstanding mistake
+         * categories to fill the focus paragraph with reached for the most
+         * plausible remaining gap -- telling a learner with 60 graded and 50
+         * clean messages that they had not written any sentences yet. Naming
+         * the author took invented deficits from 33/48 to 43/48. */
+        "- sentences they wrote themselves and had checked: " + ((x.messages || {}).graded || 0) +
         ", of which the whole sentence was correct: " + ((x.messages || {}).clean || 0) + "\n" +
         "- new words used correctly enough times to own: " + ((x.ghost || {}).retired || 0) +
         "; part-way there: " + ((x.ghost || {}).working || 0) + "\n" +
