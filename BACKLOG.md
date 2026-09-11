@@ -445,3 +445,37 @@ due date is a pure function of the credit history, the same way the count is.
 activity that should hand finished words off, or a *review* activity that should
 keep them. If the latter, the interval ladder is the small part and the empty-day
 fallback is the design work.
+
+---
+
+## The app's own instruction could migrate to Chinese as the level rises
+
+**Found:** designing the progress report, 2026-09-11.
+
+Every explanatory surface in the app is permanently in English — settings notes,
+the progress panel, grammar explanations, the report this was found while
+designing. That is right for a beginner and increasingly wrong for the learner
+the app is trying to produce. At HSK 6 a learner reads a newspaper; there is no
+good reason the sentence telling them what a setting does is still in English,
+and an app whose own chrome is Chinese is several hours a week of incidental
+reading that currently goes to waste.
+
+The machinery already exists and is the whole point: the validator can prove a
+string is inside a level, `LEVELS` already knows where the learner is, and
+coverage arithmetic already answers "can they read this". A UI string is a much
+easier target than conversation — it is fixed, short, authored once, and can be
+checked at build time instead of at runtime, so none of the retry/repair cost of
+live generation applies.
+
+The hard part is not translation, it is the **ladder**: which strings move at
+which level, whether a string moves all at once or gains a Chinese gloss first,
+and what happens to a learner who moves up and finds the settings screen
+suddenly unreadable. A per-string minimum level is the obvious shape. Going back
+down a level, or a learner who wants English regardless, both need an answer.
+
+**What would settle it:** pick one screen — Settings → Learning is a good
+candidate, since its audience has by definition been using the app a while — and
+author its strings at two or three levels. Measure whether the HSK 4 version is
+actually readable by an HSK 4 learner, because the failure mode is a string that
+validates and still does not communicate. That answer generalises; the rest is
+bookkeeping.
