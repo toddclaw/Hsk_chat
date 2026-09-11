@@ -1057,6 +1057,7 @@ const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // correct sentences to finish a drill
 const GHOST_CHOICES = [1, 2, 3, 4, 5, 6];         // correct uses to retire a ghost word
+const GHOST_CHECK_MAX = 3;                        // ghost words verdicted per message
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
@@ -3232,6 +3233,11 @@ async function gradeTurn(turnObj) {
     const tag = currentActivity() === "drill" ? drillTag() : "";
     const eg = tag ? drillExample() : "";
     const word = tag ? drillWord() : "";
+    /* Same reason as the three above: read BEFORE the await. Switching activity
+     * mid-grade must not attach this conversation's ghost targets to another
+     * one's verdict. */
+    const ghosting = currentActivity() === "focused";
+    const ghostTargets = ghosting ? reuseFor("focused").map(e => e.w) : [];
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
@@ -3259,6 +3265,40 @@ async function gradeTurn(turnObj) {
                                          120, teachingModel()));
         if (t) g.target = { used: t.used === true, ok: t.ok === true };
       } catch (e) { console.warn("[drill check] " + ((e && e.message) || e)); }
+    }
+    /* Ghost Words asks the drill's question about its own targets: was this
+     * word attempted, and was it right, judged apart from everything else in
+     * the sentence. Same prompt, same word arm, no tag -- reused character for
+     * character, so no A/B run is owed for it.
+     *
+     * Only here. Putting it on every chat message would put a model call on the
+     * grader's hot path, which BACKLOG.md names as the binding cost constraint
+     * on the whole app; outside this activity the whole-sentence fallback in
+     * HSKMistakes.ghostVerdict() does the job for free.
+     *
+     * Only for targets the sentence actually contains, and at most
+     * GHOST_CHECK_MAX of them: the banner shows six, a real sentence reaches
+     * for one or two, and the cap is what stops a word-salad message costing
+     * six calls.
+     *
+     * Its own try per word, like the drill check above: a failed question must
+     * leave the grade -- and the other words' answers -- standing. A word with
+     * no entry falls back to the whole-sentence verdict, so a failure can never
+     * demote anything. */
+    if (g && ghosting && ghostTargets.length) {
+      const inMsg = new Set(HSK.segment(turnObj.text, S.lex)
+        .filter(tok => tok.kind === "word").map(tok => tok.text));
+      for (const w of ghostTargets.filter(x => inMsg.has(x)).slice(0, GHOST_CHECK_MAX)) {
+        try {
+          const v = jsonIn(await callModel([{ role: "user",
+            content: HSKPrompt.drillCheck({ text: turnObj.text,
+              label: levelLabel(), drillWord: w }) }], 120, teachingModel()));
+          if (v) {
+            g.ghost = g.ghost || {};
+            g.ghost[w] = { used: v.used === true, ok: v.ok === true };
+          }
+        } catch (e) { console.warn("[ghost check] " + ((e && e.message) || e)); }
+      }
     }
     if (g) await nameDrillWords(g, turnObj.text);
     /* A grade that could not be read is stored as such. Left absent it would

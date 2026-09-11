@@ -1938,6 +1938,44 @@ check(usedGroups && usedGroups.first === "\u7684",
     await waitFor("window.readiness && window.readiness() !== null",
       "the next level's wordlist", 20000);
 
+    /* S.grader is on the same unreachable const as S.history above -- through
+     * localStorage and a reload, not a direct write. */
+    await exec(
+      "localStorage.setItem('hsk1chat.grader', JSON.stringify(true)); return true;");
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
+
+    /* The per-word verdict. callModel is stubbed to answer the drillCheck
+     * question and nothing else: the grade call asks for a much bigger object,
+     * so it is answered separately by looking at what the prompt contains. */
+    await exec(
+      "window.__ghostCalls = [];" +
+      "window.callModel = function (msgs) {" +
+      "  var p = msgs[0].content;" +
+      "  if (p.indexOf('{\\\"used\\\":true,\\\"ok\\\":true}') !== -1) {" +
+      "    window.__ghostCalls.push(p);" +
+      "    return Promise.resolve('{\\\"used\\\":true,\\\"ok\\\":true}');" +
+      "  }" +
+      "  return Promise.resolve('{\\\"ok\\\":false,\\\"meant\\\":\\\"\\\"," +
+      "\\\"better\\\":\\\"\\u6211\\u5403\\u82f9\\u679c\\\",\\\"cats\\\":{}," +
+      "\\\"errors\\\":[{\\\"tag\\\":\\\"aspect-le\\\",\\\"note\\\":\\\"x\\\"}]}');" +
+      "}; return true;");
+    await exec("window.newChat('focused'); return true;");
+    const turnObj = await exec(
+      "var t = { role: 'user', text: '\\u82f9\\u679c', id: 'gt1'," +
+      " created_at: '2026-09-05T10:00:00Z' };" +
+      "return window.gradeTurn(t).then(function () { return t.grade; });");
+    check(turnObj && turnObj.ghost && turnObj.ghost["苹果"] &&
+          turnObj.ghost["苹果"].ok === true,
+      "a ghost target present in the message gets its own verdict",
+      JSON.stringify(turnObj && turnObj.ghost));
+    check(turnObj && turnObj.ok === false,
+      "and the whole-sentence grade still says the sentence was wrong");
+    check(await exec("return window.HSKMistakes.ghostVerdict(" +
+      JSON.stringify(turnObj) + ", '\\u82f9\\u679c');") === "ok",
+      "so the word credits even though the sentence did not");
+
 
     /* --------------------------------------------------- story time, part 1 */
 
