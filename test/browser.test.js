@@ -246,6 +246,19 @@ return true;
           text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
           needs: [], attempts: 1, created_at: "2026-01-01T00:00:30.000Z",
           grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+        /* Two more clean uses of the same sentence on two more calendar days --
+         * a repeat, not new vocabulary, so it changes no other count in this
+         * fixture. The ghost threshold is S.ghostUses credits on that many
+         * separate days; one clean message used to be enough to retire a word
+         * from the never-used row and no longer is. */
+        { id: "44444444-4444-4444-8444-444444444445", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          needs: [], attempts: 1, created_at: "2026-01-02T00:00:30.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+        { id: "44444444-4444-4444-8444-444444444446", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          needs: [], attempts: 1, created_at: "2026-01-03T00:00:30.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
         { id: "22222222-2222-4222-8222-222222222222", role: "assistant",
           text: "你喜欢吃中国菜吗？", needs: [], attempts: 1,
           created_at: "2026-01-01T00:01:00.000Z" },
@@ -1845,6 +1858,55 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return window.systemPrompt([], window.reuseFor('focused'), '');");
     check(/\u5fc5\u987b\u7528\u5230\u8fd9\u4e9b\u8bcd/.test(fp),
       "the focused-chat rule asks the partner to build openings, not merely to use the words");
+
+    /* The threshold. Messages are seeded through localStorage and a reload --
+     * the WebDriver sandbox that exec() runs in cannot see a page-level
+     * `const`, so S itself is unreachable and the seed has to go in the same
+     * door S.learning did above. What is being tested is the arithmetic over
+     * a history, and three days of real conversation is not something a
+     * browser test can have. Graded clean and on three separate days: the
+     * fallback rule, which is all that exists until the verdict lands in the
+     * next task. */
+    const seedGhost = async (days) => {
+      await exec(
+        "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+        "m.ghosttest = " + JSON.stringify(days.map((d, i) => ({
+          role: "user", text: "\u82f9\u679c", id: "g" + i,
+          created_at: d, grade: { ok: true, errors: [] }
+        }))) + ";" +
+        "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+      await go(base);
+      await waitFor("window.readiness && window.readiness() !== null",
+        "the next level's wordlist", 20000);
+    };
+
+    await seedGhost(["2026-09-01T10:00:00Z"]);
+    let gn = await exec(
+      "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
+    check(gn === 1, "one clean message is one ghost credit", String(gn));
+    let still = await exec(
+      "return window.readiness().unused.map(function (e) { return e.w; })" +
+      ".indexOf('\\u82f9\\u679c') !== -1;");
+    check(still === true,
+      "and one credit does not retire the word: it is one of three");
+
+    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-01T18:00:00Z"]);
+    gn = await exec(
+      "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
+    check(gn === 1, "two messages on one day are still one credit", String(gn));
+
+    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-02T10:00:00Z",
+                     "2026-09-03T10:00:00Z"]);
+    const gone = await exec(
+      "return window.readiness().unused.map(function (e) { return e.w; })" +
+      ".indexOf('\\u82f9\\u679c') === -1;");
+    check(gone === true,
+      "three credits on three days retires the word from the ghost list");
+
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.ghosttest;" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
 
 
     /* --------------------------------------------------- story time, part 1 */

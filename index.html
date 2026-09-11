@@ -1772,7 +1772,15 @@ function windowed(excludeKind) {
 function reuseFor(activity) {
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
-    return ((r && r.unused) || []).slice(0, 6);
+    /* Words already credited today go last. At most one credit a day counts, so
+     * without this a learner who practised well yesterday opens the activity to
+     * six words that cannot move until tomorrow, and the activity quietly has
+     * nothing to offer. Still shown when there are not six others -- practising
+     * them is harmless and an empty banner would be worse. A stable sort, so
+     * commonest-first survives inside each group. */
+    return ((r && r.unused) || []).slice()
+      .sort((a, b) => (a.ghostToday ? 1 : 0) - (b.ghostToday ? 1 : 0))
+      .slice(0, 6);
   }
   return S.learning.filter(HSKPace.isNew).slice(-6);
 }
@@ -5382,24 +5390,21 @@ function usableWords() {
   return new Set(S.base.concat(S.extra, S.learning, S.known).map(e => e.w));
 }
 
-/* Words the learner has actually written, from their own turns. Production is
- * the harder half and lags recognition, so it is worth counting separately --
- * and it costs no new storage, since every message is already saved.
- * renderAll() segments the whole history on every render too, so the work here
- * is nothing new.
+/* Words the learner has written and been credited for at least once.
  *
- * A word only counts when the grader has passed the sentence it sits in:
- * typing a word in a broken sentence is not demonstrating you can use it.
- * Messages that were never graded (grader off, or still in flight) do not
- * contribute. */
+ * The whole-sentence gate that used to live here (`t.grade.ok`) has moved into
+ * HSKMistakes.ghostVerdict(), which still applies it -- but defers to a
+ * per-word verdict where one exists. So a word used correctly in a sentence
+ * that was wrong somewhere else now counts, which it never did before. The
+ * change can only ADD words: everything that credited before still credits. */
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
-      if (t.role !== "user") return;
-      if (!t.grade || !t.grade.ok) return;
+      if (t.role !== "user" || !t.grade) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
-        if (tok.kind === "word") out.add(tok.text);
+        if (tok.kind === "word" &&
+            HSKMistakes.ghostVerdict(t.grade, tok.text) === "ok") out.add(tok.text);
       });
     });
   };
@@ -5407,11 +5412,40 @@ function producedWords() {
   return out;
 }
 
+/* Today, as the same UTC dayKey the credit rule counts in. Local dates would
+ * let a flight change a learner's numbers -- mistakes.js says why. */
+function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
+
+/* How far along every word is, in one pass over every conversation.
+ *
+ * Segmentation happens here because it needs the live lexicon; mistakes.js gets
+ * a callback and does the arithmetic. Words are de-duplicated per message there,
+ * so this hands over whatever segment() found.
+ *
+ * ponytail: a full scan per call, and readiness() calls it on every render in
+ * the Ghost Words activity -- the same ceiling the drill banner's own scan
+ * already carries. Cache it behind a dirty flag if a long history ever makes a
+ * render feel slow. */
+function ghostProgressMap() {
+  const turns = [];
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (t && t.role === "user" && t.grade) turns.push(t);
+    });
+  });
+  return HSKMistakes.ghostProgress(turns, function (t) {
+    return HSK.segment(t.text, S.lex)
+      .filter(function (tok) { return tok.kind === "word"; })
+      .map(function (tok) { return tok.text; });
+  });
+}
+
 // Everything the progress panel and the collapsed-row summary both need.
 function readiness() {
   const next = LEVELS.find(l => l.id === S.level + 1);
   if (!next || !S.nextList.length) return null;
   const usable = usableWords(), mine = producedWords();
+  const prog = ghostProgressMap(), today = ghostDayKey();
   const met = S.learning.filter(e => e.from === S.level + 1).length;
   // A Set, not S.base.some() inside a filter: at HSK 6 -> 7-9 that pair is
   // 5364 x 10970 comparisons and the sheet visibly stalls opening.
@@ -5446,8 +5480,23 @@ function readiness() {
     /* Sorted commonest-first through the level list, because S.learning rows
      * carry no frequency of their own -- sorting them by e.f silently does
      * nothing, since every value is undefined. */
-    unused: S.learning.filter(e => (e.from || 0) > S.level && !mine.has(e.w))
+    /* Not `!mine.has(e.w)` any more: one correct use is a start, not a finish.
+     * A word leaves this list after S.ghostUses credits on S.ghostUses separate
+     * days, and a wrong use gives one back. The threshold lives HERE and
+     * nowhere else -- the coverage bars above deliberately keep none, because
+     * RESEARCH.md's Production section is an argument about gauges and this is
+     * the list it recommends instead.
+     *
+     * Shallow copies, not the S.learning rows themselves: the banner needs the
+     * progress alongside the word, and writing it onto the stored row would put
+     * a derived number into persisted state. */
+    unused: S.learning.filter(e => (e.from || 0) > S.level &&
+        ((prog[e.w] && prog[e.w].n) || 0) < S.ghostUses)
       .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity))
+      .map(e => Object.assign({}, e, {
+        ghostN: (prog[e.w] && prog[e.w].n) || 0,
+        ghostToday: !!(prog[e.w] && prog[e.w].last === today)
+      }))
   };
 }
 
