@@ -1171,6 +1171,9 @@ The 词 panel exports a file, and hands single cards over by URL.
   so on Android use the CSV export.
 - **Look up in Pleco** from the word popover — [`plecoapi://x-callback-url/s`](https://www.plecoforums.com/threads/urls-scheme-in-pleco.5875/),
   with `x-success` so Pleco offers a button back. Works on both platforms.
+  iOS Safari asks "Open in Pleco?" before it launches, every time. That
+  confirmation belongs to the browser and a web page has no way to suppress it —
+  there is nothing in this app to turn off.
 
 Delivery goes through the Web Share API, because iOS will not let a page save a file on its
 own and the share sheet can hand it straight to Pleco or Files. Download is the desktop

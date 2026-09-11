@@ -280,6 +280,51 @@ advancement. Nothing in the literature suggests a learner is harmed by moving up
 the failure mode is self-correcting — the retry counters and the validator make too-hard
 immediately visible.
 
+## Retiring a ghost word
+
+**Informed by the literature; the numbers themselves are not measured.**
+`GHOST_USES = 3` by default (settable 1–6), at most one credit per word per
+calendar day, and a wrong use costs one credit back.
+
+The Ghost Words activity targets words the app taught and the learner has never
+written. Until v95 a single clean message retired one, which is the bottom of
+every estimate in "How many encounters a word needs" read at its most generous
+— and read about *production*, where that literature is about *reception*.
+
+**Massing and spacing do different jobs, in that order.** A ghost word is a new
+word with no track record of error, so the backsliding argument that drives the
+drill's spacing cap does not apply to it in the same way. That is true and
+incomplete: the literature splits repetition by purpose, with massed repetition
+helping initial encoding and spaced repetition driving retention. Both apply, at
+different scales. Within a day, repeated production is the encoding work and is
+not limited — write the word as often as you like. Across days, only the first
+correct use counts, because that is the interval that predicts whether the word
+survives the week.
+
+The per-day cap is therefore the same rule, and the same `dayKey()`, as the
+drill's, and it is here for the same reason recorded there: session length must
+not be able to move the number.
+
+**Why 3.** It is the bottom of the window in which most semantic gain lands
+(three to seven exposures), and under the day rule it now means three separate
+days rather than three sentences in a row. It is a *productive* threshold and is
+not derived from the receptive studies behind `PROMOTE_AT = 6`; it is a setting
+rather than a constant precisely because it is unmeasured.
+
+**Why a slip costs one and not everything.** Until v95 failure was free: a wrong
+use of a ghost word simply did not count, so progress was a ratchet that only
+clicked forward and a learner could grind out a word regardless of how many
+attempts missed. Anki demotes a lapsed card, and something had to. Full reset
+was rejected: at a threshold of three, one slip on day three would send the word
+back to nothing, which is the shape of rule this document already warns against
+for the mistake count — punishing the outcome the feature exists to produce.
+Demote-by-one is the proportionate version.
+
+**Flat intervals, not expanding ones.** This is a one-day Leitner interval.
+Expanding intervals — a retired word returning at 7 days, then 30, as a
+retention check — are the better answer and were declined as a scheduler rather
+than a threshold. See BACKLOG.md.
+
 ## Production
 
 **Follows from the literature: there is no threshold, and inventing one would be false
@@ -308,6 +353,14 @@ you have never once written, commonest first, three at a time. Three characters 
 next message is a prompt; "5 unused" is a statistic.
 
 Moving up is **not** gated on production, for reason 1 above.
+
+That distinction is load-bearing and survives v95, which put a threshold on the
+list. The argument above is an argument about **gauges**: there is no defensible
+percentage of production to aim at, so the coverage bars carry no target and
+still do. The list is the instrument this section recommends *instead* of a
+gauge, and "have you used this word enough times to own it" is a question about
+one word rather than a ratio over all of them. The threshold lives on the list
+and nowhere else — see "Retiring a ghost word".
 
 ## Choosing a story, and being asked about it
 

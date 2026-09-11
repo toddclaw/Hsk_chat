@@ -422,3 +422,26 @@ Resist raising the ceiling again as the first move. 30000ms is already where the
 shared floor was moved to, after individual call sites had each been overridden
 to it for this same reason — a wait that has been lengthened once per call site
 and then once globally is usually hiding a stall rather than a slow machine.
+
+---
+
+## Ghost words retire and never come back
+
+**Found:** designing the ghost-word credit rule, 2026-09-10.
+
+`GHOST_USES` credits on separate days retire a word from the ghost list
+permanently. That is a flat one-day Leitner interval and it covers initial
+encoding only. Nothing ever re-checks the word, so a word owned in September and
+forgotten by November shows as owned forever.
+
+Expanding intervals were considered and declined during design as a scheduler
+rather than a threshold: the ghost list would need a due/not-due state per word,
+the banner would need to show it, and a day with nothing due would need a
+fallback so the activity never opens empty. The scheduling itself is cheap and
+needs no stored state — every credit already carries a message timestamp, so a
+due date is a pure function of the credit history, the same way the count is.
+
+**What would settle it:** decide whether Ghost Words is an *acquisition*
+activity that should hand finished words off, or a *review* activity that should
+keep them. If the latter, the interval ladder is the small part and the empty-day
+fallback is the design work.
