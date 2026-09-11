@@ -601,6 +601,11 @@ footer{
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button id="moveUp" class="primary" type="button" style="display:none"></button>
       </div>
+
+      <button id="btnReport" type="button" style="margin-top:14px; width:100%">Progress report</button>
+      <div class="note">Reads everything you have done and writes back a few paragraphs —
+      what is going well, what is worth working on, and what has changed since last time.
+      Opening it is free; writing a new one is one API call.</div>
       <!-- Why the headline is a percentage of text and not a count of words:
            the lists are cumulative and frequency-ordered, so HSK 1's 300 words
            are 60% of the HSK 2 list but around 88% of HSK 2 running text. A
@@ -934,6 +939,15 @@ footer{
          appended to the first: see the handler for why starting over is the
          only shape that helps. -->
     <button id="explainRedo" class="quiet" type="button">Ask again</button>
+  </div>
+</div></div>
+
+<div class="sheet" id="reportSheet"><div class="card">
+  <h2>Progress report</h2>
+  <div id="reportBody"></div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+    <button id="reportClose" class="primary">Done</button>
+    <button id="reportWrite" class="quiet" type="button">Write a new report</button>
   </div>
 </div></div>
 
@@ -5910,6 +5924,40 @@ $("#gradeAsk").onclick = () => {
   openExplain(t);
 };
 $("#explainClose").onclick = () => closeSheet("#explainSheet");
+
+/* Opening is free: the stored report is shown as-is, and only the button
+ * inside the sheet spends a call. Re-reading last week's report should not
+ * cost anything, and the delta baseline must move only when a report is
+ * actually written. */
+function openReport() {
+  const body = $("#reportBody");
+  body.innerHTML = S.report
+    ? '<div class="note">Written ' + escapeHtml(S.reportAt.slice(0, 10)) + "</div>" +
+      HSKMd.render(S.report)
+    : '<div class="note">No report yet. Write one below.</div>';
+  openSheet("#reportSheet");
+}
+$("#btnReport").onclick = openReport;
+$("#reportClose").onclick = () => closeSheet("#reportSheet");
+$("#reportSheet").addEventListener("click", e => {
+  if (e.target === $("#reportSheet")) closeSheet("#reportSheet");
+});
+$("#reportWrite").onclick = async () => {
+  const btn = $("#reportWrite");
+  btn.disabled = true;
+  btn.textContent = "Writing\u2026";
+  const r = await writeReport();
+  btn.disabled = false;
+  btn.textContent = "Write a new report";
+  /* A failure leaves the previous report exactly where it was and says why
+   * underneath it. The old report is the more valuable of the two. */
+  if (!r.ok) {
+    $("#reportBody").insertAdjacentHTML("beforeend",
+      '<div class="note" style="color:var(--bad)">' + escapeHtml(r.why) + "</div>");
+    return;
+  }
+  openReport();
+};
 /* Start over rather than append. A call that failed leaves "(couldn't reach the
  * model…)" stored as the answer, and every follow-up asked afterwards carries
  * that transcript as context -- so asking again on top of it inherits the

@@ -1989,6 +1989,69 @@ check(usedGroups && usedGroups.first === "\u7684",
       "so the word credits even though the sentence did not");
 
 
+    /* ------------------------------------------------ progress report */
+
+    /* Seeded through localStorage and a reload: the WebDriver sandbox cannot
+     * see a page-level `const`, so S is unreachable and the seed has to go in
+     * the same door S.learning does. */
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      m.reporttest = [{ id: "r1", role: "user", text: "\\u6211\\u5403\\u996d",
+        created_at: "2026-09-05T10:00:00.000Z",
+        grade: { ok: true, cats: {}, errors: [] } }];
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      localStorage.removeItem("hsk1chat.report");
+      localStorage.removeItem("hsk1chat.reportAt");
+      return true;`);
+    await go(base);
+    await waitFor("window.writeReport", "the app");
+
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the report button");
+    await exec(`document.querySelector('#btnReport').click(); return true;`);
+    await waitFor("document.querySelector('#reportSheet').classList.contains('open')",
+      "the report sheet");
+    check(/No report yet/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "with nothing written yet, the sheet says so rather than spending a call");
+
+    await exec(
+      "window.callModel = function () { return Promise.resolve('You are doing well.'); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor(
+      "/You are doing well/.test(document.querySelector('#reportBody').innerText)",
+      "the written report", 20000);
+    check(await exec("return JSON.parse(localStorage['hsk1chat.report'] || '\"\"');")
+      .then(s => /You are doing well/.test(s)),
+      "and it persists, so re-reading it later is free");
+    check(/\u5f88\u597d/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "with its Chinese line, composed rather than generated");
+
+    /* The behaviour most likely to regress quietly: a failed call must leave
+     * last week's report standing. */
+    await exec(
+      "window.callModel = function () { return Promise.reject(new Error('boom')); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor("/boom/.test(document.querySelector('#reportBody').innerText)",
+      "the failure note", 20000);
+    check(/You are doing well/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "a failed call keeps the previous report rather than blanking it");
+
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      delete m.reporttest;
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      return true;`);
+    await go(base);
+    /* The reload is not complete when go() resolves, and story time follows
+     * immediately -- without this wait it starts against a half-built page. */
+    await waitFor("window.storyStep", "the app after the report section");
+
     /* --------------------------------------------------- story time, part 1 */
 
     /* \u4ed6\u53bb\u4e86\u5b66\u6821 rather than \u5c0f\u738b\u53bb\u4e86\u5b66\u6821:
