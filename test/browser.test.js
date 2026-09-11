@@ -1022,7 +1022,7 @@ return true;
      * just counted, because three characters you can put in your next message
      * is a prompt and "5 unused" is a statistic. The seed has introduced words
      * and a typed history, so both sides of the subtraction are non-empty. */
-    check(/never used/.test(prog || ""),
+    check(/not yet yours/.test(prog || ""),
       "the panel names what to do next, not only what has happened",
       JSON.stringify((prog || "").slice(0, 260)));
     check(/1 of the 2 the app taught you/.test(prog || ""),
@@ -1030,8 +1030,8 @@ return true;
       JSON.stringify((prog || "").slice(0, 260)));
     /* 已经 is the seeded word the history never uses; 可以 is the one it does.
      * Naming the used one would make the row busywork. */
-    check(/never used[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
-          !/never used[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
+    check(/not yet yours[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
+          !/not yet yours[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
       "and naming the unused word rather than one already written",
       JSON.stringify((prog || "").slice(0, 260)));
 
@@ -1909,6 +1909,15 @@ check(usedGroups && usedGroups.first === "\u7684",
       ".indexOf('\\u82f9\\u679c') !== -1;");
     check(still === true,
       "and one credit does not retire the word: it is one of three");
+
+    /* The banner has to say this, not just the readiness() plumbing above --
+     * a learner reads the banner, not the console. Reuses the single-credit
+     * state seedGhost() just built rather than seeding a second time. */
+    await exec("window.newChat('focused'); return true;");
+    const banner = await exec("return document.querySelector('#log').innerHTML;");
+    check(/1\s*\/\s*3/.test(banner),
+      "the banner shows how far along a ghost word is, not just its name",
+      banner.slice(0, 400));
 
     await seedGhost(["2026-09-01T10:00:00Z", "2026-09-01T18:00:00Z"]);
     gn = await exec(

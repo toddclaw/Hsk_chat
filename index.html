@@ -621,7 +621,7 @@ footer{
       95% and comfortable independent reading at 98%; moving up makes the next level the one
       you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
-      <div class="note" style="margin-top:8px">Words you have never written yourself (the <b>never used</b> row below) are exactly
+      <div class="note" style="margin-top:8px">Words you have not yet used enough times to own (the <b>not yet yours</b> row below) are exactly
       what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
       lead you toward them.</div>
 
@@ -2216,10 +2216,23 @@ function renderAll() {
     if (currentActivity() !== "focused") return "";
     const targets = reuseFor("focused");
     if (targets && targets.length) {
+      /* Each word with its own count, and a tick on the ones already credited
+       * today. Both are load-bearing rather than decoration: at most one use a
+       * day counts, so a word that has had its credit will not move however
+       * much more you write it, and a counter that silently refuses to move is
+       * the exact failure drillWhyNot() was written to fix. */
+      const chips = targets.slice(0, 6).map(e =>
+        '<span style="display:inline-block;margin:0 10px 4px 0' +
+          (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
+        '<span style="font-size:14px;color:var(--dim)"> ' +
+          (e.ghostN || 0) + "/" + S.ghostUses +
+          (e.ghostToday ? " \u2713" : "") + "</span></span>").join("");
       return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
-        '<b style="color:var(--accent);font-size:22px">' +
-        targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
-        '<span style="color:var(--dim)">The partner will ask questions that need them.</span></div>';
+        '<b style="color:var(--accent);font-size:22px">' + chips + '</b><br>' +
+        '<span style="color:var(--dim)">The partner will ask questions that need them. ' +
+        'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
+        'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
+        'already banked.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
@@ -4291,7 +4304,11 @@ function fillActivities() {
   if (cur === "focused") {
     const targets = reuseFor("focused");
     if (targets && targets.length) {
-      note = "Focus words: " + targets.slice(0, 6).map(e => e.w).join("、") +
+      /* The same n/N the banner shows. This strip is visible while the banner
+       * has scrolled away, and "why is 苹果 still here" is the question it
+       * would otherwise leave unanswered. */
+      note = "Focus words: " + targets.slice(0, 6).map(e =>
+          e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、") +
         " — tap words in chat for pinyin/meaning";
     } else {
       note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
@@ -5602,8 +5619,9 @@ function renderNextProgress() {
         ", commonest first" : "there already") + "</td></tr>" +
     "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
     (r.unused.length
-      ? "<tr><td>never used</td><td>" + r.unused.length + " of the " + r.met +
-        " the app taught you — try " +
+      ? "<tr><td>not yet yours</td><td>" + r.unused.length + " of the " + r.met +
+        " the app taught you — used correctly fewer than " + S.ghostUses +
+        " times — try " +
         /* Named, not just counted. "5 words unused" is a statistic; 说话、可以
          * is something you can do in your next message, which is the whole
          * difference between a gauge and a prompt. */
