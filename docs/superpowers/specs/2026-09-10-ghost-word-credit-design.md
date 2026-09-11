@@ -164,6 +164,30 @@ It lives in `mistakes.js` rather than `index.html` because that is where the
 partial-credit rule already lives, and because it is the part of this work worth
 testing in node.
 
+**The two credit paths run on different standards, deliberately.**
+
+| | judged by | can demote? |
+| --- | --- | --- |
+| inside Ghost Words | the per-word verdict — other mistakes ignored | yes |
+| everywhere else | `grade.ok`, the whole sentence clean | no |
+
+A sentence can therefore credit inside the activity and not outside it, or the
+reverse. Credit outside the activity is kept because spontaneous correct use in
+free conversation is **transfer**, which is the point of teaching the word at
+all and which BACKLOG.md's "The grader reports only failures, so transfer is
+invisible" names as a structural gap. It is not a loophole: the whole-sentence
+rule is the stricter of the two, and it earns one day-credit exactly like a
+verdict does, so the word still needs `GHOST_USES` separate days.
+
+Running the per-word check outside the activity too would give one standard
+everywhere, and was declined on cost: that would put a model call on any chat
+message containing a ghost word, which is the grader's general hot path and the
+constraint BACKLOG.md already identifies as binding.
+
+Note this changes today's behaviour in the strict direction only. Today one
+clean message anywhere removes a word from the ghost list; after this it is one
+of `GHOST_USES` credits on separate days.
+
 ### D6. The verdict: `grade.ghost`
 
 A sibling of the existing `grade.target`, keyed by word:
