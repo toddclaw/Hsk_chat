@@ -1042,5 +1042,42 @@ check(P.ERROR_TAGS.every(t => !!P.TAG_EG[t]),
   "every tag has a worked pair for the drill check to quote",
   P.ERROR_TAGS.filter(t => !P.TAG_EG[t]).join(" "));
 
+// --- the progress report ---------------------------------------------------
+
+const rBrief = {
+  level: 2, goalLevel: 4, coverage: { read: 0.93, use: 0.7 }, minutes: 120,
+  messages: { graded: 40, clean: 30 }, words: { met: 40 },
+  ghost: { credits: 9, retired: 2, working: 3 },
+  tags: [{ tag: "aspect-le", n: 5, eg: "\u6211\u5403\u996d\u5417", better: "\u6211\u5403\u996d\u4e86\u5417" }],
+  activities: { chat: 4, focused: 2, drill: 0, story: 0, twenty: 0 }
+};
+const rp = P.report({
+  brief: rBrief, sinceBrief: rBrief, fellBack: false, label: "HSK 2",
+  samples: [{ text: "\u6211\u5403\u996d", ok: true, tag: "" }]
+});
+
+check(rp.indexOf("HSK 2") !== -1, "the report prompt names the level");
+check(rp.indexOf("aspect-le") !== -1 || rp.indexOf("\u4e86") !== -1,
+  "and the categories being missed");
+check(rp.indexOf("\u6211\u5403\u996d") !== -1,
+  "and quotes the learner's own sentence as evidence");
+check(/TAUGHT THEM SO FAR: 40/.test(rp),
+  "words taught are stated once, outside both time blocks: teaching is not an event in a window",
+  rp.slice(0, 400));
+/* The one instruction that matters. A report that invents progress is worse
+ * than no report: it is misinformation about the learner's own learning. */
+check(/must come from|only.*numbers.*above|do not invent/i.test(rp),
+  "and forbids stating any number the brief does not contain", rp.slice(0, 400));
+check(rp.indexOf("drill") !== -1 && rp.indexOf("0") !== -1,
+  "quiet activities appear with an explicit zero rather than being left out");
+
+const rpFell = P.report({
+  brief: rBrief, sinceBrief: rBrief, fellBack: true, label: "HSK 2", samples: []
+});
+check(rpFell !== rp,
+  "a fallen-back report is told so: it must not claim to cover 'since last time'");
+check(/two weeks|14 days|recent/i.test(rpFell),
+  "and is told what it does cover instead", rpFell.slice(0, 400));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
