@@ -53,6 +53,27 @@
     });
   }
 
+  /* Which moment the report's "since you last checked" section counts from.
+   *
+   * The baseline is the last report, unless too little has happened since for
+   * that to say anything -- in which case the report widens to WINDOW_DAYS and
+   * says so. The floor is a COUNT of graded messages rather than a span of
+   * time on purpose: three days away from the app and three days of hard
+   * practice are not the same event, and a clock cannot tell them apart.
+   *
+   * A learner with no previous report is not falling back. Their first report
+   * covers everything, which is exactly right. */
+  function baselineFor(chatMsgs, lastAt, now) {
+    if (!lastAt) return { since: null, fellBack: false };
+    if (gradedTurns(chatMsgs, lastAt).length >= FLOOR) {
+      return { since: lastAt, fellBack: false };
+    }
+    return {
+      since: new Date((now || Date.now()) - WINDOW_DAYS * 86400000).toISOString(),
+      fellBack: true
+    };
+  }
+
   function brief(input) {
     input = input || {};
     var since = input.since || null;
@@ -103,6 +124,7 @@
   }
 
   var api = { gradedTurns: gradedTurns, brief: brief,
+              baselineFor: baselineFor,
               FLOOR: FLOOR, WINDOW_DAYS: WINDOW_DAYS, SAMPLES: SAMPLES,
               ACTIVITY_IDS: ACTIVITY_IDS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

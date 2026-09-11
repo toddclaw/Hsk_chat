@@ -96,5 +96,40 @@ check(b4.tags[0].note === undefined,
   "and only the fields the prompt uses: the note is the grader talking to the learner, not to us",
   JSON.stringify(b4.tags[0]));
 
+
+// --- the baseline ----------------------------------------------------------
+
+// 12 graded messages, one a day, days 1..12 back.
+const many = {};
+many.a = [];
+for (let i = 1; i <= 12; i++) many.a.push(turn(daysAgo(i), true));
+
+const bl1 = R.baselineFor(many, daysAgo(20), NOW);
+check(bl1.since === daysAgo(20) && bl1.fellBack === false,
+  "plenty of new messages since the last report: that report is the baseline",
+  JSON.stringify(bl1));
+
+const bl2 = R.baselineFor(many, daysAgo(3), NOW);
+check(bl2.fellBack === true,
+  "too few since the last report: fall back rather than show an empty delta",
+  JSON.stringify(bl2));
+check(bl2.since === new Date(NOW - R.WINDOW_DAYS * 86400000).toISOString(),
+  "and the fallback covers exactly WINDOW_DAYS", JSON.stringify(bl2));
+
+const bl3 = R.baselineFor(many, null, NOW);
+check(bl3.since === null && bl3.fellBack === false,
+  "no previous report at all is not a fallback: it is the first report, and it covers everything",
+  JSON.stringify(bl3));
+
+check(R.baselineFor({}, daysAgo(30), NOW).fellBack === true,
+  "an empty history falls back too, rather than reporting on nothing");
+
+// The floor is a count of messages, not a span of time. Three days away from
+// the app and three days of hard practice must not produce the same answer.
+const busy = { a: [] };
+for (let i = 0; i < 15; i++) busy.a.push(turn(daysAgo(1), true));
+check(R.baselineFor(busy, daysAgo(2), NOW).fellBack === false,
+  "one hard day clears the floor, though barely any time has passed");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
