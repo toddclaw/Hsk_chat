@@ -123,8 +123,49 @@
     };
   }
 
+  /* The learner's own sentences, chosen BY the numbers rather than by the model.
+   *
+   * A report that says "your 了 sentences are landing now" is worth reading;
+   * the same report without an example is a horoscope. But letting the model
+   * pick its own evidence out of a transcript is how a report starts quoting
+   * sentences that prove nothing -- so the choosing happens here, in code, and
+   * the model receives a fixed, small set.
+   *
+   * These are the learner's OWN words. A sentence they wrote may contain words
+   * above their level and will be shown as written: the out-of-level guarantee
+   * is about what the partner GENERATES, and this is neither generated nor the
+   * partner's. */
+  function pickSamples(turns, tags) {
+    var list = (turns || []).slice().reverse();   // newest first
+    var out = [], seen = {};
+
+    function take(t, tag) {
+      if (!t || seen[t.text]) return;
+      seen[t.text] = true;
+      out.push({ text: t.text, ok: t.grade.ok === true, tag: tag || "" });
+    }
+
+    // The win: the most recent sentence the grader passed whole.
+    take(list.filter(function (t) { return t.grade.ok === true; })[0], "");
+
+    // The focus: the most recent sentence in each category they miss most.
+    (tags || []).forEach(function (s) {
+      if (out.length >= SAMPLES) return;
+      take(list.filter(function (t) {
+        return (t.grade.errors || []).some(function (e) {
+          return e && e.tag === s.tag;
+        });
+      })[0], s.tag);
+    });
+
+    // Whatever is left over, newest first, so a quiet history still shows something.
+    list.forEach(function (t) { if (out.length < SAMPLES) take(t, ""); });
+
+    return out.slice(0, SAMPLES);
+  }
+
   var api = { gradedTurns: gradedTurns, brief: brief,
-              baselineFor: baselineFor,
+              baselineFor: baselineFor, pickSamples: pickSamples,
               FLOOR: FLOOR, WINDOW_DAYS: WINDOW_DAYS, SAMPLES: SAMPLES,
               ACTIVITY_IDS: ACTIVITY_IDS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

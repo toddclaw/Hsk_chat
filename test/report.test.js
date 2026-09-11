@@ -131,5 +131,41 @@ for (let i = 0; i < 15; i++) busy.a.push(turn(daysAgo(1), true));
 check(R.baselineFor(busy, daysAgo(2), NOW).fellBack === false,
   "one hard day clears the floor, though barely any time has passed");
 
+// --- samples ---------------------------------------------------------------
+
+// A graded message carrying a specific error tag.
+const flawed = (when, tag, text) => ({
+  role: "user", text: text, created_at: when,
+  grade: { ok: false, errors: [{ tag: tag, note: "n" }] }
+});
+
+const sTurns = R.gradedTurns({ a: [
+  turn(daysAgo(9), true, "旧的好句子"),
+  turn(daysAgo(1), true, "新的好句子"),
+  flawed(daysAgo(2), "aspect-le", "我吃饭了吗"),
+  flawed(daysAgo(8), "measure-word", "一个书")
+] });
+const picks = R.pickSamples(sTurns, [{ tag: "aspect-le", n: 4 }]);
+
+check(picks.length <= R.SAMPLES, "never more than SAMPLES sentences",
+  JSON.stringify(picks));
+check(picks.some(p => p.text === "新的好句子" && p.ok === true),
+  "the most recent clean sentence is quoted: it is the win",
+  JSON.stringify(picks));
+check(picks.some(p => p.text === "我吃饭了吗" &&
+                      p.tag === "aspect-le"),
+  "so is a recent sentence in the category they miss most",
+  JSON.stringify(picks));
+check(!picks.some(p => p.text === "旧的好句子"),
+  "the older clean sentence loses to the newer one: recent evidence or none",
+  JSON.stringify(picks));
+check(R.pickSamples([], [{ tag: "aspect-le", n: 4 }]).length === 0,
+  "no history is no samples, not a crash");
+check(R.pickSamples(sTurns, []).length > 0,
+  "no mistake categories at all still yields the clean sentence");
+check(R.pickSamples(sTurns, [{ tag: "aspect-le", n: 4 }])
+  .every(p => typeof p.text === "string" && typeof p.ok === "boolean"),
+  "every sample is shaped the same, so the prompt builder needs no special cases");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
