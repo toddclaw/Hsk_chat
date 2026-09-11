@@ -465,6 +465,21 @@ check((gp([gturn("2026-09-01T10:00:00Z", true),
                  { "说话": { used: true, ok: false } }),
            gturn("2026-09-01T14:00:00Z", true)])["说话"] || {}).n === 0,
   "a demotion followed by a same-day success does not re-earn that day");
+// The cap runs both ways. Uncapped, this would be 0 -- three days of work undone
+// in one afternoon, which is the reset rule RESEARCH.md rejects.
+const gwrong = (when) => gturn(when, false, { "说话": { used: true, ok: false } });
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", true),
+           gwrong("2026-09-04T10:00:00Z"), gwrong("2026-09-04T12:00:00Z"),
+           gwrong("2026-09-04T14:00:00Z")])["说话"] || {}).n === 2,
+  "three wrong uses in one day cost one credit, not three");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", true),
+           gwrong("2026-09-04T10:00:00Z"),
+           gwrong("2026-09-05T10:00:00Z")])["说话"] || {}).n === 1,
+  "and wrong uses on two days cost two");
 check((gp([gturn("2026-09-03T10:00:00Z", true),
            gturn("2026-09-01T10:00:00Z", false,
                  { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,

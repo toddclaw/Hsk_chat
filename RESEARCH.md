@@ -320,6 +320,12 @@ back to nothing, which is the shape of rule this document already warns against
 for the mistake count — punishing the outcome the feature exists to produce.
 Demote-by-one is the proportionate version.
 
+The per-day cap applies to demotions as well, for the same reason and to keep
+the two directions symmetric. Uncapped, three wrong uses in one afternoon cost
+three days while the best possible day earns one — which is the reset rule above,
+reached by another road, and reached fastest by the learner struggling with the
+word. One day of practice is one day of practice in both directions.
+
 **Flat intervals, not expanding ones.** This is a one-day Leitner interval.
 Expanding intervals — a retired word returning at 7 days, then 30, as a
 retention check — are the better answer and were declined as a scheduler rather
