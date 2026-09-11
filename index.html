@@ -567,6 +567,15 @@ footer{
       category counts down by at most one a day however much you drill it, because
       spacing is what makes a correction stick.</div>
 
+    <label for="ghostUses">Correct uses to retire a ghost word</label>
+      <select id="ghostUses"></select>
+      <div class="note">How many times you have to use a <b>Ghost Words</b> target
+      correctly before it leaves the list. At most one counts per day, however often you
+      write it — spacing is what makes a new word stick, and a day of practice is one
+      day of practice. Getting it wrong costs you one back — also at most one a day. Only the word itself is
+      judged: a mistake elsewhere in the sentence still lands in your mistakes, but it
+      does not withhold the credit.</div>
+
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
       </div>
@@ -612,7 +621,7 @@ footer{
       95% and comfortable independent reading at 98%; moving up makes the next level the one
       you read, so the mark on the bar is 98%.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
-      <div class="note" style="margin-top:8px">Words you have never written yourself (the <b>never used</b> row below) are exactly
+      <div class="note" style="margin-top:8px">Words you have not yet used enough times to own (the <b>not yet yours</b> row below) are exactly
       what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
       lead you toward them.</div>
 
@@ -1040,13 +1049,15 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v94 — 2026-09-09";
+const VERSION   = "v96 — 2026-09-11";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
 const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // correct sentences to finish a drill
+const GHOST_CHOICES = [1, 2, 3, 4, 5, 6];         // correct uses to retire a ghost word
+const GHOST_CHECK_MAX = 3;                        // ghost words verdicted per message
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
@@ -1097,6 +1108,7 @@ const K = {
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
+  ghostUses:"hsk1chat.ghostUses",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
@@ -1147,6 +1159,7 @@ const S = {
   prompt:  store.get(K.prompt, ""),           // "" = track the generated default
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
+  ghostUses: store.get(K.ghostUses, 3),       // correct uses, on separate days, to retire a ghost word
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
@@ -1753,14 +1766,22 @@ function windowed(excludeKind) {
 /* Which words the partner is asked to work back in.
  *
  * Chat uses the words still being learned. Focused chat uses the ones the app
- * taught and the learner has never once written -- readiness().unused, already
+ * taught and the learner does not yet own -- readiness().unused, already
  * computed and already sorted commonest-first, because S.learning rows carry no
  * frequency of their own. Six either way, matching what the prompt has always
  * been given. */
 function reuseFor(activity) {
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
-    return ((r && r.unused) || []).slice(0, 6);
+    /* Words already credited today go last. At most one credit a day counts, so
+     * without this a learner who practised well yesterday opens the activity to
+     * six words that cannot move until tomorrow, and the activity quietly has
+     * nothing to offer. Still shown when there are not six others -- practising
+     * them is harmless and an empty banner would be worse. A stable sort, so
+     * commonest-first survives inside each group. */
+    return ((r && r.unused) || []).slice()
+      .sort((a, b) => (a.ghostToday ? 1 : 0) - (b.ghostToday ? 1 : 0))
+      .slice(0, 6);
   }
   return S.learning.filter(HSKPace.isNew).slice(-6);
 }
@@ -2195,10 +2216,23 @@ function renderAll() {
     if (currentActivity() !== "focused") return "";
     const targets = reuseFor("focused");
     if (targets && targets.length) {
+      /* Each word with its own count, and a tick on the ones already credited
+       * today. Both are load-bearing rather than decoration: at most one use a
+       * day counts, so a word that has had its credit will not move however
+       * much more you write it, and a counter that silently refuses to move is
+       * the exact failure drillWhyNot() was written to fix. */
+      const chips = targets.slice(0, 6).map(e =>
+        '<span style="display:inline-block;margin:0 10px 4px 0' +
+          (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
+        '<span style="font-size:14px;color:var(--dim)"> ' +
+          (e.ghostN || 0) + "/" + S.ghostUses +
+          (e.ghostToday ? " \u2713" : "") + "</span></span>").join("");
       return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
-        '<b style="color:var(--accent);font-size:22px">' +
-        targets.slice(0, 6).map(e => e.w).join(" ") + '</b><br>' +
-        '<span style="color:var(--dim)">The partner will ask questions that need them.</span></div>';
+        '<b style="color:var(--accent);font-size:22px">' + chips + '</b><br>' +
+        '<span style="color:var(--dim)">The partner will ask questions that need them. ' +
+        'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
+        'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
+        'already banked.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
@@ -3212,6 +3246,11 @@ async function gradeTurn(turnObj) {
     const tag = currentActivity() === "drill" ? drillTag() : "";
     const eg = tag ? drillExample() : "";
     const word = tag ? drillWord() : "";
+    /* Same reason as the three above: read BEFORE the await. Switching activity
+     * mid-grade must not attach this conversation's ghost targets to another
+     * one's verdict. */
+    const ghosting = currentActivity() === "focused";
+    const ghostTargets = ghosting ? reuseFor("focused").map(e => e.w) : [];
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
@@ -3239,6 +3278,40 @@ async function gradeTurn(turnObj) {
                                          120, teachingModel()));
         if (t) g.target = { used: t.used === true, ok: t.ok === true };
       } catch (e) { console.warn("[drill check] " + ((e && e.message) || e)); }
+    }
+    /* Ghost Words asks the drill's question about its own targets: was this
+     * word attempted, and was it right, judged apart from everything else in
+     * the sentence. Same prompt, same word arm, no tag -- reused character for
+     * character, so no A/B run is owed for it.
+     *
+     * Only here. Putting it on every chat message would put a model call on the
+     * grader's hot path, which BACKLOG.md names as the binding cost constraint
+     * on the whole app; outside this activity the whole-sentence fallback in
+     * HSKMistakes.ghostVerdict() does the job for free.
+     *
+     * Only for targets the sentence actually contains, and at most
+     * GHOST_CHECK_MAX of them: the banner shows six, a real sentence reaches
+     * for one or two, and the cap is what stops a word-salad message costing
+     * six calls.
+     *
+     * Its own try per word, like the drill check above: a failed question must
+     * leave the grade -- and the other words' answers -- standing. A word with
+     * no entry falls back to the whole-sentence verdict, so a failure can never
+     * demote anything. */
+    if (g && ghosting && ghostTargets.length) {
+      const inMsg = new Set(HSK.segment(turnObj.text, S.lex)
+        .filter(tok => tok.kind === "word").map(tok => tok.text));
+      for (const w of ghostTargets.filter(x => inMsg.has(x)).slice(0, GHOST_CHECK_MAX)) {
+        try {
+          const v = jsonIn(await callModel([{ role: "user",
+            content: HSKPrompt.drillCheck({ text: turnObj.text,
+              label: levelLabel(), drillWord: w }) }], 120, teachingModel()));
+          if (v) {
+            g.ghost = g.ghost || {};
+            g.ghost[w] = { used: v.used === true, ok: v.ok === true };
+          }
+        } catch (e) { console.warn("[ghost check] " + ((e && e.message) || e)); }
+      }
     }
     if (g) await nameDrillWords(g, turnObj.text);
     /* A grade that could not be read is stored as such. Left absent it would
@@ -4231,7 +4304,11 @@ function fillActivities() {
   if (cur === "focused") {
     const targets = reuseFor("focused");
     if (targets && targets.length) {
-      note = "Focus words: " + targets.slice(0, 6).map(e => e.w).join("、") +
+      /* The same n/N the banner shows. This strip is visible while the banner
+       * has scrolled away, and "why is 苹果 still here" is the question it
+       * would otherwise leave unanswered. */
+      note = "Focus words: " + targets.slice(0, 6).map(e =>
+          e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、") +
         " — tap words in chat for pinyin/meaning";
     } else {
       note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
@@ -5370,24 +5447,26 @@ function usableWords() {
   return new Set(S.base.concat(S.extra, S.learning, S.known).map(e => e.w));
 }
 
-/* Words the learner has actually written, from their own turns. Production is
- * the harder half and lags recognition, so it is worth counting separately --
- * and it costs no new storage, since every message is already saved.
- * renderAll() segments the whole history on every render too, so the work here
- * is nothing new.
+/* Words the learner has written and been credited for at least once.
  *
- * A word only counts when the grader has passed the sentence it sits in:
- * typing a word in a broken sentence is not demonstrating you can use it.
- * Messages that were never graded (grader off, or still in flight) do not
- * contribute. */
+ * The whole-sentence gate that used to live here (`t.grade.ok`) has moved into
+ * HSKMistakes.ghostVerdict(), which still applies it -- but defers to a
+ * per-word verdict where one exists. So a word used correctly in a sentence
+ * that was wrong somewhere else now counts, which it never did before. The
+ * change can only ADD words: everything that credited before still credits.
+ *
+ * Messages that were never graded (grader off, or still in flight) contribute
+ * nothing. The scan costs no new storage and no new work: every message is
+ * already saved, and renderAll() segments the whole history on every render
+ * anyway. */
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
-      if (t.role !== "user") return;
-      if (!t.grade || !t.grade.ok) return;
+      if (t.role !== "user" || !t.grade) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
-        if (tok.kind === "word") out.add(tok.text);
+        if (tok.kind === "word" &&
+            HSKMistakes.ghostVerdict(t.grade, tok.text) === "ok") out.add(tok.text);
       });
     });
   };
@@ -5395,11 +5474,40 @@ function producedWords() {
   return out;
 }
 
+/* Today, as the same UTC dayKey the credit rule counts in. Local dates would
+ * let a flight change a learner's numbers -- mistakes.js says why. */
+function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
+
+/* How far along every word is, in one pass over every conversation.
+ *
+ * Segmentation happens here because it needs the live lexicon; mistakes.js gets
+ * a callback and does the arithmetic. Words are de-duplicated per message there,
+ * so this hands over whatever segment() found.
+ *
+ * ponytail: a full scan per call, and readiness() calls it on every render in
+ * the Ghost Words activity -- the same ceiling the drill banner's own scan
+ * already carries. Cache it behind a dirty flag if a long history ever makes a
+ * render feel slow. */
+function ghostProgressMap() {
+  const turns = [];
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (t && t.role === "user" && t.grade) turns.push(t);
+    });
+  });
+  return HSKMistakes.ghostProgress(turns, function (t) {
+    return HSK.segment(t.text, S.lex)
+      .filter(function (tok) { return tok.kind === "word"; })
+      .map(function (tok) { return tok.text; });
+  });
+}
+
 // Everything the progress panel and the collapsed-row summary both need.
 function readiness() {
   const next = LEVELS.find(l => l.id === S.level + 1);
   if (!next || !S.nextList.length) return null;
   const usable = usableWords(), mine = producedWords();
+  const prog = ghostProgressMap(), today = ghostDayKey();
   const met = S.learning.filter(e => e.from === S.level + 1).length;
   // A Set, not S.base.some() inside a filter: at HSK 6 -> 7-9 that pair is
   // 5364 x 10970 comparisons and the sheet visibly stalls opening.
@@ -5430,12 +5538,27 @@ function readiness() {
      * with proficiency and not every word ever becomes productive, so any
      * fixed target would be wrong at every level and wrong in the same
      * direction. What is actionable is not a number to hit but a list to work
-     * through: words the app taught you that you have never once written. */
+     * through: words the app taught you that you do not yet own. */
     /* Sorted commonest-first through the level list, because S.learning rows
      * carry no frequency of their own -- sorting them by e.f silently does
      * nothing, since every value is undefined. */
-    unused: S.learning.filter(e => (e.from || 0) > S.level && !mine.has(e.w))
+    /* Not `!mine.has(e.w)` any more: one correct use is a start, not a finish.
+     * A word leaves this list after S.ghostUses credits on S.ghostUses separate
+     * days, and a wrong use gives one back. The threshold lives HERE and
+     * nowhere else -- the coverage bars above deliberately keep none, because
+     * RESEARCH.md's Production section is an argument about gauges and this is
+     * the list it recommends instead.
+     *
+     * Shallow copies, not the S.learning rows themselves: the banner needs the
+     * progress alongside the word, and writing it onto the stored row would put
+     * a derived number into persisted state. */
+    unused: S.learning.filter(e => (e.from || 0) > S.level &&
+        ((prog[e.w] && prog[e.w].n) || 0) < S.ghostUses)
       .sort((a, b) => (freq.get(a.w) || Infinity) - (freq.get(b.w) || Infinity))
+      .map(e => Object.assign({}, e, {
+        ghostN: (prog[e.w] && prog[e.w].n) || 0,
+        ghostToday: !!(prog[e.w] && prog[e.w].last === today)
+      }))
   };
 }
 
@@ -5501,8 +5624,9 @@ function renderNextProgress() {
         ", commonest first" : "there already") + "</td></tr>" +
     "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
     (r.unused.length
-      ? "<tr><td>never used</td><td>" + r.unused.length + " of the " + r.met +
-        " the app taught you — try " +
+      ? "<tr><td>not yet yours</td><td>" + r.unused.length + " of the " + r.met +
+        " the app taught you — used correctly fewer than " + S.ghostUses +
+        " times — try " +
         /* Named, not just counted. "5 words unused" is a statistic; 说话、可以
          * is something you can do in your next message, which is the whole
          * difference between a gauge and a prompt. */
@@ -5852,6 +5976,9 @@ $("#btnSet").onclick = () => {
   $("#drillTurns").innerHTML = DRILL_CHOICES.map(n =>
     '<option value="' + n + '"' + (n === S.drillTurns ? " selected" : "") + ">" + n +
     (n === 6 ? " — default" : "") + "</option>").join("");
+  $("#ghostUses").innerHTML = GHOST_CHOICES.map(n =>
+    '<option value="' + n + '"' + (n === S.ghostUses ? " selected" : "") + ">" + n +
+    (n === 3 ? " — default" : "") + "</option>").join("");
   $("#replyLength").innerHTML = Object.keys(HSKPrompt.LENGTHS).map(k =>
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
@@ -5884,6 +6011,7 @@ function commitSettings() {
   S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
   S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
   S.drillTurns = Number($("#drillTurns").value) || 6; store.set(K.drillTurns, S.drillTurns);
+  S.ghostUses = Number($("#ghostUses").value) || 3; store.set(K.ghostUses, S.ghostUses);
   S.anki = {
     deck:  $("#ankiDeck").value.trim()  || "Default",
     type:  $("#ankiType").value.trim()  || "Basic",

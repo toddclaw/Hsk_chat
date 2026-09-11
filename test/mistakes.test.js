@@ -410,5 +410,89 @@ check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1) },
                   right(daysAgo(1))] }).grades === 1,
   "a part-done history counts only what is left");
 
+// --- ghost words ------------------------------------------------------------
+
+// A graded user message. `ghost` is the per-word verdict map, omitted on the
+// messages that predate the feature.
+const gturn = (when, ok, ghost) => ({
+  role: "user", text: "我说话", created_at: when,
+  grade: ghost ? { ok: ok, errors: [], ghost: ghost } : { ok: ok, errors: [] }
+});
+const saysWord = () => ["说话"];
+
+check(M.ghostVerdict({ ok: true, errors: [] }, "说话") === "ok",
+  "no verdict and a clean sentence credits the word");
+check(M.ghostVerdict({ ok: false, errors: [{ tag: "aspect-le" }] }, "说话") === "none",
+  "no verdict and a failed sentence credits nothing");
+check(M.ghostVerdict({ ok: false, ghost: { "说话": { used: true, ok: true } } },
+  "说话") === "ok",
+  "a correct word in a failing sentence credits: the verdict beats grade.ok");
+check(M.ghostVerdict({ ok: true, ghost: { "说话": { used: true, ok: false } } },
+  "说话") === "wrong",
+  "a wrong word in a passing sentence is a failure: the verdict beats grade.ok");
+check(M.ghostVerdict({ ok: true, ghost: { "说话": { used: false, ok: false } } },
+  "说话") === "none",
+  "a sentence that never reached for the word is neither credit nor failure");
+check(M.ghostVerdict({ unreadable: true }, "说话") === "none",
+  "an unreadable grade says nothing about any word");
+check(M.ghostVerdict(null, "说话") === "none",
+  "an ungraded message says nothing about any word");
+check(M.ghostVerdict({ ok: true, ghost: { "米饭": { used: true, ok: false } } },
+  "说话") === "ok",
+  "a verdict about another word does not decide this one");
+
+const gp = (turns) => M.ghostProgress(turns, saysWord);
+
+check((gp([gturn("2026-09-01T10:00:00Z", true)])["说话"] || {}).n === 1,
+  "one clean message is one credit");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-01T18:00:00Z", true)])["说话"] || {}).n === 1,
+  "two credits on the same day count once");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", true)])["说话"] || {}).n === 3,
+  "three credits on three days count three");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", false,
+                 { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
+  "a wrong use demotes by one, it does not reset to zero");
+check((gp([gturn("2026-09-01T10:00:00Z", false,
+                 { "说话": { used: true, ok: false } })])["说话"] || {}).n === 0,
+  "a demotion floors at zero rather than going negative");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-01T12:00:00Z", false,
+                 { "说话": { used: true, ok: false } }),
+           gturn("2026-09-01T14:00:00Z", true)])["说话"] || {}).n === 0,
+  "a demotion followed by a same-day success does not re-earn that day");
+// The cap runs both ways. Uncapped, this would be 0 -- three days of work undone
+// in one afternoon, which is the reset rule RESEARCH.md rejects.
+const gwrong = (when) => gturn(when, false, { "说话": { used: true, ok: false } });
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", true),
+           gwrong("2026-09-04T10:00:00Z"), gwrong("2026-09-04T12:00:00Z"),
+           gwrong("2026-09-04T14:00:00Z")])["说话"] || {}).n === 2,
+  "three wrong uses in one day cost one credit, not three");
+check((gp([gturn("2026-09-01T10:00:00Z", true),
+           gturn("2026-09-02T10:00:00Z", true),
+           gturn("2026-09-03T10:00:00Z", true),
+           gwrong("2026-09-04T10:00:00Z"),
+           gwrong("2026-09-05T10:00:00Z")])["说话"] || {}).n === 1,
+  "and wrong uses on two days cost two");
+check((gp([gturn("2026-09-03T10:00:00Z", true),
+           gturn("2026-09-01T10:00:00Z", false,
+                 { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
+  "the walk is ordered by timestamp, not by array order");
+check((gp([gturn("2026-09-01T10:00:00Z", true)])["说话"] || {}).last === "2026-09-01",
+  "last names the most recently credited day");
+check(M.ghostProgress([{ role: "user", created_at: "2026-09-01T10:00:00Z",
+                         grade: { ok: true, errors: [] } }],
+  () => ["说话", "说话"])["说话"].n === 1,
+  "a word repeated inside one message earns that message's single credit once");
+check(Object.keys(gp([])).length === 0, "no messages is no progress");
+check(M.dayKey("2026-09-01T10:00:00Z") === "2026-09-01",
+  "dayKey is exported for the caller that needs today's key");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

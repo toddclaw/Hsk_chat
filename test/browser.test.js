@@ -944,6 +944,39 @@ return true;
 
     /* ------------------------------------------------ level progress */
 
+    /* 可以 needs S.ghostUses (3) credits on 3 separate days to leave the
+     * never-used row now, not one clean message -- so the single typed use in
+     * the seed above is no longer enough on its own. Two more clean uses land
+     * here, in a conversation with no matching hsk1chat.chats row, rather than
+     * as two more turns in the seeded history above: contextFor() windows the
+     * last EXPLAIN_CONTEXT (4) real turns before a target turn, the seeded
+     * history sits exactly at that ceiling for 我也是's grammar-check context,
+     * and two more turns inserted there silently drops 你好 out of it. An
+     * unlisted conversation id is invisible to renderChats() (it walks
+     * S.chats, never S.chatMsgs directly), so it cannot perturb the chat-list
+     * counts asserted further down either -- only readiness() and
+     * producedWords() see it, which is all this section needs. Seeded through
+     * localStorage and a reload, not S.chatMsgs directly, for the reason given
+     * where S.learning is seeded above: the WebDriver sandbox cannot see a
+     * page-level `const`. */
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      m.prodcredit = [
+        { id: "p1", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          created_at: "2026-01-02T00:00:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+        { id: "p2", role: "user",
+          text: "我们今天来这里看看，你的东西很多，我不去了，我可以来，这个很好。",
+          created_at: "2026-01-03T00:00:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } }
+      ];
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      return true;`);
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist");
+
     await exec(`document.querySelector('#btnSet').click(); return true;`);
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
       "Settings for the progress panel");
@@ -989,7 +1022,7 @@ return true;
      * just counted, because three characters you can put in your next message
      * is a prompt and "5 unused" is a statistic. The seed has introduced words
      * and a typed history, so both sides of the subtraction are non-empty. */
-    check(/never used/.test(prog || ""),
+    check(/not yet yours/.test(prog || ""),
       "the panel names what to do next, not only what has happened",
       JSON.stringify((prog || "").slice(0, 260)));
     check(/1 of the 2 the app taught you/.test(prog || ""),
@@ -997,8 +1030,8 @@ return true;
       JSON.stringify((prog || "").slice(0, 260)));
     /* 已经 is the seeded word the history never uses; 可以 is the one it does.
      * Naming the used one would make the row busywork. */
-    check(/never used[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
-          !/never used[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
+    check(/not yet yours[\s\S]*?\u5df2\u7ecf/.test(prog || "") &&
+          !/not yet yours[\s\S]*?\u53ef\u4ee5/.test(prog || ""),
       "and naming the unused word rather than one already written",
       JSON.stringify((prog || "").slice(0, 260)));
 
@@ -1845,6 +1878,112 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return window.systemPrompt([], window.reuseFor('focused'), '');");
     check(/\u5fc5\u987b\u7528\u5230\u8fd9\u4e9b\u8bcd/.test(fp),
       "the focused-chat rule asks the partner to build openings, not merely to use the words");
+
+    /* The threshold. Messages are seeded through localStorage and a reload --
+     * the WebDriver sandbox that exec() runs in cannot see a page-level
+     * `const`, so S itself is unreachable and the seed has to go in the same
+     * door S.learning did above. What is being tested is the arithmetic over
+     * a history, and three days of real conversation is not something a
+     * browser test can have. Graded clean and on three separate days: the
+     * fallback rule, which is all that exists until the verdict lands in the
+     * next task. */
+    const seedGhost = async (days) => {
+      await exec(
+        "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+        "m.ghosttest = " + JSON.stringify(days.map((d, i) => ({
+          role: "user", text: "\u82f9\u679c", id: "g" + i,
+          created_at: d, grade: { ok: true, errors: [] }
+        }))) + ";" +
+        "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+      await go(base);
+      await waitFor("window.readiness && window.readiness() !== null",
+        "the next level's wordlist", 20000);
+    };
+
+    await seedGhost(["2026-09-01T10:00:00Z"]);
+    let gn = await exec(
+      "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
+    check(gn === 1, "one clean message is one ghost credit", String(gn));
+    let still = await exec(
+      "return window.readiness().unused.map(function (e) { return e.w; })" +
+      ".indexOf('\\u82f9\\u679c') !== -1;");
+    check(still === true,
+      "and one credit does not retire the word: it is one of three");
+
+    /* The banner has to say this, not just the readiness() plumbing above --
+     * a learner reads the banner, not the console. Reuses the single-credit
+     * state seedGhost() just built rather than seeding a second time. */
+    await exec("window.newChat('focused'); return true;");
+    const banner = await exec("return document.querySelector('#log').innerHTML;");
+    check(/1\s*\/\s*3/.test(banner),
+      "the banner shows how far along a ghost word is, not just its name",
+      banner.slice(0, 400));
+
+    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-01T18:00:00Z"]);
+    gn = await exec(
+      "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
+    check(gn === 1, "two messages on one day are still one credit", String(gn));
+
+    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-02T10:00:00Z",
+                     "2026-09-03T10:00:00Z"]);
+    const gone = await exec(
+      "return window.readiness().unused.map(function (e) { return e.w; })" +
+      ".indexOf('\\u82f9\\u679c') === -1;");
+    check(gone === true,
+      "three credits on three days retires the word from the ghost list");
+
+    /* localStorage alone is not enough: the live S.chatMsgs the page is
+     * running against still holds ghosttest (S itself is unreachable from
+     * here, the same reason seedGhost() above goes through localStorage at
+     * all), and the next newChat() call below autosaves that live object
+     * straight back over whatever this writes -- undoing the delete inside
+     * the same run. A reload is what actually drops it, by rebuilding S from
+     * the now-clean storage. */
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.ghosttest;" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
+
+    /* S.grader is on the same unreachable const as S.history above -- through
+     * localStorage and a reload, not a direct write. */
+    await exec(
+      "localStorage.setItem('hsk1chat.grader', JSON.stringify(true)); return true;");
+    await go(base);
+    await waitFor("window.readiness && window.readiness() !== null",
+      "the next level's wordlist", 20000);
+
+    /* The per-word verdict. callModel is stubbed to answer the drillCheck
+     * question and nothing else: the grade call asks for a much bigger object,
+     * so it is answered separately by looking at what the prompt contains. */
+    await exec(
+      "window.__ghostCalls = [];" +
+      "window.callModel = function (msgs) {" +
+      "  var p = msgs[0].content;" +
+      "  if (p.indexOf('{\\\"used\\\":true,\\\"ok\\\":true}') !== -1) {" +
+      "    window.__ghostCalls.push(p);" +
+      "    return Promise.resolve('{\\\"used\\\":true,\\\"ok\\\":true}');" +
+      "  }" +
+      "  return Promise.resolve('{\\\"ok\\\":false,\\\"meant\\\":\\\"\\\"," +
+      "\\\"better\\\":\\\"\\u6211\\u5403\\u82f9\\u679c\\\",\\\"cats\\\":{}," +
+      "\\\"errors\\\":[{\\\"tag\\\":\\\"aspect-le\\\",\\\"note\\\":\\\"x\\\"}]}');" +
+      "}; return true;");
+    await exec("window.newChat('focused'); return true;");
+    const turnObj = await exec(
+      "var t = { role: 'user', text: '\\u82f9\\u679c', id: 'gt1'," +
+      " created_at: '2026-09-05T10:00:00Z' };" +
+      "return window.gradeTurn(t).then(function () { return t.grade; });");
+    check(turnObj && turnObj.ghost && turnObj.ghost["苹果"] &&
+          turnObj.ghost["苹果"].ok === true,
+      "a ghost target present in the message gets its own verdict",
+      JSON.stringify(turnObj && turnObj.ghost));
+    check(turnObj && turnObj.ok === false,
+      "and the whole-sentence grade still says the sentence was wrong");
+    check(await exec("return window.HSKMistakes.ghostVerdict(" +
+      JSON.stringify(turnObj) + ", '\\u82f9\\u679c');") === "ok",
+      "so the word credits even though the sentence did not");
 
 
     /* --------------------------------------------------- story time, part 1 */
