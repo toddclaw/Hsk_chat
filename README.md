@@ -763,7 +763,7 @@ The header's first control is what kind of session this is:
 | | What it is | Who speaks first |
 |---|---|---|
 | **Chat** | open conversation, the app as it always was | you |
-| **Ghost Words** | the partner steers toward words you were taught and have never once written | the partner |
+| **Ghost Words** | the partner steers toward words you were taught and have not yet used enough times to own | the partner |
 | **Story time** | a five-part story at your level, then questions about it | the partner |
 | **20 Questions** | one of you thinks of something, the other guesses | either |
 | **Drills** | one mistake the grader keeps flagging, until you get it right six times | the partner |
@@ -777,8 +777,11 @@ Conversation starters only appear in **Chat**. They are openers for the *learner
 others open with the partner speaking first — offering one there would invite you to talk
 over a story that has not started.
 
-**Ghost Words** draws its words from the same list the progress panel calls *never used*:
-words the app introduced through pacing that you have not yet written yourself. That list
+**Ghost Words** draws its words from the same list the progress panel calls *not yet yours*:
+words the app introduced through pacing that you have not yet used correctly enough times.
+*Enough* is **Correct uses to retire a ghost word** in Settings, three by default, and at most
+one counts per day — a wrong use gives one back. The banner shows each word's `n/N` and ticks
+the ones already banked today. That list
 already existed, already sorted commonest-first, so the activity is one extra rule and a
 different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
 maintaining per level and would fight the word goal whenever the two disagreed. The words pull
@@ -1013,14 +1016,14 @@ writing at 2000–3000 word families), not ratios against what you can read.
 What *is* actionable is a list rather than a number, in the spirit of Laufer and Nation's
 Lexical Frequency Profile — the question is not "what percentage" but "are you reaching for
 the newer words or coasting on the commonest ones". So the panel's last row names words the
-app has taught you that you have never once written:
+app has taught you that you have not yet used correctly often enough to own:
 
 ```
-never used   5 of the 9 you have met — try 说话、可以、以后
+not yet yours   5 of the 9 the app taught you — used correctly fewer than 3 times — try 说话、可以、以后
 ```
 
-Commonest first, three at a time, from `S.learning` minus the words segmented out of your own
-messages. Three characters you can put in your next message is a prompt; "5 unused" is a
+Commonest first, three at a time, from `S.learning` minus the words your own messages have
+earned the credits for. Three characters you can put in your next message is a prompt; "5 unused" is a
 statistic. Moving up is **not** gated on it, for the same reason there is no threshold — that
 would block advancement on a gap that is supposed to be there.
 
@@ -1171,6 +1174,9 @@ The 词 panel exports a file, and hands single cards over by URL.
   so on Android use the CSV export.
 - **Look up in Pleco** from the word popover — [`plecoapi://x-callback-url/s`](https://www.plecoforums.com/threads/urls-scheme-in-pleco.5875/),
   with `x-success` so Pleco offers a button back. Works on both platforms.
+  iOS Safari asks "Open in Pleco?" before it launches, every time. That
+  confirmation belongs to the browser and a web page has no way to suppress it —
+  there is nothing in this app to turn off.
 
 Delivery goes through the Web Share API, because iOS will not let a page save a file on its
 own and the share sheet can hand it straight to Pleco or Files. Download is the desktop

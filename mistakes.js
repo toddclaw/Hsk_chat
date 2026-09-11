@@ -110,6 +110,87 @@
     return !(grade.errors || []).some(function (e) { return e && e.tag === tag; });
   }
 
+  /* The verdict on ONE ghost word in one sentence, in three values rather than
+   * two.
+   *
+   * "none" and "wrong" have to be told apart because they do different things
+   * to progress: a sentence that never reached for the word says nothing, while
+   * one that reached for it and missed costs a day-credit. A boolean collapses
+   * those, and collapsing them is what made ghost progress a ratchet that only
+   * ever clicked forward.
+   *
+   * The fallback to grade.ok is what keeps every message written before this
+   * feature -- and every message written outside the Ghost Words activity,
+   * where no verdict is asked for -- counting exactly as it did. It is the
+   * STRICTER of the two rules: the whole sentence has to be clean. It can never
+   * return "wrong", because grade.ok === false says something in the sentence
+   * was wrong and never that THIS word was, so a failed check and a legacy
+   * transcript can demote nothing. */
+  function ghostVerdict(grade, word) {
+    if (!grade || grade.unreadable) return "none";
+    var v = grade.ghost && grade.ghost[word];
+    if (v && typeof v === "object") {
+      if (v.used !== true) return "none";
+      return v.ok === true ? "ok" : "wrong";
+    }
+    return grade.ok === true ? "ok" : "none";
+  }
+
+  /* How far along each word is, walked in timestamp order.
+   *
+   * At most one credit per word per calendar day -- the same rule and the same
+   * dayKey() the drill already uses, for the reason RESEARCH.md gives there:
+   * massed practice is what loses, so session length must not be able to move
+   * the number. Within a day, write the word as often as you like; it is the
+   * across-day interval that predicts whether the word is still there next
+   * week.
+   *
+   * A credited day stays credited after a demotion, so failing and then
+   * succeeding again the same day does not re-earn the day. That closes the
+   * only same-day loop the rule has.
+   *
+   * At most one DEMOTION a day too, for the same reason and to keep the two
+   * directions symmetric. Uncapped, three wrong uses in one afternoon undo
+   * three days of work while the best possible day gives one back -- which is
+   * the reset-to-zero rule RESEARCH.md rejects, reached by another road. The
+   * learner who writes a word wrong three times running is the one the
+   * activity exists for.
+   *
+   * Every word in one pass, not one pass per word: the per-word version is
+   * O(words x messages) and both of those grow with use. `wordsOf` is a
+   * callback because segmentation needs the live lexicon, which is index.html's
+   * business -- the same split needsMigration() already uses.
+   *
+   * Derived by scanning, never stored, like every other count in this file. */
+  function ghostProgress(turns, wordsOf) {
+    var rows = (turns || []).slice().sort(function (a, b) {
+      var x = String((a && a.created_at) || ""), y = String((b && b.created_at) || "");
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+    var out = {}, credited = {}, demoted = {};
+    function slot(w) {
+      if (!out[w]) { out[w] = { n: 0, last: "" }; credited[w] = {}; demoted[w] = {}; }
+      return out[w];
+    }
+    rows.forEach(function (t) {
+      var day = dayKey(t && t.created_at);
+      var seen = {};
+      (wordsOf(t) || []).forEach(function (w) {
+        if (seen[w]) return;            // one message credits a word once
+        seen[w] = true;
+        var v = ghostVerdict(t && t.grade, w);
+        if (v === "ok") {
+          var s = slot(w);
+          if (!credited[w][day]) { credited[w][day] = true; s.n++; s.last = day; }
+        } else if (v === "wrong") {
+          var f = slot(w);
+          if (!demoted[w][day]) { demoted[w][day] = true; f.n = Math.max(0, f.n - 1); }
+        }
+      });
+    });
+    return out;
+  }
+
   /* How much of the history predates the current grader, counted in two kinds
    * of work because they cost two very different amounts.
    *
@@ -273,6 +354,8 @@
 
   var api = { counts: counts, credited: credited,
               needsMigration: needsMigration,
+              ghostVerdict: ghostVerdict, ghostProgress: ghostProgress,
+              dayKey: dayKey,
               drillTagOf: drillTagOf, drillExampleOf: drillExampleOf,
               drillWordOf: drillWordOf,
               WINDOW_DAYS: WINDOW_DAYS, RECENT_SHOWN: RECENT_SHOWN };
