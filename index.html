@@ -567,6 +567,15 @@ footer{
       category counts down by at most one a day however much you drill it, because
       spacing is what makes a correction stick.</div>
 
+    <label for="ghostUses">Correct uses to retire a ghost word</label>
+      <select id="ghostUses"></select>
+      <div class="note">How many times you have to use a <b>Ghost Words</b> target
+      correctly before it leaves the list. At most one counts per day, however often you
+      write it — spacing is what makes a new word stick, and a day of practice is one
+      day of practice. Getting it wrong costs you one back. Only the word itself is
+      judged: a mistake elsewhere in the sentence still lands in your mistakes, but it
+      does not withhold the credit.</div>
+
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
       </div>
@@ -1047,6 +1056,7 @@ const MODELS_URL= "https://openrouter.ai/api/v1/models";
 const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // correct sentences to finish a drill
+const GHOST_CHOICES = [1, 2, 3, 4, 5, 6];         // correct uses to retire a ghost word
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
@@ -1097,6 +1107,7 @@ const K = {
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
+  ghostUses:"hsk1chat.ghostUses",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
@@ -1147,6 +1158,7 @@ const S = {
   prompt:  store.get(K.prompt, ""),           // "" = track the generated default
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
+  ghostUses: store.get(K.ghostUses, 3),       // correct uses, on separate days, to retire a ghost word
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
@@ -5852,6 +5864,9 @@ $("#btnSet").onclick = () => {
   $("#drillTurns").innerHTML = DRILL_CHOICES.map(n =>
     '<option value="' + n + '"' + (n === S.drillTurns ? " selected" : "") + ">" + n +
     (n === 6 ? " — default" : "") + "</option>").join("");
+  $("#ghostUses").innerHTML = GHOST_CHOICES.map(n =>
+    '<option value="' + n + '"' + (n === S.ghostUses ? " selected" : "") + ">" + n +
+    (n === 3 ? " — default" : "") + "</option>").join("");
   $("#replyLength").innerHTML = Object.keys(HSKPrompt.LENGTHS).map(k =>
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
@@ -5884,6 +5899,7 @@ function commitSettings() {
   S.replyLength = $("#replyLength").value; store.set(K.length, S.replyLength);
   S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
   S.drillTurns = Number($("#drillTurns").value) || 6; store.set(K.drillTurns, S.drillTurns);
+  S.ghostUses = Number($("#ghostUses").value) || 3; store.set(K.ghostUses, S.ghostUses);
   S.anki = {
     deck:  $("#ankiDeck").value.trim()  || "Default",
     type:  $("#ankiType").value.trim()  || "Basic",
