@@ -1766,7 +1766,7 @@ function windowed(excludeKind) {
 /* Which words the partner is asked to work back in.
  *
  * Chat uses the words still being learned. Focused chat uses the ones the app
- * taught and the learner has never once written -- readiness().unused, already
+ * taught and the learner does not yet own -- readiness().unused, already
  * computed and already sorted commonest-first, because S.learning rows carry no
  * frequency of their own. Six either way, matching what the prompt has always
  * been given. */
@@ -5453,7 +5453,12 @@ function usableWords() {
  * HSKMistakes.ghostVerdict(), which still applies it -- but defers to a
  * per-word verdict where one exists. So a word used correctly in a sentence
  * that was wrong somewhere else now counts, which it never did before. The
- * change can only ADD words: everything that credited before still credits. */
+ * change can only ADD words: everything that credited before still credits.
+ *
+ * Messages that were never graded (grader off, or still in flight) contribute
+ * nothing. The scan costs no new storage and no new work: every message is
+ * already saved, and renderAll() segments the whole history on every render
+ * anyway. */
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
@@ -5533,7 +5538,7 @@ function readiness() {
      * with proficiency and not every word ever becomes productive, so any
      * fixed target would be wrong at every level and wrong in the same
      * direction. What is actionable is not a number to hit but a list to work
-     * through: words the app taught you that you have never once written. */
+     * through: words the app taught you that you do not yet own. */
     /* Sorted commonest-first through the level list, because S.learning rows
      * carry no frequency of their own -- sorting them by e.f silently does
      * nothing, since every value is undefined. */

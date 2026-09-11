@@ -349,7 +349,7 @@ is a different kind of measure and not one a per-level bar can express.
 What is actionable is a **list, not a gauge**, in the spirit of Laufer & Nation's Lexical
 Frequency Profile: the useful question is not "what percentage" but "are you reaching for the
 newer words or coasting on the commonest ones". So the panel's last row names introduced words
-you have never once written, commonest first, three at a time. Three characters to put in your
+you do not yet own, commonest first, three at a time. Three characters to put in your
 next message is a prompt; "5 unused" is a statistic.
 
 Moving up is **not** gated on production, for reason 1 above.
