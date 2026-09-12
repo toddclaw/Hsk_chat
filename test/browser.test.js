@@ -2287,6 +2287,74 @@ check(usedGroups && usedGroups.first === "\u7684",
       "and a story written before kind existed still counts",
       String(await exec("return window.storyTold();")));
 
+    /* -------------------- a story whose row lost its activity is still a story
+
+     * The live database had no `conversations.side` column, so every
+     * conversations push dropped `activity` with it and every story pulled onto
+     * a device came back reading "chat": no "Read on" button, no way to
+     * continue, and the chat list calling it Chat. The `role: "topic"` marker
+     * rides in `messages.role`, where no optional column could strip it, so
+     * activityOf() asks the transcript when the row says nothing specific.
+     *
+     * Seeded exactly as the server held it: activity "chat", level absent, the
+     * topic marker and two segments intact. */
+    await exec(`
+      var cid = "5a5a5a5a-4444-4444-8444-5a5a5a5a5a5a";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "\u5c0f\u660e", activity: "chat",
+          created_at: "2026-09-12T14:44:07.000Z", updated_at: "2026-09-12T14:52:07.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.history", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "5a5a5a5a-4444-4444-8444-5a5a5a5a5a5a": [
+        { id: "e1e1e1e1-4444-4444-8444-e1e1e1e1e1e1", role: "topic",
+          text: "Buying a birthday present",
+          created_at: "2026-09-12T14:44:16.000Z" },
+        { id: "e2e2e2e2-4444-4444-8444-e2e2e2e2e2e2", role: "assistant",
+          text: "\u4ed6\u53bb\u4e86\u5546\u5e97\u3002", kind: "segment", attempts: 1,
+          created_at: "2026-09-12T14:44:28.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#starters').children.length > 0",
+      "the recovered story to finish rendering");
+    check(await exec("return window.currentActivity();") === "story",
+      "a story whose row lost its activity is read back as a story, not a chat",
+      await exec("return window.currentActivity();"));
+    check(await exec("return window.storyTold();") === 1,
+      "and its segments still count");
+    /* The point of the whole fix: the control that continues the story. */
+    check(/Read on \(2 of 5\)/.test(await exec(
+        "return document.querySelector('#starters').textContent;")),
+      "so the button that continues it is back on screen",
+      await exec("return document.querySelector('#starters').textContent;"));
+    // renderChats() explicitly: the list is built when the sheet is opened.
+    await exec("window.renderChats(); return true;");
+    const lostMeta = await exec(
+      "var m = document.querySelector('#chatList .cmeta'); return m ? m.textContent : '';");
+    check(/Story time/.test(lostMeta),
+      "and the chat list labels it Story time rather than Chat", lostMeta);
+
+    /* The inference must not fire the other way: an ordinary chat has no topic
+     * or drill marker, so it stays a chat and keeps its starters. */
+    await exec(`
+      var cid = "5b5b5b5b-4444-4444-8444-5b5b5b5b5b5b";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "t", activity: "chat",
+          created_at: "2026-09-12T14:44:07.000Z", updated_at: "2026-09-12T14:52:07.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "5b5b5b5b-4444-4444-8444-5b5b5b5b5b5b": [
+        { id: "e3e3e3e3-4444-4444-8444-e3e3e3e3e3e3", role: "user",
+          text: "\u4f60\u597d", created_at: "2026-09-12T14:44:16.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.currentActivity", "the app to boot");
+    check(await exec("return window.currentActivity();") === "chat",
+      "a conversation with no marker is still a chat -- the inference only fires where the row lost",
+      await exec("return window.currentActivity();"));
+
     /* Finding 1 (task 10 review, round 3): a v67 story already in phase two,
      * written before `kind` existed -- so anyStoryQuestion() finds nothing on
      * it -- must not have the new gate shut its composer forever. The learner
