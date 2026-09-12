@@ -53,9 +53,11 @@ sentence employed correctly, and credit those the way drill passes are credited.
 
 Three things make this more than a schema edit:
 
-- **It is on the hot path.** The grader runs on every message the learner sends. Any
-  added output costs tokens on all of them, and the story-cost item below is already
-  the binding constraint on this budget.
+- **It is on the hot path.** The grader runs on every message the learner sends, so any
+  added output costs tokens on all of them. This used to be blocked on story time eating
+  the whole $5; at the corrected rate of one story a week it is not (see the story-cost
+  item below), so the objection is now the plain one — price the added tokens per message
+  against ~$4 a month and check that a heavy month still fits.
 - **The model may manufacture successes.** `grade()` already carries a measured
   counter-instruction because a model told a sentence may be wrong grades everything
   correct. Asking it to list what went *right* invites the mirror failure — claiming
@@ -70,16 +72,25 @@ window, and spaced drill passes capped at one a day.
 
 ---
 
-## The "$0.10 a story" figure is wrong, and the right one is not known yet
+## A story costs $0.25, not $0.10 — and what the other two thirds buy is unknown
 
 **Found:** costing the story-time chooser design against a $5/month whole-app budget,
 2026-08-28, by reading the learner's own `cost` and `attempts` rows off the server.
 
-`index.html`'s `STORY_MODEL` comment and the Settings note both say a story costs about
+`index.html`'s `STORY_MODEL` comment and the Settings note both said a story costs about
 $0.10. Measured from real use: 9 story segments at a mean of **3.00 attempts each** came to
 $0.4663, which is ~$0.017 a model call, ~$0.05 a segment and **~$0.25 for a five-segment
-story** — two and a half times the published figure. At the expected 20 stories a month that
-is the entire budget before anything else runs.
+story** — two and a half times the published figure. Both now say $0.25 (v99).
+
+**The 20-stories-a-month assumption was wrong, and that is where the budget went.** The
+learner's own answer, 2026-09-12: story time gets used about **once a week**. So the line to
+cost against is **~4 stories a month, ~$1**, not $5, and story time stops being the binding
+constraint on everything else. Roughly **$4 a month of headroom**, earmarked in the learner's
+own order of preference: more grader traffic per message first, then evaluating **transfer** —
+whether a word introduced by pacing shows up correctly in ordinary chat, outside the drill or
+ghost-word activity that taught it, which is the thing the entry above says the app currently
+cannot see. Neither is designed yet; what changed is only that the money argument against them
+is gone. Re-cost both against $4, not $5: a month of ordinary chatting still has to fit.
 
 Two thirds of it is repair traffic, and the repair rate is suspect: every one of those
 segments predates v67, where `turn()` was dropping `S.known` from the validation lexicon on
@@ -88,8 +99,8 @@ segment was validated as if the learner's 222 ticked words were out of level.
 
 **Measured on v67, 2026-08-28:** still **3.00**, across 19 segments in three stories. The
 v67 hypothesis was wrong — the learner is at HSK 2 now, so the words they had ticked as known
-ahead are inside `S.base` already and the fixed bug had little left to break. The note should
-say **$0.25**, and story time needs a cost look of its own.
+ahead are inside `S.base` already and the fixed bug had little left to break. The notes now
+say **$0.25** (v99), and story time still needs a cost look of its own.
 
 **What would settle the cost:** the repair loop re-sends the whole scratch on every attempt,
 and the scratch grows with each repair exchange, so a 3-attempt segment costs far more than

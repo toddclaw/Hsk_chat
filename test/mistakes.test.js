@@ -400,6 +400,20 @@ check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
     grade: { ok: false, better: "",
              errors: [{ tag: "wrong-word", note: "n" }] } }] }).words === 0,
   "with no correction there is nothing to extract the word from");
+
+// The whole reason the run never finished: "no single word is at fault" is what
+// drillWord() asks for when the mistake is the order or the sentence as a
+// whole, so an error can be done and still carry no word. Without `noword` it
+// matches this scan on every pass and every press re-buys the same residue.
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { ok: false, better: "y",
+             errors: [{ tag: "wrong-word", note: "n", noword: true }] } }] }).words === 0,
+  "an extraction that found no single word is done, not work again");
+check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
+    grade: { ok: false, better: "y",
+             errors: [{ tag: "wrong-word", note: "n", noword: true },
+                      { tag: "unnatural", note: "n" }] } }] }).words === 1,
+  "and a sibling error the extraction has not reached still counts");
 check(need({ c1: [{ role: "user", text: "x", created_at: daysAgo(1),
     grade: { unreadable: true } }] }).words === 0,
   "an unreadable grade is not work either");
