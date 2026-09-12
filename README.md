@@ -340,7 +340,8 @@ key you had just pasted.)
 | **Text size** | 16–34px, with a live preview |
 | **Reply length** | short (1–2 sentences) / medium (3–4) / longer (5–6) |
 | **System prompt** | edit the assembled prompt, or leave it tracking the pickers |
-| **Teaching prompts** | the four behind translate / explain / grammar-check, individually editable |
+| **Teaching prompts** | the six behind translate / explain / grammar-check / grader / progress report, individually editable |
+| **Progress report** | reads your whole history and writes back a few paragraphs; opening it is free, writing a new one is one call |
 | **Anki cards** | deck, note type and field names for the one-tap links |
 | **Tries before giving up** | 1–6; each is another API call |
 | **Prompt mode (A/B)** | with or without the wordlist in the prompt, and the counters |
@@ -998,6 +999,55 @@ gap is normal.
 segmented out of your own messages — it needs no new storage, since every message is already
 saved, and it will always lag: recognition runs ahead of production and the gap widens with
 proficiency.
+
+**A starter chip you tapped is not production.** Tapping a starter fills the composer and you
+send it like any other message, so nothing stored on it says you did not write it — and since
+the text is the app's own Chinese it is correct by construction and always checks out clean.
+Left in, it would credit you for words you only recognised well enough to tap, count toward
+retiring a ghost word you never produced, and turn up in a progress report as a sentence you
+wrote well. Starters are excluded from **used by you**, from the green bar, from ghost-word
+credit, and from everything the progress report counts or quotes. They are matched by text, so
+the rule applies to history you have already written.
+
+### The progress report
+
+The panel above is a set of **gauges** — they say where you stand, not what to do about it.
+The **Progress report** button under them asks the teaching model for the other thing: a few
+paragraphs of English about what has gone well, what is worth working on next, and one
+concrete thing to try in your next conversation.
+
+It is English on purpose. "You are getting 了 right in statements but still dropping it in
+questions" is not expressible inside HSK 2, and this is talk *about* your Chinese rather than
+Chinese to read. The one Chinese line at the end is composed from HSK 1 templates rather than
+generated — so it costs no tokens, cannot hallucinate, and is valid at every level the app
+offers. `test/report.test.js` checks that claim against the real HSK 1 allowlist.
+
+**Opening it is free.** The last report is stored and shown as-is; only *Write a new report*
+spends a call, and a call that fails leaves the previous report standing — last week's report
+is worth more than a blank sheet.
+
+**What "since last time" covers.** The baseline is your last report. If fewer than **10**
+checked messages have arrived since then, there is not enough new evidence to say anything
+true, so writing a new one is **refused before it spends a call** and tells you how many there
+have been. The floor is a count of messages rather than a span of time on purpose: three days
+away from the app and three days of hard practice are not the same event, and a clock cannot
+tell them apart. A first report has no baseline and simply covers everything.
+
+**A starter chip you tapped does not count as a sentence you wrote** — not here, and not in
+the coverage bars above either. See "A starter chip you tapped is not production".
+
+The three sentences it quotes back at you are chosen **in code**, by the numbers — your most
+recent clean sentence, and your most recent sentence in each category you miss most. The model
+is shown evidence; it does not get to pick its own.
+
+Reports are not archived. Each one replaces the last. The version that keeps them and charts
+them over time is in **[BACKLOG.md](BACKLOG.md)**, "My own progress data, over time, shown to
+me", and was deliberately not built here.
+
+> What this prompt gets wrong, measured rather than guessed, is in
+> **[tools/report-ab-results.md](tools/report-ab-results.md)** — including the counter that
+> scored 48/48 while a third of the reports contained a flat falsehood, and the one case that
+> is still not fixed.
 
 > Every constant in this section — 95%, `1/rank`, six sightings — is argued with citations in
 > **[RESEARCH.md](RESEARCH.md)**, along with the measurements behind them and an explicit

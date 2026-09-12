@@ -920,6 +920,79 @@
    *
    * `used` exists because the cheapest way to pass a drill is to write a
    * sentence that never reaches for the structure at all. */
+  /* The progress report.
+   *
+   * English, not Chinese: this is metalanguage about the learner's Chinese, and
+   * "you are improving at aspect-le but still drop it in questions" is not
+   * expressible inside HSK 2. The one Chinese line the report carries is
+   * composed in report.js from HSK 1 templates and never generated here.
+   *
+   * The brief is rendered as plain labelled lines rather than JSON. A model
+   * asked for warm, specific prose writes better from prose than from a data
+   * structure, and the numbers are equally checkable either way.
+   *
+   * Explicit zeroes for quiet activities, not omissions: a model handed a gap
+   * fills it. That is an assumption and tools/report-ab.js measures it -- see
+   * the `zeroes` and `omit` arms. */
+  function report(opts) {
+    opts = opts || {};
+    var b = opts.brief || {}, s = opts.sinceBrief || {};
+
+    function block(x, name) {
+      var acts = Object.keys(x.activities || {}).map(function (k) {
+        return k + " " + x.activities[k];
+      }).join(", ");
+      return name + ":\n" +
+        /* "sentences they wrote themselves" rather than "messages graded".
+         * tools/report-ab.js measured the difference: the old label never said
+         * WHOSE sentences these were, and a model with no outstanding mistake
+         * categories to fill the focus paragraph with reached for the most
+         * plausible remaining gap -- telling a learner with 60 graded and 50
+         * clean messages that they had not written any sentences yet. Naming
+         * the author took invented deficits from 33/48 to 43/48. */
+        "- sentences they wrote themselves and had checked: " + ((x.messages || {}).graded || 0) +
+        ", of which the whole sentence was correct: " + ((x.messages || {}).clean || 0) + "\n" +
+        "- new words used correctly enough times to own: " + ((x.ghost || {}).retired || 0) +
+        "; part-way there: " + ((x.ghost || {}).working || 0) + "\n" +
+        "- minutes practising: " + (x.minutes || 0) + "\n" +
+        "- conversations by activity: " + acts + "\n";
+    }
+
+    var tags = (b.tags || []).length
+      ? (b.tags || []).map(function (t) {
+          return "- " + t.tag + ", " + t.n + " outstanding. They wrote \u300c" +
+            t.eg + "\u300d where \u300c" + t.better + "\u300d was wanted.";
+        }).join("\n")
+      : "- none outstanding.";
+
+    var samples = (opts.samples || []).length
+      ? (opts.samples || []).map(function (p) {
+          return "- \u300c" + p.text + "\u300d \u2014 " +
+            (p.ok ? "correct" : "not correct" + (p.tag ? " (" + p.tag + ")" : ""));
+        }).join("\n")
+      : "- none yet.";
+
+    return "You are writing a short progress report for a student of Chinese at " +
+      (opts.label || "their level") + ". Write to them directly, as \"you\".\n\n" +
+      /* Outside both blocks on purpose: a word the app taught is not something
+       * that happened during a window, so putting it inside the since-block
+       * would read as "they met 40 words this fortnight". */
+      "WORDS THE APP HAS TAUGHT THEM SO FAR: " + ((b.words || {}).met || 0) + "\n\n" +
+      block(b, "ALL TIME") + "\n" +
+      block(s, "SINCE THEIR LAST REPORT") + "\n" +
+      "MISTAKE CATEGORIES STILL OUTSTANDING:\n" + tags + "\n\n" +
+      "SENTENCES THEY WROTE:\n" + samples + "\n\n" +
+      "Write three short paragraphs:\n" +
+      "1. What has gone well. Name something specific and quote one of their " +
+      "sentences above if it supports the point.\n" +
+      "2. What is worth focusing on next. One or two things, not a list.\n" +
+      "3. One concrete thing to do in their next conversation.\n\n" +
+      "Every number you state must come from the figures above. Do not invent " +
+      "progress, and do not estimate. If a figure is zero, either say so plainly " +
+      "or say nothing about it \u2014 never describe it as progress. Warm and direct, " +
+      "no headings, no bullet points, no preamble.";
+  }
+
   function drillCheck(opts) {
     /* A word drill names the WORD and skips the tag entirely. This is what lets
      * the four error-class tags be drilled at all: "did you use \u884c, and was
@@ -1183,6 +1256,7 @@
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
               drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
+              report: report,
               castPrompt: castPrompt,
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,

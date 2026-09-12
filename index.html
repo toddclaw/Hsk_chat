@@ -601,6 +601,11 @@ footer{
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button id="moveUp" class="primary" type="button" style="display:none"></button>
       </div>
+
+      <button id="btnReport" type="button" style="margin-top:14px; width:100%">Progress report</button>
+      <div class="note">Reads everything you have done and writes back a few paragraphs —
+      what is going well, what is worth working on, and what has changed since last time.
+      Opening it is free; writing a new one is one API call.</div>
       <!-- Why the headline is a percentage of text and not a count of words:
            the lists are cumulative and frequency-ordered, so HSK 1's 300 words
            are 60% of the HSK 2 list but around 88% of HSK 2 running text. A
@@ -937,6 +942,15 @@ footer{
   </div>
 </div></div>
 
+<div class="sheet" id="reportSheet"><div class="card">
+  <h2>Progress report</h2>
+  <div id="reportBody"></div>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+    <button id="reportClose" class="primary">Done</button>
+    <button id="reportWrite" class="quiet" type="button">Write a new report</button>
+  </div>
+</div></div>
+
 <div class="sheet" id="vocabSheet"><div class="card">
   <!-- Same sticky header as Settings, and for the same reason: the way out
        should be one tap away rather than a scroll past the whole word list. -->
@@ -984,6 +998,7 @@ footer{
 <script src="mistakes.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
+<script src="report.js"></script>
 <script src="issues.js"></script>
 <script>
 "use strict";
@@ -1049,7 +1064,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v96 — 2026-09-11";
+const VERSION   = "v98 — 2026-09-11";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1109,6 +1124,7 @@ const K = {
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
   ghostUses:"hsk1chat.ghostUses",
+  report:"hsk1chat.report", reportAt:"hsk1chat.reportAt",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
@@ -1160,6 +1176,8 @@ const S = {
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
   ghostUses: store.get(K.ghostUses, 3),       // correct uses, on separate days, to retire a ghost word
+  report:  store.get(K.report, ""),           // the last progress report, as written
+  reportAt: store.get(K.reportAt, ""),        // when it was written; the delta baseline
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
   font:    store.get(K.font, 26),             // message text size in px
   starters: store.get(K.starters, true),      // the chip row above the composer
@@ -1672,7 +1690,9 @@ const TEACH_PROMPTS = [
   { key: "explainReply", kind: "explain",   own: false,
     label: "English explanation" },
   { key: "grade",        kind: "grade",     own: true,
-    label: "Grader — the ✓ / ✗ on your messages" }
+    label: "Grader — the ✓ / ✗ on your messages" },
+  { key: "report",       kind: "report",    own: true,
+    label: "Progress report" }
 ];
 
 // Recently introduced words, so an explanation can say which are still new.
@@ -1707,6 +1727,10 @@ function defaultTeachPrompt(spec, vars) {
   if (spec.kind === "grade") {
     return HSKPrompt.grade({ text: vars.text, label: vars.level,
                              recent: vars.recent, context: vars.context });
+  }
+  if (spec.kind === "report") {
+    return HSKPrompt.report({ brief: vars.brief, sinceBrief: vars.sinceBrief,
+                              samples: vars.samples, label: vars.level });
   }
   return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
                              recent: vars.recent, context: vars.context,
@@ -5459,11 +5483,47 @@ function usableWords() {
  * nothing. The scan costs no new storage and no new work: every message is
  * already saved, and renderAll() segments the whole history on every render
  * anyway. */
+/* Every starter chip, at every level, in both scripts.
+ *
+ * Tapping a starter fills the composer; sending it is an ordinary send, so the
+ * stored message is indistinguishable from one the learner wrote -- and being
+ * the app's own Chinese it is always correct, so it grades clean, credits its
+ * words, and counts as production the learner never did. Anything asking "what
+ * has this learner actually written?" has to leave them out.
+ *
+ * Both scripts because the chips render through toScript() and the learner may
+ * have switched since; every level because history outlives the level it was
+ * made at.
+ *
+ * Memoised: producedWords() and ghostProgressMap() both call this on every
+ * render, and the answer only moves when the display script does.
+ *
+ * ponytail: exact text match, so a learner who types a sentence identical to a
+ * starter goes uncredited for it. Rare, and it errs toward under-crediting
+ * rather than handing out a word they did not produce. Flag it at send time if
+ * that ever reads as wrong. */
+let starterCache = null, starterCacheScript = null;
+function starterTexts() {
+  if (starterCache && starterCacheScript === S.script) return starterCache;
+  const out = [];
+  LEVELS.forEach(l => HSKPrompt.startersFor(l.id).forEach(t => {
+    [t, toScript(t)].forEach(v => { if (out.indexOf(v) === -1) out.push(v); });
+  }));
+  starterCacheScript = S.script;
+  starterCache = out;
+  return out;
+}
+
+/* Did the learner write this, or tap it? */
+function ownWriting(t) {
+  return starterTexts().indexOf(String((t && t.text) || "").trim()) === -1;
+}
+
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
-      if (t.role !== "user" || !t.grade) return;
+      if (t.role !== "user" || !t.grade || !ownWriting(t)) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
         if (tok.kind === "word" &&
             HSKMistakes.ghostVerdict(t.grade, tok.text) === "ok") out.add(tok.text);
@@ -5492,7 +5552,7 @@ function ghostProgressMap() {
   const turns = [];
   Object.keys(S.chatMsgs || {}).forEach(function (cid) {
     (S.chatMsgs[cid] || []).forEach(function (t) {
-      if (t && t.role === "user" && t.grade) turns.push(t);
+      if (t && t.role === "user" && t.grade && ownWriting(t)) turns.push(t);
     });
   });
   return HSKMistakes.ghostProgress(turns, function (t) {
@@ -5500,6 +5560,69 @@ function ghostProgressMap() {
       .filter(function (tok) { return tok.kind === "word"; })
       .map(function (tok) { return tok.text; });
   });
+}
+
+/* Everything report.js needs, gathered from live state in one place.
+ *
+ * Segmentation and the lexicon are this file's business, so the ghost map and
+ * the mistake counts are computed HERE and handed over already counted --
+ * report.js stays pure and node-testable, which is the whole reason it is a
+ * separate file. */
+function reportInput(since) {
+  /* readiness() is null at the top level, where there is no next list to cover.
+   * Its two fractions are `read` and `produce`; the brief calls the second one
+   * `use`, which is what the prompt says to the learner. */
+  const r = readiness();
+  return {
+    chatMsgs: S.chatMsgs, chats: S.chats, learning: S.learning,
+    tags: mistakeCounts(),
+    ghost: ghostProgressMap(), ghostUses: S.ghostUses,
+    level: S.level, goalLevel: S.goalLevel,
+    coverage: { read: (r && r.read) || 0, use: (r && r.produce) || 0 },
+    /* S.chatTime is time on task; S.cost is money. */
+    minutes: Math.round((HSKTime.totals(S.chatTime).total || 0) / 60000),
+    starters: starterTexts(),
+    since: since || null, now: Date.now()
+  };
+}
+
+/* One model call, and the stored report replaced only if it succeeds.
+ *
+ * A failed call must leave the previous report standing: a timeout should cost
+ * the learner a retry, not last week's report. Everything that can refuse
+ * before spending a call does so -- a learner with no graded messages gets a
+ * note, not an invented report about nothing. */
+async function writeReport() {
+  const all = HSKReport.brief(reportInput(null));
+  if (!all.messages.graded) {
+    return { ok: false, why: "Chat for a while first \u2014 there is nothing to report on yet." };
+  }
+  const base = HSKReport.baselineFor(S.chatMsgs, S.reportAt || null, starterTexts());
+  /* Refused before the call, not after: below the floor there is nothing new to
+   * say, and saying it anyway costs the learner money for a paraphrase of the
+   * report they already have. */
+  if (!base.enough) {
+    return { ok: false, why: "Only " + base.newTurns + " new checked message" +
+      (base.newTurns === 1 ? "" : "s") + " since your last report. Come back " +
+      "after about " + HSKReport.FLOOR + " \u2014 there is nothing new to say yet." };
+  }
+  const since = HSKReport.brief(reportInput(base.since));
+  const samples = HSKReport.pickSamples(
+    HSKReport.gradedTurns(S.chatMsgs, base.since, starterTexts()), all.tags);
+  let text;
+  try {
+    text = await callModel([{ role: "user", content: teachPromptFor("report", {
+      brief: all, sinceBrief: since, samples: samples, level: levelLabel()
+    }) }], 700, teachingModel());
+  } catch (e) {
+    return { ok: false, why: "That did not go through \u2014 " + ((e && e.message) || e) };
+  }
+  if (!text || !text.trim()) return { ok: false, why: "The model sent nothing back." };
+  S.report = text.trim() + "\n\n" + HSKReport.chineseLine(since);
+  S.reportAt = new Date().toISOString();
+  store.set(K.report, S.report);
+  store.set(K.reportAt, S.reportAt);
+  return { ok: true };
 }
 
 // Everything the progress panel and the collapsed-row summary both need.
@@ -5844,6 +5967,40 @@ $("#gradeAsk").onclick = () => {
   openExplain(t);
 };
 $("#explainClose").onclick = () => closeSheet("#explainSheet");
+
+/* Opening is free: the stored report is shown as-is, and only the button
+ * inside the sheet spends a call. Re-reading last week's report should not
+ * cost anything, and the delta baseline must move only when a report is
+ * actually written. */
+function openReport() {
+  const body = $("#reportBody");
+  body.innerHTML = S.report
+    ? '<div class="note">Written ' + escapeHtml(S.reportAt.slice(0, 10)) + "</div>" +
+      HSKMd.render(S.report)
+    : '<div class="note">No report yet. Write one below.</div>';
+  openSheet("#reportSheet");
+}
+$("#btnReport").onclick = openReport;
+$("#reportClose").onclick = () => closeSheet("#reportSheet");
+$("#reportSheet").addEventListener("click", e => {
+  if (e.target === $("#reportSheet")) closeSheet("#reportSheet");
+});
+$("#reportWrite").onclick = async () => {
+  const btn = $("#reportWrite");
+  btn.disabled = true;
+  btn.textContent = "Writing\u2026";
+  const r = await writeReport();
+  btn.disabled = false;
+  btn.textContent = "Write a new report";
+  /* A failure leaves the previous report exactly where it was and says why
+   * underneath it. The old report is the more valuable of the two. */
+  if (!r.ok) {
+    $("#reportBody").insertAdjacentHTML("beforeend",
+      '<div class="note" style="color:var(--bad)">' + escapeHtml(r.why) + "</div>");
+    return;
+  }
+  openReport();
+};
 /* Start over rather than append. A call that failed leaves "(couldn't reach the
  * model…)" stored as the answer, and every follow-up asked afterwards carries
  * that transcript as context -- so asking again on top of it inherits the
