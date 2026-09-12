@@ -5483,11 +5483,47 @@ function usableWords() {
  * nothing. The scan costs no new storage and no new work: every message is
  * already saved, and renderAll() segments the whole history on every render
  * anyway. */
+/* Every starter chip, at every level, in both scripts.
+ *
+ * Tapping a starter fills the composer; sending it is an ordinary send, so the
+ * stored message is indistinguishable from one the learner wrote -- and being
+ * the app's own Chinese it is always correct, so it grades clean, credits its
+ * words, and counts as production the learner never did. Anything asking "what
+ * has this learner actually written?" has to leave them out.
+ *
+ * Both scripts because the chips render through toScript() and the learner may
+ * have switched since; every level because history outlives the level it was
+ * made at.
+ *
+ * Memoised: producedWords() and ghostProgressMap() both call this on every
+ * render, and the answer only moves when the display script does.
+ *
+ * ponytail: exact text match, so a learner who types a sentence identical to a
+ * starter goes uncredited for it. Rare, and it errs toward under-crediting
+ * rather than handing out a word they did not produce. Flag it at send time if
+ * that ever reads as wrong. */
+let starterCache = null, starterCacheScript = null;
+function starterTexts() {
+  if (starterCache && starterCacheScript === S.script) return starterCache;
+  const out = [];
+  LEVELS.forEach(l => HSKPrompt.startersFor(l.id).forEach(t => {
+    [t, toScript(t)].forEach(v => { if (out.indexOf(v) === -1) out.push(v); });
+  }));
+  starterCacheScript = S.script;
+  starterCache = out;
+  return out;
+}
+
+/* Did the learner write this, or tap it? */
+function ownWriting(t) {
+  return starterTexts().indexOf(String((t && t.text) || "").trim()) === -1;
+}
+
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
     (list || []).forEach(function (t) {
-      if (t.role !== "user" || !t.grade) return;
+      if (t.role !== "user" || !t.grade || !ownWriting(t)) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
         if (tok.kind === "word" &&
             HSKMistakes.ghostVerdict(t.grade, tok.text) === "ok") out.add(tok.text);
@@ -5516,7 +5552,7 @@ function ghostProgressMap() {
   const turns = [];
   Object.keys(S.chatMsgs || {}).forEach(function (cid) {
     (S.chatMsgs[cid] || []).forEach(function (t) {
-      if (t && t.role === "user" && t.grade) turns.push(t);
+      if (t && t.role === "user" && t.grade && ownWriting(t)) turns.push(t);
     });
   });
   return HSKMistakes.ghostProgress(turns, function (t) {
@@ -5526,28 +5562,12 @@ function ghostProgressMap() {
   });
 }
 
-// Everything the progress panel and the collapsed-row summary both need.
 /* Everything report.js needs, gathered from live state in one place.
  *
  * Segmentation and the lexicon are this file's business, so the ghost map and
  * the mistake counts are computed HERE and handed over already counted --
  * report.js stays pure and node-testable, which is the whole reason it is a
  * separate file. */
-/* Every starter chip, at every level, in both scripts.
- *
- * Tapping a starter fills the composer; sending it is an ordinary send, so the
- * stored message is indistinguishable from one the learner wrote. Both scripts
- * because the chips are rendered through toScript() and the learner may have
- * switched since; every level because history outlives the level it was made
- * at. See gradedTurns() in report.js for why they are excluded at all. */
-function starterTexts() {
-  const out = [];
-  LEVELS.forEach(l => HSKPrompt.startersFor(l.id).forEach(t => {
-    [t, toScript(t)].forEach(v => { if (out.indexOf(v) === -1) out.push(v); });
-  }));
-  return out;
-}
-
 function reportInput(since) {
   /* readiness() is null at the top level, where there is no next list to cover.
    * Its two fractions are `read` and `produce`; the brief calls the second one
@@ -5605,6 +5625,7 @@ async function writeReport() {
   return { ok: true };
 }
 
+// Everything the progress panel and the collapsed-row summary both need.
 function readiness() {
   const next = LEVELS.find(l => l.id === S.level + 1);
   if (!next || !S.nextList.length) return null;

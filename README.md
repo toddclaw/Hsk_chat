@@ -1000,6 +1000,15 @@ segmented out of your own messages — it needs no new storage, since every mess
 saved, and it will always lag: recognition runs ahead of production and the gap widens with
 proficiency.
 
+**A starter chip you tapped is not production.** Tapping a starter fills the composer and you
+send it like any other message, so nothing stored on it says you did not write it — and since
+the text is the app's own Chinese it is correct by construction and always checks out clean.
+Left in, it would credit you for words you only recognised well enough to tap, count toward
+retiring a ghost word you never produced, and turn up in a progress report as a sentence you
+wrote well. Starters are excluded from **used by you**, from the green bar, from ghost-word
+credit, and from everything the progress report counts or quotes. They are matched by text, so
+the rule applies to history you have already written.
+
 ### The progress report
 
 The panel above is a set of **gauges** — they say where you stand, not what to do about it.
@@ -1024,10 +1033,8 @@ have been. The floor is a count of messages rather than a span of time on purpos
 away from the app and three days of hard practice are not the same event, and a clock cannot
 tell them apart. A first report has no baseline and simply covers everything.
 
-**A starter chip you tapped does not count as a sentence you wrote.** Starters are the app's
-own Chinese, so they always check out clean — left in, they would inflate your clean total and
-could be quoted back at you as your best work when you only tapped one out of curiosity. They
-are excluded from the counts, from the floor, and from the quoted sentences.
+**A starter chip you tapped does not count as a sentence you wrote** — not here, and not in
+the coverage bars above either. See "A starter chip you tapped is not production".
 
 The three sentences it quotes back at you are chosen **in code**, by the numbers — your most
 recent clean sentence, and your most recent sentence in each category you miss most. The model

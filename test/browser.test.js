@@ -1718,6 +1718,28 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec("window.newChat('chat'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
       "chat offers starters");
+
+    /* A tapped starter is the app's own Chinese: it fills the composer, is sent
+     * like anything else, and being correct by construction it always grades
+     * clean. Counted, it credits the learner with production they did not do --
+     * which is what Todd hit when a report quoted a chip back at him as a
+     * sentence he had written well. He had tapped it because he did not
+     * recognise the characters.
+     *
+     * Asserted against a REAL rendered chip rather than an invented string, so
+     * this fails if renderStarters and the exclusion ever disagree about the
+     * text -- the script conversion being the likely way that happens. */
+    check(await exec(
+      "var c = document.querySelector('#starters button');" +
+      "return window.ownWriting({ text: c.textContent });") === false,
+      "a chip the learner tapped is not counted as their own writing");
+    check(await exec(
+      "var c = document.querySelector('#starters button');" +
+      "return window.ownWriting({ text: ' ' + c.textContent + ' ' });") === false,
+      "and stray whitespace around it does not sneak it back in");
+    check(await exec(
+      "return window.ownWriting({ text: '\u6211\u6628\u5929\u53bb\u4e86\u5546\u5e97' });") === true,
+      "a sentence they actually typed still counts");
     /* A fresh story chat has no topic yet, so this is the chooser rather than
      * the starters strip a fresh chat gets -- it lands on the chooser instead
      * of any sentence-starter buttons, Task 5's replacement for the old
