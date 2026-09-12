@@ -881,7 +881,7 @@ return true;
                .querySelector('summary').textContent.match(/Conversation/);`),
       "and so did Clear conversation");
 
-    /* The four teaching prompts, editable like the system prompt. The default is
+    /* Every teaching prompt, editable like the system prompt. The default is
      * shown with its placeholders intact rather than filled against a sample
      * sentence -- the placeholders are the part worth editing. */
     await exec(`document.querySelectorAll('#setSheet .sec')[6].open = true; return true;`);
@@ -893,7 +893,10 @@ return true;
                states: Array.prototype.map.call(
                  document.querySelectorAll('#teachPrompts .note'),
                  function (s) { return s.textContent; }) };`);
-    check(tp.n === 5, "every teaching prompt is exposed, the grader included",
+    check(tp.n === 6, "every teaching prompt is exposed, the grader included",
+      JSON.stringify(tp.ids));
+    check(tp.ids.indexOf("tp_report") !== -1,
+      "the progress report among them: it is a prompt like the rest",
       JSON.stringify(tp.ids));
     check(tp.ids.indexOf("tp_grade") !== -1,
       "including the grader, which is a prompt like the rest and editable like the rest",
@@ -1715,6 +1718,28 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec("window.newChat('chat'); window.renderStarters();");
     check(await exec("return document.querySelectorAll('#starters button').length;") > 0,
       "chat offers starters");
+
+    /* A tapped starter is the app's own Chinese: it fills the composer, is sent
+     * like anything else, and being correct by construction it always grades
+     * clean. Counted, it credits the learner with production they did not do --
+     * which is what Todd hit when a report quoted a chip back at him as a
+     * sentence he had written well. He had tapped it because he did not
+     * recognise the characters.
+     *
+     * Asserted against a REAL rendered chip rather than an invented string, so
+     * this fails if renderStarters and the exclusion ever disagree about the
+     * text -- the script conversion being the likely way that happens. */
+    check(await exec(
+      "var c = document.querySelector('#starters button');" +
+      "return window.ownWriting({ text: c.textContent });") === false,
+      "a chip the learner tapped is not counted as their own writing");
+    check(await exec(
+      "var c = document.querySelector('#starters button');" +
+      "return window.ownWriting({ text: ' ' + c.textContent + ' ' });") === false,
+      "and stray whitespace around it does not sneak it back in");
+    check(await exec(
+      "return window.ownWriting({ text: '\u6211\u6628\u5929\u53bb\u4e86\u5546\u5e97' });") === true,
+      "a sentence they actually typed still counts");
     /* A fresh story chat has no topic yet, so this is the chooser rather than
      * the starters strip a fresh chat gets -- it lands on the chooser instead
      * of any sentence-starter buttons, Task 5's replacement for the old
@@ -1985,6 +2010,99 @@ check(usedGroups && usedGroups.first === "\u7684",
       JSON.stringify(turnObj) + ", '\\u82f9\\u679c');") === "ok",
       "so the word credits even though the sentence did not");
 
+
+    /* ------------------------------------------------ progress report */
+
+    /* Seeded through localStorage and a reload: the WebDriver sandbox cannot
+     * see a page-level `const`, so S is unreachable and the seed has to go in
+     * the same door S.learning does. */
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      m.reporttest = [{ id: "r1", role: "user", text: "\\u6211\\u5403\\u996d",
+        created_at: "2026-09-05T10:00:00.000Z",
+        grade: { ok: true, cats: {}, errors: [] } }];
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      localStorage.removeItem("hsk1chat.report");
+      localStorage.removeItem("hsk1chat.reportAt");
+      return true;`);
+    await go(base);
+    await waitFor("window.writeReport", "the app");
+
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the report button");
+    await exec(`document.querySelector('#btnReport').click(); return true;`);
+    await waitFor("document.querySelector('#reportSheet').classList.contains('open')",
+      "the report sheet");
+    check(/No report yet/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "with nothing written yet, the sheet says so rather than spending a call");
+
+    await exec(
+      "window.callModel = function () { return Promise.resolve('You are doing well.'); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor(
+      "/You are doing well/.test(document.querySelector('#reportBody').innerText)",
+      "the written report", 20000);
+    check(await exec("return JSON.parse(localStorage['hsk1chat.report'] || '\"\"');")
+      .then(s => /You are doing well/.test(s)),
+      "and it persists, so re-reading it later is free");
+    check(/\u5f88\u597d/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "with its Chinese line, composed rather than generated");
+
+    /* The bug Todd hit on v97: pressing the button again straight after a
+     * report spent a real call and rewrote the same history with small
+     * changes. One seeded graded message is below the floor of 10, so the
+     * second press must refuse before calling anything. */
+    await exec("window.__calls2 = 0; window.callModel = function () {" +
+      "window.__calls2++; return Promise.resolve('Second report.'); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor("/nothing new to say/.test(document.querySelector('#reportBody').innerText)",
+      "the refusal", 20000);
+    check(await exec("return window.__calls2;") === 0,
+      "a second report straight after the first spends no call at all");
+    check(/You are doing well/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "and the report already written is still the one on screen");
+
+    /* The behaviour most likely to regress quietly: a failed call must leave
+     * last week's report standing.
+     *
+     * The baseline is cleared first, through localStorage and a reload -- the
+     * floor above would otherwise refuse this press before any call is made,
+     * and the network failure is what this is about. The stored report stays,
+     * so there is still something for the failure to fail to replace. */
+    await exec(`localStorage.removeItem("hsk1chat.reportAt"); return true;`);
+    await go(base);
+    await waitFor("window.writeReport", "the app");
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the failure case");
+    await exec(`document.querySelector('#btnReport').click(); return true;`);
+    await waitFor("document.querySelector('#reportSheet').classList.contains('open')",
+      "the report sheet again");
+    await exec(
+      "window.callModel = function () { return Promise.reject(new Error('boom')); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor("/boom/.test(document.querySelector('#reportBody').innerText)",
+      "the failure note", 20000);
+    check(/You are doing well/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "a failed call keeps the previous report rather than blanking it");
+
+    await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}");
+      delete m.reporttest;
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
+      return true;`);
+    await go(base);
+    /* The reload is not complete when go() resolves, and story time follows
+     * immediately -- without this wait it starts against a half-built page. */
+    await waitFor("window.storyStep", "the app after the report section");
 
     /* --------------------------------------------------- story time, part 1 */
 

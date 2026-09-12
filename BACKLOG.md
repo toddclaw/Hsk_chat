@@ -445,3 +445,70 @@ due date is a pure function of the credit history, the same way the count is.
 activity that should hand finished words off, or a *review* activity that should
 keep them. If the latter, the interval ladder is the small part and the empty-day
 fallback is the design work.
+
+---
+
+## The app's own instruction could migrate to Chinese as the level rises
+
+**Found:** designing the progress report, 2026-09-11.
+
+Every explanatory surface in the app is permanently in English — settings notes,
+the progress panel, grammar explanations, the report this was found while
+designing. That is right for a beginner and increasingly wrong for the learner
+the app is trying to produce. At HSK 6 a learner reads a newspaper; there is no
+good reason the sentence telling them what a setting does is still in English,
+and an app whose own chrome is Chinese is several hours a week of incidental
+reading that currently goes to waste.
+
+The machinery already exists and is the whole point: the validator can prove a
+string is inside a level, `LEVELS` already knows where the learner is, and
+coverage arithmetic already answers "can they read this". A UI string is a much
+easier target than conversation — it is fixed, short, authored once, and can be
+checked at build time instead of at runtime, so none of the retry/repair cost of
+live generation applies.
+
+The hard part is not translation, it is the **ladder**: which strings move at
+which level, whether a string moves all at once or gains a Chinese gloss first,
+and what happens to a learner who moves up and finds the settings screen
+suddenly unreadable. A per-string minimum level is the obvious shape. Going back
+down a level, or a learner who wants English regardless, both need an answer.
+
+**What would settle it:** pick one screen — Settings → Learning is a good
+candidate, since its audience has by definition been using the app a while — and
+author its strings at two or three levels. Measure whether the HSK 4 version is
+actually readable by an HSK 4 learner, because the failure mode is a string that
+validates and still does not communicate. That answer generalises; the rest is
+bookkeeping.
+
+---
+
+## My own progress data, over time, shown to me
+
+**Found:** designing the progress report, 2026-09-11, deciding against keeping a
+history of reports.
+
+The progress report is synthesis and voice — it reads the numbers and tells you
+what they mean. It is deliberately not a record: reports are not kept, because
+the gauges already answer "am I progressing". What the gauges do *not* answer is
+"how fast, and is that faster or slower than last month". Every panel in the app
+is a snapshot of now. There is no surface anywhere that shows a rate.
+
+The data is already there and already timestamped. Words learned carry the day
+they were earned, every message carries `created_at` and its grade, `HSKTime`
+already buckets by day, and mistake credits are counted per day by the same
+`dayKey()` the drill and ghost-word rules use. Words learned per week, clean-
+sentence rate per month, time on task per week, mistakes retired per category
+over time — all of it is arithmetic over data the app already stores, with no
+new writes anywhere.
+
+What is missing is the view, and that is the whole question: a sparkline row, a
+small table by week, or a single "you are learning about 9 words a week, up from
+6" sentence. The last is cheapest and possibly the most useful — a rate stated
+in words beats a chart nobody reads, and it is the same gauge-versus-prompt
+argument RESEARCH.md makes about the production list.
+
+**What would settle it:** pick one number — words learned per week is the
+strongest candidate, since it is the thing the pacing constants actually control
+— and show it for the last several weeks. If seeing the rate changes what you do,
+the rest is worth building. If it does not, one sentence in the progress report
+was the right size for this after all.
