@@ -106,7 +106,31 @@ const exec = async (script, args) => {
   if (r.value && r.value.error) throw new Error(r.value.error + ": " + r.value.message);
   return r.value;
 };
-const go = url => call("POST", `/session/${session}/url`, { url: url });
+/* Navigating is not the same as the app being ready, and the difference is
+ * where this suite's CI-only flakiness lived. Every name the sandbox can see
+ * -- storyStep, writeReport, newChat, storyTopic -- is a top-level function
+ * declaration, so it is a property of window from script-parse time. Waiting
+ * on one proved only that the script had been parsed: measured true on 42 of
+ * 42 navigations while boot() was still awaiting loadLevel(). The suite then
+ * stubbed callModel and drove a turn inside that gap, and on a contended
+ * runner the turn ran against an empty lexicon -- recorded as a failed turn,
+ * so the wait for its rendered output never came true and timed out at
+ * whichever call site lost the race that run.
+ *
+ * readiness() is non-null only once loadLevel() has resolved, which is boot's
+ * one await closing. Waiting here rather than at each call site means the
+ * guarantee cannot be forgotten by the next test that navigates. It costs
+ * nothing overall: the same time was already being spent, polling for the app
+ * to catch up at whichever wait came next.
+ *
+ * ponytail: readiness() is null at the top level, where there is no next list
+ * to load, so a test that navigates there would hang this out. None does; give
+ * boot its own marker if one ever needs to. */
+const go = async url => {
+  const r = await call("POST", `/session/${session}/url`, { url: url });
+  await waitFor("window.readiness && window.readiness() !== null", "the app to finish booting");
+  return r;
+};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* Polls rather than sleeps: firefox start-up varies far more than the app does.
@@ -977,8 +1001,6 @@ return true;
       localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
       return true;`);
     await go(base);
-    await waitFor("window.readiness && window.readiness() !== null",
-      "the next level's wordlist");
 
     await exec(`document.querySelector('#btnSet').click(); return true;`);
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
@@ -1760,7 +1782,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.history");
       return true;`);
     await go(base);
-    await waitFor("window.startActivity", "the app");
     await exec("window.__calls = 0;" +
       "window.callModel = function () { window.__calls++;" +
       "  return Promise.resolve('\\u4ed6\\u597d\\u3002'); };" +
@@ -1862,9 +1883,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));");
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after reload");
-    // readiness() is null until the next level's wordlist has loaded.
-    await waitFor("window.readiness && window.readiness() !== null",
-      "the next level's wordlist", 20000);
     await exec("window.newChat('focused');");
 
     const focusedReuse = await exec(
@@ -1900,8 +1918,6 @@ check(usedGroups && usedGroups.first === "\u7684",
         }))) + ";" +
         "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
       await go(base);
-      await waitFor("window.readiness && window.readiness() !== null",
-        "the next level's wordlist", 20000);
     };
 
     await seedGhost(["2026-09-01T10:00:00Z"]);
@@ -1948,16 +1964,12 @@ check(usedGroups && usedGroups.first === "\u7684",
       "delete m.ghosttest;" +
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
     await go(base);
-    await waitFor("window.readiness && window.readiness() !== null",
-      "the next level's wordlist", 20000);
 
     /* S.grader is on the same unreachable const as S.history above -- through
      * localStorage and a reload, not a direct write. */
     await exec(
       "localStorage.setItem('hsk1chat.grader', JSON.stringify(true)); return true;");
     await go(base);
-    await waitFor("window.readiness && window.readiness() !== null",
-      "the next level's wordlist", 20000);
 
     /* The per-word verdict. callModel is stubbed to answer the drillCheck
      * question and nothing else: the grade call asks for a much bigger object,
@@ -2005,7 +2017,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.reportAt");
       return true;`);
     await go(base);
-    await waitFor("window.writeReport", "the app");
 
     await exec(`document.querySelector('#btnSet').click(); return true;`);
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
@@ -2056,7 +2067,6 @@ check(usedGroups && usedGroups.first === "\u7684",
      * so there is still something for the failure to fail to replace. */
     await exec(`localStorage.removeItem("hsk1chat.reportAt"); return true;`);
     await go(base);
-    await waitFor("window.writeReport", "the app");
     await exec(`document.querySelector('#btnSet').click(); return true;`);
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
       "Settings for the failure case");
@@ -2079,9 +2089,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(m));
       return true;`);
     await go(base);
-    /* The reload is not complete when go() resolves, and story time follows
-     * immediately -- without this wait it starts against a half-built page. */
-    await waitFor("window.storyStep", "the app after the report section");
 
     /* --------------------------------------------------- story time, part 1 */
 
@@ -2259,7 +2266,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ]));
       return true;`);
     await go(base);
-    await waitFor("window.storyTold", "the app");
     check(await exec("return window.storyTold();") === 2,
       "segments are counted across an answered question",
       String(await exec("return window.storyTold();")));
@@ -2277,7 +2283,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ]));
       return true;`);
     await go(base);
-    await waitFor("window.storyTold", "the app again");
     check(await exec("return window.storyTold();") === 2,
       "and a story written before kind existed still counts",
       String(await exec("return window.storyTold();")));
@@ -2395,7 +2400,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ]));
       return true;`);
     await go(base);
-    await waitFor("window.storyTold", "the app a third time");
     check(await exec("return window.storyTold();") === 1,
       "a legacy turn does not borrow a later turn's kind, or vice versa",
       String(await exec("return window.storyTold();")));
@@ -2420,7 +2424,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ]));
       return true;`);
     await go(base);
-    await waitFor("window.storyTold", "the app a fourth time");
     check(await exec("return window.storyTold();") === 2,
       "a notice's unrelated kind does not knock a legacy story's count to zero",
       String(await exec("return window.storyTold();")));
@@ -2437,7 +2440,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ]));
       return true;`);
     await go(base);
-    await waitFor("window.storyTopic", "the app");
     check(await exec("return window.storyTopic();") === "the Monkey King",
       "the topic is read back off the conversation");
     check(await exec("return document.querySelectorAll('#log .msg').length;") === 0,
@@ -2522,7 +2524,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.history");
       return true;`);
     await go(base);
-    await waitFor("window.storyStep", "the app");
     await exec(
       "window.__models = [];" +
       "window.callModel = function (m, t, model) {" +
@@ -2643,7 +2644,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.history");
       return true;`);
     await go(base);
-    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
 
     const lastBubble = `
       var all = document.querySelectorAll('#log .msg.bot .bubble');
@@ -2780,7 +2780,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       return true;`);
     await go(base);
-    await waitFor("window.newChat && window.storyStep", "the app after reseeding");
     await exec(
       "window.__resolve = null;" +
       "window.callModel = function () {" +
@@ -3130,7 +3129,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.history");
       return true;`);
     await go(base);
-    await waitFor("window.startStoryWith", "the app");
     /* Dispatch on what the call actually asks for, not on call order -- a
      * mock keyed by count cannot tell "the cast call never happened" from
      * "the cast call happened first", which is exactly the distinction this
@@ -3184,7 +3182,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.removeItem("hsk1chat.history");
       return true;`);
     await go(base);
-    await waitFor("window.startStoryWith", "the app");
     await exec(
       "window.__calls = 0; window.__rej = null;" +
       "window.callModel = function () {" +
@@ -3218,7 +3215,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       return true;`);
     await go(base);
-    await waitFor("window.newChat && window.startStoryWith", "the app once more");
     await exec(
       "window.__castResolve = null;" +
       "window.callModel = function () {" +
@@ -3264,7 +3260,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       return true;`);
     await go(base);
-    await waitFor("window.newChat", "the app");
     await exec("window.newChat('story'); window.newChat('chat');");
     const left = await exec(`
       return JSON.parse(localStorage["hsk1chat.chats"] || "[]")
@@ -3283,7 +3278,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
-    await waitFor("window.storyStep", "the app");
     /* callModel's third argument records which model each of the 5 segment
      * calls plus the trailing title call actually used -- a mock that
      * ignores it cannot tell the title call from a segment call, which is
@@ -3328,7 +3322,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       return true;`);
     await go(base);
-    await waitFor("window.storyStep", "the app once more");
     await exec(
       "window.callModel = function (messages) {" +
       "  var isTitle = (messages || []).some(function (m) {" +
@@ -3371,7 +3364,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.teachModel", JSON.stringify("teaching/model"));
       return true;`);
     await go(base);
-    await waitFor("window.storyStep", "the app with the seeded story");
     /* Two callModel calls happen in this flow -- the segment, then the title
      * -- so resolvers queue up rather than a single variable, which only the
      * first call would ever fill. */
@@ -3406,7 +3398,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       localStorage.setItem("hsk1chat.chatMsgs", "{}");
       return true;`);
     await go(base);
-    await waitFor("window.newChat && window.storyStep", "the app once more");
     await exec(
       "window.__reject = null;" +
       "window.callModel = function () {" +
@@ -3504,7 +3495,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ] }));
       return true;`);
     await go(base);
-    await waitFor("window.startActivity", "the app");
     /* callModel is stubbed before the activity opens, not after: startActivity()
      * withholds the opening turn for a drill, but a stub that arrives late
      * would leave any other path free to reach the network. */
@@ -3636,7 +3626,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ] }));
       return true;`);
     await go(base);
-    await waitFor("window.startActivity", "the app");
     await exec(`
       window.callModel = function () { return Promise.resolve("\u4f60\u597d\u5417\uff1f"); };
       window.startActivity("drill");
@@ -3833,7 +3822,6 @@ check(usedGroups && usedGroups.first === "\u7684",
       ] }));
       return true;`);
     await go(base);
-    await waitFor("window.renderMigrate", "the app");
     /* One stub for both calls, told apart by the prompt: the extraction says
      * "Name the ONE word", the grader asks for an errors array. */
     await exec(`
