@@ -2030,8 +2030,38 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return document.querySelector('#reportBody').innerText;")),
       "with its Chinese line, composed rather than generated");
 
+    /* The bug Todd hit on v97: pressing the button again straight after a
+     * report spent a real call and rewrote the same history with small
+     * changes. One seeded graded message is below the floor of 10, so the
+     * second press must refuse before calling anything. */
+    await exec("window.__calls2 = 0; window.callModel = function () {" +
+      "window.__calls2++; return Promise.resolve('Second report.'); };" +
+      "return true;");
+    await exec("document.querySelector('#reportWrite').click(); return true;");
+    await waitFor("/nothing new to say/.test(document.querySelector('#reportBody').innerText)",
+      "the refusal", 20000);
+    check(await exec("return window.__calls2;") === 0,
+      "a second report straight after the first spends no call at all");
+    check(/You are doing well/.test(await exec(
+      "return document.querySelector('#reportBody').innerText;")),
+      "and the report already written is still the one on screen");
+
     /* The behaviour most likely to regress quietly: a failed call must leave
-     * last week's report standing. */
+     * last week's report standing.
+     *
+     * The baseline is cleared first, through localStorage and a reload -- the
+     * floor above would otherwise refuse this press before any call is made,
+     * and the network failure is what this is about. The stored report stays,
+     * so there is still something for the failure to fail to replace. */
+    await exec(`localStorage.removeItem("hsk1chat.reportAt"); return true;`);
+    await go(base);
+    await waitFor("window.writeReport", "the app");
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor("document.querySelector('#setSheet').classList.contains('open')",
+      "Settings for the failure case");
+    await exec(`document.querySelector('#btnReport').click(); return true;`);
+    await waitFor("document.querySelector('#reportSheet').classList.contains('open')",
+      "the report sheet again");
     await exec(
       "window.callModel = function () { return Promise.reject(new Error('boom')); };" +
       "return true;");

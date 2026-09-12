@@ -11,16 +11,10 @@
 (function (root) {
   "use strict";
 
-  /* New graded messages needed before "since you last checked" can say anything.
+  /* New graded messages needed before a report is worth writing at all.
    * Ten is roughly one sitting, which is the smallest unit about which anything
-   * true can be said. Below it the report widens rather than showing an empty
-   * delta -- see WINDOW_DAYS. */
+   * true can be said. Below it the report REFUSES -- see baselineFor. */
   var FLOOR = 10;
-
-  /* What the report covers when FLOOR is not met. Two weeks of ordinary use:
-   * long enough that the fallback is never empty, short enough to still be
-   * recent. */
-  var WINDOW_DAYS = 14;
 
   /* Sentences quoted back at the learner. Three is enough to show evidence
    * without the prompt turning into a transcript -- and the cap is the whole
@@ -37,13 +31,26 @@
    *
    * Ungraded messages contribute nothing: the grader being off, or a message
    * still in flight, is not evidence about the learner either way. Same rule
-   * mistakes.js applies, for the same reason. */
-  function gradedTurns(chatMsgs, since) {
+   * mistakes.js applies, for the same reason.
+   *
+   * Neither does a tapped STARTER. A starter chip drops app-authored Chinese
+   * into the composer and the learner sends it like anything else, so nothing
+   * on the stored message says they did not write it -- and because the text is
+   * the app's own it grades clean every time. Left in, starters are a free pass
+   * into the clean count and into the sentences quoted back as the learner's
+   * best work. They are matched by text rather than flagged at send time so the
+   * rule reaches history that is already stored.
+   *
+   * This is the one gate every count routes through -- the graded and clean
+   * totals, the floor, and pickSamples's input -- so excluding them here
+   * excludes them everywhere, rather than in three places that can drift. */
+  function gradedTurns(chatMsgs, since, starters) {
     var out = [];
     Object.keys(chatMsgs || {}).forEach(function (cid) {
       (chatMsgs[cid] || []).forEach(function (t) {
         if (!t || t.role !== "user" || !t.grade) return;
         if (since && String(t.created_at || "") < since) return;
+        if (starters && starters.indexOf(String(t.text || "").trim()) !== -1) return;
         out.push(t);
       });
     });
@@ -53,31 +60,33 @@
     });
   }
 
-  /* Which moment the report's "since you last checked" section counts from.
+  /* Which moment the report's "since you last checked" section counts from, and
+   * whether enough has happened since to be worth spending a call on.
    *
-   * The baseline is the last report, unless too little has happened since for
-   * that to say anything -- in which case the report widens to WINDOW_DAYS and
-   * says so. The floor is a COUNT of graded messages rather than a span of
-   * time on purpose: three days away from the app and three days of hard
-   * practice are not the same event, and a clock cannot tell them apart.
+   * The floor is a COUNT of graded messages rather than a span of time on
+   * purpose: three days away from the app and three days of hard practice are
+   * not the same event, and a clock cannot tell them apart.
    *
-   * A learner with no previous report is not falling back. Their first report
-   * covers everything, which is exactly right. */
-  function baselineFor(chatMsgs, lastAt, now) {
-    if (!lastAt) return { since: null, fellBack: false };
-    if (gradedTurns(chatMsgs, lastAt).length >= FLOOR) {
-      return { since: lastAt, fellBack: false };
-    }
-    return {
-      since: new Date((now || Date.now()) - WINDOW_DAYS * 86400000).toISOString(),
-      fellBack: true
-    };
+   * Below the floor the report REFUSES. The original design widened to a
+   * recent window instead, on the reasoning that an empty delta is worse than
+   * a wide one -- and that was wrong in the hand. Pressing the button twice in
+   * a row spent a real call rewriting the same report with small changes,
+   * because a fourteen-day window over a history that has not changed is the
+   * same history. A report nobody needed is worse than no report, and it costs
+   * money to produce.
+   *
+   * A learner with no previous report is never below the floor. Their first
+   * report covers everything, which is exactly right. */
+  function baselineFor(chatMsgs, lastAt, starters) {
+    if (!lastAt) return { since: null, enough: true, newTurns: 0 };
+    var n = gradedTurns(chatMsgs, lastAt, starters).length;
+    return { since: lastAt, enough: n >= FLOOR, newTurns: n };
   }
 
   function brief(input) {
     input = input || {};
     var since = input.since || null;
-    var turns = gradedTurns(input.chatMsgs, since);
+    var turns = gradedTurns(input.chatMsgs, since, input.starters);
 
     var clean = 0;
     turns.forEach(function (t) { if (t.grade && t.grade.ok === true) clean++; });
@@ -192,7 +201,7 @@
 
   var api = { gradedTurns: gradedTurns, brief: brief,
               baselineFor: baselineFor, pickSamples: pickSamples, chineseLine: chineseLine,
-              FLOOR: FLOOR, WINDOW_DAYS: WINDOW_DAYS, SAMPLES: SAMPLES,
+              FLOOR: FLOOR, SAMPLES: SAMPLES,
               ACTIVITY_IDS: ACTIVITY_IDS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKReport = api;

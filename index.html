@@ -1064,7 +1064,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v97 — 2026-09-11";
+const VERSION   = "v98 — 2026-09-11";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1730,8 +1730,7 @@ function defaultTeachPrompt(spec, vars) {
   }
   if (spec.kind === "report") {
     return HSKPrompt.report({ brief: vars.brief, sinceBrief: vars.sinceBrief,
-                              samples: vars.samples, fellBack: vars.fellBack,
-                              label: vars.level });
+                              samples: vars.samples, label: vars.level });
   }
   return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
                              recent: vars.recent, context: vars.context,
@@ -5534,6 +5533,21 @@ function ghostProgressMap() {
  * the mistake counts are computed HERE and handed over already counted --
  * report.js stays pure and node-testable, which is the whole reason it is a
  * separate file. */
+/* Every starter chip, at every level, in both scripts.
+ *
+ * Tapping a starter fills the composer; sending it is an ordinary send, so the
+ * stored message is indistinguishable from one the learner wrote. Both scripts
+ * because the chips are rendered through toScript() and the learner may have
+ * switched since; every level because history outlives the level it was made
+ * at. See gradedTurns() in report.js for why they are excluded at all. */
+function starterTexts() {
+  const out = [];
+  LEVELS.forEach(l => HSKPrompt.startersFor(l.id).forEach(t => {
+    [t, toScript(t)].forEach(v => { if (out.indexOf(v) === -1) out.push(v); });
+  }));
+  return out;
+}
+
 function reportInput(since) {
   /* readiness() is null at the top level, where there is no next list to cover.
    * Its two fractions are `read` and `produce`; the brief calls the second one
@@ -5547,6 +5561,7 @@ function reportInput(since) {
     coverage: { read: (r && r.read) || 0, use: (r && r.produce) || 0 },
     /* S.chatTime is time on task; S.cost is money. */
     minutes: Math.round((HSKTime.totals(S.chatTime).total || 0) / 60000),
+    starters: starterTexts(),
     since: since || null, now: Date.now()
   };
 }
@@ -5562,15 +5577,22 @@ async function writeReport() {
   if (!all.messages.graded) {
     return { ok: false, why: "Chat for a while first \u2014 there is nothing to report on yet." };
   }
-  const base = HSKReport.baselineFor(S.chatMsgs, S.reportAt || null, Date.now());
+  const base = HSKReport.baselineFor(S.chatMsgs, S.reportAt || null, starterTexts());
+  /* Refused before the call, not after: below the floor there is nothing new to
+   * say, and saying it anyway costs the learner money for a paraphrase of the
+   * report they already have. */
+  if (!base.enough) {
+    return { ok: false, why: "Only " + base.newTurns + " new checked message" +
+      (base.newTurns === 1 ? "" : "s") + " since your last report. Come back " +
+      "after about " + HSKReport.FLOOR + " \u2014 there is nothing new to say yet." };
+  }
   const since = HSKReport.brief(reportInput(base.since));
   const samples = HSKReport.pickSamples(
-    HSKReport.gradedTurns(S.chatMsgs, base.since), all.tags);
+    HSKReport.gradedTurns(S.chatMsgs, base.since, starterTexts()), all.tags);
   let text;
   try {
     text = await callModel([{ role: "user", content: teachPromptFor("report", {
-      brief: all, sinceBrief: since, samples: samples,
-      fellBack: base.fellBack, level: levelLabel()
+      brief: all, sinceBrief: since, samples: samples, level: levelLabel()
     }) }], 700, teachingModel());
   } catch (e) {
     return { ok: false, why: "That did not go through \u2014 " + ((e && e.message) || e) };

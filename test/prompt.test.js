@@ -1052,7 +1052,7 @@ const rBrief = {
   activities: { chat: 4, focused: 2, drill: 0, story: 0, twenty: 0 }
 };
 const rp = P.report({
-  brief: rBrief, sinceBrief: rBrief, fellBack: false, label: "HSK 2",
+  brief: rBrief, sinceBrief: rBrief, label: "HSK 2",
   samples: [{ text: "\u6211\u5403\u996d", ok: true, tag: "" }]
 });
 
@@ -1071,13 +1071,14 @@ check(/must come from|only.*numbers.*above|do not invent/i.test(rp),
 check(rp.indexOf("drill") !== -1 && rp.indexOf("0") !== -1,
   "quiet activities appear with an explicit zero rather than being left out");
 
-const rpFell = P.report({
-  brief: rBrief, sinceBrief: rBrief, fellBack: true, label: "HSK 2", samples: []
-});
-check(rpFell !== rp,
-  "a fallen-back report is told so: it must not claim to cover 'since last time'");
-check(/two weeks|14 days|recent/i.test(rpFell),
-  "and is told what it does cover instead", rpFell.slice(0, 400));
+/* There is no fallen-back report any more: below the floor the app refuses
+ * before it spends the call, so the prompt has one shape and never has to
+ * explain which window it is covering. */
+check(rp.indexOf("SINCE THEIR LAST REPORT") !== -1,
+  "the since-block is always the since-block", rp.slice(0, 400));
+check(!/two weeks|recent window/i.test(rp),
+  "and never claims to cover a widened window, because that path is gone",
+  rp.slice(0, 400));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

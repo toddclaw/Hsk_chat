@@ -76,14 +76,29 @@ drift apart, and there is no snapshot to keep in sync with anything.
 ### The floor is data, not clock
 
 If fewer than `REPORT_FLOOR` newly **graded messages** have landed since the last
-report, the report says so plainly and covers the last `REPORT_WINDOW` days
-instead of presenting an empty delta.
+report, writing a new one is **refused before the call is made**, naming how many
+there have been.
 
-Starting values, to be confirmed by the plan rather than guessed at during
-implementation: `REPORT_FLOOR = 10` and `REPORT_WINDOW = 14`. Ten graded messages
-is roughly one sitting, which is the smallest unit about which anything true can
-be said; fourteen days is two weeks of ordinary use, long enough that a fallback
-report is never empty and short enough to still feel like *recent*.
+> **Revised after v97 shipped.** The original design widened to a
+> `REPORT_WINDOW = 14` day window here instead of refusing, on the reasoning that
+> an empty delta is worse than a wide one. That was wrong in the hand: pressing
+> the button twice in a row spent a real call rewriting the same report with
+> small changes, because a fourteen-day window over a history that has not
+> changed is the same history. A report nobody needed is worse than no report,
+> and it costs money to produce. `REPORT_WINDOW` no longer exists — with the
+> refusal in place nothing could reach it.
+
+`REPORT_FLOOR = 10`. Ten graded messages is roughly one sitting, which is the
+smallest unit about which anything true can be said.
+
+**A tapped starter is not a graded message.** Starter chips drop app-authored
+Chinese into the composer and the learner sends it like any other message, so
+nothing stored on it says they did not write it — and because the text is the
+app's own, it grades clean every time. Counted, starters are a free pass into
+the clean total, into the floor, and into the sentences quoted back to the
+learner as their own best work. They are excluded in `gradedTurns()`, the single
+gate all three route through, and matched by text so the rule reaches history
+that is already stored.
 
 A message count is more honest than a time floor: three days away from the app
 and three days of hard practice should not produce the same "too soon". The

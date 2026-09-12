@@ -1018,11 +1018,16 @@ spends a call, and a call that fails leaves the previous report standing — las
 is worth more than a blank sheet.
 
 **What "since last time" covers.** The baseline is your last report. If fewer than **10**
-graded messages have arrived since then, there is not enough new evidence to say anything
-true, so the report widens to the **last 14 days** and says so rather than showing you an
-empty delta. The floor is a count of messages rather than a span of time on purpose: three
-days away from the app and three days of hard practice are not the same event, and a clock
-cannot tell them apart. A first report has no baseline and simply covers everything.
+checked messages have arrived since then, there is not enough new evidence to say anything
+true, so writing a new one is **refused before it spends a call** and tells you how many there
+have been. The floor is a count of messages rather than a span of time on purpose: three days
+away from the app and three days of hard practice are not the same event, and a clock cannot
+tell them apart. A first report has no baseline and simply covers everything.
+
+**A starter chip you tapped does not count as a sentence you wrote.** Starters are the app's
+own Chinese, so they always check out clean — left in, they would inflate your clean total and
+could be quoted back at you as your best work when you only tapped one out of curiosity. They
+are excluded from the counts, from the floor, and from the quoted sentences.
 
 The three sentences it quotes back at you are chosen **in code**, by the numbers — your most
 recent clean sentence, and your most recent sentence in each category you miss most. The model

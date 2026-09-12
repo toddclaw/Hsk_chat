@@ -106,32 +106,40 @@ const many = {};
 many.a = [];
 for (let i = 1; i <= 12; i++) many.a.push(turn(daysAgo(i), true));
 
-const bl1 = R.baselineFor(many, daysAgo(20), NOW);
-check(bl1.since === daysAgo(20) && bl1.fellBack === false,
+const bl1 = R.baselineFor(many, daysAgo(20));
+check(bl1.since === daysAgo(20) && bl1.enough === true,
   "plenty of new messages since the last report: that report is the baseline",
   JSON.stringify(bl1));
 
-const bl2 = R.baselineFor(many, daysAgo(3), NOW);
-check(bl2.fellBack === true,
-  "too few since the last report: fall back rather than show an empty delta",
+const bl2 = R.baselineFor(many, daysAgo(3));
+check(bl2.enough === false,
+  "too few since the last report: refuse rather than paraphrase the last one",
   JSON.stringify(bl2));
-check(bl2.since === new Date(NOW - R.WINDOW_DAYS * 86400000).toISOString(),
-  "and the fallback covers exactly WINDOW_DAYS", JSON.stringify(bl2));
+check(bl2.newTurns === 3,
+  "and say how many there were, so the refusal can name a number", JSON.stringify(bl2));
 
-const bl3 = R.baselineFor(many, null, NOW);
-check(bl3.since === null && bl3.fellBack === false,
-  "no previous report at all is not a fallback: it is the first report, and it covers everything",
+const bl3 = R.baselineFor(many, null);
+check(bl3.since === null && bl3.enough === true,
+  "no previous report at all is never a refusal: it is the first report, and it covers everything",
   JSON.stringify(bl3));
 
-check(R.baselineFor({}, daysAgo(30), NOW).fellBack === true,
-  "an empty history falls back too, rather than reporting on nothing");
+check(R.baselineFor({}, daysAgo(30)).enough === false,
+  "an empty history refuses too, rather than reporting on nothing");
 
 // The floor is a count of messages, not a span of time. Three days away from
 // the app and three days of hard practice must not produce the same answer.
 const busy = { a: [] };
 for (let i = 0; i < 15; i++) busy.a.push(turn(daysAgo(1), true));
-check(R.baselineFor(busy, daysAgo(2), NOW).fellBack === false,
+check(R.baselineFor(busy, daysAgo(2)).enough === true,
   "one hard day clears the floor, though barely any time has passed");
+
+/* The bug this replaced: a second press straight after a report widened to a
+ * fourteen-day window and spent a real call rewriting the same history with
+ * small changes. Nothing new has happened, so nothing is what it must say. */
+check(R.baselineFor(many, daysAgo(0)).enough === false,
+  "pressing again immediately refuses: a call that paraphrases last week is worse than no call");
+check(R.WINDOW_DAYS === undefined,
+  "and the widening window is gone rather than left dead in the module");
 
 // --- samples ---------------------------------------------------------------
 
@@ -196,6 +204,37 @@ check(lines.every(l => l && l.length > 0),
   "there is always a line, even for a learner who has done nothing yet");
 check(new Set(lines).size > 1,
   "and it is not the same sentence every time, or it is decoration rather than feedback");
+
+// --- tapped starters are not the learner's writing -------------------------
+
+/* Todd's report quoted a starter chip back at him as a sentence he had written
+ * well. He had not written it: he tapped it because he did not recognise the
+ * characters and was curious. Starters are app-authored, so they grade clean
+ * every time -- a free pass into the clean count and into the quoted evidence. */
+const STARTER = "\u4f60\u597d\uff01";
+const mixed = { a: [turn(daysAgo(2), true, STARTER), turn(daysAgo(1), true, "\u6211\u5403\u996d")] };
+
+check(R.gradedTurns(mixed, null, [STARTER]).length === 1,
+  "a tapped starter is not a graded turn, however cleanly it graded");
+check(R.gradedTurns(mixed, null, [STARTER])[0].text === "\u6211\u5403\u996d",
+  "the learner's own sentence survives the filter");
+check(R.gradedTurns(mixed, null).length === 2,
+  "and with no starter list nothing is excluded: the caller supplies the chips");
+
+const bs = R.brief(input({ chatMsgs: mixed, starters: [STARTER] }));
+check(bs.messages.graded === 1 && bs.messages.clean === 1,
+  "the counts exclude it too, so 'sentences they wrote themselves' is true",
+  JSON.stringify(bs.messages));
+
+check(!R.pickSamples(R.gradedTurns(mixed, null, [STARTER]), [])
+       .some(p => p.text === STARTER),
+  "and it can never be quoted back as their own good sentence");
+
+/* The floor routes through the same gate: tapping ten chips is not a sitting. */
+const allStarters = { a: [] };
+for (let i = 0; i < 12; i++) allStarters.a.push(turn(daysAgo(i + 1), true, STARTER));
+check(R.baselineFor(allStarters, daysAgo(20), [STARTER]).enough === false,
+  "tapping twelve starters does not clear the floor: none of it was theirs");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

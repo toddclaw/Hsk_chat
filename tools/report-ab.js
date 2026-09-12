@@ -148,27 +148,27 @@ const ARMS = {
   // Does carrying explicit zeroes stop the model inventing activity? The spec
   // asserts it does. This is the arm that finds out.
   zeroes: (f) => HSKPrompt.report({ brief: f, sinceBrief: f, samples: [],
-                                    fellBack: false, label: "HSK 2" }),
+                                    label: "HSK 2" }),
   omit: (f) => {
     const thin = JSON.parse(JSON.stringify(f));
     Object.keys(thin.activities).forEach(k => {
       if (thin.activities[k] === 0) delete thin.activities[k];
     });
     return HSKPrompt.report({ brief: thin, sinceBrief: thin, samples: [],
-                              fellBack: false, label: "HSK 2" });
+                              label: "HSK 2" });
   },
   // Does the guard sentence move fidelity, or does it only make us feel safer?
   guarded: (f) => HSKPrompt.report({ brief: f, sinceBrief: f, samples: [],
-                                     fellBack: false, label: "HSK 2" }),
+                                     label: "HSK 2" }),
   plain: (f) => HSKPrompt.report({ brief: f, sinceBrief: f, samples: [],
-                                   fellBack: false, label: "HSK 2" })
+                                   label: "HSK 2" })
     .replace(GUARD, ""),
   /* The candidate fix for what the contradiction counter found. The guard
    * forbids inventing progress; nothing forbade inventing its absence, and the
    * "what to focus on next" paragraph is where a model with nothing true to say
    * goes looking. This tells it that deepening is a legitimate answer. */
   nodeficit: (f) => HSKPrompt.report({ brief: f, sinceBrief: f, samples: [],
-                                       fellBack: false, label: "HSK 2" })
+                                       label: "HSK 2" })
     .replace("Warm and direct,",
       "Never describe as missing or not yet done anything the figures above " +
       "show they did. If they have no outstanding mistake categories, say so " +
@@ -182,7 +182,7 @@ const ARMS = {
    * so this arm now runs the OLD wording: if a future edit erodes the gain,
    * `oldlabel` catching up is how it shows. */
   oldlabel: (f) => HSKPrompt.report({ brief: f, sinceBrief: f, samples: [],
-                                      fellBack: false, label: "HSK 2" })
+                                      label: "HSK 2" })
     .replace(/- sentences they wrote themselves and had checked: /g,
              "- messages graded: ")
 };
