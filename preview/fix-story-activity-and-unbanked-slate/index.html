@@ -2536,11 +2536,32 @@ function touchChat() {
 /* The activity a conversation was created in. Fixed at creation: switching
  * activity starts a new conversation rather than changing this one, so a
  * transcript never mixes a story with a chat. Absent means chat -- every
- * conversation written before activities existed was one. */
-function currentActivity() {
-  const c = chatById(S.chatId);
+ * conversation written before activities existed was one.
+ *
+ * The row is believed only when it says something specific, and the TRANSCRIPT
+ * is asked otherwise, because the transcript is the copy that never got lost. A
+ * database missing one unrelated column made every conversations push drop
+ * `activity`, and a story that comes back saying "chat" has no "Read on" button
+ * and no way to continue -- while its `role: "topic"` marker, riding in
+ * `messages.role` where nothing optional could strip it, was sitting right there
+ * in the same conversation the whole time. Same authority storyTopic() and
+ * drillTag() have always used, for the same reason.
+ *
+ * So it heals with no migration, no server repair, and no ordering between the
+ * two. Only story and drill leave a marker: Ghost Words leaves none and 20
+ * Questions' is a column of its own, so those two still depend on the row, and
+ * on mergeConversations() not letting a lost value overwrite a real one.
+ *
+ * A specific row still wins outright -- a chat transcript cannot contain a topic
+ * or drill marker, so the inference only ever fires where the row lost. */
+function activityOf(c) {
+  if (c && c.activity && c.activity !== "chat") return c.activity;
+  const msgs = (c && S.chatMsgs[c.id]) || [];
+  if (msgs.some(m => m.role === "topic")) return "story";
+  if (HSKMistakes.drillTagOf(msgs)) return "drill";
   return (c && c.activity) || "chat";
 }
+function currentActivity() { return activityOf(chatById(S.chatId)); }
 
 /* The chat id storyStep() is generating a reply for right now, or null. Not
  * S.busy: that is one flag for the whole app, and can't tell "this specific
@@ -5382,7 +5403,7 @@ function renderStoryChooser(box) {
 function pastStoryTopics() {
   const out = [];
   S.chats.forEach(c => {
-    if (c.activity !== "story" || c.deleted) return;
+    if (activityOf(c) !== "story" || c.deleted) return;
     const t = (S.chatMsgs[c.id] || []).find(m => m.role === "topic");
     if (t && t.text && out.indexOf(t.text) === -1) out.push(t.text);
   });
@@ -6691,7 +6712,9 @@ function renderChats() {
 
     const meta = document.createElement("span");
     meta.className = "cmeta";
-    meta.textContent = HSKPrompt.activityFor(c.activity).label + " · " +
+    // activityOf(), not c.activity: a row that lost its activity must not label
+    // a story "Chat" in the list and then open with the story controls on.
+    meta.textContent = HSKPrompt.activityFor(activityOf(c)).label + " · " +
       turns.length + " message" + (turns.length === 1 ? "" : "s") +
       " · " + new Date(c.updated_at || c.created_at).toLocaleDateString();
 
