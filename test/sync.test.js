@@ -297,18 +297,43 @@ check(local.model === "old/model" && local.replyLength === "short" && local.atte
   "an adopted snapshot overwrites model, reply length and tries -- the reported symptom");
 check(local.key === "keep", "though never the API key");
 
-/* activity is the third optional column. NULL means "chat", so conversations
- * written before the column existed read back correctly with no migration. */
+/* activity is the third optional column. An absent one stays absent through the
+ * round trip -- it is defaulted to "chat" where it is USED, never where it is
+ * stored, so the merge can still tell "we don't know" from "it is a chat". */
 const convA = { id: "c1", title: "T", activity: "story",
                 created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
 const rowA = Sync.conversationToRow(convA, "u1");
 check(rowA.activity === "story", "conversationToRow carries the activity");
 check(Sync.rowToConversation(rowA).activity === "story", "and it survives the round trip");
 
-check(Sync.rowToConversation({ id: "c2", created_at: "x", updated_at: "x" }).activity === "chat",
-  "a row with no activity column reads back as chat");
+check(Sync.rowToConversation({ id: "c2", created_at: "x", updated_at: "x" }).activity === null,
+  "a row with no activity column reads back as unknown, not as chat");
 check(Sync.rowToConversation({ id: "c3", activity: null, created_at: "x", updated_at: "x" })
-  .activity === "chat", "and so does an explicit NULL");
+  .activity === null, "and so does an explicit NULL");
+/* The reason that matters: a local copy that says "chat" out loud outranks the
+ * real answer for ever, so a device that pulled a story while the server's
+ * activity column was null could never recover once it was repaired. */
+const mergedHeal = Sync.mergeConversations(
+  [Sync.rowToConversation({ id: "c2b", created_at: "x", updated_at: "2026-01-01T00:00:00Z" })],
+  [{ id: "c2b", activity: "story", created_at: "x", updated_at: "2026-01-09T00:00:00Z" }]);
+check(mergedHeal[0].activity === "story",
+  "a repaired server row heals a device that had pulled the activity-less one");
+/* And the same for a device that already PERSISTED the invented "chat" -- which
+ * every device running before this fix did, on every story it pulled. A
+ * specific activity outranks "chat" from either side, because the field is
+ * fixed at creation and so a disagreement is always a lost value. */
+const mergedHealStuck = Sync.mergeConversations(
+  [{ id: "c2d", activity: "chat", updated_at: "2026-09-12T17:00:00Z" }],
+  [{ id: "c2d", activity: "story", updated_at: "2026-09-12T14:52:00Z" }]);
+check(mergedHealStuck[0].activity === "story",
+  "a local 'chat' that was invented, not chosen, loses to a real story -- even though it is newer");
+const mergedRealChat = Sync.mergeConversations(
+  [{ id: "c2e", activity: "chat", updated_at: "2026-09-12T17:00:00Z" }],
+  [{ id: "c2e", activity: null, updated_at: "2026-09-12T14:52:00Z" }]);
+check(mergedRealChat[0].activity === "chat",
+  "...and a conversation that really is a chat stays one");
+check(Sync.conversationToRow({ id: "c2c", created_at: "x", updated_at: "x" }, "u1").activity === null,
+  "and an unknown activity is pushed as unknown, never taught to the next device as chat");
 
 /* The merge trap: mergeConversations rebuilds its object field by field, so a
  * column not added there is dropped on every sync. */
@@ -558,6 +583,49 @@ function freshSync() {
     "once probeSchema has already learned kind is missing, the push needs no retry at all");
   check(msgCalls3[0].keys.indexOf("kind") === -1 && msgCalls3[0].keys.indexOf("grade") !== -1,
     "and the single push still carries grade");
+
+  /* --- Scenario 4: conversations, missing only the newest migration.
+   *
+   * The real state of the deployed database on 2026-09-12: `activity` and
+   * `level` exist, `side` and `secret` do not. Every conversation row on the
+   * server had activity: null, because the retry dropped all four optional
+   * columns on one 42703 about `side` -- so a story pulled onto any device
+   * without its own local copy arrived as a plain chat, with no "Read on" button
+   * and no way to continue it. */
+  const seen4 = [];
+  const Sync4 = freshSync();
+  global.window = { supabase: mockSupabase(["side", "secret"], seen4) };
+  Sync4.configure("https://example.invalid", "publishable");
+
+  const storyRow = { id: "cccccccc-0000-0000-0000-000000000004", activity: "story",
+                     level: 2, created_at: "2026-09-12T14:44:07.526Z",
+                     updated_at: "2026-09-12T14:52:07.774Z" };
+  await Sync4.pushConversations([Sync4.conversationToRow(storyRow, USER)]);
+  const convCalls4 = seen4.filter(c => c.table === "conversations");
+  check(convCalls4.length === 2,
+    "a conversations push failing only on side/secret retries exactly once",
+    JSON.stringify(convCalls4));
+  check(convCalls4[1] && convCalls4[1].keys.indexOf("side") === -1 &&
+        convCalls4[1].keys.indexOf("secret") === -1,
+    "the retry drops the twenty-questions columns");
+  check(convCalls4[1] && convCalls4[1].keys.indexOf("activity") !== -1 &&
+        convCalls4[1].keys.indexOf("level") !== -1,
+    "...and KEEPS activity and level -- a story stays a story");
+  check(Sync4.activitySupported() === true && Sync4.levelSupported() === true,
+    "and neither is written off as missing");
+
+  // Only when dropping side/secret alone is not enough does activity go.
+  const seen5 = [];
+  const Sync5 = freshSync();
+  global.window = { supabase: mockSupabase(["side", "secret", "level"], seen5) };
+  Sync5.configure("https://example.invalid", "publishable");
+  await Sync5.pushConversations([Sync5.conversationToRow(storyRow, USER)]);
+  const convCalls5 = seen5.filter(c => c.table === "conversations");
+  check(convCalls5.length === 3,
+    "when side/secret alone isn't enough the retry escalates once more and stops",
+    JSON.stringify(convCalls5));
+  check(convCalls5[2] && convCalls5[2].keys.indexOf("activity") === -1,
+    "activity is the acknowledged collateral cost of the blunt fallback, and only then");
 
   /* Sign-in is for sync only. Issues are filed through a prefilled github.com
    * URL that needs no token, so asking for public_repo -- write access to every
