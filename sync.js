@@ -121,7 +121,9 @@
       id: c.id,
       user_id: userId,
       title: c.title || null,
-      activity: c.activity || "chat",
+      // Same reason as rowToConversation: unknown is pushed as unknown, so this
+      // device cannot teach the next one an activity it never knew.
+      activity: c.activity || null,
       level: c.level || null,
       side: c.side || null,
       secret: c.secret || null,
@@ -131,11 +133,21 @@
     };
   }
 
+  /* An absent activity stays absent, and is NOT read back as "chat".
+   *
+   * "chat" here is a value, and mergeConversations treats a value as the answer
+   * -- `existing.activity || incoming.activity` -- so inventing one turned "this
+   * database never told us" into "this is a chat", which then beat the real
+   * answer for ever. A device that pulled a story while the server's activity
+   * column was being nulled kept showing it as a chat even after the server was
+   * repaired, because its own local copy now said "chat" out loud. Absent means
+   * chat only at the point of USE: currentActivity() and activityFor() both
+   * already default it, and neither can be misled by a null. */
   function rowToConversation(row) {
     return {
       id: row.id,
       title: row.title || "",
-      activity: row.activity || "chat",
+      activity: row.activity || null,
       level: row.level || null,
       side: row.side || null,
       secret: row.secret || null,
@@ -144,6 +156,21 @@
       deleted: !!row.deleted_at,
       deleted_at: row.deleted_at || null
     };
+  }
+
+  /* Which side's activity to keep. Because the field is fixed at creation, a
+   * disagreement is never a real one: one side lost the value. "chat" is the
+   * awkward case -- it is both a real activity and what an older client wrote
+   * when it had no column to read -- so a SPECIFIC activity outranks it from
+   * either side, and that is what heals a device which persisted an invented
+   * "chat" over a real story. Nothing but newChat() ever writes a specific one,
+   * so there is no way for this to overrule a conversation that really is a
+   * chat. Returns null, not "chat", when neither side knows: currentActivity()
+   * and activityFor() default it at the point of use. */
+  function pickActivity(a, b) {
+    if (a && a !== "chat") return a;
+    if (b && b !== "chat") return b;
+    return a || b || null;
   }
 
   /* Union by id, newer updated_at wins -- except deletion, which is monotonic
@@ -171,7 +198,7 @@
          * "which is newer" but "which side actually has one" -- a remote row
          * from an un-migrated database carries none, and a recency rule would
          * let it erase ours. */
-        activity: existing.activity || incoming.activity || "chat",
+        activity: pickActivity(existing.activity, incoming.activity),
         // Fixed at creation exactly like activity, so the same rule: whichever
         // side actually has one, never whichever is newer.
         level: existing.level || incoming.level || null,
@@ -519,21 +546,36 @@
     var r = await client.from("conversations").upsert(payload);
     if (r.error) {
       /* A push that got past the probe -- a column dropped mid-session, or a
-       * probe that never ran. Drop every optional column once before concluding
-       * the whole table is missing. All of them rather than the guilty one:
-       * telling them apart means parsing PostgREST's localized message text,
-       * which is what the probe exists to avoid. With all already false there
-       * is nothing left to strip, so this cannot recurse. */
-      if (isMissingSchema(r.error) &&
-          (schemaHasActivity !== false || schemaHasLevel !== false ||
-           schemaHasSide !== false || schemaHasSecret !== false)) {
-        schemaHasActivity = false;
-        schemaHasLevel = false;
-        schemaHasSide = false;
-        schemaHasSecret = false;
-        return pushConversations(rows);
+       * probe that never ran, which is index.html's case: nothing there calls
+       * probeSchema(), so this retry is the only degrade mechanism that runs in
+       * production and which column it blames first decides what survives.
+       *
+       * Incremental, exactly like pushMessages and for the same reason. `side`
+       * and `secret` are the newest migration -- a hand-run SQL-editor
+       * statement, newer than activity and level -- so they are the likeliest
+       * culprit and are dropped alone first. Blaming all four at once is what
+       * wrote activity: null over every conversation on a database whose only
+       * fault was a missing `side`, and a conversation with no activity is a
+       * story that has turned into a chat on the next device to pull it.
+       *
+       * At most two retries: the first only fires while side/secret aren't
+       * already false, the second only while activity/level aren't, and both
+       * set the flags they check before recursing -- so neither branch can fire
+       * twice, and with all four false there is nothing left to strip. */
+      if (isMissingSchema(r.error)) {
+        if (schemaHasSide !== false || schemaHasSecret !== false) {
+          schemaHasSide = false;
+          schemaHasSecret = false;
+          return pushConversations(rows);
+        }
+        if (schemaHasActivity !== false || schemaHasLevel !== false) {
+          schemaHasActivity = false;
+          schemaHasLevel = false;
+          return pushConversations(rows);
+        }
+        schemaHasConversations = false;
+        return;
       }
-      if (isMissingSchema(r.error)) { schemaHasConversations = false; return; }
       throw r.error;
     }
   }

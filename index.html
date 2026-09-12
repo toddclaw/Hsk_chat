@@ -1061,7 +1061,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v99 — 2026-09-12";
+const VERSION   = "v100 — 2026-09-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1813,7 +1813,17 @@ async function turn(ctx) {
    * Drills both say so on their own row (`newWords: false`) rather than being
    * named here, so the next one that needs it needs no edit to this line. */
   const isFocused = currentActivity() === "focused";
-  const noNew = HSKPrompt.activityFor(currentActivity()).newWords === false;
+  /* Story time's asking phase is the third case, and it is not a preference:
+   * whatever turn() legalises here, settlePace() has to bank, or the word stays
+   * above level in every later render -- validated clean, then painted red, with
+   * no card to explain it. storyStep() deliberately does not settle an asking
+   * turn ("the question is not a segment and earns no slate of its own"), and
+   * only said so on its own side, so the slate was legal for validation and
+   * banked by nothing. Both halves of that sentence have to be said in the same
+   * place. This is how 辆 -- the top word on an HSK 2 slate -- shipped inside a
+   * question and underlined itself. */
+  const noNew = HSKPrompt.activityFor(currentActivity()).newWords === false ||
+                (ctx && ctx.storyPhase === "asking");
   const b = levelBudget();
   const offer = (!noNew && S.pace.on && b.credits > 0)
     ? HSKPace.slate(S.pool, S.learning.map(e => e.w).concat(S.known.map(e => e.w)), HSKPace.SLATE)
