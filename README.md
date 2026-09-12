@@ -848,7 +848,7 @@ cheap model cannot do. Measured at HSK 1: two usable segments in fifty-five on t
 chat model, against thirty-three in forty on the default story model — and zero stories out
 of eleven that worked, against eight out of eight. Six different prompt strategies were tried
 first and none of them helped; two of them made a capable model worse. The write-up is in
-DEVELOPING.md. It costs roughly **$0.10 a story**, about 170× a chat turn, which is why it is
+DEVELOPING.md. It costs roughly **$0.25 a story** — measured, see BACKLOG.md — some 400× a chat turn, which is why it is
 a separate setting you can see and change rather than something the app quietly spends on
 your behalf.
 
@@ -962,15 +962,16 @@ The lists are cumulative and frequency-ordered, and those two facts together mak
 obvious progress bar a liar. HSK 1 is 300 words and HSK 2 is 497, so at HSK 1 you have
 ticked off 60% of the HSK 2 *list* — but because language is Zipfian and the commonest words
 carry most of the text, those same 300 words already cover about **88% of HSK 2 running
-text**. The gap holds at every band, not just the first. A bar that starts at zero is telling you that you understand none of a level you can
-mostly already read.
+text**. The gap holds at every band, not just the first. A bar that starts at zero and is
+labelled as comprehension is telling you that you understand none of a level you can mostly
+already read.
 
-So Settings → **Learning** leads with the number that answers the question actually being
-asked:
+So Settings → **Learning** answers the question actually being asked — *how much more until I
+can read the level* — as a count of words rather than as a percentage, and the bar beside it is
+labelled as what it really is, the level's new words learned:
 
 ```
 Progress to the next level
-  ████████████████░░░░  88% of HSK 2 you can read — estimated     41% you can use
   ██░░░░░░░░░░░░░░░░░░  12 of 197 new words                      learned at HSK 2
   to 98%       58 more words, commonest first
   used by you  12 written in your own messages
@@ -982,19 +983,21 @@ coverage for adequate comprehension, **98%** for comfortable independent reading
 that is roughly 58 of the 197 new HSK 2 words to reach 98% — not 197 — and pacing already
 offers them commonest-first, so it is working through them in the cheapest possible order.
 
-**Two bars, because they answer different questions on different scales.** The first is
-reading ability and it starts high — 88% for HSK 1 → 2 — because that is genuinely what share
-of HSK 2 running text the HSK 1 words carry. Correct, and useless as a progress display on its
-own: every word still worth learning lives in the top twelve points of it, so it looks nearly
-full on arrival and barely moves while you work. The second is the level's **new** words, 0 to
-100 across the same effort. Neither is the other's units, so they are not folded together.
+**One bar, and it is the new words.** A reading-coverage bar was drawn above this one until
+v99 and was taken out. It starts high — 88% for HSK 1 → 2 — because that is genuinely what
+share of HSK 2 running text the HSK 1 words carry: correct, and useless as a progress display,
+since every word still worth learning lives in the top twelve points of it, so the bar looked
+nearly full on arrival and barely moved while you worked. The same number is still computed
+and still says everything it usefully can in the **to 98%** row, which puts it in words you
+can act on, and it is still the condition **Move up** waits for. The bar that is left is the
+level's **new** words, 0 to 100 across the same effort.
 
-Separate figures rather than one blended score, because they mean different things and the
-gaps between them are the informative part. **Blue** is what you can **read** — every word the
-level allows you. **Green** is what you can **use**, the same measure over the words you have
-actually written. Each figure is printed in its bar's color, so the legend is the text
-itself rather than a key you have to hold in your head. Green always trails blue, and that
-gap is normal.
+The goal-level bar at the top of the section keeps both colors, because a goal two or three
+levels out is the one place the read/use gap is worth watching: **blue** is what you can
+**read** — every word the level allows you — and **green** is what you can **use**, the same
+measure over the words you have actually written. Each figure is printed in its bar's color,
+so the legend is the text itself rather than a key you have to hold in your head. Green always
+trails blue, and that gap is normal.
 **Met** is what pacing has taught you. **Used by you** is that same production as a count,
 segmented out of your own messages — it needs no new storage, since every message is already
 saved, and it will always lag: recognition runs ahead of production and the gap widens with

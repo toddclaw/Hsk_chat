@@ -984,28 +984,17 @@ return true;
     await waitFor("document.querySelector('#setSheet').classList.contains('open')",
       "Settings for the progress panel");
 
-    /* The number that makes the whole feature worth having. A learner at HSK 1
-     * has ticked off 41% of the HSK 2 *list* but can already read about 85% of
-     * HSK 2 *text*, because the lists are frequency-ordered and language is
-     * Zipfian. Asserted as a band, not a constant: the exact figure moves with
-     * ZIPF_EXP and with anything the earlier tests added to the word lists, but
-     * a panel reporting the list share instead would land near 41% and a broken
-     * one would land at 0 or 100. */
+    /* This panel led with reading coverage -- 85% of HSK 2 text at HSK 1 -- and
+     * deliberately no longer does: a bar that arrives nearly full and barely
+     * moves is correct arithmetic and a useless progress display. The number
+     * still drives the "to 98%" row and Move up, and both are checked below,
+     * so removing the bar cannot quietly remove the arithmetic with it. The
+     * goal-level bar further down still carries both figures. */
     const prog = await exec(`
       return document.querySelector('#nextProgress').textContent;`);
-    const pctMatch = /(\d+)% you can read/.exec(prog || "");
-    check(!!pctMatch, "the progress panel reports a percentage of the next level",
-      JSON.stringify((prog || "").slice(0, 160)));
-    /* Both figures are named in words, so the bar's two colors do not have to
-     * be decoded from a key that is not on screen. */
-    const useMatch = /(\d+)% you can use/.exec(prog || "");
-    check(!!useMatch && Number(useMatch[1]) < Number(pctMatch ? pctMatch[1] : 0),
-      "and production is labelled and sits below reading",
-      JSON.stringify((prog || "").slice(0, 160)));
-    const pct = pctMatch ? Number(pctMatch[1]) : -1;
-    check(pct > 70 && pct < 100,
-      `and it is text coverage (~85%), not list share (~41%) -- got ${pct}%`,
-      JSON.stringify((prog || "").slice(0, 160)));
+    check(!/you can read/.test(prog || "") && !/you can use/.test(prog || ""),
+      "the next-level panel draws no reading-coverage bar",
+      JSON.stringify((prog || "").slice(0, 200)));
 
     /* The actionable half: how many words to the threshold. 741 would mean the
      * whole remaining list; the frequency-weighted answer is a few hundred at
@@ -1040,22 +1029,21 @@ return true;
 
     /* The bug this replaced: the headline was weighted for production and
      * clamped while the words-to-threshold row was not, so the panel showed
-     * "100%" and "57 more words to 95%" together. They are the same number
-     * read two ways and must never contradict -- checked here rather than only
-     * in pace.test.js because what went wrong was the panel wiring the two
-     * rows to different functions, which the node suite cannot see. */
-    const headline = pct, stillToGo = toGo ? Number(toGo[1]) : -1;
-    check((headline >= 95) === (stillToGo === 0),
-      "the headline and the words-to-threshold row agree with each other",
-      `headline ${headline}%, ${stillToGo} words to go`);
-    check(/you can read/.test(prog || "") && /you can use/.test(prog || ""),
-      "reading and production are shown as two figures on one scale",
-      JSON.stringify((prog || "").slice(0, 200)));
-
-    /* The second bar answers a different question on its own scale. Reading
-     * coverage starts near 88% for HSK 1 -> 2 and every word that matters sits
-     * in the top twelve points of it, so it looks full on arrival; new words
-     * learned runs 0 to 100 across the same effort. Two bars, two scales. */
+     * "100%" and "57 more words to 95%" together. The headline is gone, but the
+     * same wiring mistake is still available -- Move up reads readiness() and
+     * the row reads the word count -- so the two are checked against each other
+     * here, which the node suite cannot do. */
+    const stillToGo = toGo ? Number(toGo[1]) : -1;
+    const upShown = await exec(`
+      var b = document.querySelector('#moveUp');
+      return !(b.style.display === "none" || b.offsetParent === null);`);
+    check(upShown === (stillToGo === 0),
+      "Move up and the words-to-threshold row agree with each other",
+      `Move up ${upShown ? "shown" : "hidden"}, ${stillToGo} words to go`);
+    /* The one bar left. Reading coverage starts near 88% for HSK 1 -> 2 and
+     * every word that matters sits in the top twelve points of it, so it looked
+     * full on arrival; new words learned runs 0 to 100 across the same effort,
+     * which is why this is the one that stayed. */
     const newBar = /(\d+) of (\d+) new words/.exec(prog || "");
     check(!!newBar, "the panel shows new-word progress as its own figure",
       JSON.stringify((prog || "").slice(0, 260)));
@@ -1067,17 +1055,8 @@ return true;
       "with a denominator of the level's new words, not its whole list",
       newBar ? newBar[0] : "no match");
     check(await exec(`
-      return document.querySelectorAll('#nextProgress .bar').length;`) === 2,
-      "and draws it as a second bar rather than folding it into the first");
-    /* Its fill must not track the reading bar: they are different numbers and
-     * a shared width would mean one of them is lying. */
-    check(await exec(`
-      var b = document.querySelectorAll('#nextProgress .bar');
-      return b[0].querySelector('i').style.width !== b[1].querySelector('i').style.width;`),
-      "the two bars are filled independently",
-      await exec(`
-        var b = document.querySelectorAll('#nextProgress .bar');
-        return b[0].querySelector('i').style.width + " vs " + b[1].querySelector('i').style.width;`));
+      return document.querySelectorAll('#nextProgress .bar').length;`) === 1,
+      "and it is the only bar in the panel");
 
     /* Below the threshold there must be no Move up button: it is a
      * recommendation, and offering it early would make it meaningless. */
