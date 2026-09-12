@@ -979,10 +979,7 @@
        * would read as "they met 40 words this fortnight". */
       "WORDS THE APP HAS TAUGHT THEM SO FAR: " + ((b.words || {}).met || 0) + "\n\n" +
       block(b, "ALL TIME") + "\n" +
-      block(s, opts.fellBack
-        ? "THE LAST TWO WEEKS (they have not practised much since their last report, " +
-          "so this covers a recent window instead)"
-        : "SINCE THEIR LAST REPORT") + "\n" +
+      block(s, "SINCE THEIR LAST REPORT") + "\n" +
       "MISTAKE CATEGORIES STILL OUTSTANDING:\n" + tags + "\n\n" +
       "SENTENCES THEY WROTE:\n" + samples + "\n\n" +
       "Write three short paragraphs:\n" +
