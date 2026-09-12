@@ -499,8 +499,8 @@ footer{
     <button id="browseStoryModel" class="quiet" type="button" style="margin-top:6px; width:100%">Browse and star models</button>
     <div class="note">Story time is the one activity a cheap model cannot do. Measured at
     HSK 1: 2 usable segments in 55 on the default chat model, against 33 in 40 here. It costs
-    roughly <b>$0.10 a story</b> — about 170&times; a chat turn — and <b>Spend</b> above shows
-    what you actually paid.</div>
+    roughly <b>$0.25 a story</b> — measured from real use, some 400&times; a chat turn — and
+    <b>Spend</b> above shows what you actually paid.</div>
 
     <label for="twentyModel">Model for 20 Questions</label>
     <select id="twentyModel"></select>
@@ -606,25 +606,19 @@ footer{
       <div class="note">Reads everything you have done and writes back a few paragraphs —
       what is going well, what is worth working on, and what has changed since last time.
       Opening it is free; writing a new one is one API call.</div>
-      <!-- Why the headline is a percentage of text and not a count of words:
+      <!-- Why "to 98%" is a count of words and not a percentage of the list:
            the lists are cumulative and frequency-ordered, so HSK 1's 300 words
-           are 60% of the HSK 2 list but around 88% of HSK 2 running text. A
-           bar starting at zero would be telling you something untrue. -->
-      <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
-      word the level allows you. <b style="color:var(--ok)">Green</b> is what you can
-      <em>use</em>: the same measure over the words you have actually written yourself. Green
-      always trails blue, and the gap between them is normal — recognising a word is easier
-      than reaching for it, and that gap widens as you improve.
-      <b style="color:var(--prog)">Violet</b> is a different question on its own scale: how
-      many of the level's <em>new</em> words you have. The blue bar starts high because the
-      commonest words carry most of the text and you already have them, so the words still
-      worth learning move it only a little; the violet one runs the whole way.
-      Both are estimates of how much of the next level you can handle, not of how much of its
-      list you have ticked off — the commonest words carry most of the text, so the first few
-      hundred matter far more than the rest — which is why the two bars move at such different
-      speeds. Published research puts adequate comprehension at
-      95% and comfortable independent reading at 98%; moving up makes the next level the one
-      you read, so the mark on the bar is 98%.</div>
+           are 60% of the HSK 2 list but around 88% of HSK 2 running text, and
+           the coverage bar that used to head this panel therefore arrived
+           nearly full and barely moved. Removed; the word count it implies is
+           the actionable half and is all that is left. -->
+      <div class="note">The bar is how many of the level's <em>new</em> words you have, and it
+      runs the whole way from 0 to 100 as you work. The <b>to 98%</b> row above is a different
+      question: how many more words until you can read the level comfortably. It is a much
+      smaller number than the bar's, because the commonest words carry most of the running text
+      and you already have them — published research puts adequate comprehension at 95% lexical
+      coverage and comfortable independent reading at 98%, and moving up makes the next level
+      the one you read, so 98% is the mark <b>Move up</b> waits for.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
       <div class="note" style="margin-top:8px">Words you have not yet used enough times to own (the <b>not yet yours</b> row below) are exactly
       what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
@@ -1042,8 +1036,11 @@ const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
 /* Story time is the one activity that does not work on a cheap model, so its
  * default is capable rather than matching the chat model. Measured at HSK 1:
  * 2 usable segments in 55 on qwen3-30b-a3b against 33 in 40 here, and 0 stories
- * out of 11 usable against 8 out of 8. It costs about $0.10 a story, roughly
- * 170x a chat turn, which the Settings note says out loud. See DEVELOPING.md. */
+ * out of 11 usable against 8 out of 8. It costs about $0.25 a story -- measured
+ * off real use, 9 segments at a mean of 3.00 repair attempts each, two and a
+ * half times the $0.10 this comment used to claim -- so roughly 400x a chat
+ * turn, which the Settings note says out loud. See BACKLOG.md, "A story costs
+ * $0.25", and DEVELOPING.md. */
 const STORY_MODEL = "anthropic/claude-sonnet-4.5";
 
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
@@ -1064,7 +1061,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v98 — 2026-09-11";
+const VERSION   = "v99 — 2026-09-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3251,6 +3248,14 @@ async function nameDrillWords(g, text) {
        * offer. Cheap to verify here and impossible to undo once stored. */
       const wrong = String((w && w.wrong) || "").trim();
       if (wrong && text.indexOf(wrong) !== -1) e.word = wrong;
+      /* Asked and answered "none", which the prompt asks for by name when the
+       * fault is the word order or the sentence as a whole. Recorded, because
+       * an error that only carries a category is otherwise indistinguishable
+       * from one the extraction has never seen -- and needsMigration() would
+       * keep offering it, and the Process-messages run would keep paying for
+       * the same residue and never finish. A call that THREW sets neither, so
+       * a network failure is still retried. */
+      else e.noword = true;
       /* `right` is asked for and deliberately not stored. The chooser shows the
        * whole corrected SENTENCE beside the word, which is what makes a mistake
        * recognisable, and the replacement word alone has no reader. It stays in
@@ -5111,7 +5116,13 @@ async function migrateGrades() {
             600, teachingModel());
           const g = parseGrade(reply, w.turn.text);
           if (g) { await nameDrillWords(g, w.turn.text); w.turn.grade = g; }
-          else failed++;
+          /* A reply that came back and could not be read is stored as
+           * unreadable, exactly as gradeTurn() does with a live one: left
+           * absent it is work again on the next scan, so a message the model
+           * cannot grade would be re-bought on every run forever. Errors
+           * thrown before a reply arrive in the catch below and stay
+           * retryable. */
+          else { w.turn.grade = { unreadable: true, at: new Date().toISOString() }; failed++; }
         } else {
           await nameDrillWords(w.turn.grade, w.turn.text);
         }
@@ -5717,27 +5728,17 @@ function renderNextProgress() {
     if ($("#moveUp")) $("#moveUp").style.display = "none";
     return;
   }
-  const pct = Math.round(r.read * 100);
-  const use = Math.round(r.produce * 100);
   const ready = r.read >= HSKPace.READY_AT;
   const mark = Math.round(HSKPace.READY_AT * 100);
-  /* The fill is reading coverage and the tick is the threshold, so the two
-   * agree with the "to 95%" row below by construction -- they are the same
-   * number read two ways. The inner fill is production, on the same axis so
-   * the gap is readable at a glance rather than needing arithmetic. */
+  /* One bar, and it is the new words. A reading-coverage bar was drawn above
+   * this one and was removed: it starts at 88% for HSK 1 -> 2 and every word
+   * still worth learning lives in the top 12 points of it, so it looked nearly
+   * full on arrival and barely moved while you worked -- correct arithmetic,
+   * useless as a progress display. The same number survives where it is worth
+   * reading: the "to 98%" row below says it in words you can act on, and it is
+   * still what Move up waits for. New words learned runs 0 to 100 across the
+   * same effort. */
   box.innerHTML =
-    '<div class="bar"><i style="width:' + pct + '%"></i>' +
-    '<b style="width:' + use + '%"></b>' +
-    '<u style="left:' + mark + '%"></u></div>' +
-    '<div class="barnote"><b>' + use + "% you can use</b>" +
-      "<span>" + escapeHtml(r.next.label) + " — estimated</span>" +
-      "<i>" + pct + "% you can read</i></div>" +
-    /* A second bar, on its own scale, because the first one cannot show this.
-     * Reading coverage starts at 88% for HSK 1 -> 2 and every word that
-     * matters lives in the top 12 points of it -- correct, since that is what
-     * share of the text those words carry, but it looks full on arrival and
-     * barely moves while you work. New words learned runs 0 to 100 across the
-     * same effort. Two questions, two scales; neither is the other's units. */
     '<div class="bar words"><i style="width:' +
       (r.newWords ? Math.round(100 * r.newHave / r.newWords) : 0) + '%"></i></div>' +
     '<div class="barnote"><em>' + r.newHave + " of " + r.newWords +

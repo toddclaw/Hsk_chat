@@ -209,7 +209,12 @@
    *
    * `better` is required for the word half because the extraction compares the
    * two sentences to find the word. An error with no correction beside it has
-   * nothing to extract from and is not counted as work. */
+   * nothing to extract from and is not counted as work.
+   *
+   * `noword` is the extraction's own answer and not a migration flag: "no
+   * single word is at fault" is a documented, correct reply to drillWord(), so
+   * an error that came back empty has been done. Without it those errors match
+   * this scan forever and every run re-spends on the same residue. */
   function needsMigration(chatMsgs, errorClassTags) {
     var classTags = errorClassTags || [];
     var out = { grades: 0, words: 0 };
@@ -219,7 +224,7 @@
         if (!t.grade) { out.grades++; return; }
         if (t.grade.unreadable || !t.grade.better) return;
         var any = (t.grade.errors || []).some(function (e) {
-          return e && !e.word && classTags.indexOf(e.tag) !== -1;
+          return e && !e.word && !e.noword && classTags.indexOf(e.tag) !== -1;
         });
         if (any) out.words++;
       });
