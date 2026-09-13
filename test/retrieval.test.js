@@ -124,5 +124,61 @@ check(sents([partner(LONG)])[0].day === YDAY, "the source day rides along for di
 check(R.sentences({ turns: null, today: TODAY, segment: segment, validate: validate }).length === 0,
   "no turns, no sentences");
 
+// --- batch ------------------------------------------------------------------
+/* A fixed sequence, not Math.random: a generator whose output cannot be pinned
+ * is one you can only test for "did not throw". */
+const seeded = (seq) => { let i = 0; return () => seq[i++ % seq.length]; };
+
+const pool = JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk1.json"), "utf8"));
+const learning = w => ({ w: w, from: 2, seen: 6 });
+
+const batch = over => R.batch(Object.assign({
+  turns: [partner(LONG)], starters: [], counts: {}, learning: [learning("朋友")],
+  mistakes: [], pool: pool, today: TODAY, size: R.ROUND,
+  segment: segment, validate: validate, random: seeded([0.1, 0.4, 0.7, 0.2, 0.9])
+}, over || {}));
+
+const one = batch()[0];
+check(!!one, "an item is generated from one eligible sentence");
+check(one.target === "朋友", "the target is a word the learner is learning");
+check(LONG.slice(one.at, one.at + one.len) === "朋友",
+  "at/len point at the target inside the sentence", JSON.stringify(one));
+check(one.candidates.length === R.CANDIDATES, "four candidates");
+check(one.candidates.indexOf("朋友") !== -1, "the target is among the candidates");
+check(new Set(one.candidates).size === R.CANDIDATES, "no duplicate candidates");
+check(one.candidates.every(w => LONG.indexOf(w) === -1 || w === "朋友"),
+  "no distractor is already visible in the sentence", JSON.stringify(one.candidates));
+check(one.source.kind === "partner" && one.source.day === YDAY,
+  "the item knows where it came from");
+
+check(batch({ learning: [], mistakes: [] }).length === 0,
+  "a sentence with no word worth practising is skipped, not filled with 的");
+check(batch({ mistakes: ["朋友"], learning: [] })[0].target === "朋友",
+  "a word from the mistake ledger is worth practising too");
+
+/* The selector: fewest retrievals first, ties commonest-first. 朋友 has been
+ * retrieved twice, 学校 not at all, so 学校 is the one to ask. */
+const twoWords = { learning: [learning("朋友"), learning("学校")],
+  counts: { "朋友": { n: 2, days: { "2026-09-01": true, "2026-09-02": true } } } };
+check(batch(twoWords)[0].target === "学校", "the fewest-retrievals word wins");
+
+/* 学校 has the fewest retrievals and would win -- but it has already been
+ * answered today, so the day cap hands the item to 朋友 instead. */
+const doneToday = {
+  learning: [learning("朋友"), learning("学校")],
+  counts: { "学校": { n: 0, days: { [TODAY]: true } }, "朋友": { n: 5, days: {} } }
+};
+check(batch(doneToday)[0].target === "朋友",
+  "a word already answered today is not offered again");
+
+const many = [];
+for (let i = 0; i < 15; i++) many.push(partner(LONG, "2026-09-0" + ((i % 8) + 1)));
+check(batch({ turns: many }).length <= R.ROUND, "a round is at most ROUND items");
+const targets = batch({ turns: many, learning: [learning("朋友"), learning("学校")] })
+  .map(it => it.target);
+check(new Set(targets).size === targets.length, "no target is repeated in a round");
+
+check(batch({ turns: [] }).length === 0, "an empty corpus yields an empty round");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

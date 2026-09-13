@@ -109,9 +109,99 @@
     return out;
   }
 
+  function shuffle(list, random) {
+    var a = list.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(random() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  /* Three wrong candidates that are obviously wrong make the task free of
+   * information. The lists already carry what is needed to do better: a
+   * frequency rank. Nearest ranks, then a random three out of that window --
+   * pure nearest-rank would hand the same word the same three distractors
+   * every time it came round.
+   *
+   * No part-of-speech data exists anywhere in this app, so rank proximity is
+   * the whole of the similarity model. The blank renders fixed-width, so
+   * length does not have to match and is not a cue either way. */
+  function distractors(target, sentence, pool, random) {
+    var seen = {};
+    seen[target] = true;
+    var eligible = (pool || []).filter(function (e) {
+      if (!e || !e.w || seen[e.w]) return false;
+      return sentence.indexOf(e.w) === -1;
+    });
+    var tf = null;
+    (pool || []).forEach(function (e) { if (e.w === target && e.f) tf = e.f; });
+    var ranked = tf === null
+      ? shuffle(eligible, random)
+      : eligible.slice().sort(function (a, b) {
+          return Math.abs((a.f || Infinity) - tf) - Math.abs((b.f || Infinity) - tf);
+        });
+    var window = ranked.slice(0, tf === null ? CANDIDATES - 1 : (CANDIDATES - 1) * 4);
+    return shuffle(window, random).slice(0, CANDIDATES - 1).map(function (e) { return e.w; });
+  }
+
+  /* Fewest retrievals first, ties commonest-first.
+   *
+   * Not weakest-first tiers, and not random. Random mostly blanks 的 and 我;
+   * tiers sound better than they behave, because a target only exists if an
+   * eligible sentence happens to contain it, so a mistake-ledger tier can be
+   * empty while feeling like it should be full. Fewest-retrievals spreads
+   * practice across the words the learner is actually working on and makes the
+   * stored count load-bearing -- it is the selector, not a score. */
+  function pickTarget(tokens, worth, counts, rank, today, used) {
+    var best = null;
+    tokens.forEach(function (tok, i) {
+      if (tok.kind !== "word" || !worth[tok.text] || used[tok.text]) return;
+      var c = counts[tok.text] || { n: 0, days: {} };
+      if (c.days[today]) return;                  // one retrieval a day, each way
+      var r = rank[tok.text];
+      if (r === undefined) r = Infinity;
+      if (!best || c.n < best.n || (c.n === best.n && r < best.rank)) {
+        best = { word: tok.text, n: c.n, rank: r, index: i };
+      }
+    });
+    return best;
+  }
+
+  function batch(opts) {
+    var o = opts || {}, counts = o.counts || {}, used = {};
+    var worth = {}, rank = {};
+    (o.learning || []).forEach(function (e) { if (e && e.w) worth[e.w] = true; });
+    (o.mistakes || []).forEach(function (w) { if (w) worth[w] = true; });
+    (o.pool || []).forEach(function (e) { if (e && e.w && e.f) rank[e.w] = e.f; });
+
+    var size = o.size || ROUND;
+    /* Shuffled, so a round is not always the ten oldest sentences in the
+     * history -- which after a month would be the same ten every time. */
+    var pool = shuffle(sentences(o), o.random);
+    var items = [];
+    for (var i = 0; i < pool.length && items.length < size; i++) {
+      var s = pool[i];
+      var tokens = o.segment(s.text);
+      var hit = pickTarget(tokens, worth, counts, rank, o.today, used);
+      if (!hit) continue;                          // skip the sentence, do not fall back
+      var before = 0;
+      for (var k = 0; k < hit.index; k++) before += tokens[k].text.length;
+      used[hit.word] = true;
+      items.push({
+        text: s.text, at: before, len: hit.word.length, target: hit.word,
+        candidates: shuffle(
+          [hit.word].concat(distractors(hit.word, s.text, o.pool, o.random)), o.random),
+        source: { kind: s.kind, day: s.day, conversationId: s.conversationId }
+      });
+    }
+    return items;
+  }
+
   var api = {
     ROUND: ROUND, CANDIDATES: CANDIDATES, MIN_WORDS: MIN_WORDS,
-    dayOf: dayOf, countsFrom: countsFrom, credit: credit, sentences: sentences
+    dayOf: dayOf, countsFrom: countsFrom, credit: credit, sentences: sentences,
+    batch: batch
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKRetrieval = api;
