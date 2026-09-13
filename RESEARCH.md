@@ -331,6 +331,42 @@ Expanding intervals — a retired word returning at 7 days, then 30, as a
 retention check — are the better answer and were declined as a scheduler rather
 than a threshold. See BACKLOG.md.
 
+## What a retrieval counts, and why it is not a ghost credit
+
+**Informed by the literature; the numbers are not measured.** `ROUND = 10`,
+`CANDIDATES = 4`, and a sentence is eligible from the day after it was met.
+
+Folse (2006) beat one original-sentence exercise with three fill-in-the-blanks
+on the same words: the number of retrievals drives retention, not the depth of
+any single one. That is the argument for gap-fill existing at all, and it is
+also the argument for keeping the rounds short and frequent rather than long.
+
+**Why a retrieval is counted separately from `GHOST_USES`.** That counter means
+*days on which the learner produced the word in a graded sentence*, and the
+section above is explicit that it is a productive threshold not derived from
+the receptive studies behind `PROMOTE_AT`. A tap in gap-fill is recognition.
+Feeding it into the ghost count would not fill the counter faster, it would
+change what the counter means — and would make a tap game the fast way to
+retire a ghost word.
+
+**Why four candidates.** Recall-versus-recognition is genuinely mixed: one
+study found multiple choice produced *more* productive retrieval than cued
+recall, and format comparisons find no significant difference in outcome. Four
+candidates and one tap is therefore as well-evidenced as typing through an IME,
+and is one gesture instead of ten.
+
+**Why nothing from today.** Retrieval after a gap is the mechanism. A sentence
+read four minutes ago tests the screen, not memory. It is the same UTC
+`dayKey()` the ghost and drill counters use, for the same reason.
+
+**Why the count is also the selector.** The word with the fewest retrievals is
+the next one asked, so a wrong answer — which banks the day without adding to
+the count — brings the word back sooner. No demotion arithmetic exists anywhere
+in this path, and none is needed.
+
+These are unmeasured. If round length or candidate count turns out to matter,
+measure it and change this section with the code.
+
 ## Production
 
 **Follows from the literature: there is no threshold, and inventing one would be false
