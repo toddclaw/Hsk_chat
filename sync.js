@@ -623,7 +623,13 @@
   async function deleteAllCloudData(userId) {
     for (var i = 0; i < USER_TABLES.length; i++) {
       var r = await client.from(USER_TABLES[i]).delete().eq("user_id", userId);
-      if (r.error) throw r.error;
+      /* A table not yet on this database -- the deploy window between the
+       * client shipping a new table and its owner running db/schema.sql --
+       * holds no rows to delete. Stopping the loop over that reports failure
+       * over nothing and, worse, leaves every table after it in the list
+       * untouched. Same tolerance as deleteConversationMessages above; a
+       * real error (permissions, network) still throws. */
+      if (r.error && !isMissingSchema(r.error)) throw r.error;
     }
   }
 

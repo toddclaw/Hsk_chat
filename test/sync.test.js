@@ -432,6 +432,14 @@ const other = Object.assign({}, entry, { id: "r2" });
 check(Sync.mergeRetrievals([entry], [other]).length === 2,
   "two devices, same word-day, both rows kept");
 check(Sync.mergeRetrievals([entry], [entry]).length === 1, "the same row twice is one row");
+
+const localWins = Sync.mergeRetrievals(
+  [Object.assign({}, entry, { ok: true })],
+  [Object.assign({}, entry, { ok: false })]);
+check(localWins.length === 1 && localWins[0].ok === true,
+  "same id, differing field: local wins, remote is dropped not merged in",
+  JSON.stringify(localWins));
+
 check(Sync.mergeRetrievals([], null).length === 0, "an empty merge does not throw");
 check(Sync.mergeRetrievals(null, [entry]).length === 1, "a null local side still takes the remote");
 
