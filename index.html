@@ -5019,6 +5019,54 @@ function renderVocab() {
  * between reading the sentence and tapping. */
 let gapRound = null, gapAt = 0, gapRight = 0, gapTimer = null;
 
+// The mistake-ledger words folded in as plain strings, the shape batch()
+// wants for `mistakes`. Shared by gapItems() and gapEmpty() so both agree on
+// what is "worth practising" -- see gapWorthWords().
+function gapMistakeWords() {
+  return mistakeCounts().reduce((ws, m) =>
+    ws.concat((m.words || []).map(w => w.word)), []);
+}
+
+// Every word gap-fill will target: S.learning plus the mistake ledger, the
+// same union batch() computes internally from `learning` + `mistakes`.
+// gapEmpty() has to diagnose over this same union, not S.learning alone, or
+// it can call a learner "done" while an unretried mistake word just has no
+// eligible sentence yet.
+function gapWorthWords() {
+  return (S.learning || []).map(e => e.w).concat(gapMistakeWords());
+}
+
+/* The candidate pool for gap-fill: everything already in the lexicon
+ * (S.base + S.extra + S.learning + S.known -- the same lists rebuildLexicon()
+ * feeds S.lex from, so nothing here can be out of level), in the learner's
+ * active script, with frequency rank re-attached afterward.
+ *
+ * Rank has to be re-attached rather than read off inScript()'s output:
+ * inScript() rekeys an entry to its traditional form and returns
+ * { w, p, d, s, other }, dropping `f` on the floor. A bare inScript(S.base)
+ * pool would be script-safe but silently disable the rank-neighbour
+ * distractor rule in traditional mode -- do not "simplify" it back to that.
+ * S.learning words need this even more: they are not in S.base at all (they
+ * are next-level words already promoted into the lexicon), so their rank
+ * only exists in S.nextList. The join key is always the simplified form --
+ * `other` when inScript() swapped it, `w` when it did not.
+ *
+ * S.nextList is a source of rank data only, never of pool entries: those
+ * words are not in S.lex, and putting them in the pool would put an
+ * out-of-level word back on a button. */
+function gapPool() {
+  const rank = new Map();
+  S.base.concat(S.nextList).forEach(e => { if (e && e.w && e.f) rank.set(e.w, e.f); });
+  const seen = new Set(), out = [];
+  inScript(S.base.concat(S.learning, S.extra, S.known)).forEach(e => {
+    if (!e || !e.w || seen.has(e.w)) return;
+    seen.add(e.w);
+    const f = rank.get(e.other || e.w);
+    out.push(f ? Object.assign({}, e, { f: f }) : e);
+  });
+  return out;
+}
+
 function gapItems() {
   return HSKRetrieval.batch({
     turns: Object.keys(S.chatMsgs || {}).reduce((all, cid) =>
@@ -5027,9 +5075,8 @@ function gapItems() {
     starters: starterTexts(),
     counts: retrievalCounts(),
     learning: S.learning,
-    mistakes: mistakeCounts().reduce((ws, m) =>
-      ws.concat((m.words || []).map(w => w.word)), []),
-    pool: S.base,
+    mistakes: gapMistakeWords(),
+    pool: gapPool(),
     today: ghostDayKey(),
     size: HSKRetrieval.ROUND,
     segment: t => HSK.segment(t, S.lex),
@@ -5120,15 +5167,15 @@ function gapEmpty() {
       'Gap-fill asks about sentences you met on an earlier day — chat today, ' +
       'come back tomorrow.</div>';
   }
-  const learningWords = (S.learning || []).map(e => e.w);
-  if (!learningWords.length) {
+  const worthWords = gapWorthWords();
+  if (!worthWords.length) {
     return '<div class="hint"><b>No words to practise</b><br>' +
       'Gap-fill asks about words you are currently learning. Turn on ' +
       '<b>Introduce words from the next level</b> in Settings → Learning, ' +
       'chat for a day, then come back.</div>';
   }
   const counts = retrievalCounts(), today = ghostDayKey();
-  const allDone = learningWords.every(w => counts[w] && counts[w].days[today]);
+  const allDone = worthWords.every(w => counts[w] && counts[w].days[today]);
   if (allDone) {
     return '<div class="hint"><b>Done for today</b><br>' +
       'Every word you are working on has had its retrieval. One a day is the ' +

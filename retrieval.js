@@ -185,6 +185,12 @@
       var tokens = o.segment(s.text);
       var hit = pickTarget(tokens, worth, counts, rank, o.today, used);
       if (!hit) continue;                          // skip the sentence, do not fall back
+      /* pickTarget blanks one occurrence, but a repeated target leaves the
+       * others sitting in the sentence next to the blank -- the answer,
+       * legible a few characters away. Held to the same "skip the sentence"
+       * rule distractors() already applies to visible words, and checked
+       * before `used` is set so a skipped sentence does not burn the word. */
+      if (tokens.filter(function (t) { return t.text === hit.word; }).length > 1) continue;
       /* Four candidates is a hard invariant, not a best-effort: a pool too
        * small or too covered by this sentence to offer three distractors
        * ships a worse question than none, so the item -- and only this

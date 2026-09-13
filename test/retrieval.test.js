@@ -202,5 +202,37 @@ check(batch({ turns: plenty, learning: richWords.map(learning) }).length === R.R
 
 check(batch({ turns: [] }).length === 0, "an empty corpus yields an empty round");
 
+/* A repeated target: pickTarget blanks only the first occurrence, so a naive
+ * item would print the answer a few characters past its own blank. */
+const REPEATED = "我今天去学校，你也去学校。";
+check(batch({ turns: [partner(REPEATED)], learning: [learning("学校")] }).length === 0,
+  "a sentence with the target word twice yields no item, not a leaked answer");
+
+// --- traditional-script pool -------------------------------------------------
+/* Simulates what gapPool() in index.html hands to batch() in traditional
+ * mode: a pool keyed by the traditional form (`w`), simplified form riding
+ * along as `other` -- the shape inScript() produces. Sentences and the
+ * lexicon they are validated against are traditional too, so a candidate
+ * drawn from the wrong (simplified) form would fail HSK.validate() against
+ * this lexicon even though it is a real HSK1 word. */
+const tradList = pool.map(e => e.t ? Object.assign({}, e, { w: e.t, other: e.w }) : e);
+const tradLex = HSK.buildLexicon(tradList);
+const tradSegment = t => HSK.segment(t, tradLex);
+const tradValidate = t => HSK.validate(t, tradLex).length === 0;
+const TRAD_SENT = "我今天去學校看朋友。";  // 學校 traditional for simplified 学校
+const tradBatch = batch({
+  turns: [partner(TRAD_SENT)], learning: [learning("學校")],
+  pool: tradList, segment: tradSegment, validate: tradValidate
+});
+check(tradBatch.length > 0, "a traditional pool still produces an item");
+tradBatch.forEach(it => {
+  check(it.candidates.every(w => tradLex.words.has(w)),
+    "every candidate is in the traditional lexicon items were validated against",
+    JSON.stringify(it.candidates));
+  check(it.candidates.indexOf("学校") === -1,
+    "the simplified form of the target does not appear as a candidate",
+    JSON.stringify(it.candidates));
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
