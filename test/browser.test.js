@@ -1463,7 +1463,7 @@ check(usedGroups && usedGroups.first === "\u7684",
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
     const want = ["conversations", "messages", "prefs",
-                  "vocab_extra", "vocab_known", "vocab_learning"];
+                  "vocab_extra", "vocab_known", "vocab_learning", "retrievals"];
 
     check(want.every(t => tables.includes(t)),
       "every user table is deleted", "deleted: [" + tables + "]");

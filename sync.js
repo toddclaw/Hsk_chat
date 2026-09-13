@@ -242,6 +242,32 @@
     });
   }
 
+  /* ------------------------------------------------------- retrievals */
+
+  /* Append-only rows, merged by union on id. See db/schema.sql for why this is
+   * rows and not a count, and why there is no unique constraint. */
+  function retrievalToRow(e, userId) {
+    if (!e || !e.id || !e.word || !e.day) return null;
+    return { id: e.id, user_id: userId, word: e.word, day: e.day,
+             ok: !!e.ok, face: e.face || "gapfill",
+             created_at: e.created_at, updated_at: new Date().toISOString() };
+  }
+
+  function rowsToRetrievals(rows) {
+    return (rows || []).filter(function (r) { return r && r.id && r.word && r.day; })
+      .map(function (r) {
+        return { id: r.id, word: r.word, day: r.day, ok: !!r.ok,
+                 face: r.face || "gapfill", created_at: r.created_at };
+      });
+  }
+
+  function mergeRetrievals(local, remote) {
+    var byId = new Map();
+    (local || []).forEach(function (e) { if (e && e.id) byId.set(e.id, e); });
+    (remote || []).forEach(function (e) { if (e && e.id && !byId.has(e.id)) byId.set(e.id, e); });
+    return Array.from(byId.values());
+  }
+
   /* ------------------------------------------------------------- prefs */
 
   /* Exactly what a prefs push contains, enumerated rather than ever
@@ -288,6 +314,9 @@
     rowToConversation: rowToConversation,
     mergeConversations: mergeConversations,
     visibleConversations: visibleConversations,
+    retrievalToRow: retrievalToRow,
+    rowsToRetrievals: rowsToRetrievals,
+    mergeRetrievals: mergeRetrievals,
     PREFS_KEYS: PREFS_KEYS,
     prefsSnapshot: prefsSnapshot,
     applyPrefsSnapshot: applyPrefsSnapshot
@@ -428,6 +457,7 @@
   var schemaHasKind = null;
   var schemaHasSide = null;
   var schemaHasSecret = null;
+  var schemaHasRetrievals = null;
 
   function conversationsSupported() { return schemaHasConversations !== false; }
   function gradesSupported() { return schemaHasGrade !== false; }
@@ -435,6 +465,7 @@
   function levelSupported() { return schemaHasLevel !== false; }
   function sideSupported() { return schemaHasSide !== false; }
   function secretSupported() { return schemaHasSecret !== false; }
+  function retrievalsSupported() { return schemaHasRetrievals !== false; }
 
   /* Asked once per session, before anything is pushed.
    *
@@ -538,6 +569,33 @@
     }
   }
 
+  /* Probed once per session, like every other optional table. A project whose
+   * owner has not run the migration keeps a working gap-fill -- it just does
+   * not travel between devices -- because whoever runs the deployment may not
+   * be the person reading the screen.
+   *
+   * Its own flag, never folded into another. sync.js already records what one
+   * flag standing for two facts cost: a failed push switched off conversation
+   * syncing for a whole session while the status line still said "Synced". */
+  async function pullRetrievals(userId) {
+    var r = await client.from("retrievals").select("*").eq("user_id", userId);
+    if (r.error) {
+      if (isMissingSchema(r.error)) { schemaHasRetrievals = false; return []; }
+      throw r.error;
+    }
+    schemaHasRetrievals = true;
+    return r.data || [];
+  }
+
+  async function pushRetrievals(rows) {
+    if (!rows.length || schemaHasRetrievals === false) return;
+    var r = await client.from("retrievals").upsert(rows);
+    if (r.error) {
+      if (isMissingSchema(r.error)) { schemaHasRetrievals = false; return; }
+      throw r.error;
+    }
+  }
+
   // Messages belonging to one conversation, gone for good. The tombstone in
   // `conversations` is what tells other devices; this just reclaims the rows.
   async function deleteConversationMessages(userId, conversationId) {
@@ -556,7 +614,7 @@
    * here would leave data behind that the app promised to remove, so
    * test/sync.test.js reads the schema and checks this list still matches it. */
   var USER_TABLES = ["conversations", "messages", "vocab_extra", "vocab_learning",
-                     "vocab_known", "prefs"];
+                     "vocab_known", "retrievals", "prefs"];
 
   /* Sequential rather than Promise.all: the point of this call is that the user
    * is told the truth about what happened, and a partial failure buried inside a
@@ -598,9 +656,12 @@
     levelSupported: levelSupported,
     sideSupported: sideSupported,
     secretSupported: secretSupported,
+    retrievalsSupported: retrievalsSupported,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
+    pushRetrievals: pushRetrievals,
+    pullRetrievals: pullRetrievals,
     deleteVocab: deleteVocab,
     deleteAllMessages: deleteAllMessages,
     USER_TABLES: USER_TABLES,

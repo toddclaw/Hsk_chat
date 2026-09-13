@@ -415,6 +415,26 @@ check(Sync.PREFS_KEYS.indexOf("twentyModel") !== -1,
 check(Sync.PREFS_KEYS.indexOf("key") === -1 && Sync.PREFS_KEYS.indexOf("history") === -1,
   "and adding it did not smuggle the key or the history in");
 
+// --- retrievals -------------------------------------------------------------
+const entry = { id: "r1", word: "朋友", day: "2026-09-11", ok: true,
+                face: "gapfill", created_at: "2026-09-11T09:00:00Z" };
+
+const rrow = Sync.retrievalToRow(entry, "u1");
+check(rrow.user_id === "u1" && rrow.word === "朋友" && rrow.day === "2026-09-11" &&
+      rrow.ok === true && rrow.face === "gapfill" && rrow.id === "r1",
+  "a retrieval round-trips into a row", JSON.stringify(rrow));
+check(Sync.retrievalToRow({ word: "" }, "u1") === null, "a row with no word is refused");
+check(Sync.rowsToRetrievals([rrow])[0].id === "r1", "and back again");
+
+/* Union by id, never a counter: two devices offline on the same day produce
+ * two rows, both survive the merge, and countsFrom() counts the day once. */
+const other = Object.assign({}, entry, { id: "r2" });
+check(Sync.mergeRetrievals([entry], [other]).length === 2,
+  "two devices, same word-day, both rows kept");
+check(Sync.mergeRetrievals([entry], [entry]).length === 1, "the same row twice is one row");
+check(Sync.mergeRetrievals([], null).length === 0, "an empty merge does not throw");
+check(Sync.mergeRetrievals(null, [entry]).length === 1, "a null local side still takes the remote");
+
 /* --- the glue half: one failed push must not disable a different table -----
  *
  * configure() reads window.supabase at call time, so a stub client is enough to
