@@ -366,6 +366,17 @@ footer{
    a line, centred, is hard to read. */
 .hint .tip{display:inline-block; text-align:left; white-space:pre-wrap;
   max-width:34em; margin:6px 0; color:var(--ink)}
+/* Gap-fill. The blank is fixed-width so the target's character count is never
+   a cue, and plain rather than a .w token -- see gapText()'s comment for why. */
+.gapsentence{font-size:24px; line-height:2; margin-bottom:8px}
+.gapblank{display:inline-block; min-width:3em; text-align:center;
+  border-bottom:2px solid var(--dim)}
+.gapblank.ok{color:var(--ok); border-color:var(--ok)}
+.gapblank.bad{color:var(--bad); border-color:var(--bad)}
+.gapchoices{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.gapchoice{min-height:var(--tap); padding:8px 16px; font-size:18px}
+.gapchoice.ok{border-color:var(--ok); color:var(--ok)}
+.gapchoice.bad{border-color:var(--bad); color:var(--bad)}
 /* Issue submission form */
 #issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
 #issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
@@ -980,6 +991,14 @@ footer{
   use them too — and persist on this device. Pinyin and meaning come from the HSK 7-9
   reference list, or from one small model lookup when the word is not in it.</div>
   <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
+</div></div>
+
+<div class="sheet" id="gapSheet"><div class="card">
+  <div class="sheethead">
+    <b>Gap-fill</b><span id="gapProgress" class="secnote"></span>
+    <button id="gapX" class="sheetx" type="button" aria-label="Close gap-fill" title="Close">✕</button>
+  </div>
+  <div id="gapBody"></div>
 </div></div>
 
 <div id="pop"></div>
@@ -4340,6 +4359,13 @@ function fillActivities() {
   $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
     '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
+  /* Not a row in HSKPrompt.ACTIVITIES, deliberately. Every key in that table is
+   * a conversation config, and newChat() will happily create a chat for any id
+   * it knows -- a gapfill row would be a conversation waiting to be started
+   * against a prompt that does not exist. This is a menu item that behaves like
+   * a button: it opens the sheet and puts the select back where it was. */
+  $("#activity").insertAdjacentHTML("beforeend",
+    '<option value="__gapfill">Gap-fill</option>');
   const act = HSKPrompt.ACTIVITIES[cur];
   let note = act && act.note;
   /* Ghost Words: show the target words so the user knows what to aim for. */
@@ -4984,6 +5010,142 @@ function renderVocab() {
     row.appendChild(del);
     box.appendChild(row);
   });
+}
+
+/* ---------------------------------------------------------------- gap-fill
+ *
+ * One round, built once when the sheet opens. Rebuilt only by "Again": an item
+ * list that regenerated on every render would change under the learner's thumb
+ * between reading the sentence and tapping. */
+let gapRound = null, gapAt = 0, gapRight = 0;
+
+function gapItems() {
+  return HSKRetrieval.batch({
+    turns: Object.keys(S.chatMsgs || {}).reduce((all, cid) =>
+      all.concat((S.chatMsgs[cid] || []).map(t =>
+        Object.assign({}, t, { conversation_id: cid }))), []),
+    starters: starterTexts(),
+    counts: retrievalCounts(),
+    learning: S.learning,
+    mistakes: mistakeCounts().reduce((ws, m) =>
+      ws.concat((m.words || []).map(w => w.word)), []),
+    pool: S.base,
+    today: ghostDayKey(),
+    size: HSKRetrieval.ROUND,
+    segment: t => HSK.segment(t, S.lex),
+    validate: t => HSK.validate(t, S.lex).length === 0,
+    random: Math.random
+  });
+}
+
+function openGapFill() {
+  gapRound = gapItems(); gapAt = 0; gapRight = 0;
+  renderGapFill();
+  openSheet("#gapSheet");
+}
+
+/* The blank is fixed-width whatever the target's length, so character count
+ * leaks nothing -- which is also why distractors need not match length.
+ *
+ * Pinyin is suppressed on the blank and kept on the rest of the sentence: with
+ * the global pinyin toggle on, a reading over the blank hands over the answer.
+ * Same reason there is no audio and no translate control in this sheet. Audio
+ * belongs to dictation, where hearing it IS the task. */
+function renderGapFill() {
+  const body = $("#gapBody"), prog = $("#gapProgress");
+  if (!gapRound) return;
+  if (!gapRound.length) { prog.textContent = ""; body.innerHTML = gapEmpty(); return; }
+  if (gapAt >= gapRound.length) {
+    prog.textContent = "";
+    body.innerHTML = '<div class="hint"><b>' + gapRight + " / " + gapRound.length +
+      "</b><br>" + gapRound.length + " word" + (gapRound.length === 1 ? "" : "s") +
+      ' practised.<br><button id="gapAgain" class="primary">Again</button></div>';
+    $("#gapAgain").onclick = () => openGapFill();
+    return;
+  }
+  const it = gapRound[gapAt];
+  prog.textContent = (gapAt + 1) + "/" + gapRound.length;
+  /* pinyin-<mode> on the sentence's own wrapper, the same way renderMessage()
+   * scopes it to a bubble: the CSS rule is a descendant selector, so without
+   * this class here the toggle would do nothing at all inside this sheet. */
+  body.innerHTML =
+    '<div class="gapsentence pinyin-' + S.pinyin + '">' + gapText(it.text.slice(0, it.at)) +
+      '<span class="gapblank" id="gapBlank">____</span>' +
+      gapText(it.text.slice(it.at + it.len)) + '</div>' +
+    '<div class="note">from ' + gapSourceLabel(it.source) + '</div>' +
+    '<div class="gapchoices">' + it.candidates.map((w, i) =>
+      '<button class="gapchoice" data-w="' + escapeHtml(w) + '" type="button">' +
+      escapeHtml(w) + '</button>').join("") + '</div>';
+  Array.from(body.querySelectorAll(".gapchoice")).forEach(b => {
+    b.onclick = () => answerGap(b.dataset.w, b);
+  });
+}
+
+/* The app's own token renderer, so a word in the sheet looks like the same word
+ * in a bubble. tokenSpan() emits data-py and the global pinyin CSS does the
+ * rest -- which is exactly why the blank is NOT a token span: with no data-py
+ * there is nothing for the pinyin rule to annotate, and the answer cannot leak
+ * through the toggle.
+ *
+ * needs is null and flagLatin false: nothing here is a required word, and
+ * everything here has already passed validate(). */
+function gapText(part) {
+  return HSK.segment(part, S.lex)
+    .map(tok => tokenSpan(tok, null, false)).join("");
+}
+
+/* Three cases, named separately. A single "nothing to practise" covering all
+ * three is the failure drillWhyNot() was written to fix. */
+function gapEmpty() {
+  const older = Object.keys(S.chatMsgs || {}).some(cid =>
+    (S.chatMsgs[cid] || []).some(t => HSKRetrieval.dayOf(t.created_at) < ghostDayKey()));
+  if (!older) {
+    return '<div class="hint"><b>Nothing to practise yet</b><br>' +
+      'Gap-fill asks about sentences you met on an earlier day — chat today, ' +
+      'come back tomorrow.</div>';
+  }
+  const counts = retrievalCounts(), today = ghostDayKey();
+  const learningWords = (S.learning || []).map(e => e.w);
+  const allDone = learningWords.length > 0 && learningWords.every(w =>
+    counts[w] && counts[w].days[today]);
+  if (allDone) {
+    return '<div class="hint"><b>Done for today</b><br>' +
+      'Every word you are working on has had its retrieval. One a day is the ' +
+      'point — come back tomorrow.</div>';
+  }
+  return '<div class="hint"><b>No words to practise</b><br>' +
+    'Gap-fill asks about words you are currently learning. Turn on ' +
+    '<b>Introduce words from the next level</b> in Settings → Learning, ' +
+    'chat for a day, then come back.</div>';
+}
+
+function gapSourceLabel(src) {
+  const what = src.kind === "story" ? "a story"
+    : src.kind === "mine" ? "something you wrote"
+    : src.kind === "correction" ? "a correction"
+    : "your chat";
+  return what + " · " + src.day;
+}
+
+/* Correct: fill the blank and move on after a beat. Wrong: show the answer and
+ * wait for a tap -- the learner needs time to read what they missed. Exactly
+ * one row is written either way, and only if today is still open for that word. */
+function answerGap(word, btn) {
+  const it = gapRound[gapAt];
+  const right = word === it.target;
+  Array.from($("#gapBody").querySelectorAll(".gapchoice")).forEach(b => {
+    b.disabled = true;
+    if (b.dataset.w === it.target) b.classList.add("ok");
+  });
+  if (!right) btn.classList.add("bad");
+  $("#gapBlank").textContent = it.target;
+  $("#gapBlank").classList.add(right ? "ok" : "bad");
+  recordRetrieval(it.target, right);
+  if (right) gapRight++;
+  if (right) setTimeout(() => { gapAt++; renderGapFill(); }, 900);
+  else $("#gapBody").insertAdjacentHTML("beforeend",
+    '<div style="margin-top:12px"><button id="gapNext" class="primary">Next</button></div>'),
+    $("#gapNext").onclick = () => { gapAt++; renderGapFill(); };
 }
 
 /* What is actually running on this device: the page's own stamp, the cache the
@@ -5893,7 +6055,10 @@ $("#goalLevel").onchange = async e => {
   await loadGoalList();
   renderSectionNotes();
 };
-$("#activity").onchange = e => { startActivity(e.target.value); fillActivities(); };
+$("#activity").onchange = e => {
+  if (e.target.value === "__gapfill") { fillActivities(); openGapFill(); return; }
+  startActivity(e.target.value); fillActivities();
+};
 $("#levelChip").onclick = () => openSheet("#setSheet");
 /* One setting, three controls that show it: the header picker, the Settings
  * picker and the paste-an-id box. Whichever one moves, the other two follow --
@@ -5956,6 +6121,7 @@ $("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
 $("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(); });
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolX").onclick = () => closeSheet("#poolSheet");
+$("#gapX").onclick = () => closeSheet("#gapSheet");
 
 /* Moving up. Never automatic: the level decides what the validator enforces and
  * what the partner is allowed to say, so it changing itself mid-conversation
@@ -5980,6 +6146,7 @@ $("#moveUp").onclick = async () => {
   renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
 };
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
+$("#gapSheet").addEventListener("click", e => { if (e.target === $("#gapSheet")) closeSheet("#gapSheet"); });
 
 function sendExplainQuestion() {
   const text = $("#explainInput").value.trim();
