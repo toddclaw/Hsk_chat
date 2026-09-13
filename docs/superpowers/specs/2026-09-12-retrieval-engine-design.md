@@ -232,8 +232,13 @@ table.
   adding a column later means whoever runs the deployment applying SQL by hand
   again, which is the expensive kind of change. "Which face produced this
   retrieval" is exactly what the tone-ID and dictation evaluations will ask.
-- **Sync reuses `pushVocab` / `pullVocab`**, which are already generic over the
-  table name. New: converters and a `schemaHasRetrievals` probe flag, kept
+- **Sync gets its own `pushRetrievals` / `pullRetrievals`.** The generic
+  `pushVocab` / `pullVocab` (`sync.js:417`) are table-name-agnostic and were the
+  obvious reuse, but they throw on any error — and an un-migrated database has
+  to degrade rather than throw, or the sync status enters a retry loop for the
+  session. The pair is modelled on `pullConversations()` (`sync.js:488`)
+  instead, which already catches, tests with `isMissingSchema()`, and returns
+  empty. New: converters and a `schemaHasRetrievals` probe flag, kept
   independent of the other flags per the rule `sync.js:450` already enforces —
   a project that ran one migration and not another must not lose unrelated
   features as collateral. When the probe fails, `retrievalsSupported()` goes
