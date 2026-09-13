@@ -151,6 +151,14 @@ check(one.candidates.every(w => LONG.indexOf(w) === -1 || w === "朋友"),
 check(one.source.kind === "partner" && one.source.day === YDAY,
   "the item knows where it came from");
 
+/* A pool too small to fill four candidates must not ship a short list -- the
+ * item is skipped instead. Both non-target entries here are already visible
+ * in LONG, so eligible is empty and there is nothing to draw a distractor
+ * from at all. */
+const tinyPool = [{ w: "朋友", f: 1 }, { w: "你", f: 2 }, { w: "了", f: 3 }];
+check(batch({ pool: tinyPool }).length === 0,
+  "a pool too small for four candidates is skipped, not shipped short");
+
 check(batch({ learning: [], mistakes: [] }).length === 0,
   "a sentence with no word worth practising is skipped, not filled with 的");
 check(batch({ mistakes: ["朋友"], learning: [] })[0].target === "朋友",
@@ -177,6 +185,20 @@ check(batch({ turns: many }).length <= R.ROUND, "a round is at most ROUND items"
 const targets = batch({ turns: many, learning: [learning("朋友"), learning("学校")] })
   .map(it => it.target);
 check(new Set(targets).size === targets.length, "no target is repeated in a round");
+
+/* The boundary itself: far more eligible sentences and worth-practising
+ * words than ROUND exist here, so a round must fill to exactly ROUND -- not
+ * stop short, and not (an off-by-one the <= check above would miss) run
+ * past it. */
+const NEW = "你的朋友是谁呀？";
+const richWords = ["我", "今天", "下午", "在", "学校", "看见", "你", "的", "朋友", "了", "是", "谁", "呀"];
+const plenty = [];
+for (let i = 0; i < 20; i++) {
+  plenty.push(partner(LONG, "2026-09-0" + ((i % 8) + 1)));
+  plenty.push(partner(NEW, "2026-09-0" + ((i % 8) + 1)));
+}
+check(batch({ turns: plenty, learning: richWords.map(learning) }).length === R.ROUND,
+  "a round fills to exactly ROUND when enough sentences and words exist");
 
 check(batch({ turns: [] }).length === 0, "an empty corpus yields an empty round");
 

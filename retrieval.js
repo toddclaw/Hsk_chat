@@ -135,7 +135,7 @@
       return sentence.indexOf(e.w) === -1;
     });
     var tf = null;
-    (pool || []).forEach(function (e) { if (e.w === target && e.f) tf = e.f; });
+    (pool || []).forEach(function (e) { if (e && e.w === target && e.f) tf = e.f; });
     var ranked = tf === null
       ? shuffle(eligible, random)
       : eligible.slice().sort(function (a, b) {
@@ -185,13 +185,20 @@
       var tokens = o.segment(s.text);
       var hit = pickTarget(tokens, worth, counts, rank, o.today, used);
       if (!hit) continue;                          // skip the sentence, do not fall back
+      /* Four candidates is a hard invariant, not a best-effort: a pool too
+       * small or too covered by this sentence to offer three distractors
+       * ships a worse question than none, so the item -- and only this
+       * item -- is dropped. Built and measured before `used` is set, so a
+       * skip here does not burn the word for the rest of the round. */
+      var candidates = shuffle(
+        [hit.word].concat(distractors(hit.word, s.text, o.pool, o.random)), o.random);
+      if (candidates.length < CANDIDATES) continue;
       var before = 0;
       for (var k = 0; k < hit.index; k++) before += tokens[k].text.length;
       used[hit.word] = true;
       items.push({
         text: s.text, at: before, len: hit.word.length, target: hit.word,
-        candidates: shuffle(
-          [hit.word].concat(distractors(hit.word, s.text, o.pool, o.random)), o.random),
+        candidates: candidates,
         source: { kind: s.kind, day: s.day, conversationId: s.conversationId }
       });
     }
