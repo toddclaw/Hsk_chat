@@ -990,6 +990,7 @@ footer{
 <script src="time.js"></script>
 <script src="pace.js"></script>
 <script src="mistakes.js"></script>
+<script src="retrieval.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
 <script src="report.js"></script>
@@ -1121,6 +1122,7 @@ const K = {
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
   ghostUses:"hsk1chat.ghostUses",
+  retrievals:"hsk1chat.retrievals",
   report:"hsk1chat.report", reportAt:"hsk1chat.reportAt",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
@@ -1192,6 +1194,10 @@ const S = {
   pace:    store.get(K.pace, { on: false, rate: HSKPace.DEFAULT_RATE }),
   budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
+  /* Retrieval rows: one per word per day per face, append-only. Counts are
+   * derived by HSKRetrieval.countsFrom() and never stored -- a derived number
+   * in persisted state is how two displays of the same fact start disagreeing. */
+  retrievals: store.get(K.retrievals, []),
   pool:    [],                                // next level minus this one
   /* Words at the next level the learner already knows, marked from the
    * browser in Settings. Joins the allowlist like anything else, but is kept
@@ -1251,7 +1257,7 @@ let syncLastError = "";
  * far more often than anything that has news -- without this it repaints the
  * line from scratch and blanks whatever the last pull reported. */
 let syncStatus = "";
-const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
+const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, retrievals: false, prefs: false };
 let syncTimer = null;
 
 const $ = s => document.querySelector(s);
@@ -2809,6 +2815,10 @@ async function flushSync() {
     if (q.vocab_extra) await HSKSync.pushVocab("vocab_extra", HSKSync.vocabToRows(S.extra, syncUser.id));
     if (q.vocab_learning) await HSKSync.pushVocab("vocab_learning", HSKSync.vocabToRows(S.learning, syncUser.id));
     if (q.vocab_known) await HSKSync.pushVocab("vocab_known", HSKSync.vocabToRows(S.known, syncUser.id));
+    if (q.retrievals) {
+      await HSKSync.pushRetrievals(
+        S.retrievals.map(e => HSKSync.retrievalToRow(e, syncUser.id)).filter(Boolean));
+    }
     if (q.prefs) {
       await HSKSync.pushPrefs(syncUser.id, HSKSync.prefsSnapshot(S));
       S.prefsPushedAt = new Date().toISOString();
@@ -2863,12 +2873,13 @@ async function pullAndMerge() {
   if (!S.sync.on || !syncUser || syncBusy) return;
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
-    const [convRows, msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+    const [convRows, msgRows, extraRows, learningRows, knownRows, retrievalRows, prefsRow] = await Promise.all([
       HSKSync.pullConversations(syncUser.id),
       HSKSync.pullMessages(syncUser.id),
       HSKSync.pullVocab("vocab_extra", syncUser.id),
       HSKSync.pullVocab("vocab_learning", syncUser.id),
       HSKSync.pullVocab("vocab_known", syncUser.id),
+      HSKSync.pullRetrievals(syncUser.id),
       HSKSync.pullPrefs(syncUser.id)
     ]);
     /* Conversations first: the tombstones decide which incoming messages are
@@ -2905,6 +2916,8 @@ async function pullAndMerge() {
     S.extra = HSKSync.mergeWordList(S.extra, HSKSync.rowsToVocab(extraRows));
     S.learning = HSKSync.mergeWordList(S.learning, HSKSync.rowsToVocab(learningRows), "seen");
     S.known = HSKSync.mergeWordList(S.known, HSKSync.rowsToVocab(knownRows));
+    S.retrievals = HSKSync.mergeRetrievals(S.retrievals, HSKSync.rowsToRetrievals(retrievalRows));
+    store.set(K.retrievals, S.retrievals);
 
     // Prefs are whole-blob last-write-wins: adopt the remote snapshot only
     // if it is newer than the last one this device is known to have pushed.
@@ -5548,6 +5561,26 @@ function producedWords() {
 /* Today, as the same UTC dayKey the credit rule counts in. Local dates would
  * let a flight change a learner's numbers -- mistakes.js says why. */
 function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
+
+/* Counts, derived on demand. Cheap: this list is one row per word per day, not
+ * a scan of every message the way ghostProgressMap() is. */
+function retrievalCounts() { return HSKRetrieval.countsFrom(S.retrievals); }
+
+/* One row per word per day, in both directions -- the cap lives in
+ * HSKRetrieval.credit(), so the tap handler cannot get it wrong. The id and
+ * the timestamp are generated HERE because the module is pure and may not
+ * reach for crypto or the clock. */
+function recordRetrieval(word, ok, face) {
+  const before = S.retrievals;
+  S.retrievals = HSKRetrieval.credit(before, {
+    id: crypto.randomUUID(), word: word, day: ghostDayKey(), ok: !!ok,
+    face: face || "gapfill", created_at: new Date().toISOString()
+  });
+  if (S.retrievals === before) return false;         // already banked today
+  store.set(K.retrievals, S.retrievals);
+  queueSync("retrievals");
+  return true;
+}
 
 /* How far along every word is, in one pass over every conversation.
  *
