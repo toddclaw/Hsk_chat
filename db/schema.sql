@@ -147,6 +147,37 @@ create table if not exists public.vocab_known (
   primary key (user_id, word)
 );
 
+-- Retrievals: one row per word, per day, per face.
+--
+-- Deliberately NOT a counter column. Two devices each incrementing an integer
+-- offline resolve to one of the two values and the other retrieval is gone.
+-- Rows merge by union on id, and the count is derived: the number of distinct
+-- days a word was answered correctly. Two devices that both record the same
+-- word on the same day therefore produce two rows and still count one day,
+-- which is why there is NO unique constraint here -- a constraint would reject
+-- the second device's push instead of absorbing it.
+--
+-- Append-only: nothing is ever deleted, so this is the one user-data table
+-- that needs no tombstone.
+--
+-- `face` ships in this first migration although only gap-fill writes it today.
+-- Same reasoning as conversations.title above: adding a column later means
+-- whoever runs this deployment applying SQL by hand again, and "which face
+-- produced this retrieval" is exactly what the tone-ID and dictation
+-- evaluations will ask.
+
+create table if not exists public.retrievals (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  word text not null,
+  day text not null,
+  ok boolean not null,
+  face text not null default 'gapfill',
+  created_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists retrievals_user_word_idx on public.retrievals (user_id, word);
+
 -- Preferences: one JSONB row per user, whole-blob last-write-wins by
 -- updated_at. Everything in S that isn't the API key, the model cache, or
 -- one of the tables above lives in here (level, model, mode, pinyin,
@@ -164,6 +195,7 @@ alter table public.messages enable row level security;
 alter table public.vocab_extra enable row level security;
 alter table public.vocab_learning enable row level security;
 alter table public.vocab_known enable row level security;
+alter table public.retrievals enable row level security;
 alter table public.prefs enable row level security;
 
 drop policy if exists "own rows" on public.conversations;
@@ -184,6 +216,10 @@ create policy "own rows" on public.vocab_learning
 
 drop policy if exists "own rows" on public.vocab_known;
 create policy "own rows" on public.vocab_known
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own rows" on public.retrievals;
+create policy "own rows" on public.retrievals
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "own rows" on public.prefs;

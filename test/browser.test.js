@@ -31,6 +31,9 @@ const ROOT = path.join(__dirname, "..");
  * than written into the file: a date literal here passes on the day it is
  * written and fails silently every day after. */
 const TODAY = new Date().toLocaleDateString("en-CA");
+/* UTC, matching HSKRetrieval.dayOf()/ghostDayKey() (both slice an ISO string,
+ * not a local calendar day) -- computed per run for the same reason as TODAY. */
+const GAP_YDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 let pass = 0, fail = 0;
 const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
@@ -1485,7 +1488,7 @@ check(usedGroups && usedGroups.first === "\u7684",
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
     const want = ["conversations", "messages", "prefs",
-                  "vocab_extra", "vocab_known", "vocab_learning"];
+                  "vocab_extra", "vocab_known", "vocab_learning", "retrievals"];
 
     check(want.every(t => tables.includes(t)),
       "every user table is deleted", "deleted: [" + tables + "]");
@@ -3951,6 +3954,155 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(migLedger.indexOf("measure-word") !== -1 &&
           migLedger.indexOf("wrong-word:行") !== -1,
       "and both reach the mistake list, the word one drillable", migLedger);
+
+    /* --------------------------------------------------------- gap-fill */
+
+    /* One assistant turn from yesterday, all HSK 1, 10 word tokens, with 朋友
+     * sitting at character index 10 -- verified against retrieval.test.js's
+     * own fixture (the same sentence, LONG). 朋友 is marked "learning" so the
+     * engine has a word worth asking about; the day gap is what makes the
+     * sentence eligible at all. Chats/chatId/retrievals are reset alongside it
+     * so nothing an earlier case in this file left behind leaks into the round
+     * or into the "gains exactly one row" count below. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.removeItem("hsk1chat.chatId");
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({
+        "eeeeeeee-1111-4111-8111-eeeeeeeeeeee": [
+          { id: "e1111111-1111-4111-8111-111111111111", role: "assistant",
+            text: "我今天下午在学校看见你的朋友了。", attempts: 1,
+            created_at: "${GAP_YDAY}T09:00:00.000Z" }
+        ]
+      }));
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "朋友", from: 2, seen: 6 }
+      ]));
+      localStorage.setItem("hsk1chat.retrievals", "[]");
+      /* "all", not the "extra" default: an ordinary already-known word like
+       * 学校 only gets a ruby under "extra" if it is new/needed/bad, and every
+       * word in this sentence is plain HSK 1 -- "all" is the toggle state in
+       * which the surrounding sentence is guaranteed to show one. */
+      localStorage.setItem("hsk1chat.pinyin", JSON.stringify("all"));
+      return true;`);
+    await go(base);
+    /* Not just '#activity' existing: that select is in the static markup and
+     * is there before boot() even starts. Its Gap-fill option is appended by
+     * fillActivities(), which runs after the async loadLevel() -- waiting on
+     * the option itself, not the element, is what actually closes the race. */
+    await waitFor("document.querySelector('#activity option[value=\"__gapfill\"]')",
+      "the app after reseeding for gap-fill");
+
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to open");
+    check(await exec(`return document.querySelector('#activity').value;`) !== "__gapfill",
+      "the dropdown snaps back to the real activity rather than sitting on the menu item");
+
+    check(await exec(`return !!document.querySelector('#gapBlank');`) === true,
+      "the sheet renders a blank");
+    check(await exec(`return document.querySelector('#gapBlank').textContent;`) === "____",
+      "unanswered, the blank shows as a placeholder, not the word");
+    check(await exec(`return document.querySelectorAll('.gapchoice').length;`) === 4,
+      "one target and three distractors");
+
+    /* The leak check: #gapBlank is a plain span, never a .w token, so it has
+     * no data-py attribute at all to annotate -- while the sentence around it
+     * is built from the app's own tokenSpan() and does. Attribute presence
+     * rather than a computed ::before check: it is what the design comment on
+     * gapText() stakes the claim on, and it does not depend on how a headless
+     * engine happens to compute pseudo-element style. */
+    check(await exec(`return document.querySelector('#gapBlank').hasAttribute('data-py');`) === false,
+      "the blank carries no pinyin annotation even with the toggle on");
+    check(await exec(`
+      var w = document.querySelector('.gapsentence .w');
+      return !!w && !!w.getAttribute('data-py');`) === true,
+      "while an ordinary word in the same sentence does");
+
+    const gapWrapClass = await exec(`return document.querySelector('.gapsentence').className;`);
+    check(gapWrapClass.indexOf("pinyin-all") !== -1,
+      "and the toggle's mode reaches this sheet the same way it reaches a chat bubble",
+      gapWrapClass);
+
+    const retrBefore = await exec(`return JSON.parse(localStorage.getItem("hsk1chat.retrievals") || "[]").length;`);
+    await exec(`
+      var b = Array.prototype.filter.call(document.querySelectorAll(".gapchoice"),
+        function (x) { return x.textContent === "\\u670b\\u53cb"; })[0];
+      b.click();
+      return true;`);
+    const retrAfter = await exec(`return JSON.parse(localStorage.getItem("hsk1chat.retrievals"));`);
+    check(retrAfter.length === retrBefore + 1,
+      "answering writes exactly one row",
+      JSON.stringify(retrAfter));
+    const gapRow = retrAfter[retrAfter.length - 1];
+    check(gapRow.word === "朋友" && gapRow.ok === true,
+      "the row names the word and the correct answer",
+      JSON.stringify(gapRow));
+
+    /* Task 6 review, finding 1: the 900ms auto-advance timer answerGap() sets
+     * on a correct tap is never cancelled, so closing the sheet inside that
+     * window and reopening it fires the stale timer against the NEW round.
+     * Proved deterministically -- no sleep raced against the real 900ms --
+     * by wrapping window.setTimeout/clearTimeout right after load and reading
+     * back which ids were scheduled and cleared. Both call sites are checked:
+     * closeGapFill() (the X button) and openGapFill() (reopening). */
+    await exec(`
+      localStorage.setItem("hsk1chat.retrievals", "[]");
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#activity option[value=\"__gapfill\"]')",
+      "the app after reseeding for the timer check");
+    await exec(`
+      window.__gapTimeouts = []; window.__gapCleared = [];
+      var origSet = window.setTimeout, origClear = window.clearTimeout;
+      window.setTimeout = function (fn, ms) {
+        var id = origSet(fn, ms);
+        if (ms === 900) window.__gapTimeouts.push(id);
+        return id;
+      };
+      window.clearTimeout = function (id) { window.__gapCleared.push(id); return origClear(id); };
+      return true;`);
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to open for the timer check");
+    await exec(`
+      var b = Array.prototype.filter.call(document.querySelectorAll(".gapchoice"),
+        function (x) { return x.textContent === "\u670b\u53cb"; })[0];
+      b.click();
+      return true;`);
+    const scheduled = await exec(`return window.__gapTimeouts.slice();`);
+    check(scheduled.length === 1, "a correct answer schedules exactly one 900ms timer",
+      JSON.stringify(scheduled));
+    const timerId = scheduled[0];
+
+    // Close within the 900ms window -- closeGapFill() must clear it.
+    await exec(`document.querySelector('#gapX').click(); return true;`);
+    let cleared = await exec(`return window.__gapCleared.slice();`);
+    check(cleared.indexOf(timerId) !== -1,
+      "closing the sheet before the timer fires cancels it",
+      JSON.stringify(cleared));
+
+    // Reopen -- openGapFill() must also clear on the way in, not just on the
+    // way out, so a stale timer from a sheet that was never explicitly closed
+    // cannot survive either.
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to reopen for the timer check");
+    cleared = await exec(`return window.__gapCleared.slice();`);
+    check(cleared.filter(function (id) { return id === timerId; }).length >= 2,
+      "reopening clears it a second time, independent of the close path",
+      JSON.stringify(cleared));
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

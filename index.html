@@ -366,6 +366,17 @@ footer{
    a line, centred, is hard to read. */
 .hint .tip{display:inline-block; text-align:left; white-space:pre-wrap;
   max-width:34em; margin:6px 0; color:var(--ink)}
+/* Gap-fill. The blank is fixed-width so the target's character count is never
+   a cue, and plain rather than a .w token -- see gapText()'s comment for why. */
+.gapsentence{font-size:24px; line-height:2; margin-bottom:8px}
+.gapblank{display:inline-block; min-width:3em; text-align:center;
+  border-bottom:2px solid var(--dim)}
+.gapblank.ok{color:var(--ok); border-color:var(--ok)}
+.gapblank.bad{color:var(--bad); border-color:var(--bad)}
+.gapchoices{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.gapchoice{min-height:var(--tap); padding:8px 16px; font-size:18px}
+.gapchoice.ok{border-color:var(--ok); color:var(--ok)}
+.gapchoice.bad{border-color:var(--bad); color:var(--bad)}
 /* Issue submission form */
 #issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
 #issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
@@ -982,6 +993,14 @@ footer{
   <div style="margin-top:16px"><button id="vocabClose" class="primary">Done</button></div>
 </div></div>
 
+<div class="sheet" id="gapSheet"><div class="card">
+  <div class="sheethead">
+    <b>Gap-fill</b><span id="gapProgress" class="secnote"></span>
+    <button id="gapX" class="sheetx" type="button" aria-label="Close gap-fill" title="Close">✕</button>
+  </div>
+  <div id="gapBody"></div>
+</div></div>
+
 <div id="pop"></div>
 
 <script src="validator.js"></script>
@@ -990,6 +1009,7 @@ footer{
 <script src="time.js"></script>
 <script src="pace.js"></script>
 <script src="mistakes.js"></script>
+<script src="retrieval.js"></script>
 <script src="senses.js"></script>
 <script src="sync.js"></script>
 <script src="report.js"></script>
@@ -1061,7 +1081,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v100 — 2026-09-12";
+const VERSION   = "v101 — 2026-09-13";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1121,6 +1141,7 @@ const K = {
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
   ghostUses:"hsk1chat.ghostUses",
+  retrievals:"hsk1chat.retrievals",
   report:"hsk1chat.report", reportAt:"hsk1chat.reportAt",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
   speechRate:"hsk1chat.speechRate",
@@ -1192,6 +1213,10 @@ const S = {
   pace:    store.get(K.pace, { on: false, rate: HSKPace.DEFAULT_RATE }),
   budget:  store.get(K.paceState, {}),        // level -> {chars, credits}
   learning: store.get(K.learning, []),        // [{w,p,d,seen,from}]
+  /* Retrieval rows: one per word per day per face, append-only. Counts are
+   * derived by HSKRetrieval.countsFrom() and never stored -- a derived number
+   * in persisted state is how two displays of the same fact start disagreeing. */
+  retrievals: store.get(K.retrievals, []),
   pool:    [],                                // next level minus this one
   /* Words at the next level the learner already knows, marked from the
    * browser in Settings. Joins the allowlist like anything else, but is kept
@@ -1251,7 +1276,7 @@ let syncLastError = "";
  * far more often than anything that has news -- without this it repaints the
  * line from scratch and blanks whatever the last pull reported. */
 let syncStatus = "";
-const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, prefs: false };
+const syncQueue = { conversations: false, messages: false, vocab_extra: false, vocab_learning: false, vocab_known: false, retrievals: false, prefs: false };
 let syncTimer = null;
 
 const $ = s => document.querySelector(s);
@@ -2840,6 +2865,10 @@ async function flushSync() {
     if (q.vocab_extra) await HSKSync.pushVocab("vocab_extra", HSKSync.vocabToRows(S.extra, syncUser.id));
     if (q.vocab_learning) await HSKSync.pushVocab("vocab_learning", HSKSync.vocabToRows(S.learning, syncUser.id));
     if (q.vocab_known) await HSKSync.pushVocab("vocab_known", HSKSync.vocabToRows(S.known, syncUser.id));
+    if (q.retrievals) {
+      await HSKSync.pushRetrievals(
+        S.retrievals.map(e => HSKSync.retrievalToRow(e, syncUser.id)).filter(Boolean));
+    }
     if (q.prefs) {
       await HSKSync.pushPrefs(syncUser.id, HSKSync.prefsSnapshot(S));
       S.prefsPushedAt = new Date().toISOString();
@@ -2894,12 +2923,13 @@ async function pullAndMerge() {
   if (!S.sync.on || !syncUser || syncBusy) return;
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
-    const [convRows, msgRows, extraRows, learningRows, knownRows, prefsRow] = await Promise.all([
+    const [convRows, msgRows, extraRows, learningRows, knownRows, retrievalRows, prefsRow] = await Promise.all([
       HSKSync.pullConversations(syncUser.id),
       HSKSync.pullMessages(syncUser.id),
       HSKSync.pullVocab("vocab_extra", syncUser.id),
       HSKSync.pullVocab("vocab_learning", syncUser.id),
       HSKSync.pullVocab("vocab_known", syncUser.id),
+      HSKSync.pullRetrievals(syncUser.id),
       HSKSync.pullPrefs(syncUser.id)
     ]);
     /* Conversations first: the tombstones decide which incoming messages are
@@ -2936,6 +2966,8 @@ async function pullAndMerge() {
     S.extra = HSKSync.mergeWordList(S.extra, HSKSync.rowsToVocab(extraRows));
     S.learning = HSKSync.mergeWordList(S.learning, HSKSync.rowsToVocab(learningRows), "seen");
     S.known = HSKSync.mergeWordList(S.known, HSKSync.rowsToVocab(knownRows));
+    S.retrievals = HSKSync.mergeRetrievals(S.retrievals, HSKSync.rowsToRetrievals(retrievalRows));
+    store.set(K.retrievals, S.retrievals);
 
     // Prefs are whole-blob last-write-wins: adopt the remote snapshot only
     // if it is newer than the last one this device is known to have pushed.
@@ -4358,6 +4390,13 @@ function fillActivities() {
   $("#activity").innerHTML = Object.keys(HSKPrompt.ACTIVITIES).map(k =>
     '<option value="' + k + '"' + (k === cur ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.ACTIVITIES[k].label) + "</option>").join("");
+  /* Not a row in HSKPrompt.ACTIVITIES, deliberately. Every key in that table is
+   * a conversation config, and newChat() will happily create a chat for any id
+   * it knows -- a gapfill row would be a conversation waiting to be started
+   * against a prompt that does not exist. This is a menu item that behaves like
+   * a button: it opens the sheet and puts the select back where it was. */
+  $("#activity").insertAdjacentHTML("beforeend",
+    '<option value="__gapfill">Gap-fill</option>');
   const act = HSKPrompt.ACTIVITIES[cur];
   let note = act && act.note;
   /* Ghost Words: show the target words so the user knows what to aim for. */
@@ -5004,6 +5043,213 @@ function renderVocab() {
   });
 }
 
+/* ---------------------------------------------------------------- gap-fill
+ *
+ * One round, built once when the sheet opens. Rebuilt only by "Again": an item
+ * list that regenerated on every render would change under the learner's thumb
+ * between reading the sentence and tapping. */
+let gapRound = null, gapAt = 0, gapRight = 0, gapTimer = null;
+
+// The mistake-ledger words folded in as plain strings, the shape batch()
+// wants for `mistakes`. Shared by gapItems() and gapEmpty() so both agree on
+// what is "worth practising" -- see gapWorthWords().
+function gapMistakeWords() {
+  return mistakeCounts().reduce((ws, m) =>
+    ws.concat((m.words || []).map(w => w.word)), []);
+}
+
+// Every word gap-fill will target: S.learning plus the mistake ledger, the
+// same union batch() computes internally from `learning` + `mistakes`.
+// gapEmpty() has to diagnose over this same union, not S.learning alone, or
+// it can call a learner "done" while an unretried mistake word just has no
+// eligible sentence yet.
+function gapWorthWords() {
+  return (S.learning || []).map(e => e.w).concat(gapMistakeWords());
+}
+
+/* The candidate pool for gap-fill: everything already in the lexicon
+ * (S.base + S.extra + S.learning + S.known -- the same lists rebuildLexicon()
+ * feeds S.lex from, so nothing here can be out of level), in the learner's
+ * active script, with frequency rank re-attached afterward.
+ *
+ * Rank has to be re-attached rather than read off inScript()'s output:
+ * inScript() rekeys an entry to its traditional form and returns
+ * { w, p, d, s, other }, dropping `f` on the floor. A bare inScript(S.base)
+ * pool would be script-safe but silently disable the rank-neighbour
+ * distractor rule in traditional mode -- do not "simplify" it back to that.
+ * S.learning words need this even more: they are not in S.base at all (they
+ * are next-level words already promoted into the lexicon), so their rank
+ * only exists in S.nextList. The join key is always the simplified form --
+ * `other` when inScript() swapped it, `w` when it did not.
+ *
+ * S.nextList is a source of rank data only, never of pool entries: those
+ * words are not in S.lex, and putting them in the pool would put an
+ * out-of-level word back on a button. */
+function gapPool() {
+  const rank = new Map();
+  S.base.concat(S.nextList).forEach(e => { if (e && e.w && e.f) rank.set(e.w, e.f); });
+  const seen = new Set(), out = [];
+  inScript(S.base.concat(S.learning, S.extra, S.known)).forEach(e => {
+    if (!e || !e.w || seen.has(e.w)) return;
+    seen.add(e.w);
+    const f = rank.get(e.other || e.w);
+    out.push(f ? Object.assign({}, e, { f: f }) : e);
+  });
+  return out;
+}
+
+function gapItems() {
+  return HSKRetrieval.batch({
+    turns: Object.keys(S.chatMsgs || {}).reduce((all, cid) =>
+      all.concat((S.chatMsgs[cid] || []).map(t =>
+        Object.assign({}, t, { conversation_id: cid }))), []),
+    starters: starterTexts(),
+    counts: retrievalCounts(),
+    learning: S.learning,
+    mistakes: gapMistakeWords(),
+    pool: gapPool(),
+    today: ghostDayKey(),
+    size: HSKRetrieval.ROUND,
+    segment: t => HSK.segment(t, S.lex),
+    validate: t => HSK.validate(t, S.lex).length === 0,
+    random: Math.random
+  });
+}
+
+function openGapFill() {
+  /* gapRound/gapAt are module-level, and the correct-answer path below sets a
+   * 900ms timer against them -- close the sheet inside that window, reopen,
+   * and a stale timer would fire against the NEW round, silently skipping an
+   * item the learner is looking at (or jumping straight to the summary). */
+  clearTimeout(gapTimer);
+  gapRound = gapItems(); gapAt = 0; gapRight = 0;
+  renderGapFill();
+  openSheet("#gapSheet");
+}
+
+function closeGapFill() {
+  clearTimeout(gapTimer);
+  closeSheet("#gapSheet");
+}
+
+/* The blank is fixed-width whatever the target's length, so character count
+ * leaks nothing -- which is also why distractors need not match length.
+ *
+ * Pinyin is suppressed on the blank and kept on the rest of the sentence: with
+ * the global pinyin toggle on, a reading over the blank hands over the answer.
+ * Same reason there is no audio and no translate control in this sheet. Audio
+ * belongs to dictation, where hearing it IS the task. */
+function renderGapFill() {
+  const body = $("#gapBody"), prog = $("#gapProgress");
+  if (!gapRound) return;
+  if (!gapRound.length) { prog.textContent = ""; body.innerHTML = gapEmpty(); return; }
+  if (gapAt >= gapRound.length) {
+    prog.textContent = "";
+    body.innerHTML = '<div class="hint"><b>' + gapRight + " / " + gapRound.length +
+      "</b><br>" + gapRound.length + " word" + (gapRound.length === 1 ? "" : "s") +
+      ' practised.<br><button id="gapAgain" class="primary">Again</button></div>';
+    $("#gapAgain").onclick = () => openGapFill();
+    return;
+  }
+  const it = gapRound[gapAt];
+  prog.textContent = (gapAt + 1) + "/" + gapRound.length;
+  /* pinyin-<mode> on the sentence's own wrapper, the same way renderMessage()
+   * scopes it to a bubble: the CSS rule is a descendant selector, so without
+   * this class here the toggle would do nothing at all inside this sheet. */
+  body.innerHTML =
+    '<div class="gapsentence pinyin-' + S.pinyin + '">' + gapText(it.text.slice(0, it.at)) +
+      '<span class="gapblank" id="gapBlank">____</span>' +
+      gapText(it.text.slice(it.at + it.len)) + '</div>' +
+    '<div class="note">from ' + gapSourceLabel(it.source) + '</div>' +
+    '<div class="gapchoices">' + it.candidates.map((w, i) =>
+      '<button class="gapchoice" data-w="' + escapeHtml(w) + '" type="button">' +
+      escapeHtml(w) + '</button>').join("") + '</div>';
+  Array.from(body.querySelectorAll(".gapchoice")).forEach(b => {
+    b.onclick = () => answerGap(b.dataset.w, b);
+  });
+}
+
+/* The app's own token renderer, so a word in the sheet looks like the same word
+ * in a bubble. tokenSpan() emits data-py and the global pinyin CSS does the
+ * rest -- which is exactly why the blank is NOT a token span: with no data-py
+ * there is nothing for the pinyin rule to annotate, and the answer cannot leak
+ * through the toggle.
+ *
+ * needs is null and flagLatin false: nothing here is a required word, and
+ * everything here has already passed validate(). */
+function gapText(part) {
+  return HSK.segment(part, S.lex)
+    .map(tok => tokenSpan(tok, null, false)).join("");
+}
+
+/* Four cases, named separately. A single "nothing to practise" covering all
+ * of them is the failure drillWhyNot() was written to fix -- and the first
+ * cut of this function still conflated two of them: "no words in progress"
+ * and "words in progress but none turned up in an eligible sentence" read as
+ * the same branch, so a learner with 苹果 in S.learning but no sentence that
+ * ever used it was told they had no words in progress at all, which was
+ * false. Each message is only shown when it is true, so the order matters:
+ * the earlier branches are gates the later ones may assume already failed. */
+function gapEmpty() {
+  const older = Object.keys(S.chatMsgs || {}).some(cid =>
+    (S.chatMsgs[cid] || []).some(t => HSKRetrieval.dayOf(t.created_at) < ghostDayKey()));
+  if (!older) {
+    return '<div class="hint"><b>Nothing to practise yet</b><br>' +
+      'Gap-fill asks about sentences you met on an earlier day — chat today, ' +
+      'come back tomorrow.</div>';
+  }
+  const worthWords = gapWorthWords();
+  if (!worthWords.length) {
+    return '<div class="hint"><b>No words to practise</b><br>' +
+      'Gap-fill asks about words you are currently learning. Turn on ' +
+      '<b>Introduce words from the next level</b> in Settings → Learning, ' +
+      'chat for a day, then come back.</div>';
+  }
+  const counts = retrievalCounts(), today = ghostDayKey();
+  const allDone = worthWords.every(w => counts[w] && counts[w].days[today]);
+  if (allDone) {
+    return '<div class="hint"><b>Done for today</b><br>' +
+      'Every word you are working on has had its retrieval. One a day is the ' +
+      'point — come back tomorrow.</div>';
+  }
+  return '<div class="hint"><b>Nothing to ask about yet</b><br>' +
+    'The words you are working on have not turned up in a sentence you met ' +
+    'on an earlier day. Keep chatting — gap-fill asks about sentences you ' +
+    'have actually read.</div>';
+}
+
+function gapSourceLabel(src) {
+  const what = src.kind === "story" ? "a story"
+    : src.kind === "mine" ? "something you wrote"
+    : src.kind === "correction" ? "a correction"
+    : "your chat";
+  return what + " · " + src.day;
+}
+
+/* Correct: fill the blank and move on after a beat. Wrong: show the answer and
+ * wait for a tap -- the learner needs time to read what they missed. Exactly
+ * one row is written either way, and only if today is still open for that word. */
+function answerGap(word, btn) {
+  const it = gapRound[gapAt];
+  const right = word === it.target;
+  Array.from($("#gapBody").querySelectorAll(".gapchoice")).forEach(b => {
+    b.disabled = true;
+    if (b.dataset.w === it.target) b.classList.add("ok");
+  });
+  if (!right) btn.classList.add("bad");
+  $("#gapBlank").textContent = it.target;
+  $("#gapBlank").classList.add(right ? "ok" : "bad");
+  recordRetrieval(it.target, right);
+  if (right) gapRight++;
+  if (right) {
+    gapTimer = setTimeout(() => { gapAt++; renderGapFill(); }, 900);
+  } else {
+    $("#gapBody").insertAdjacentHTML("beforeend",
+      '<div style="margin-top:12px"><button id="gapNext" class="primary">Next</button></div>');
+    $("#gapNext").onclick = () => { gapAt++; renderGapFill(); };
+  }
+}
+
 /* What is actually running on this device: the page's own stamp, the cache the
  * service worker activated, and the data it loaded. If the first two disagree,
  * an update is half-applied and a relaunch will finish it. */
@@ -5580,6 +5826,26 @@ function producedWords() {
  * let a flight change a learner's numbers -- mistakes.js says why. */
 function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
 
+/* Counts, derived on demand. Cheap: this list is one row per word per day, not
+ * a scan of every message the way ghostProgressMap() is. */
+function retrievalCounts() { return HSKRetrieval.countsFrom(S.retrievals); }
+
+/* One row per word per day, in both directions -- the cap lives in
+ * HSKRetrieval.credit(), so the tap handler cannot get it wrong. The id and
+ * the timestamp are generated HERE because the module is pure and may not
+ * reach for crypto or the clock. */
+function recordRetrieval(word, ok, face) {
+  const before = S.retrievals;
+  S.retrievals = HSKRetrieval.credit(before, {
+    id: crypto.randomUUID(), word: word, day: ghostDayKey(), ok: !!ok,
+    face: face || "gapfill", created_at: new Date().toISOString()
+  });
+  if (S.retrievals === before) return false;         // already banked today
+  store.set(K.retrievals, S.retrievals);
+  queueSync("retrievals");
+  return true;
+}
+
 /* How far along every word is, in one pass over every conversation.
  *
  * Segmentation happens here because it needs the live lexicon; mistakes.js gets
@@ -5891,7 +6157,10 @@ $("#goalLevel").onchange = async e => {
   await loadGoalList();
   renderSectionNotes();
 };
-$("#activity").onchange = e => { startActivity(e.target.value); fillActivities(); };
+$("#activity").onchange = e => {
+  if (e.target.value === "__gapfill") { fillActivities(); openGapFill(); return; }
+  startActivity(e.target.value); fillActivities();
+};
 $("#levelChip").onclick = () => openSheet("#setSheet");
 /* One setting, three controls that show it: the header picker, the Settings
  * picker and the paste-an-id box. Whichever one moves, the other two follow --
@@ -5954,6 +6223,7 @@ $("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
 $("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(); });
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolX").onclick = () => closeSheet("#poolSheet");
+$("#gapX").onclick = () => closeGapFill();
 
 /* Moving up. Never automatic: the level decides what the validator enforces and
  * what the partner is allowed to say, so it changing itself mid-conversation
@@ -5978,6 +6248,7 @@ $("#moveUp").onclick = async () => {
   renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
 };
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
+$("#gapSheet").addEventListener("click", e => { if (e.target === $("#gapSheet")) closeGapFill(); });
 
 function sendExplainQuestion() {
   const text = $("#explainInput").value.trim();
