@@ -3986,6 +3986,68 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the row names the word and the correct answer",
       JSON.stringify(gapRow));
 
+    /* Task 6 review, finding 1: the 900ms auto-advance timer answerGap() sets
+     * on a correct tap is never cancelled, so closing the sheet inside that
+     * window and reopening it fires the stale timer against the NEW round.
+     * Proved deterministically -- no sleep raced against the real 900ms --
+     * by wrapping window.setTimeout/clearTimeout right after load and reading
+     * back which ids were scheduled and cleared. Both call sites are checked:
+     * closeGapFill() (the X button) and openGapFill() (reopening). */
+    await exec(`
+      localStorage.setItem("hsk1chat.retrievals", "[]");
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#activity option[value=\"__gapfill\"]')",
+      "the app after reseeding for the timer check");
+    await exec(`
+      window.__gapTimeouts = []; window.__gapCleared = [];
+      var origSet = window.setTimeout, origClear = window.clearTimeout;
+      window.setTimeout = function (fn, ms) {
+        var id = origSet(fn, ms);
+        if (ms === 900) window.__gapTimeouts.push(id);
+        return id;
+      };
+      window.clearTimeout = function (id) { window.__gapCleared.push(id); return origClear(id); };
+      return true;`);
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to open for the timer check");
+    await exec(`
+      var b = Array.prototype.filter.call(document.querySelectorAll(".gapchoice"),
+        function (x) { return x.textContent === "\u670b\u53cb"; })[0];
+      b.click();
+      return true;`);
+    const scheduled = await exec(`return window.__gapTimeouts.slice();`);
+    check(scheduled.length === 1, "a correct answer schedules exactly one 900ms timer",
+      JSON.stringify(scheduled));
+    const timerId = scheduled[0];
+
+    // Close within the 900ms window -- closeGapFill() must clear it.
+    await exec(`document.querySelector('#gapX').click(); return true;`);
+    let cleared = await exec(`return window.__gapCleared.slice();`);
+    check(cleared.indexOf(timerId) !== -1,
+      "closing the sheet before the timer fires cancels it",
+      JSON.stringify(cleared));
+
+    // Reopen -- openGapFill() must also clear on the way in, not just on the
+    // way out, so a stale timer from a sheet that was never explicitly closed
+    // cannot survive either.
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to reopen for the timer check");
+    cleared = await exec(`return window.__gapCleared.slice();`);
+    check(cleared.filter(function (id) { return id === timerId; }).length >= 2,
+      "reopening clears it a second time, independent of the close path",
+      JSON.stringify(cleared));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

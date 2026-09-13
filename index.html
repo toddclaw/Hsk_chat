@@ -5017,7 +5017,7 @@ function renderVocab() {
  * One round, built once when the sheet opens. Rebuilt only by "Again": an item
  * list that regenerated on every render would change under the learner's thumb
  * between reading the sentence and tapping. */
-let gapRound = null, gapAt = 0, gapRight = 0;
+let gapRound = null, gapAt = 0, gapRight = 0, gapTimer = null;
 
 function gapItems() {
   return HSKRetrieval.batch({
@@ -5039,9 +5039,19 @@ function gapItems() {
 }
 
 function openGapFill() {
+  /* gapRound/gapAt are module-level, and the correct-answer path below sets a
+   * 900ms timer against them -- close the sheet inside that window, reopen,
+   * and a stale timer would fire against the NEW round, silently skipping an
+   * item the learner is looking at (or jumping straight to the summary). */
+  clearTimeout(gapTimer);
   gapRound = gapItems(); gapAt = 0; gapRight = 0;
   renderGapFill();
   openSheet("#gapSheet");
+}
+
+function closeGapFill() {
+  clearTimeout(gapTimer);
+  closeSheet("#gapSheet");
 }
 
 /* The blank is fixed-width whatever the target's length, so character count
@@ -5094,8 +5104,14 @@ function gapText(part) {
     .map(tok => tokenSpan(tok, null, false)).join("");
 }
 
-/* Three cases, named separately. A single "nothing to practise" covering all
- * three is the failure drillWhyNot() was written to fix. */
+/* Four cases, named separately. A single "nothing to practise" covering all
+ * of them is the failure drillWhyNot() was written to fix -- and the first
+ * cut of this function still conflated two of them: "no words in progress"
+ * and "words in progress but none turned up in an eligible sentence" read as
+ * the same branch, so a learner with 苹果 in S.learning but no sentence that
+ * ever used it was told they had no words in progress at all, which was
+ * false. Each message is only shown when it is true, so the order matters:
+ * the earlier branches are gates the later ones may assume already failed. */
 function gapEmpty() {
   const older = Object.keys(S.chatMsgs || {}).some(cid =>
     (S.chatMsgs[cid] || []).some(t => HSKRetrieval.dayOf(t.created_at) < ghostDayKey()));
@@ -5104,19 +5120,24 @@ function gapEmpty() {
       'Gap-fill asks about sentences you met on an earlier day — chat today, ' +
       'come back tomorrow.</div>';
   }
-  const counts = retrievalCounts(), today = ghostDayKey();
   const learningWords = (S.learning || []).map(e => e.w);
-  const allDone = learningWords.length > 0 && learningWords.every(w =>
-    counts[w] && counts[w].days[today]);
+  if (!learningWords.length) {
+    return '<div class="hint"><b>No words to practise</b><br>' +
+      'Gap-fill asks about words you are currently learning. Turn on ' +
+      '<b>Introduce words from the next level</b> in Settings → Learning, ' +
+      'chat for a day, then come back.</div>';
+  }
+  const counts = retrievalCounts(), today = ghostDayKey();
+  const allDone = learningWords.every(w => counts[w] && counts[w].days[today]);
   if (allDone) {
     return '<div class="hint"><b>Done for today</b><br>' +
       'Every word you are working on has had its retrieval. One a day is the ' +
       'point — come back tomorrow.</div>';
   }
-  return '<div class="hint"><b>No words to practise</b><br>' +
-    'Gap-fill asks about words you are currently learning. Turn on ' +
-    '<b>Introduce words from the next level</b> in Settings → Learning, ' +
-    'chat for a day, then come back.</div>';
+  return '<div class="hint"><b>Nothing to ask about yet</b><br>' +
+    'The words you are working on have not turned up in a sentence you met ' +
+    'on an earlier day. Keep chatting — gap-fill asks about sentences you ' +
+    'have actually read.</div>';
 }
 
 function gapSourceLabel(src) {
@@ -5142,10 +5163,13 @@ function answerGap(word, btn) {
   $("#gapBlank").classList.add(right ? "ok" : "bad");
   recordRetrieval(it.target, right);
   if (right) gapRight++;
-  if (right) setTimeout(() => { gapAt++; renderGapFill(); }, 900);
-  else $("#gapBody").insertAdjacentHTML("beforeend",
-    '<div style="margin-top:12px"><button id="gapNext" class="primary">Next</button></div>'),
+  if (right) {
+    gapTimer = setTimeout(() => { gapAt++; renderGapFill(); }, 900);
+  } else {
+    $("#gapBody").insertAdjacentHTML("beforeend",
+      '<div style="margin-top:12px"><button id="gapNext" class="primary">Next</button></div>');
     $("#gapNext").onclick = () => { gapAt++; renderGapFill(); };
+  }
 }
 
 /* What is actually running on this device: the page's own stamp, the cache the
@@ -6121,7 +6145,7 @@ $("#poolLevel").onchange = e => loadPoolLevel(Number(e.target.value));
 $("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(); });
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolX").onclick = () => closeSheet("#poolSheet");
-$("#gapX").onclick = () => closeSheet("#gapSheet");
+$("#gapX").onclick = () => closeGapFill();
 
 /* Moving up. Never automatic: the level decides what the validator enforces and
  * what the partner is allowed to say, so it changing itself mid-conversation
@@ -6146,7 +6170,7 @@ $("#moveUp").onclick = async () => {
   renderProgress(); renderPaceNote(); renderLearning(); renderSectionNotes();
 };
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
-$("#gapSheet").addEventListener("click", e => { if (e.target === $("#gapSheet")) closeSheet("#gapSheet"); });
+$("#gapSheet").addEventListener("click", e => { if (e.target === $("#gapSheet")) closeGapFill(); });
 
 function sendExplainQuestion() {
   const text = $("#explainInput").value.trim();
