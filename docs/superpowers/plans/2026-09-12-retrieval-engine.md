@@ -458,11 +458,14 @@ const twoWords = { learning: [learning("朋友"), learning("学校")],
   counts: { "朋友": { n: 2, days: { "2026-09-01": true, "2026-09-02": true } } } };
 check(batch(twoWords)[0].target === "学校", "the fewest-retrievals word wins");
 
-const doneToday = { learning: [learning("朋友"), learning("学校")],
-  counts: { "学校": { n: 0, days: {} }, "朋友": { n: 5, days: {} } } };
-check(batch(Object.assign({}, doneToday, {
+/* 学校 has the fewest retrievals and would win -- but it has already been
+ * answered today, so the day cap hands the item to 朋友 instead. */
+const doneToday = {
+  learning: [learning("朋友"), learning("学校")],
   counts: { "学校": { n: 0, days: { [TODAY]: true } }, "朋友": { n: 5, days: {} } }
-}))[0].target === "朋友", "a word already answered today is not offered again");
+};
+check(batch(doneToday)[0].target === "朋友",
+  "a word already answered today is not offered again");
 
 const many = [];
 for (let i = 0; i < 15; i++) many.push(partner(LONG, "2026-09-0" + ((i % 8) + 1)));
@@ -1188,7 +1191,7 @@ than saying 'nothing to practise' and leaving the learner to guess."
 
 - [ ] **Step 1: Bump the version in both files**
 
-`index.html`: `const VERSION   = "v100 — 2026-09-12";`
+`index.html`: `const VERSION   = "v100 — 2026-09-13";`  (the ship date, not the plan's date)
 `sw.js`: `const CACHE = "hsk-chat-v100";`
 
 - [ ] **Step 2: Verify the release test enforces the pairing**
