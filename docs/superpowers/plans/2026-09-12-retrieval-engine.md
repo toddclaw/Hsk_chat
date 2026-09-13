@@ -22,7 +22,13 @@
 - **`retrieval.js` is pure**: no DOM, no `S`, no network, no `Date.now()`, no `crypto`, no `Math.random()`. Everything time-, lexicon- or randomness-dependent is passed in.
 - **Constants:** `ROUND = 10`, `CANDIDATES = 4`, `MIN_WORDS = 4`. Exported from the module; never re-typed elsewhere.
 - **A new file the page loads must be added in FOUR places** or the release test fails or the deploy 404s: `<script src>` in `index.html`, `SHELL` in `sw.js`, the `isShell` regex in `sw.js`, and `.github/publish-files`.
-- **`VERSION` in `index.html` and `CACHE` in `sw.js` must move together.** This branch starts at v99; it ships as **v100**.
+- **`VERSION` in `index.html` and `CACHE` in `sw.js` must move together.** This branch starts at v99. It ships as **v101**, NOT v102 or v100: `v100` is
+already claimed by the unmerged branch `fix/story-activity-and-unbanked-slate`.
+Two branches carrying the same `CACHE` name is not a cosmetic clash — `sw.js`'s
+activate handler deletes every cache whose key differs from `CACHE`, which is
+what clears stale runtime-cached files, so an identical name makes that sweep
+match nothing. Check every unmerged branch's VERSION before choosing a number;
+`release.test.js` only checks the two agree within one tree.
 - **`PREFS_KEYS` in `sync.js` must never name `key` or `history`.** Nothing in this feature goes near either.
 - **Commit style:** the repo uses Conventional Commits with a body explaining *why*. Run `sh test/run.sh` before every commit; `.githooks/pre-commit` runs it anyway and refuses a failing commit.
 - **Branch:** `feat/retrieval-engine`, already created off `main`. Do not commit to `main`.
@@ -1191,13 +1197,13 @@ than saying 'nothing to practise' and leaving the learner to guess."
 
 - [ ] **Step 1: Bump the version in both files**
 
-`index.html`: `const VERSION   = "v100 — 2026-09-13";`  (the ship date, not the plan's date)
-`sw.js`: `const CACHE = "hsk-chat-v100";`
+`index.html`: `const VERSION   = "v101 — 2026-09-13";`  (the ship date, not the plan's date)
+`sw.js`: `const CACHE = "hsk-chat-v101";`
 
 - [ ] **Step 2: Verify the release test enforces the pairing**
 
 Run: `node test/release.test.js`
-Expected: PASS. Then temporarily bump only `sw.js` to v101 and re-run — expect FAIL on "VERSION and CACHE are the same release". Revert to v100 and confirm PASS.
+Expected: PASS. Then temporarily bump only `sw.js` to v102 and re-run — expect FAIL on "VERSION and CACHE are the same release". Revert to v101 and confirm PASS.
 
 - [ ] **Step 3: Record the constants in RESEARCH.md**
 
@@ -1243,7 +1249,7 @@ measure it and change this section with the code.
 
 - [ ] **Step 4: Update BACKLOG.md**
 
-- In "Order of work", move item 1 out of **Next** and note that the engine shipped in v100, leaving items 2 and 3 as the next two.
+- In "Order of work", move item 1 out of **Next** and note that the engine shipped in v101, leaving items 2 and 3 as the next two.
 - In "One retrieval engine, and the activities that fall out of it", replace "What would settle it" with what was built: the module name, the three functions, and the fact that dictation, tone ID and scramble now need only a presentation over `batch()`.
 - In the Dictation entry, replace "Build it as a face of the retrieval engine above" with the concrete call: `HSKRetrieval.batch()`, ignore `candidates`, hide `text`, play it with `speak()`.
 
@@ -1259,7 +1265,7 @@ Expected: all suites pass.
 ```bash
 git add index.html sw.js RESEARCH.md
 git add -p BACKLOG.md
-git commit -m "docs: v100 — the retrieval engine, and the numbers it introduced
+git commit -m "docs: v101 — the retrieval engine, and the numbers it introduced
 
 ROUND, CANDIDATES and the day gate go in RESEARCH.md with the argument for
 each, including the one that matters most: a retrieval is counted separately
@@ -1276,6 +1282,6 @@ Per `superpowers:verification-before-completion` — evidence, not assertion:
 
 1. `sh test/run.sh` passes in full, on a machine with firefox and geckodriver, and the browser suite's output shows the new gap-fill case actually ran rather than the suite skipping.
 2. The four registration points for `retrieval.js` are all present (`node test/release.test.js` covers three; check `sw.js`'s `isShell` regex by eye).
-3. `VERSION` and `CACHE` both read v100.
+3. `VERSION` and `CACHE` both read v101, and no other unmerged branch claims that number.
 4. In a browser with sync on against a database that has **not** had the migration applied: gap-fill still opens, still records locally, and the sync status does not go into a failure loop. This is the degrade-don't-fail requirement and no test covers it.
 5. Answering the same word twice in one day leaves exactly one row in `hsk1chat.retrievals`.
