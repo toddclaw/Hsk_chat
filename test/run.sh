@@ -11,6 +11,17 @@ for t in test/validator.test.js test/prompt.test.js test/md.test.js test/time.te
   node "$t"
 done
 
+# The preview reconcile is python and lives in .github/scripts, so it gets its
+# own self-check rather than a node suite. Skipped without python3, the same way
+# browser.test.js skips without firefox: a bare machine still runs everything
+# else. CI always has python3, so the check is never silently absent there.
+printf '\n=== .github/scripts/sync-previews.py --selftest ===\n'
+if command -v python3 >/dev/null 2>&1; then
+  python3 .github/scripts/sync-previews.py --selftest
+else
+  echo "no python3 -- skipped"
+fi
+
 # browser.test.js drives a real, mocked-network Firefox session and is fully
 # idempotent -- a retry is a fresh run, not a masked bug. On GitHub's shared
 # runners its heaviest path (a story segment's validate-and-render round trip)
