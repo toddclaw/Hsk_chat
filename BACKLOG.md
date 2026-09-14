@@ -9,37 +9,39 @@ Ranked 2026-09-12 against the pedagogical literature (sources at the foot of thi
 file), by learner value per unit of build, with the app's ~$4/month of unspent
 budget as the money constraint. Not a commitment — a default to argue with.
 
-**Next.** Three builds, no new measurement gate, and the first of them makes three
-later activities small.
+**Built since this was ranked.** Item 1 was *the retrieval engine, with gap-fill as
+its first face* — free, offline, no model call, generated out of a corpus the app had
+been storing all along and using only for arithmetic. It shipped 2026-09-13 as v101
+(#37), which is what makes items 3–5 below cheap rather than three separate projects.
+Its constants live in RESEARCH.md. The list is renumbered; the ranking above it is
+left as it was made.
 
-1. **The retrieval engine, with gap-fill as its first face.** Free, offline, no model
-   call, generated out of a corpus the app has been storing all along and using only
-   for arithmetic. Folse's result — retrievals, not depth — is the most directly
-   actionable finding in this file, and building this is what turns tone ID, dictation
-   and scramble from three projects into three screens.
-2. **Let me rewrite a sentence the grader failed.** Independent of the above and just
+**Next.** Two builds, no new measurement gate.
+
+1. **Let me rewrite a sentence the grader failed.** Independent of the above and just
    as small. The feedback literature's strongest moderators are focused and
    metalinguistic feedback; this app has both and then stops one step short of the
    repair that makes them work.
-3. **The flat re-check for retired ghost words.** Expanding intervals beat equal ones
+2. **The flat re-check for retired ghost words.** Expanding intervals beat equal ones
    only slightly; both crush never-reviewing-again, which is what the app does now. A
    pure function over timestamps already stored — no scheduler.
 
-**Then, at a discount.** Each is a face of item 1 rather than a new activity.
+**Then, at a discount.** Each is another face of the engine that now exists, not a new
+activity.
 
-4. **Tone ID.** Best transfer evidence of anything here — perception-only training
+3. **Tone ID.** Best transfer evidence of anything here — perception-only training
    moved *production* 18% in a real study. Cycle every installed Chinese voice;
    talker variability is the active ingredient, not a nicety.
-5. **Dictation.** The app is text-only and listening is the skill it trains least —
+4. **Dictation.** The app is text-only and listening is the skill it trains least —
    a structural gap, not a refinement. Design it as reconstruction from memory rather
    than verbatim transcription: better evidenced, and the smaller build.
-6. **Scramble**, which targets 语序 and costs almost nothing once the engine exists;
+5. **Scramble**, which targets 语序 and costs almost nothing now the engine exists;
    then **retranslation**, which is the only productive retrieval available and the
    only production task in the app with a reference answer to mark against.
 
 **The expensive one, and it is still worth it.**
 
-7. **The grader's `used` array (transfer).** The learner's own earmark for the spare
+6. **The grader's `used` array (transfer).** The learner's own earmark for the spare
    budget, and the only item that would make every other item on this list
    measurable. It is last of the feature work because it is the one that cannot ship
    without a measurement first: it runs on every message, and a model asked what went
@@ -80,13 +82,16 @@ string, one `ACTIVITIES` row if it is ever wanted, not a project.
 
 **Found:** 2026-09-12, considering fill-in-the-blank as an activity and noticing that
 three separate entries in this file describe the same machine.
+**Built** 2026-09-13 as v101 (#37) — the engine and the gap-fill face only. The other
+four masks below are unbuilt, and are now small.
 
 **The app has a personal corpus and uses it for arithmetic.** Every partner message,
 every story segment and every sentence the learner has written is stored, synced, and
 already known to be inside the level — the partner's Chinese because `validate()`
 passed it, the learner's because it is theirs. `HSK.segment()` splits any of it into
-words. Today that corpus feeds the coverage bars and supplies a drill its example
-sentence, and nothing else.
+words. Until v101 that corpus fed the coverage bars and supplied a drill its example
+sentence, and nothing else; gap-fill is the first thing to read it as a source of
+questions.
 
 Point a retrieval task at it and the task costs **no model call, no network and no
 new data**: pick a span from text the learner has personally met, hide it, ask for it
@@ -97,7 +102,7 @@ Four activities are that one mechanism wearing different masks:
 
 | face | what is hidden | what it trains |
 | --- | --- | --- |
-| **gap-fill** | one word, sentence visible | form recalled from context |
+| **gap-fill** *(built, v101)* | one word, sentence visible | form recalled from context |
 | **dictation** | the whole sentence; audio plays | sound → character |
 | **tone ID** | everything but the audio | tone categories |
 | **scramble** | the word order | 语序 |
@@ -108,13 +113,15 @@ last week, write it back in Chinese — is the same shape but not free: it needs
 retrieval available and the only production task in the app that has a reference
 answer to mark against.
 
-**Why gap-fill is the one to build first.** Folse (2006) beat one original-sentence
-exercise with three fill-in-the-blanks on the same words and concluded that the
-number of retrievals drives retention, not the depth of any single one. Gap-fill is
-the cheapest retrieval that exists, this app can generate them for nothing, and
-building it is what makes tone ID, dictation and scramble small.
+**Why gap-fill went first.** Folse (2006) beat one original-sentence exercise with
+three fill-in-the-blanks on the same words and concluded that the number of retrievals
+drives retention, not the depth of any single one. Gap-fill is the cheapest retrieval
+that exists, this app can generate them for nothing, and building it is what makes
+tone ID, dictation and scramble small — which is the part that has now paid off, and
+the reason those three are listed at a discount rather than as projects.
 
-Four decisions, in the order they matter:
+Four decisions, in the order they matter. All four were taken in v101; the first
+three landed as argued here, the fourth did not:
 
 - **Ask what the word *was*, not what *fits*.** "Which word fits here" has several
   right answers (很好, 真好) and an exact compare marks a good one wrong. "Which word
@@ -132,23 +139,37 @@ Four decisions, in the order they matter:
   do better — same level, similar frequency rank `f`, and for the interesting version,
   a word the learner has confused before (the mistake ledger knows). Start with
   same-level-similar-rank; it needs no new data.
-- **What it credits.** Same hazard as every other activity that touches the same
-  counters: if a gap-fill pass credits a ghost word, the one-per-day cap has to cover
-  this road too, or the game is the fast way to farm words. See RESEARCH.md,
-  "Retiring a ghost word".
+- **What it credits — and this one was settled the other way.** The worry was right,
+  the remedy was not: sharing `GHOST_USES` behind a one-per-day cap would still have
+  made a tap game a road to retiring a ghost word, just a slower one. What shipped
+  counts a retrieval in its own table and lets it touch `GHOST_USES` not at all,
+  because that counter means *days the learner produced the word in a graded
+  sentence* and a tap is recognition — feeding it in would not fill the counter
+  faster, it would change what the counter means. See RESEARCH.md, "Why a retrieval
+  is counted separately from `GHOST_USES`".
 
-**What would settle it:** nothing needs a model measurement — there is no model in
-this path. Build gap-fill against the learner's own corpus, see whether it gets used,
-and only then decide whether the other faces are worth their own screens. If the
-constants it needs (how old a sentence must be, how many candidates) turn out to
-matter, they go in RESEARCH.md with the citation above.
+**What would settle it — now the open question, not the build.** Gap-fill exists and
+still needs no model measurement, because there is no model in this path. What is not
+yet known is whether it gets *used*: that is the evidence that decides whether the
+other four faces are worth their own screens, and nothing here should be built on the
+strength of the argument above alone. `ROUND`, `CANDIDATES` and the day gate went into
+RESEARCH.md with the reasoning when they shipped, so a change to any of them updates
+that file too.
+
+One gap shipped with it, deliberately: `gapPool()` lives in `index.html` where no node
+suite can reach it, and the browser suite's gap-fill case does not exercise traditional
+script — so the fix that keeps simplified words off the candidate buttons in
+traditional mode has **no regression test**. Closing it needs one browser case that
+seeds `hsk1chat.script = "trad"` and asserts every candidate button's text is in the
+active lexicon.
 
 ---
 
 ## Dictation: hide the text, play it, mark what I wrote
 
-**Asked for:** 2026-09-12. **Build it as a face of the retrieval engine above** —
-the corpus question below is the one that entry already answers.
+**Asked for:** 2026-09-12. **Build it as a face of the retrieval engine above**,
+which shipped in v101 — the corpus question below is the one that entry already
+answers, and answers in working code now rather than in argument.
 
 Hide the Chinese, play it, let me type what I heard, and tell me whether I got it
 right.
@@ -260,7 +281,8 @@ afternoon after that.
 
 **Asked for:** 2026-09-12. **Researched** 2026-09-12, and the research moved it:
 the cheap version is the one with the evidence behind it. **Another face of the
-retrieval engine above** — same hide-and-compare loop, with the audio as the cue.
+retrieval engine above**, which shipped in v101 — same hide-and-compare loop, with
+the audio as the cue.
 
 **The app cannot hear you, and it turns out not to matter much.** The first draft
 of this entry assumed that recognising a tone and producing one are different
