@@ -3,30 +3,375 @@
 Things found and deliberately not fixed yet, with enough context to pick up cold.
 Each entry says what it is, how it was found, and what would settle it.
 
+## Order of work
+
+Ranked 2026-09-12 against the pedagogical literature (sources at the foot of this
+file), by learner value per unit of build, with the app's ~$4/month of unspent
+budget as the money constraint. Not a commitment — a default to argue with.
+
+**Next.** Three builds, no new measurement gate, and the first of them makes three
+later activities small.
+
+1. **The retrieval engine, with gap-fill as its first face.** Free, offline, no model
+   call, generated out of a corpus the app has been storing all along and using only
+   for arithmetic. Folse's result — retrievals, not depth — is the most directly
+   actionable finding in this file, and building this is what turns tone ID, dictation
+   and scramble from three projects into three screens.
+2. **Let me rewrite a sentence the grader failed.** Independent of the above and just
+   as small. The feedback literature's strongest moderators are focused and
+   metalinguistic feedback; this app has both and then stops one step short of the
+   repair that makes them work.
+3. **The flat re-check for retired ghost words.** Expanding intervals beat equal ones
+   only slightly; both crush never-reviewing-again, which is what the app does now. A
+   pure function over timestamps already stored — no scheduler.
+
+**Then, at a discount.** Each is a face of item 1 rather than a new activity.
+
+4. **Tone ID.** Best transfer evidence of anything here — perception-only training
+   moved *production* 18% in a real study. Cycle every installed Chinese voice;
+   talker variability is the active ingredient, not a nicety.
+5. **Dictation.** The app is text-only and listening is the skill it trains least —
+   a structural gap, not a refinement. Design it as reconstruction from memory rather
+   than verbatim transcription: better evidenced, and the smaller build.
+6. **Scramble**, which targets 语序 and costs almost nothing once the engine exists;
+   then **retranslation**, which is the only productive retrieval available and the
+   only production task in the app with a reference answer to mark against.
+
+**The expensive one, and it is still worth it.**
+
+7. **The grader's `used` array (transfer).** The learner's own earmark for the spare
+   budget, and the only item that would make every other item on this list
+   measurable. It is last of the feature work because it is the one that cannot ship
+   without a measurement first: it runs on every message, and a model asked what went
+   *right* has an obvious way to lie.
+
+**Cheap, and they restore trust in the tools.** None is a feature; all four are
+currently costing something silently.
+
+- `judge()` undefined in `tools/story-ab.js` — every continuity figure that harness
+  has printed recently was zero by accident.
+- The `loadGoalList()` race in `browser.test.js` — closes out `run.sh`'s retry.
+- Place names past the validator — burns retries on a starter the app itself ships.
+- 为什么 at HSK 1 — burns repairs at the level where pacing is most fragile.
+
+**After that.** Quality and polish, in rough order: word rescue (a game built on
+parts that exist — fun, but the research says it teaches little that Ghost Words and
+gap-fill do not); the cast declaring content and not only people (measured 15×
+violation density on a free-text topic); the story-cost look; the two genuinely
+confusing items from the v69 list; one rate sentence in the progress report.
+
+**Parked, with reasons.** Ghost Words' missing A/B and the prompt-mode gaps (HSK 2,
+5, 7–9) are expensive measurements with no decision waiting on them. The 90-character
+segment target, the eight-seed weakness and the empty-completion cause are all
+covered by workarounds that hold. The app's own chrome in Chinese is the largest
+project in this file and the least certain to help.
+
+**Considered and not wanted.** An in-app spaced-repetition flashcard system — the
+Anki export already exists and rebuilding Anki is not a feature. Handwriting or
+stroke input — large, and the comparison research says IME typing trains the
+sound-to-character mapping that actually matters for reading here. Speech recognition
+scoring — not dependable enough in a browser for Chinese, and the tone drill is the
+honest version of that ambition. Role-play scenarios — that is Chat with a topic
+string, one `ACTIVITIES` row if it is ever wanted, not a project.
+
 ---
 
-## ghost words: partial credit  grader
+## One retrieval engine, and the activities that fall out of it
 
-The grader during ghost words should also evaluate whether
-ive used the words in question correctly or not.  I'm
-getting many cases where i use a word correctly, but i screw
-up something else and therefore the grader does not pass.
-Also, I really wamt to restate the sentence correctly based
-on the grader feedback.  I'd like some way to keep trying.
+**Found:** 2026-09-12, considering fill-in-the-blank as an activity and noticing that
+three separate entries in this file describe the same machine.
+
+**The app has a personal corpus and uses it for arithmetic.** Every partner message,
+every story segment and every sentence the learner has written is stored, synced, and
+already known to be inside the level — the partner's Chinese because `validate()`
+passed it, the learner's because it is theirs. `HSK.segment()` splits any of it into
+words. Today that corpus feeds the coverage bars and supplies a drill its example
+sentence, and nothing else.
+
+Point a retrieval task at it and the task costs **no model call, no network and no
+new data**: pick a span from text the learner has personally met, hide it, ask for it
+back, compare. The right answer is known before the question is asked, which is the
+property none of the generative activities have.
+
+Four activities are that one mechanism wearing different masks:
+
+| face | what is hidden | what it trains |
+| --- | --- | --- |
+| **gap-fill** | one word, sentence visible | form recalled from context |
+| **dictation** | the whole sentence; audio plays | sound → character |
+| **tone ID** | everything but the audio | tone categories |
+| **scramble** | the word order | 语序 |
+
+A fifth, **retranslation** — show the English gloss of a sentence the learner wrote
+last week, write it back in Chinese — is the same shape but not free: it needs
+`grade()`. It is worth listing here anyway, because it is the only *productive*
+retrieval available and the only production task in the app that has a reference
+answer to mark against.
+
+**Why gap-fill is the one to build first.** Folse (2006) beat one original-sentence
+exercise with three fill-in-the-blanks on the same words and concluded that the
+number of retrievals drives retention, not the depth of any single one. Gap-fill is
+the cheapest retrieval that exists, this app can generate them for nothing, and
+building it is what makes tone ID, dictation and scramble small.
+
+Four decisions, in the order they matter:
+
+- **Ask what the word *was*, not what *fits*.** "Which word fits here" has several
+  right answers (很好, 真好) and an exact compare marks a good one wrong. "Which word
+  was here, in the sentence you read on Tuesday" has exactly one. That single
+  reframing removes the whole multiple-answers problem, and it is only available
+  because the corpus is the learner's own.
+- **Tap beats type, and the research says it costs nothing.** Recall-versus-
+  recognition is genuinely mixed — one study found multiple choice produced *more*
+  productive retrieval than cued recall, and format comparisons find no significant
+  difference in outcome. Four candidate words and one tap is therefore as
+  well-evidenced as typing through an IME, and is one gesture instead of ten. Build
+  the tap version; typing can be a setting if it is ever missed.
+- **Where the distractors come from.** Three wrong candidates that are obviously
+  wrong make the task free of information. The lists already carry what is needed to
+  do better — same level, similar frequency rank `f`, and for the interesting version,
+  a word the learner has confused before (the mistake ledger knows). Start with
+  same-level-similar-rank; it needs no new data.
+- **What it credits.** Same hazard as every other activity that touches the same
+  counters: if a gap-fill pass credits a ghost word, the one-per-day cap has to cover
+  this road too, or the game is the fast way to farm words. See RESEARCH.md,
+  "Retiring a ghost word".
+
+**What would settle it:** nothing needs a model measurement — there is no model in
+this path. Build gap-fill against the learner's own corpus, see whether it gets used,
+and only then decide whether the other faces are worth their own screens. If the
+constants it needs (how old a sentence must be, how many candidates) turn out to
+matter, they go in RESEARCH.md with the citation above.
+
 ---
 
-## Mistakes Drills Activity
+## Dictation: hide the text, play it, mark what I wrote
 
-Use skills: caveman, ponytail, superpowers.  Use superpowers to implement new feature:
-I would like a new activity for drilling my mistakes as accumulated by the
-grader.  I'd like to see a prioritized list of mistakes categories with the
-numbers from my own data and be able to select one of the categories to drill.
-Then I'd like the teacher to guide me through some practices with that
-particular category and words/grammar/etc I had trouble with.  Only when the
-grader passes my text will it have an impact on my stats.  I'm open to
-suggestions on how to impact the mistakes stats with drills.  Please research
-language pedagogy to explore the best way to update the mistakes counters with
-drills on those mistakes and the grader passing my submissions.
+**Asked for:** 2026-09-12. **Build it as a face of the retrieval engine above** —
+the corpus question below is the one that entry already answers.
+
+Hide the Chinese, play it, let me type what I heard, and tell me whether I got it
+right.
+
+Most of the machinery is already here. `speak()` has a voice, a speaking-speed
+setting and a "no 中文 voice" path for a device without one; every message in a
+conversation is text the app chose and already put through `validate()`. And the
+marking needs **no model at all** — the target string is known before the audio
+plays, so a comparison against what was typed is exact, free and offline, which no
+other graded activity in this app can say.
+
+Four questions before it is designed:
+
+- **What gets dictated.** Generating a sentence for the purpose costs a call and
+  has to be validated like every other Chinese in the app. A partner message or a
+  story segment the learner has already read costs nothing and makes this a review
+  of text they have met, which is the cheaper and probably the better activity.
+- **Wrong character, right sound is the exercise.** An exact string compare marks
+  在/再 wrong — correct, and the whole point — but it marks a dropped 了 with the
+  same severity as a nonsense character. Saying *which kind* of wrong is what
+  `grade()`'s tags exist for (`wrong-character` among them), at the price of the
+  call the paragraph above was pleased to avoid. Decide whether the free exact
+  mark is enough before spending it.
+- **The IME does half the work — and half is the half that matters here.** On a
+  phone the learner types pinyin and picks a character from a candidate list, so this
+  is not the handwriting exercise dictation means on paper. The comparison literature
+  splits exactly along that line: typing beats handwriting for phonology recognition
+  and **sound-to-orthography mapping**, handwriting beats typing for orthographic
+  recall and form-to-meaning. Sound-to-character is the mapping a text-only app has
+  never trained at all, so IME dictation trains the thing that is missing rather than
+  failing to train the thing that is not. Just do not read the score as evidence the
+  learner could write it by hand.
+- **No Chinese voice means no activity.** Every other activity degrades on a device
+  without one; this one has to refuse. `zhVoice()` already answers the question, so
+  the chooser can hide it rather than letting someone start a silent drill.
+
+**One finding should shape the design before it is built.** Yu, Boers & Tremblay
+(2025) compared dictation against dictogloss — writing down what you heard verbatim
+against *reconstructing* it from memory. Both beat answering comprehension questions
+on an immediate post-test, but the advantage faded on the delayed test, and it faded
+**most for verbatim dictation**; retrieval from memory was what predicted learning.
+That argues against the obvious design — play a clause, pause, transcribe, replay on
+demand — and for playing the whole thing once or twice and asking for it back from
+memory. Which is also the cheaper build: fewer controls, no per-clause segmentation.
+The exact string compare survives either way; it just gets a more forgiving mark on
+the reconstruction version, which is where a model call might finally earn itself.
+
+**What would settle it:** run one by hand on the preview with a partner message as
+the target and see what the exact compare actually flags — the balance between
+homophone slips and typos decides whether a model is needed at all.
+
+---
+
+## Word rescue: two words, one sentence, the grader decides
+
+**Asked for:** 2026-09-12.
+
+Hand me two words, I write a sentence using both, a grader pass wins the round.
+
+The verdict this needs already exists. `ghostVerdict()` in `mistakes.js` answers
+"was *this word* used correctly in this sentence", separately from whether the
+sentence around it was clean — built for Ghost Words, in answer to exactly the
+complaint the entry below it records. `ACTIVITIES` in `prompt.js` is a table, and
+an activity with its own chooser and rule is the shape `drill` and `twenty`
+already have.
+
+What is not decided:
+
+- **Which two words.** Ghost words (taught, never used) makes this Ghost Words with
+  a scoreboard. *Retired* ghost words would make it the retention check that "Ghost
+  words retire and never come back" asks for, which is the more valuable version and
+  costs nothing extra. One of each — a new word and an old one — is the pairing that
+  is actually a game.
+- **What a pass counts for.** If it credits the ghost counter it is a second road to
+  the same number, and the one-credit-per-word-per-day cap has to cover both roads or
+  the game becomes the fast way to farm words. RESEARCH.md, "Retiring a ghost word",
+  says why that cap exists; a new activity does not get to route around it.
+- **The bridge between the two words must not lose the round.** Two unrelated words
+  is the fun; it is also an invitation to write something clumsy and fail on the
+  grammar joining them rather than on the words themselves. Per-word verdicts are
+  what save that — the sentence's other errors still file under their own tags, but
+  they do not decide the game. That is a rule to write down, not an implementation
+  detail.
+
+**The pedagogy is split on how much this buys.** The involvement-load side supports
+it: Hulstijn & Laufer (2001) found retention highest for composition with target
+words, lower for gap-fill, lowest for reading, and later work orders
+composition > sentence-writing > gap-fill. The counterweight is Folse (2006), which
+beat one original-sentence-writing exercise with **three fill-in-the-blanks** on the
+same words and concluded that what matters is the *number of retrievals*, not the
+depth of any one. Read together: writing a sentence with two target words is a good
+retrieval, and three of them beat one good one. So the design should favour short
+rounds repeated over an elaborate single sentence — and it should notice that Ghost
+Words already counts repeated uses across days, and gap-fill — the entry above —
+generates those retrievals for nothing.
+
+**This is a motivation feature more than a pedagogy feature**: it makes an existing
+exercise into a game, which RESEARCH.md's own Self-Determination note says is worth
+something, but it should not be expected to teach anything Ghost Words and gap-fill
+do not.
+
+**What would settle it:** it is mostly assembly, so the decisions above are the
+work. Pick the word pool and the credit rule first; the activity row is an
+afternoon after that.
+
+---
+
+## Tone drills
+
+**Asked for:** 2026-09-12. **Researched** 2026-09-12, and the research moved it:
+the cheap version is the one with the evidence behind it. **Another face of the
+retrieval engine above** — same hide-and-compare loop, with the audio as the cue.
+
+**The app cannot hear you, and it turns out not to matter much.** The first draft
+of this entry assumed that recognising a tone and producing one are different
+skills, so a receptive drill would be a consolation prize. The training
+literature says otherwise. Wang, Spence, Jongman & Sereno (1999) trained American
+learners to identify Mandarin tones in **eight 40-minute sessions**: identification
+improved 21%, generalised to new words (+18%) and to voices never heard in training
+(+25%), and was still there at a six-month follow-up. Wang, Jongman & Sereno (2003)
+recorded the same trainees before and after and had native listeners identify what
+they said: **production improved 18% after perception-only training**. Nobody
+corrected their pronunciation. Perceptual training is the intervention with the
+transfer evidence, and it is precisely the one this app can run for free.
+
+So: play a word, ask which tone. `p` in every `data/hsk<N>.json` entry is the pinyin
+with tone marks (`wǒ`), so the answer is already in the data, `speak()` produces the
+audio, and nothing touches the network or a model.
+
+Four things decide whether it works:
+
+- **Talker variability is the active ingredient, and the app has one voice.** The
+  effective protocol is *high*-variability training — four talkers, not one — and
+  low-variability training is the arm that underperforms. `zhVoice()` picks the first
+  Chinese voice it finds and ignores the rest; `speechSynthesis.getVoices()` often
+  returns several. Cycling every installed Chinese voice, and varying the rate, is a
+  few lines and is the difference between the two arms. It is still synthetic speech
+  with canonical tones, which is a ceiling no amount of cycling clears.
+- **The dose in those studies is eight sessions of forty minutes.** Two minutes a day
+  is not that, and nothing here says a smaller dose scales down linearly. Whatever
+  number gets picked for "a round", it is a guess and should be a setting, not a
+  constant, the way `GHOST_USES` is.
+- **Sandhi means the data and the audio disagree.** `p` is the citation tone. 你好 is
+  `nǐ hǎo` in the file and comes out of the speaker as *ní hǎo*; 不 and 一 shift too.
+  Marking a heard tone against `p` is therefore wrong for exactly the words a tone
+  drill most wants to teach. Exclude the sandhi cases or make them the lesson.
+- **Neutral is a fifth answer.** `de`, `le`, `ma` carry no mark, so a four-button drill
+  cannot express them and a word ending in one cannot be scored.
+
+**What would settle it:** nothing needs measuring against a model — there is no model
+call in this activity. Build the smallest version (one word, four buttons, marked
+against `p`, sandhi words excluded) and find out whether it is used. If it is, the
+constants it needs go in RESEARCH.md with the citations above.
+
+---
+
+## Let me rewrite a sentence the grader failed
+
+**Found:** the learner's own report, 2026-09-07, while using Ghost Words.
+
+Half of this shipped. The complaint was that a word used correctly in a sentence
+that went wrong elsewhere earned nothing; `ghostVerdict()` and the per-word grade
+arm (v96) fixed that, and the other mistake still lands under its own tag.
+
+The other half did not. When the grader fails a sentence there is no way to try
+that sentence again. The feedback names what was wrong, and the only thing to do
+with it is write a *different* sentence in the next message — so the correction is
+never actually performed, which is the part of corrective feedback the literature
+cares about (RESEARCH.md, "Drilling a mistake category", on why one pass is not
+enough). `retryLast()` re-sends the learner's message unchanged to get a new
+*partner* reply; there is nothing that re-grades an edited one.
+
+The shape is small — a "fix it" affordance on a ✗ grade that puts the text back in
+the composer and re-grades it against the same context. What is not small:
+
+- **A re-grade is another model call**, on a path that already runs on every
+  message. Cheap per use, unbounded per sentence unless attempts are capped.
+- **What a corrected sentence counts for.** If the second attempt clears the tag,
+  the mistake ledger is measuring the ability to act on feedback rather than the
+  ability to write it right first time — which may be the better thing to measure,
+  but it is a different thing and the counters do not currently distinguish them.
+  The drill's one-credit-per-day cap is the precedent.
+
+**The feedback literature is unusually direct about this gap.** Written corrective
+feedback works — meta-analyses put it at g ≈ 0.54–0.68 with effects that hold up over
+time — and the strongest moderators are the two this app already has: **focused**
+feedback on few errors beats unfocused, and **explicit/metalinguistic** feedback
+produces far higher uptake-and-repair than implicit recasts, which is what the
+seventeen tags and their notes are. What the app is missing is the last step of that
+chain: the learner never actually performs the repair. Uptake and repair are
+*behaviours*, and there is currently nowhere to perform one.
+
+Honest caveat, because it bears directly on the credit question: whether *asking* for
+a revision adds anything beyond the feedback itself is contested. Revision reliably
+reduces errors on the piece being revised; whether that is learning or copying is the
+long-running argument in that literature. So build the affordance, and do not assume
+a repaired sentence is worth what a clean one is.
+
+**What would settle it:** decide whether a repaired sentence is worth the same as
+a clean one, less, or nothing but the practice. The evidence above says: less, but
+not nothing. The UI follows from that answer.
+
+---
+
+## Ghost Words and 20 Questions have no marker in their own transcript
+
+**Found:** the v100 sync repair, 2026-09-12 (`fde8095`).
+
+`activityOf()` now believes the `activity` column only when it names something
+specific and asks the transcript otherwise, because a v99 client kept pushing a
+poisoned `"chat"` back over the server rows. A story recovers from its
+`role: "topic"` message and a drill from its own marker, on any device, with no
+migration.
+
+The other two cannot. Ghost Words leaves nothing in the transcript at all, and
+20 Questions' state lives in `side`/`secret`, which are columns — exactly the
+thing that went missing. Both still depend on the row being right and on
+`mergeConversations()` refusing to let a lost value overwrite a real one. That
+held this time; it is the same class of dependency that just failed.
+
+**What would settle it:** a marker message for Ghost Words and one for
+20 Questions, of the kind story and drill already carry, so the transcript is
+sufficient for every activity rather than four of five.
 
 ---
 
@@ -247,12 +592,14 @@ concentrate in one.
 
 ---
 
-## Focused chat has never been measured
+## Ghost Words has never been measured
 
-**Found:** it shipped with the activity framework and no A/B at all.
+**Found:** it shipped with the activity framework (as `focused`) and no A/B at all.
+Still true after the v96 credit work, which changed what a use is *worth* without
+ever measuring whether the activity produces uses.
 
 CLAUDE.md requires a counted run against a real model before a prompt edit
-ships, and focused chat is a prompt edit. Its claim is specifically **that words
+ships, and Ghost Words is a prompt edit. Its claim is specifically **that words
 move from taught to used** — how many of the offered `readiness().unused` words
 the learner actually produces per session, against plain chat as the control.
 Out-of-level rate is *not* that measurement and would say nothing about it.
@@ -401,38 +748,30 @@ first two are the ones with a real chance of confusing a user.
 
 ---
 
-## `browser.test.js` trips a `waitFor` ceiling roughly one run in three
+## `browser.test.js`: one race diagnosed and fixed, one still open
 
-**Found:** 2026-09-07, across a day of commits that touched only Markdown and one
-new module — five first-attempt failures, every one of them a single `waitFor`
-call tripping its ceiling, on a different call site each time.
+**Found:** 2026-09-07, five first-attempt failures in a day of commits that touched
+only Markdown. **Mostly answered** 2026-09-12 (`d9957a7`).
 
-The suite retries itself once and the pre-commit hook usually goes green on the
-second pass, so this mostly reads as noise. It is not free. On 2026-09-07 both
-attempts failed in CI on the merge of #29 (`chat reply`, then `story runs out at
-five segments`), the Publish job went red, and because the publish job is gated
-on `github.event_name == 'push'` the delete-triggered run beside it published
-nothing. `main` sat unpublished until the run was manually re-run.
+It was never slowness, and raising the ceiling was never going to fix it. Every
+name the suite waited on (`storyStep`, `newChat`, `storyTopic`, …) is a top-level
+function declaration, so it is a property of `window` the moment the script parses
+— waiting on one proved only that the parser had run. Measured on 42 of 42 loads,
+those names answer true while `boot()` is still awaiting `loadLevel()`, so the
+suite drove a turn inside boot's async gap, against an empty lexicon, and then
+waited out the full 30s for output that could never render. `go()` now waits for
+`readiness()` instead, in one place rather than forty call sites. Reproduced under
+CPU saturation: five failures in ~25 loaded runs before, none in 22 after.
 
-**Why the standing explanation no longer holds.** The comment above `waitFor`
-(`test/browser.test.js`) says the measured failures were "never reproducible
-locally" and attributes them to scheduler jitter on CI runners, which is why the
-shared floor was raised to 30000ms. On 2026-09-07 it reproduced locally three
-times on an otherwise idle machine. Whatever this is, "CI runners are loaded" is
-not it.
+**What is left.** `boot()` also calls `loadGoalList()` unawaited, and `readiness()`
+does not cover it — it reads `S.nextList`, not `S.goalList` — so `#goalProgress`
+and `#secLearningNote` race the goal list. "The collapsed Learning row carries the
+number" failed twice in those same 25 loaded runs on exactly that. `test/run.sh`
+keeps its one retry until this one is closed.
 
-**What would settle it:** make the failure say more than which label it was
-waiting on. Record, per tripped wait, how long it actually waited and what the
-page state was at the ceiling — if the elapsed time is pinned at 30000 the page
-never reached the state at all, and if it is well under, something is aborting
-the loop early. Then find out whether the tripped waits cluster on the ones that
-wait for a model reply, which would point at the test harness's stubbing rather
-than at the browser.
-
-Resist raising the ceiling again as the first move. 30000ms is already where the
-shared floor was moved to, after individual call sites had each been overridden
-to it for this same reason — a wait that has been lengthened once per call site
-and then once globally is usually hiding a stall rather than a slow machine.
+The standing advice survives its own diagnosis: **do not raise the ceiling as the
+first move.** 30000ms was reached by overriding call sites one at a time and then
+moving the shared floor, and what it was hiding was a stall, not a slow machine.
 
 ---
 
@@ -452,10 +791,19 @@ fallback so the activity never opens empty. The scheduling itself is cheap and
 needs no stored state — every credit already carries a message timestamp, so a
 due date is a pure function of the credit history, the same way the count is.
 
+**The research says the ladder is the part you can skip.** Nakata (2015) compared
+expanding against equal spacing on L2 vocabulary and found a **limited** — real, but
+small — advantage for expanding; both beat massed practice by a wide margin. The
+value is in re-checking a retired word *at all*, not in the shape of the schedule.
+That removes the objection this entry was filed under: a single flat re-check (a
+retired word comes back once, ~30 days later, and retires again if it survives) is a
+pure function of the credit timestamps already stored, needs no scheduler, no stored
+due state, and captures most of the available benefit. The empty-day fallback is
+still the real design work.
+
 **What would settle it:** decide whether Ghost Words is an *acquisition*
 activity that should hand finished words off, or a *review* activity that should
-keep them. If the latter, the interval ladder is the small part and the empty-day
-fallback is the design work.
+keep them. If the latter, build the flat re-check, not the ladder.
 
 ---
 
@@ -523,3 +871,89 @@ strongest candidate, since it is the thing the pacing constants actually control
 — and show it for the last several weeks. If seeing the rate changes what you do,
 the rest is worth building. If it does not, one sentence in the progress report
 was the right size for this after all.
+
+---
+
+## Reading behind the new entries
+
+Cited inline above; kept here rather than in RESEARCH.md because none of them has
+become a constant yet. Whichever one does, its citation moves there — see CLAUDE.md.
+
+**Dictation and listening**
+
+- Yu, X., Boers, F. & Tremblay, P. (2025). [Learning multiword items through dictation
+  and dictogloss](https://journals.sagepub.com/doi/10.1177/13621688221117242).
+  *Language Teaching Research* — both beat comprehension questions immediately; the
+  advantage fades on the delayed test, most for verbatim dictation.
+- [Comparison studies of typing and handwriting in Chinese language
+  learning](https://www.researchgate.net/publication/349054232_Comparison_Studies_of_Typing_and_Handwriting_in_Chinese_Language_Learning_A_Synthetic_Review)
+  — typing favours phonology and sound-to-orthography mapping; handwriting favours
+  orthographic recall.
+
+**Tones**
+
+- Wang, Y., Spence, M., Jongman, A. & Sereno, J. (1999). [Training American listeners
+  to perceive Mandarin
+  tones](https://kuppl.ku.edu/sites/kuppl/files/documents/publications/Wang_Spence_Jongman_Sereno_training_JASA_1999.pdf).
+  *JASA* 106(6) — +21% over eight sessions, generalising to new words and new talkers,
+  retained at six months.
+- Wang, Y., Jongman, A. & Sereno, J. (2003). [Acoustic and perceptual evaluation of
+  Mandarin tone productions before and after perceptual
+  training](https://pubmed.ncbi.nlm.nih.gov/12597196/). *JASA* 113(2) — perception-only
+  training improved production by 18% as judged by native listeners.
+- [The effects of high versus low talker variability on phonetic training of Mandarin
+  lexical tones](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6690337/) — why one voice
+  is the weaker arm.
+
+**Producing sentences with target words**
+
+- Hulstijn, J. & Laufer, B. (2001). [Some empirical evidence for the involvement load
+  hypothesis](https://onlinelibrary.wiley.com/doi/abs/10.1111/0023-8333.00164).
+  *Language Learning* 51(3) — composition > gap-fill > reading for retention.
+- Folse, K. (2006). [The effect of type of written exercise on L2 vocabulary
+  retention](https://onlinelibrary.wiley.com/doi/abs/10.2307/40264523). *TESOL
+  Quarterly* 40(2) — three fill-in-the-blanks beat one original sentence; retrievals,
+  not depth.
+
+**Correcting, and being asked to correct**
+
+- Brown, D., Liu, Q. & Norouzian, R. (2023). [Effectiveness of written corrective
+  feedback in developing L2 accuracy: a Bayesian
+  meta-analysis](https://journals.sagepub.com/doi/abs/10.1177/13621688221147374).
+  *Language Teaching Research*.
+- Chen, S. & Renandya, W. (2020). [Efficacy of written corrective feedback in writing
+  instruction](https://tesl-ej.org/wordpress/issues/volume24/ej95/ej95a3/). *TESL-EJ*
+  24(3) — g ≈ 0.59 across 35 studies; focused beats unfocused.
+- Lyster & Ranta and successors on [corrective feedback and learner
+  uptake](https://escholarship.mcgill.ca/downloads/0p096b851) — repair is rare after
+  recasts, common after metalinguistic feedback.
+- [Does asking learners to revise add to the effect of written corrective
+  feedback?](https://www.sciencedirect.com/science/article/abs/pii/S0346251X20307016)
+  *System* (2020) — the contested part, and why a repaired sentence should not credit
+  like a clean one.
+
+**Retrieval format**
+
+- [Effects of cued-recall versus recognition retrieval practice on exam
+  performance](https://www.tandfonline.com/doi/full/10.1080/87567555.2021.1910124).
+  *College Teaching* 70(2) — multiple-choice and fill-in-the-blank quizzes improved
+  scores equally.
+- [The effects of receptive and productive word retrieval practice on second language
+  vocabulary
+  learning](https://www.researchgate.net/publication/303939278) — the mixed picture,
+  including the finding that multiple choice can induce productive retrieval.
+
+**Word order**
+
+- [HSK 3 reading and writing: what to
+  expect](https://www.eblcu.com/blogs/HSK-3-Reading-and-Writing-What-to-Expect-and-How-to-Prepare.html)
+  — 连词成句 is HSK 3 writing part 1; note that the standalone word-ordering task was
+  **removed** at HSK 4 in the 3.0 syllabus, so a scramble activity is justified by the
+  语序 tag, not by exam alignment.
+
+**Spacing**
+
+- Nakata, T. (2015). [Effects of expanding and equal spacing on second language
+  vocabulary
+  learning](https://www.academia.edu/8174622/). *Studies in Second Language
+  Acquisition* 37(4) — expanding wins, but by a little; both beat massed.
