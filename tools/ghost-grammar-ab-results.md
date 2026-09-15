@@ -158,4 +158,6 @@ edited, the harness raises rather than silently measuring a prompt that no
 longer exists. `LIFTED` is the same rule with the two words removed and is
 patched *in* by the arms that need it — the ban was never lifted in the app.
 
-Raw per-reply results, both rounds, in `ghost-grammar-ab-results.json`.
+Raw per-reply results, both rounds, in `ghost-grammar-ab-results.json` --
+180 replies, of which 78 carry the enumerated judge's verdict on their 被. That
+field is null where the reply never used 被: it judges the 被, not the reply.

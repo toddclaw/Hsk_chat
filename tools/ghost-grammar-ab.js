@@ -354,10 +354,16 @@ async function pool(jobs, width) {
   }
   console.log("\nspend: $" + spend.toFixed(4));
 
-  const out = path.join(__dirname, "ghost-grammar-ab-results.json");
-  fs.writeFileSync(out, JSON.stringify({
+  /* A short run must not overwrite the archival file. It did once: a --runs 1
+   * smoke test replaced two rounds of results with four rows, and the write-up
+   * next door went on citing numbers its own raw data no longer contained. */
+  const out = path.join(__dirname, RUNS >= 10
+    ? "ghost-grammar-ab-results.json" : "ghost-grammar-ab-smoke.json");
+  const prior = RUNS >= 10 && fs.existsSync(out)
+    ? JSON.parse(fs.readFileSync(out, "utf8")) : null;
+  fs.writeFileSync(out, JSON.stringify(Object.assign({}, prior, {
     model: MODEL, runs: RUNS, level: LABEL, require: REQUIRE, ghosts: GHOSTS,
     when: new Date().toISOString(), results: results
-  }, null, 2));
+  }), null, 2));
   console.log("written: " + path.relative(ROOT, out));
 })();
