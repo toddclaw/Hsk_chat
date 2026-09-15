@@ -134,12 +134,23 @@ is RLS doing its job; `23503` would mean the FK caught it *because RLS was off*.
 **Outcome 2026-09-14:** table present, all eight columns (`id`, `user_id`, `word`, `day`,
 `ok`, `face`, `created_at`, `updated_at`), RLS on and returning `42501`. Nothing to do.
 
-**What would settle the general case:** nothing in this repo reports whether a migration has
-been applied. Every optional-column probe degrades silently by design, so from inside the app
-"it works" and "it is syncing" are indistinguishable — which is the condition that let v100
-ship. The cheap fix is a Settings line listing which optional tables the current session
-probed successfully; `sync.js` already computes exactly that (`retrievalsSupported()` and its
-siblings) and simply never shows it.
+**Half-settled** in v102: the sync status line now names a missing **table**. After any sync,
+`HSKSync.missingTables()` reports the tables this session actually watched fail, and
+`syncedMessage()` turns that into what it costs — *"Synced, but the cloud has no retrievals
+table — gap-fill progress stays on this device."* Silent when healthy, and it clears on the
+next sync once the migration is run.
+
+It reports tables and not `retrievalsSupported()` on purpose: that accessor answers
+`!== false`, folding "known present" together with "never probed", so a warning built on it
+would accuse a database nothing had looked at yet.
+
+**Still open: the columns.** `schemaHasActivity` / `Level` / `Side` / `Secret` / `ConvId` /
+`Grade` / `Kind` only move *after* a push has already failed and silently dropped them, so a
+column warning would stay quiet for exactly as long as the damage was being done, and show
+all-clear until then — a restatement of the v100 failure rather than a guard against it.
+Reporting them honestly needs `probeSchema()`, which is real, exported, tested code that
+**nothing calls**: six extra round-trips per session, so wiring it up is a cost decision, not
+an oversight to fix casually.
 
 ---
 
