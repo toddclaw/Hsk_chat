@@ -2906,7 +2906,7 @@ async function flushSync() {
       store.set(K.prefsPushedAt, S.prefsPushedAt);
     }
     syncLastError = "";
-    renderSyncStatus("Synced just now");
+    renderSyncStatus(syncedMessage());
   } catch (e) {
     console.warn("sync push failed", e);
     syncLastError = syncErrText(e);
@@ -3046,7 +3046,7 @@ async function pullAndMerge() {
     if ($("#setSheet").classList.contains("open")) fillSyncUI();
 
     syncLastError = "";
-    renderSyncStatus("Synced just now");
+    renderSyncStatus(syncedMessage());
     // Whatever the merge added locally that the server did not have yet.
     queueSync("conversations"); queueSync("messages");
     queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
@@ -3087,6 +3087,37 @@ async function signOutOfSync() {
   try { await HSKSync.signOut(); } catch (e) { console.warn("sign-out failed", e); }
   syncUser = null;
   renderSyncSection();
+}
+
+/* What the learner loses when a table is absent, rather than the table's name.
+ * "retrievals is missing" is a fact about a database; "gap-fill progress stays
+ * on this device" is the part worth interrupting someone for. */
+const TABLE_LOSS = {
+  conversations: "conversations stay on this device",
+  retrievals: "gap-fill progress stays on this device"
+};
+
+/* Both sync paths end by saying "Synced just now", which was true and
+ * incomplete: a pull against a database missing a table succeeds, degrades,
+ * and reports success -- the condition that let v100 run for weeks against a
+ * database with no `side` column while every push said it had worked.
+ *
+ * Silent when healthy, deliberately. A warning that also appears on a good day
+ * is one you learn to scroll past. It can only speak after a pull has looked,
+ * which is why it reads HSKSync.missingTables() rather than the *Supported()
+ * accessors -- those answer "not known to be broken", and would accuse a
+ * database nothing had checked yet. */
+function syncedMessage() {
+  const missing = (window.HSKSync && HSKSync.missingTables) ? HSKSync.missingTables() : [];
+  if (!missing.length) return "Synced just now";
+  /* One missing table names what it costs; more than one does not bother,
+   * because the per-table clauses read as repetition and two missing tables
+   * means essentially nothing was migrated -- at which point the instruction
+   * is the useful half, not the itemisation. */
+  const tail = missing.length === 1
+    ? "no " + missing[0] + " table — " + (TABLE_LOSS[missing[0]] || "that data stays on this device")
+    : "no " + missing.join(" or ") + " tables — that data stays on this device";
+  return "Synced, but the cloud has " + tail + ". Run db/schema.sql on the database.";
 }
 
 function renderSyncStatus(text) {
