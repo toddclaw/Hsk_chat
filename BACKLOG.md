@@ -581,6 +581,15 @@ violation contexts show near-duplicates — `我家在杭州，那` recurring wi
 different neighbourhoods — so distinctness overstates independence and the
 p-values are more fragile than n = 64 suggests.
 
+**The harness now differs from the app by one seed, deliberately.** `你的家在哪儿？`
+shipped as an HSK 1 starter and the app's own grader faulted it in real use — 的 is
+dropped before 家, which the neighbouring starter `你家有几个人？` already got right and
+which every model reply got right too (我家在…, never 我的家在…). The starter is fixed in
+`prompt.js`; `tools/prompt-ab.js:47` keeps its own hardcoded copy and was **left alone**,
+so the four runs already in RESEARCH.md stay comparable. The cost is that the harness now
+measures one sentence the app no longer ships. Whoever widens the seed set should fix that
+drift at the same time, rather than changing measurement inputs on their own.
+
 **What would settle it:** a wider seed set is worth more than more runs on these
 eight. Seeds must stay namefree (RESEARCH.md says why), and per the entry above,
 should probably avoid inviting *place* names too until the validator handles them.
