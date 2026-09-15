@@ -1,0 +1,49 @@
+{
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "runs": 1,
+  "level": "HSK 2",
+  "require": "被",
+  "ghosts": [
+    "被",
+    "把",
+    "为了",
+    "放",
+    "生活",
+    "手表"
+  ],
+  "when": "2026-09-15T18:26:51.463Z",
+  "results": {
+    "stated": [
+      {
+        "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。我的手表被朋友拿走了，现在不在我的手上。你吃饭的时候喜欢看电视吗？",
+        "attempts": 2,
+        "validates": true,
+        "used": true,
+        "wellformed": true
+      }
+    ],
+    "fixed": [
+      {
+        "text": "对不起。我把手表放在桌子上，后来被弟弟拿走了。我找了三小时。你把东西放好过吗？",
+        "attempts": 2,
+        "validates": true,
+        "used": true,
+        "wellformed": true
+      }
+    ],
+    "statedCare": [
+      {
+        "validates": false,
+        "used": false,
+        "attempts": 3
+      }
+    ],
+    "liftedCare": [
+      {
+        "validates": false,
+        "used": false,
+        "attempts": 3
+      }
+    ]
+  }
+}
