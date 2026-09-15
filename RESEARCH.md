@@ -492,6 +492,35 @@ its fresh ideas, because that is the condition the evidence favours.
 - Whether stories are *enjoyable* over a run of them is still only readable, not measurable —
   see the backlog entry on story time being unverified end to end.
 
+### The 90-character segment target is a target, not a threshold
+
+The story prompt asks for 九十个汉字 (`prompt.js`) and no model delivers it: 55-83 on
+`qwen3-30b-a3b`, 112-168 on capable models. `STORY_MODEL` is
+`anthropic/claude-sonnet-4.5`, so the **shipped** path is the wide one — which makes
+the concern recorded in BACKLOG.md, that segments run *short* of 90, a statement
+about a model the app does not use for stories.
+
+Worked against `earn()`, the invariant the 90 was chosen to protect holds across the
+entire measured range. Credits per five-segment story:
+
+| segment chars | 55 | 83 | 90 | 112 | 168 | 180 |
+| --- | --- | --- | --- | --- | --- | --- |
+| credits per story | 6 | 9 | **10** | 12 | 15 | 15 |
+| discards anything | no | no | no | no | no | yes |
+
+Nothing is discarded anywhere a model actually lands. `earn()` carries the remainder
+into the next segment, which is what recovers the short end — five 55-character
+segments earn 6 credits, not 5 — and its stop-hoarding rule does not bite until ~180
+characters in a single turn, above the top of anything measured. The shipped model
+therefore *exceeds* the ten-credit design figure rather than missing it.
+
+So the number is not load-bearing, and it is deliberately left alone: changing it
+would be a prompt edit, and CLAUDE.md wants a counted A/B for one of those. What
+changed is `test/pace.test.js`, which used to pin `SEG = 90` — arithmetic on a length
+no model produces — and now asserts the invariant across 55-168. Confirmed by
+mutation: the range assertions go red at `CREDIT_CAP = 2` (135 and 168 begin
+discarding) and at `DEFAULT_RATE = 60` (a 55-character segment stops earning).
+
 ## Measurements we ran
 
 Prompt and pacing changes read as obviously-correct and sometimes measure backwards, so the

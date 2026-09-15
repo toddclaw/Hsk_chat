@@ -208,33 +208,62 @@ check(P.toTarget(h2, h1w, P.READY_AT) === 58,
   `actually ${P.toTarget(h2, h1w, P.READY_AT)}`);
 
 /* Story segments exist so the per-turn pacing constants keep meaning what
- * RESEARCH.md says. A segment above 3*DEFAULT_RATE crosses CREDIT_CAP and the
- * remainder is discarded; far below DEFAULT_RATE it earns nothing. */
+ * RESEARCH.md says: a segment must earn at least one credit, and a story must
+ * not throw earnings away.
+ *
+ * This used to pin SEG = 90 -- the number the prompt asks for -- and test the
+ * arithmetic of a length no model produces. Measured output is 55-83 on qwen
+ * and 112-168 on capable models, and STORY_MODEL is anthropic/claude-sonnet-4.5,
+ * so the SHIPPED path is the wide one, not the short one BACKLOG.md worried
+ * about. The invariant is asserted across the whole measured range instead. */
 const SEG = 90, SEGS = 5;
-check(SEG <= 3 * P.DEFAULT_RATE,
-  "a segment cannot cross CREDIT_CAP in one turn", SEG + " vs " + 3 * P.DEFAULT_RATE);
-check(SEG >= P.DEFAULT_RATE, "and is large enough to earn at least one credit");
+const SEG_RANGE = [55, 70, 83, 90, 112, 135, 168];
 
-let segSt = { chars: 0, credits: 0 };
-let earned = 0;
-for (let i = 0; i < SEGS; i++) {
-  const before = segSt.credits;
-  segSt = P.earn(segSt, "\u5b57".repeat(SEG), P.DEFAULT_RATE);
-  earned += segSt.credits - before;
-  segSt = { chars: segSt.chars, credits: 0 };   // spent on the next segment's slate
+SEG_RANGE.forEach(function (seg) {
+  const one = P.earn({ chars: 0, credits: 0 }, "\u5b57".repeat(seg), P.DEFAULT_RATE);
+  check(one.credits >= 1,
+    `a ${seg}-character segment earns at least one credit`, "earned " + one.credits);
+  // Everything is either banked as a credit or carried as chars; anything
+  // unaccounted for is what earn()'s stop-hoarding rule threw away.
+  const lost = seg - (one.credits * P.DEFAULT_RATE + one.chars);
+  check(lost === 0,
+    `a ${seg}-character segment discards nothing`, "lost " + lost + " chars");
+});
+
+/* A whole story, with the remainder carried between segments the way the app
+ * carries it. This is what recovers the short end: five 55-character segments
+ * earn 6 credits, not 5, because the leftovers add up. */
+function storyCredits(seg) {
+  let st = { chars: 0, credits: 0 }, got = 0;
+  for (let i = 0; i < SEGS; i++) {
+    const before = st.credits;
+    st = P.earn(st, "\u5b57".repeat(seg), P.DEFAULT_RATE);
+    got += st.credits - before;
+    st = { chars: st.chars, credits: 0 };   // spent on the next segment's slate
+  }
+  return got;
 }
-check(earned >= SEGS,
-  `${SEGS} segments of ${SEG} chars earn at least one credit each`, "earned " + earned);
-check(earned >= 10,
-  "and a whole story earns roughly graded-reader density", "earned " + earned);
+
+check(storyCredits(90) === 10,
+  "the 90 the prompt asks for is ten credits a story -- the design figure",
+  "got " + storyCredits(90));
+check(storyCredits(55) === 6,
+  "the shortest measured segment still earns 6, not 5: the remainder carries",
+  "got " + storyCredits(55));
+check(storyCredits(168) === 15,
+  "and the widest measured segment earns 15, discarding nothing",
+  "got " + storyCredits(168));
+check(storyCredits(112) >= 10,
+  "so the SHIPPED story model's range meets or beats the design figure",
+  "got " + storyCredits(112));
 
 // The failure this replaces: the same text as one turn.
 const oneShot = P.earn({ chars: 0, credits: 0 }, "\u5b57".repeat(SEG * SEGS), P.DEFAULT_RATE);
 check(oneShot.credits === P.CREDIT_CAP,
   "as a single turn the same story caps out", String(oneShot.credits));
-check(oneShot.credits < earned,
+check(oneShot.credits < storyCredits(SEG),
   "which is strictly fewer new words than segmenting yields",
-  oneShot.credits + " vs " + earned);
+  oneShot.credits + " vs " + storyCredits(SEG));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -4104,6 +4104,84 @@ check(usedGroups && usedGroups.first === "\u7684",
       "reopening clears it a second time, independent of the close path",
       JSON.stringify(cleared));
 
+    /* ------------------------------------- gap-fill, traditional script */
+
+    /* The out-of-level guarantee is the product, and in traditional mode it
+     * was being broken: gapItems() sourced its candidate pool from S.base,
+     * which is always simplified, so a third of the buttons were simplified
+     * words the learner's lexicon does not contain. gapPool() fixed it and
+     * lives in index.html, where no node suite can reach it -- so without this
+     * case, reverting that fix leaves the whole suite green.
+     *
+     * The seeded sentence is written in TRADITIONAL characters (學校, 看見),
+     * unlike the simplified fixture above. It has to be: every candidate
+     * sentence is re-validated against the current lexicon at generation time,
+     * and in traditional script that lexicon is traditional -- so a simplified
+     * history validates as out-of-level, no sentence is eligible, and the
+     * round comes back empty. An empty round would fail this case for a reason
+     * that has nothing to do with the leak it is meant to catch. 朋友 is the
+     * target in both scripts, which is why it was the fixture word to begin
+     * with. */
+    await exec(`
+      localStorage.setItem("hsk1chat.script", JSON.stringify("trad"));
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.removeItem("hsk1chat.chatId");
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({
+        "eeeeeeee-2222-4222-8222-eeeeeeeeeeee": [
+          { id: "e2222222-2222-4222-8222-222222222222", role: "assistant",
+            text: "我今天下午在學校看見你的朋友了。", attempts: 1,
+            created_at: "${GAP_YDAY}T09:00:00.000Z" }
+        ]
+      }));
+      localStorage.setItem("hsk1chat.learning", JSON.stringify([
+        { w: "朋友", from: 2, seen: 6 }
+      ]));
+      localStorage.setItem("hsk1chat.retrievals", "[]");
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#activity option[value=\"__gapfill\"]')",
+      "the app after reseeding for gap-fill in traditional script");
+
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to open in traditional script");
+
+    check(await exec(`return JSON.parse(localStorage.getItem("hsk1chat.script"));`) === "trad",
+      "the fixture really is in traditional script");
+    check(await exec(`return document.querySelectorAll('.gapchoice').length;`) === 4,
+      "traditional mode still offers one target and three distractors");
+
+    /* The assertion that matters, and it deliberately does not reach into S.
+     * Marionette runs exec() in a sandbox whose prototype is window, so a
+     * top-level `function` is visible (that is why waitFor can call
+     * window.readiness) but a top-level `const` is NOT: S is simply not
+     * defined in here. Checking the candidates against S.lex therefore throws
+     * a ReferenceError, which the harness catches as a failure rather than as
+     * the assertion -- a test that can only ever fail for the wrong reason.
+     *
+     * So the check comes from the wordlist instead. 134 of HSK 1's 300 entries
+     * carry a traditional form that differs from the simplified one, and in
+     * traditional script the app must render `t`, never `w`. A pool sourced
+     * from S.base -- which is always simplified, and is exactly the bug
+     * gapPool() fixed -- puts those `w` forms straight onto the buttons. */
+    const simpOnly = new Set(
+      JSON.parse(fs.readFileSync(path.join(ROOT, "data/hsk1.json"), "utf8"))
+        .filter(e => e.t && e.t !== e.w).map(e => e.w));
+    const candidates = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('.gapchoice'),
+        function (b) { return b.textContent.trim(); });`);
+    const leaked = (candidates || []).filter(w => simpOnly.has(w));
+    check(candidates.length === 4 && leaked.length === 0,
+      "no gap-fill candidate is a simplified form when the script is traditional",
+      "candidates " + JSON.stringify(candidates) + " leaked " + JSON.stringify(leaked));
+
+    // Restore the default so nothing later in the file inherits trad.
+    await exec(`localStorage.setItem("hsk1chat.script", JSON.stringify("simp")); return true;`);
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

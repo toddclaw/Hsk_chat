@@ -1094,9 +1094,18 @@ const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
 /* Story segments. 90 Han characters is two credits at DEFAULT_RATE = 45 and stays
- * under CREDIT_CAP = 3, so no segment throws earnings away; five of them is a
- * ~450-character story carrying roughly ten new words, which is graded-reader
- * density reached without changing a researched constant. See RESEARCH.md.
+ * under CREDIT_CAP = 3; five of them is a ~450-character story carrying roughly
+ * ten new words, which is graded-reader density reached without changing a
+ * researched constant. See RESEARCH.md.
+ *
+ * The 90 is a target, not a threshold, and no model hits it: 55-83 on qwen,
+ * 112-168 on capable models -- and STORY_MODEL is a capable one, so the shipped
+ * path runs WIDE of 90, not short of it. The invariant survives either way.
+ * Every length in 55-168 earns at least one credit and discards nothing,
+ * because earn() carries the remainder into the next segment and only starts
+ * discarding above ~180 in a single turn. test/pace.test.js asserts that across
+ * the measured range rather than pinning 90, which was arithmetic on a length
+ * that never happens.
  *
  * STORY_MAX_TOKENS is generous against 90 characters on purpose: a segment cut
  * off by the ceiling is a broken story, not a short one.
@@ -1672,7 +1681,29 @@ async function callModel(messages, maxTokens, model) {
   const choice = (body.choices && body.choices[0]) || {};
   const txt = choice.message && choice.message.content;
   // The common free-tier outcome: a 200 with nothing in it.
-  if (!txt) throw callError("empty", detail);
+  if (!txt) {
+    /* About one completion in eight comes back empty on some routes and the
+     * cause is unknown. It stayed unknown because this line used to throw
+     * immediately, three lines above where finish_reason is recorded -- so the
+     * one case where the reason matters was the only case that discarded it.
+     *
+     * OpenRouter routes a single model id to several providers and names the
+     * one it used in the response, so the first question is whether the
+     * empties concentrate in one provider; that needs the provider recorded
+     * next to the reason, not either alone. Kept on the function rather than
+     * in S because it is a breadcrumb read off the console during a live
+     * session, not state: it must never sync, never persist, and never reach
+     * the UI. */
+    callModel.lastEmpty = {
+      finish: choice.finish_reason || "",
+      nativeFinish: choice.native_finish_reason || "",
+      provider: body.provider || "",
+      model: model || S.model,
+      at: new Date().toISOString()
+    };
+    console.warn("[empty completion]", JSON.stringify(callModel.lastEmpty));
+    throw callError("empty", detail);
+  }
   // finish_reason "length" means the ceiling cut the reply off mid-sentence,
   // which is a different problem from the model choosing to stop.
   callModel.lastFinish = choice.finish_reason || "";
