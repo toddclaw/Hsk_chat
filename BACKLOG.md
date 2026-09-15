@@ -573,12 +573,44 @@ In the A/B run it was `without-list`'s single largest violation at HSK 6 (杭×9
 all of them `我家在杭州`) and removing that one character reversed the sign of the
 whole comparison. Any future vocabulary measurement is exposed to the same thing.
 
-**What would settle it:** decide whether `nameSpans()` should recognise place
-names at all, or whether the surrounding pattern (`在…州`, `去…市`) is the more
-tractable signal. Note that a place name is *not* like a person name in one
-respect — 北京 and 中国 are genuinely in the lists, so the filter must not
-swallow words the learner is supposed to know. Then check whether the fix moves
-the retry counters on a real conversation, not just a fixture.
+**Fixed** 2026-09-15 (v103), and the entry above was wrong about the risk. 北京 is
+**not** in the lists — neither is 上海, nor any city, in any list including the
+10,896-word HSK 7-9 reference. Only 中国 survives, at HSK 1. So place names are
+unfixable in exactly the way person names are: there is no in-level answer for the
+repair loop to reach, and it rewrites until the attempts run out.
+
+The stated hazard — swallowing words the learner should know — cannot happen at all.
+`validate()` filters to `bad`/`latin` *before* marking anything, so an in-level word is
+never a candidate: 中国 segments as `word` and is unreachable however generous the rule.
+
+`validate()` now marks a bad run `.name` when a location preposition (在去到住) sits
+within two characters before it and a geographic classifier (州京港省市海岛) ends it or
+immediately follows it. Both halves of each pair are load-bearing:
+
+- **Preposition and classifier, not either alone.** A classifier alone excuses 节省,
+  反省, 股市, 上市; a preposition alone excuses every progressive 在 + verb, and 在 marks
+  aspect at least as often as location.
+- **Ends *or* follows the run, because that flips with the level.** 州, 海, 市, 省 and
+  岛 are themselves HSK 6 words, so 杭州 is one bad run at HSK 1 and 杭[bad] + 州[word]
+  at HSK 6. Testing only the run's last character fixed HSK 1 and left the measured case
+  — HSK 6, which is where the A/B ran — still burning a retry.
+- **Two characters of lookback, not one**, because the bad run is often only the tail:
+  上海 splits into 上[word] + 海[bad].
+
+The classifier set was chosen by running real city names through `segment()`, which
+removed two obvious-looking members: 国 never ends a bad run (美国 splits as 美 + 国) and
+山 bought nothing while adding 爬山.
+
+Measured on the mechanism the loop actually reads (`validate(...).filter(v => !v.name)`,
+`index.html`): burned repair attempts over a fixed sentence set go **8 → 3 at HSK 1** and
+**4 → 0 at HSK 6**, with 咖啡, 节省 and 跑步 still correctly repaired.
+
+**Known misses, pinned as tests rather than left to be discovered:** a bare mention with
+no preposition (杭州很大, 我是杭州人); the second city in a conjunction (我去过杭州和北京
+excuses 杭州 and not 北京); and city-specific characters with no classifier (深圳, 台北),
+which would need a gazetteer. One known false positive: 他在反省, where 在 is progressive
+and 省 is read as a province. Each costs one word glossed instead of repaired — the same
+cost a wrong person-name span already carries.
 
 ---
 
@@ -609,6 +641,15 @@ Every measurement in RESEARCH.md's A/B series uses the same eight seeds from
 violation contexts show near-duplicates — `我家在杭州，那` recurring with slightly
 different neighbourhoods — so distinctness overstates independence and the
 p-values are more fragile than n = 64 suggests.
+
+**The harness now differs from the app by one seed, deliberately.** `你的家在哪儿？`
+shipped as an HSK 1 starter and the app's own grader faulted it in real use — 的 is
+dropped before 家, which the neighbouring starter `你家有几个人？` already got right and
+which every model reply got right too (我家在…, never 我的家在…). The starter is fixed in
+`prompt.js`; `tools/prompt-ab.js:47` keeps its own hardcoded copy and was **left alone**,
+so the four runs already in RESEARCH.md stay comparable. The cost is that the harness now
+measures one sentence the app no longer ships. Whoever widens the seed set should fix that
+drift at the same time, rather than changing measurement inputs on their own.
 
 **What would settle it:** a wider seed set is worth more than more runs on these
 eight. Seeds must stay namefree (RESEARCH.md says why), and per the entry above,

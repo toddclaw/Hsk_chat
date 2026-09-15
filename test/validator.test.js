@@ -192,5 +192,79 @@ check(HSK.nameSpans("我叫小明。你好").every(([a, b]) => b - a <= 3),
 check(HSK.nameSpans("我叫。").length === 0,
   "no span is opened when punctuation follows immediately");
 
+/* Place names get the same pass, for the same reason and with a narrower rule.
+ *
+ * The syllabus has essentially no cities: 北京 and 上海 are absent from every
+ * list including the 10,896-word HSK 7-9 reference, and only 中国 survives at
+ * HSK 1. So a reply saying where someone lives cannot be repaired into the
+ * level -- the loop rewrites it until the attempts run out. Measured at HSK 6
+ * in the prompt-mode A/B, 杭 was the single largest violation (x9, every one
+ * of them 我家在杭州) and removing that one character reversed the sign of the
+ * whole comparison. The app provokes it itself: 你的家在哪儿？ is a shipped
+ * HSK 1 starter. */
+for (const t of ["我家在杭州。", "我家在北京。", "我家在上海。", "我家在香港。",
+                 "我家在河南省。", "我去过杭州。"]) {
+  const v = HSK.validate(t, lex);
+  check(v.length > 0 && v.every(x => x.name), `place: ${t} is marked, not repaired`,
+    JSON.stringify(v.map(x => ({ t: x.text, name: !!x.name }))));
+}
+
+/* Both conditions are required, and each test below fails if either is dropped.
+ * A classifier with no preposition is ordinary vocabulary: 节省 is a word the
+ * learner should have repaired, not a province. */
+check(HSK.validate("我要节省钱。", lex).every(v => !v.name),
+  "a classifier without a location preposition is not a place",
+  JSON.stringify(HSK.validate("我要节省钱。", lex).map(x => ({ t: x.text, name: !!x.name }))));
+check(HSK.validate("我喜欢咖啡。", lex).every(v => !v.name),
+  "an ordinary out-of-level word is still repaired");
+check(HSK.validate("他在跑步。", lex).every(v => !v.name),
+  "a preposition without a classifier is not a place either -- 在 is also the progressive");
+
+// The mark is scoped to the place; a hard word elsewhere still forces a repair.
+const mixedPlace = HSK.validate("我家在杭州，我喜欢咖啡。", lex);
+check(mixedPlace.some(v => !v.name), "a hard word alongside a place is still repaired",
+  JSON.stringify(mixedPlace.map(x => ({ t: x.text, name: !!x.name }))));
+
+/* An in-level word can never be swallowed however generous the rule gets --
+ * validate() filters to bad/latin before marking anything, so 中国 is a `word`
+ * and never a candidate. This is the structural answer to "the filter must not
+ * eat words the learner is supposed to know". */
+check(HSK.validate("我家在中国。", lex).length === 0,
+  "中国 is in HSK 1, so it is never a violation and never markable");
+
+/* Known false positive, pinned deliberately rather than left to be discovered:
+ * 在 is also the progressive marker, so a verb ending in a classifier reads as
+ * a place. The cost is one word glossed instead of repaired -- the same cost a
+ * wrong person-name span already carries. If a real conversation shows it
+ * mattering, narrowing PLACE_SUFFIX is a one-line change. */
+check(HSK.validate("他在反省。", lex).every(v => v.name),
+  "documented limitation: 在 + a verb ending in a classifier is read as a place");
+
+/* At HSK 6 the SAME name splits the other way: 州, 海, 市, 省 and 岛 are
+ * themselves HSK 6 words, so 杭州 arrives as 杭[bad] + 州[word] rather than one
+ * bad run. HSK 6 is the level the A/B that found this measured -- a rule that
+ * only looked at the run's last character fixed HSK 1 and left the measured
+ * case burning a retry, which a HSK-1-only fixture would never have shown. */
+const lex6 = HSK.buildLexicon(
+  JSON.parse(fs.readFileSync(path.join(__dirname, "../data/hsk6.json"), "utf8")));
+for (const t of ["我家在杭州。", "我家在香港。", "我住在北京。"]) {
+  check(HSK.validate(t, lex6).every(v => v.name),
+    `place at HSK 6, where the classifier is in-level: ${t}`,
+    JSON.stringify(HSK.validate(t, lex6).map(x => ({ t: x.text, name: !!x.name }))));
+}
+check(HSK.validate("我喜欢咖啡。", lex6).every(v => !v.name),
+  "and an ordinary out-of-level word at HSK 6 is still repaired");
+
+/* Second known miss, pinned for the same reason as the first: only the place
+ * next to the preposition is excused, so the second city in a conjunction still
+ * costs a retry. Same family as the bare mention (杭州很大, 我是杭州人) this rule
+ * was deliberately scoped not to chase -- widening it to reach 和北京 means
+ * dropping the preposition condition, which is what keeps ordinary vocabulary
+ * being repaired. */
+const conj = HSK.validate("我去过杭州和北京。", lex6);
+check(conj.some(v => v.name) && conj.some(v => !v.name),
+  "documented limitation: in 杭州和北京 only the first place is excused",
+  JSON.stringify(conj.map(x => ({ t: x.text, name: !!x.name }))));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

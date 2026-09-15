@@ -1080,5 +1080,37 @@ check(!/two weeks|recent window/i.test(rp),
   "and never claims to cover a widened window, because that path is gone",
   rp.slice(0, 400));
 
+/* A starter is a sentence the app hands a beginner to say, so it is the one
+ * place the app must not offer Chinese its own grader will fault. 你的家在哪儿？
+ * shipped at HSK 1 and the grader marked it unnatural in real use: 的 is dropped
+ * before 家 and the immediate kinship terms, which the neighbouring starter
+ * 你家有几个人？ already got right, and which every model reply in that session
+ * got right too (我家在…, never 我的家在…).
+ *
+ * Scoped to 家 and the immediate family. 的 is genuinely optional before 朋友 or
+ * 老师 -- 我的朋友 is fine -- so including them would fail a starter that is not
+ * wrong. */
+const CLOSE_PRONOUNS = ["我们", "你们", "他们", "她们", "我", "你", "他", "她"];
+const CLOSE_NOUNS = ["家", "爸爸", "妈妈", "哥哥", "姐姐", "弟弟", "妹妹"];
+const possessiveHits = [];
+for (const lv of Object.keys(P.STARTERS)) {
+  for (const s of P.STARTERS[lv]) {
+    for (const p of CLOSE_PRONOUNS) {
+      for (const n of CLOSE_NOUNS) {
+        if (s.indexOf(p + "的" + n) !== -1) {
+          possessiveHits.push(`HSK${lv}: ${s} (${p}的${n} -> ${p}${n})`);
+        }
+      }
+    }
+  }
+}
+check(possessiveHits.length === 0,
+  "no starter drops a 的 the grader would fault before 家 or a kinship term",
+  possessiveHits.join("; "));
+
+// The fixed starter is still present and still asks the question.
+check(P.STARTERS[1].indexOf("你家在哪儿？") !== -1,
+  "the HSK 1 home question survives the fix, without the 的");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
