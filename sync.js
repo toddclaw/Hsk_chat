@@ -494,6 +494,29 @@
   function secretSupported() { return schemaHasSecret !== false; }
   function retrievalsSupported() { return schemaHasRetrievals !== false; }
 
+  /* The tables this client has actually WATCHED go missing -- not the ones it
+   * has not looked at. The *Supported() accessors above answer `!== false`,
+   * which folds "known present" together with "never probed": correct for
+   * deciding whether to attempt a write, and wrong for telling a learner
+   * something is absent, because every flag is null until the first pull and a
+   * warning built on them would accuse a healthy database on load.
+   *
+   * Only these two can report, and that is not an oversight. Their pull sets
+   * the flag definitively on every sync, so one sync is enough to know. The
+   * optional COLUMNS are deliberately absent: their flags only move after a
+   * push has already failed and silently dropped them, so a column warning
+   * would stay quiet for exactly as long as the damage was being done, and
+   * show all-clear until then. That is a restatement of the v100 failure, not
+   * a guard against it -- `side` was missing for weeks while every push
+   * reported success. Reporting columns honestly needs probeSchema(), which
+   * nothing calls. */
+  function missingTables() {
+    var out = [];
+    if (schemaHasConversations === false) out.push("conversations");
+    if (schemaHasRetrievals === false) out.push("retrievals");
+    return out;
+  }
+
   /* Asked once per session, before anything is pushed.
    *
    * Two optional columns arrived in two separate migrations, so they have to be
@@ -705,6 +728,7 @@
     sideSupported: sideSupported,
     secretSupported: secretSupported,
     retrievalsSupported: retrievalsSupported,
+    missingTables: missingTables,
     probeSchema: probeSchema,
     pushVocab: pushVocab,
     pullVocab: pullVocab,
