@@ -607,10 +607,19 @@ card — but that is a workaround, not a diagnosis. Ruled out: the message shape
 (20/20 fine in a direct probe), concurrency, and the system-role problem that
 affects `deepseek-v4-pro` (`qwen` is unaffected by it, 24/24).
 
-**What would settle it:** log `finish_reason`, `native_finish_reason` and the
-provider on an empty reply. OpenRouter routes one id to several providers and
-names them in the response, so the first question is whether the empties
-concentrate in one.
+**Instrumented** 2026-09-14, not yet diagnosed. The data needed to answer this was
+always being thrown away: `callModel` threw on the empty reply three lines *above*
+where it records `finish_reason`, so the one case where the reason mattered was the
+only case that discarded it. It now records `finish_reason`, `native_finish_reason`,
+the provider and the model on `callModel.lastEmpty` and warns them to the console
+before throwing. Kept on the function, not in `S`: it is a breadcrumb, and must never
+sync or persist.
+
+**What would settle it:** use the app normally until the warning has appeared a
+handful of times, then read the provider field. OpenRouter routes one id to several
+providers, so the question is whether the empties concentrate in one — if they do,
+this is a routing problem rather than a prompt or a model problem, and none of the
+prompt-side hypotheses above need testing at all.
 
 ---
 

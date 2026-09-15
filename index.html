@@ -1672,7 +1672,29 @@ async function callModel(messages, maxTokens, model) {
   const choice = (body.choices && body.choices[0]) || {};
   const txt = choice.message && choice.message.content;
   // The common free-tier outcome: a 200 with nothing in it.
-  if (!txt) throw callError("empty", detail);
+  if (!txt) {
+    /* About one completion in eight comes back empty on some routes and the
+     * cause is unknown. It stayed unknown because this line used to throw
+     * immediately, three lines above where finish_reason is recorded -- so the
+     * one case where the reason matters was the only case that discarded it.
+     *
+     * OpenRouter routes a single model id to several providers and names the
+     * one it used in the response, so the first question is whether the
+     * empties concentrate in one provider; that needs the provider recorded
+     * next to the reason, not either alone. Kept on the function rather than
+     * in S because it is a breadcrumb read off the console during a live
+     * session, not state: it must never sync, never persist, and never reach
+     * the UI. */
+    callModel.lastEmpty = {
+      finish: choice.finish_reason || "",
+      nativeFinish: choice.native_finish_reason || "",
+      provider: body.provider || "",
+      model: model || S.model,
+      at: new Date().toISOString()
+    };
+    console.warn("[empty completion]", JSON.stringify(callModel.lastEmpty));
+    throw callError("empty", detail);
+  }
   // finish_reason "length" means the ceiling cut the reply off mid-sentence,
   // which is a different problem from the model choosing to stop.
   callModel.lastFinish = choice.finish_reason || "";
