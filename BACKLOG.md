@@ -16,11 +16,12 @@ been storing all along and using only for arithmetic. It shipped 2026-09-13 as v
 Its constants live in RESEARCH.md. The list is renumbered; the ranking above it is
 left as it was made.
 
-**The trust pass, 2026-09-14.** A second axis over this file: not learner value, but
-whether the ground under it has been checked. Five items — the retrievals migration, a
-regression test for the out-of-level guarantee in traditional script, `judge()`, the
-discarded empty-completion diagnostic, and the 90-character question. Spec and plan in
-`docs/superpowers/`.
+**The trust pass, 2026-09-14 — complete.** A second axis over this file: not learner
+value, but whether the ground under it has been checked. Five items — the retrievals
+migration, a regression test for the out-of-level guarantee in traditional script,
+`judge()`, the discarded empty-completion diagnostic, and the 90-character question. Spec
+and plan in `docs/superpowers/`. All five are now answered; the migration turned out to
+have been run, verified rather than assumed, and the entry above records how.
 
 Two of the five turned out to be **documentation** defects rather than code defects,
 which is the part worth remembering: the 90 was never load-bearing, and the
@@ -90,6 +91,55 @@ sound-to-character mapping that actually matters for reading here. Speech recogn
 scoring — not dependable enough in a browser for Chinese, and the tone drill is the
 honest version of that ambition. Role-play scenarios — that is Chat with a topic
 string, one `ACTIVITIES` row if it is ever wanted, not a project.
+
+---
+
+## Whether a migration has actually been run is unanswerable from the client — checked
+
+**Found:** 2026-09-14, auditing v101 against the v100 failure. **Answered** the same day:
+the `retrievals` migration *had* been run. Nothing was wrong. The entry stays for the
+general problem, which is not fixed.
+
+v101 shipped a `retrievals` table that `db/schema.sql` has to be run by hand to create —
+exactly like the `side`/`secret` columns whose absence turned every story into a chat in
+v100. This one degrades instead of failing (`schemaHasRetrievals`, `sync.js`), and that is
+precisely what makes it worth checking deliberately: there is no error anywhere, and it
+matters more than it looks, because the retrieval count is also the word selector. A device
+whose rows never sync asks the same words for ever.
+
+**The check, which needs no secret.** `SUPABASE_URL` and the publishable key are in
+`index.html` and are shipped to every browser already, so this is what the app does on load:
+
+```sh
+URL=$(grep -m1 'const SUPABASE_URL' index.html | sed 's/.*"\(https[^"]*\)".*/\1/')
+KEY=$(grep -m1 'const SUPABASE_ANON_KEY' index.html | sed 's/.*"\([^"]*\)".*/\1/')
+curl -s -H "apikey: $KEY" "$URL/rest/v1/retrievals?select=*&limit=1"
+```
+
+Three readings, and the controls matter because two of them look alike:
+
+- **`200 []` — the table exists.** An anonymous read of an RLS-protected table is filtered,
+  not refused, so empty-because-filtered and empty-because-empty are identical. Both mean
+  present. Control: `prefs` returns the same.
+- **`404 PGRST205` — the table is missing**, i.e. the migration has not run. Control: `vocab`
+  returns this, since there is no such table (`vocab_extra` etc.).
+- **A named column** (`?select=face`) returns `42703` if that column alone is missing, which
+  is how a *partially* applied migration is caught. Control: `?select=nonsense` must fail.
+
+**RLS needs a write, not a read**, per DEVELOPING.md — a read cannot tell an enforced policy
+from an empty table. Insert with a random `user_id`: the foreign key to `auth.users` rejects
+it either way, so nothing is ever written, and the error code says which wall it hit. `42501`
+is RLS doing its job; `23503` would mean the FK caught it *because RLS was off*.
+
+**Outcome 2026-09-14:** table present, all eight columns (`id`, `user_id`, `word`, `day`,
+`ok`, `face`, `created_at`, `updated_at`), RLS on and returning `42501`. Nothing to do.
+
+**What would settle the general case:** nothing in this repo reports whether a migration has
+been applied. Every optional-column probe degrades silently by design, so from inside the app
+"it works" and "it is syncing" are indistinguishable — which is the condition that let v100
+ship. The cheap fix is a Settings line listing which optional tables the current session
+probed successfully; `sync.js` already computes exactly that (`retrievalsSupported()` and its
+siblings) and simply never shows it.
 
 ---
 
