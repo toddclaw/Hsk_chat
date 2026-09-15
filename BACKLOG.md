@@ -16,6 +16,18 @@ been storing all along and using only for arithmetic. It shipped 2026-09-13 as v
 Its constants live in RESEARCH.md. The list is renumbered; the ranking above it is
 left as it was made.
 
+**The trust pass, 2026-09-14.** A second axis over this file: not learner value, but
+whether the ground under it has been checked. Five items — the retrievals migration, a
+regression test for the out-of-level guarantee in traditional script, `judge()`, the
+discarded empty-completion diagnostic, and the 90-character question. Spec and plan in
+`docs/superpowers/`.
+
+Two of the five turned out to be **documentation** defects rather than code defects,
+which is the part worth remembering: the 90 was never load-bearing, and the
+story-segment entry had the wrong model in it. A third — the empty-completion cause —
+was never blocked on anything but a `throw` sitting three lines above the field that
+would have explained it.
+
 **Next.** Two builds, no new measurement gate.
 
 1. **Let me rewrite a sentence the grader failed.** Independent of the above and just
@@ -47,14 +59,17 @@ activity.
    without a measurement first: it runs on every message, and a model asked what went
    *right* has an obvious way to lie.
 
-**Cheap, and they restore trust in the tools.** None is a feature; all four are
-currently costing something silently.
+**Cheap, and they restore trust in the tools.** None is a feature; each was costing
+something silently.
 
-- `judge()` undefined in `tools/story-ab.js` — every continuity figure that harness
-  has printed recently was zero by accident.
+- ~~`judge()` undefined in `tools/story-ab.js`~~ — **fixed 2026-09-14.** Which
+  published continuity figures were zero by accident is still open.
 - The `loadGoalList()` race in `browser.test.js` — closes out `run.sh`'s retry.
+  **Still open**: it touches `boot()` and wants its own change.
 - Place names past the validator — burns retries on a starter the app itself ships.
+  **Still open**, and the first thing to fix before any A/B is re-run.
 - 为什么 at HSK 1 — burns repairs at the level where pacing is most fragile.
+  **Still open**; needs a counted run, so it was out of the trust pass.
 
 **After that.** Quality and polish, in rough order: word rescue (a game built on
 parts that exist — fun, but the research says it teaches little that Ghost Words and
@@ -579,7 +594,7 @@ measurable.
 
 ---
 
-## Story segments run short of the 90 characters the prompt asks for
+## Story segments run short of the 90 characters the prompt asks for — answered, and backwards
 
 **Found:** every story measurement, all models. 55–83 characters typical on
 `qwen`, 112–168 on capable models where the *clean* segments are measured.
@@ -608,7 +623,7 @@ would be a prompt change requiring a counted A/B (CLAUDE.md).
 
 ---
 
-## One completion in eight comes back empty, cause unknown
+## One completion in eight comes back empty, cause unknown — instrumented
 
 **Found:** across every arm of every story run, at concurrency 1 as well as 6, on
 `qwen3-30b-a3b`.
@@ -708,7 +723,7 @@ not.
 
 ---
 
-## `judge()` is undefined in `tools/story-ab.js`
+## `judge()` is undefined in `tools/story-ab.js` — fixed
 
 **Found:** reading the harness while writing up Task 13's topic arms.
 
