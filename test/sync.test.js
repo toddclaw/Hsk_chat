@@ -486,7 +486,7 @@ check(Sync.mergeRetrievals(null, [entry]).length === 1, "a null local side still
  * incremental retry has to fall back from. Scenario 3 keeps probeSchema()
  * itself covered -- it is real, exported code, just not wired up by this
  * task. */
-function mockSupabase(missingCols, seen) {
+function mockSupabase(missingCols, seen, missingTables) {
   return {
     createClient: function () {
       return {
@@ -500,7 +500,13 @@ function mockSupabase(missingCols, seen) {
           // Thenable, so `await client.from(t).upsert(rows)` resolves.
           q.then = function (resolve) {
             let error = null;
-            if (q._rows) {
+            /* A whole table absent, which is what an un-run migration looks
+             * like -- PostgREST answers PGRST205 and never reaches the
+             * columns. Checked first for that reason. */
+            if ((missingTables || []).indexOf(table) !== -1) {
+              error = { code: "PGRST205",
+                        message: "Could not find the table 'public." + table + "'" };
+            } else if (q._rows) {
               // upsert call: fails if any row carries a column the simulated
               // database doesn't have, exactly like a real un-migrated table.
               const keys = Object.keys(q._rows[0] || {});
@@ -654,6 +660,68 @@ function freshSync() {
     JSON.stringify(convCalls5));
   check(convCalls5[2] && convCalls5[2].keys.indexOf("activity") === -1,
     "activity is the acknowledged collateral cost of the blunt fallback, and only then");
+
+  /* --- what the learner is told when a table is missing ------------------
+   *
+   * The failure this guards is not a crash: a pull against a database with no
+   * `retrievals` table succeeds, degrades to local-only, and reports "Synced".
+   * That is exactly how v100 ran for weeks against a database with no `side`
+   * column while every push said it had worked.
+   *
+   * missingTables() must therefore distinguish three states, which is why it
+   * exists alongside retrievalsSupported(): never looked, looked and present,
+   * looked and absent. The accessor collapses the first two. */
+  const seen6 = [];
+  const Sync6 = freshSync();
+  global.window = { supabase: mockSupabase([], seen6, ["retrievals"]) };
+  Sync6.configure("https://example.invalid", "publishable");
+
+  check(Sync6.missingTables().length === 0,
+    "before any pull nothing is reported -- an unprobed table is not a missing one",
+    JSON.stringify(Sync6.missingTables()));
+  check(Sync6.retrievalsSupported() === true,
+    "...while the accessor already says 'supported', which is why it cannot drive a warning");
+
+  await Sync6.pullRetrievals(USER);
+  check(JSON.stringify(Sync6.missingTables()) === JSON.stringify(["retrievals"]),
+    "a pull that meets PGRST205 reports that table",
+    JSON.stringify(Sync6.missingTables()));
+
+  await Sync6.pullConversations(USER);
+  check(JSON.stringify(Sync6.missingTables()) === JSON.stringify(["retrievals"]),
+    "and a healthy table pulled afterwards is not added to the complaint",
+    JSON.stringify(Sync6.missingTables()));
+
+  // The control: the same pulls against a complete database say nothing at all.
+  const seen7 = [];
+  const Sync7 = freshSync();
+  global.window = { supabase: mockSupabase([], seen7, []) };
+  Sync7.configure("https://example.invalid", "publishable");
+  await Sync7.pullRetrievals(USER);
+  await Sync7.pullConversations(USER);
+  check(Sync7.missingTables().length === 0,
+    "a complete database produces no warning -- one that cried wolf would be scrolled past",
+    JSON.stringify(Sync7.missingTables()));
+
+  /* And it has to go away again. The learner reads the warning, runs
+   * db/schema.sql, presses Sync now -- same session, same module instance, so
+   * the flag set false by the first pull has to be cleared by the second.
+   * Without the `= true` on the success path the flag stays false for the rest
+   * of the session and the app keeps reporting a table that now exists, which
+   * teaches the learner the warning is noise. */
+  const Sync8 = freshSync();
+  global.window = { supabase: mockSupabase([], [], ["retrievals"]) };
+  Sync8.configure("https://example.invalid", "publishable");
+  await Sync8.pullRetrievals(USER);
+  check(Sync8.missingTables().length === 1, "the warning is on before the migration is run");
+
+  // The migration is run; the next sync talks to a complete database.
+  global.window = { supabase: mockSupabase([], [], []) };
+  Sync8.configure("https://example.invalid", "publishable");
+  await Sync8.pullRetrievals(USER);
+  check(Sync8.missingTables().length === 0,
+    "and clears on the next sync once the table exists -- it does not stick for the session",
+    JSON.stringify(Sync8.missingTables()));
 
   /* Sign-in is for sync only. Issues are filed through a prefilled github.com
    * URL that needs no token, so asking for public_repo -- write access to every
