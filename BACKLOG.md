@@ -590,10 +590,21 @@ earnings (RESEARCH.md). At 55 it is one credit. The design still beats one long
 turn, but by less than the arithmetic claims, and `test/pace.test.js` pins the
 arithmetic against a number the model does not actually hit.
 
-**What would settle it:** decide whether the target should move to what models
-actually produce, or whether the instruction should be enforced the way the
-required-word rule is (reject and re-ask). Changing 90 means updating
-RESEARCH.md's justification with it — see CLAUDE.md.
+**Answered** 2026-09-14, by arithmetic rather than measurement — and the heading above
+has it backwards. `STORY_MODEL` is `anthropic/claude-sonnet-4.5`, which produces
+112-168. The 55-83 figures are `qwen`, which is not the shipped story model. The
+shipped path runs **wide** of 90, not short of it.
+
+The invariant holds either way. Credits per five-segment story: 55→6, 83→9, 90→10,
+112→12, 168→15, and nothing is discarded anywhere in that range — `earn()` carries the
+remainder between segments, which is what recovers the short end, and its stop-hoarding
+rule does not bite until ~180 in one turn. The shipped model beats the ten-credit design
+figure.
+
+So neither of the two options this entry offered is needed. `test/pace.test.js` no longer
+pins 90 and asserts the invariant across 55-168 instead; RESEARCH.md carries the table.
+`prompt.js` is deliberately unchanged: the number is not load-bearing, and editing it
+would be a prompt change requiring a counted A/B (CLAUDE.md).
 
 ---
 

@@ -1094,9 +1094,18 @@ const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
 
 /* Story segments. 90 Han characters is two credits at DEFAULT_RATE = 45 and stays
- * under CREDIT_CAP = 3, so no segment throws earnings away; five of them is a
- * ~450-character story carrying roughly ten new words, which is graded-reader
- * density reached without changing a researched constant. See RESEARCH.md.
+ * under CREDIT_CAP = 3; five of them is a ~450-character story carrying roughly
+ * ten new words, which is graded-reader density reached without changing a
+ * researched constant. See RESEARCH.md.
+ *
+ * The 90 is a target, not a threshold, and no model hits it: 55-83 on qwen,
+ * 112-168 on capable models -- and STORY_MODEL is a capable one, so the shipped
+ * path runs WIDE of 90, not short of it. The invariant survives either way.
+ * Every length in 55-168 earns at least one credit and discards nothing,
+ * because earn() carries the remainder into the next segment and only starts
+ * discarding above ~180 in a single turn. test/pace.test.js asserts that across
+ * the measured range rather than pinning 90, which was arithmetic on a length
+ * that never happens.
  *
  * STORY_MAX_TOKENS is generous against 90 characters on purpose: a segment cut
  * off by the ceiling is a broken story, not a short one.
