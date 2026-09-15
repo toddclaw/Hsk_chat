@@ -256,6 +256,65 @@
    * the real parse of 你叫什么名字 (什么 + 名字, two tokens) with a bogus
    * one-token name. Forgiving only what the segmenter already gave up on leaves
    * every legal parse exactly as it was. */
+  /* Place names, and why they get the same pass person names do.
+   *
+   * The syllabus carries essentially no cities: 北京 and 上海 are absent from
+   * every list including the 10,896-word HSK 7-9 reference, and only 中国
+   * survives at HSK 1. So a reply saying where someone lives cannot be repaired
+   * INTO the level -- the loop rewrites it until the attempts run out, exactly
+   * as it did for 张 and 王 before NAME_INTRO existed. Measured at HSK 6 in the
+   * prompt-mode A/B, 杭 was the single largest violation (x9, every one of them
+   * 我家在杭州) and removing that one character reversed the sign of the whole
+   * comparison. The app provokes it itself: 你的家在哪儿？ is a shipped HSK 1
+   * starter, so the question with no in-level answer is one we ask.
+   *
+   * Two conditions, because either alone is too generous. A classifier by
+   * itself waves through 节省, 反省, 股市 and 上市 -- ordinary vocabulary a
+   * learner should have repaired. A preposition by itself waves through every
+   * progressive 在 + verb, and 在 marks aspect at least as often as location.
+   *
+   * The classifier set was chosen by running real city names through segment()
+   * rather than from intuition, which removed two obvious-looking members: 国
+   * is useless because 美国 splits into 美[bad] + 国[word] and never ends a bad
+   * run, and 山 bought nothing while adding 爬山. What survives is what actually
+   * ends a bad run: 杭州/广州/苏州, 北京/南京, 香港, 上海 (as a bare 海), 河南省,
+   * 上海市 (as 海市), 青岛.
+   *
+   * ponytail: a flat character set, so 他在反省 is excused as though 省 were a
+   * province -- pinned in validator.test.js rather than left to be found. The
+   * cost is one word glossed instead of repaired, which is the same cost a
+   * wrong person-name span already carries; narrowing the set is a one-line
+   * change if a real conversation shows it mattering. City-specific characters
+   * (深圳, 台北) are missed and would need a gazetteer, which is not worth it. */
+  var PLACE_PREP = "在去到住";
+  var PLACE_SUFFIX = "州京港省市海岛";
+
+  /* A bad run reads as a place when a location preposition sits just before it
+   * and a geographic classifier ends it.
+   *
+   * Two characters of lookback, not one, because the bad run is often only the
+   * TAIL of the place name: 上海 splits into 上[word] + 海[bad] -- 上 is HSK 1
+   * on its own -- so the character before the violation is 上 and the
+   * preposition is one further back. 上海 is not an edge case worth missing.
+   * The same window covers an intervening aspect marker, though the segmenter
+   * usually folds that into the run itself (我去过杭州 arrives as 去 + 过杭州). */
+  function isPlaceRun(text, t) {
+    /* The classifier may end the bad run or sit just past it, and which one
+     * happens is a property of the LEVEL, not of the place. 州, 海, 市, 省 and
+     * 岛 are themselves HSK 6 words, so 杭州 arrives at HSK 1 as one bad run
+     * ending in 州 and at HSK 6 as 杭[bad] + 州[word] -- the same name, split
+     * the other way round. Testing only the run's last character fixed 我家在杭州
+     * at HSK 1 and left it burning a retry at HSK 6, which is the level the A/B
+     * that found this actually measured. */
+    var ends = PLACE_SUFFIX.indexOf(text[t.end - 1]) !== -1;
+    var follows = t.end < text.length && PLACE_SUFFIX.indexOf(text[t.end]) !== -1;
+    if (!ends && !follows) return false;
+    for (var i = t.start - 1; i >= 0 && i >= t.start - 2; i--) {
+      if (PLACE_PREP.indexOf(text[i]) !== -1) return true;
+    }
+    return false;
+  }
+
   var NAME_INTRO = "叫姓";
   var NAME_MAX = 3;            // 小明, 王小明 -- long enough for a full name
 
@@ -285,9 +344,9 @@
        *
        * Latin is never a name. The prompt bans English outright, so 我叫John is
        * a rule break rather than something to read. */
-      if (t.kind === "bad" && spans.some(function (s) {
+      if (t.kind === "bad" && (spans.some(function (s) {
         return t.start < s[1] && t.end > s[0];
-      })) t.name = true;
+      }) || isPlaceRun(text, t))) t.name = true;
       return t;
     });
   }
