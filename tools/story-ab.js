@@ -504,6 +504,37 @@ async function clarity(segs) {
   return { label: m ? m[0] : "UNPARSED", cost: res.cost };
 }
 
+/* Continuity, per segment, against everything before it. Deliberately the same
+ * shape as clarity() above: one judge model, a one-word answer, a regex that
+ * cannot half-match. The three labels are exactly the ones the counters below
+ * read -- lab("CONTINUES"), lab("RESTARTS"), lab("UNRELATED") -- and a typo
+ * here would reintroduce this function's own bug in a new form.
+ *
+ * It went missing at some commit after 1028a8a and nothing noticed: the call
+ * site's .catch writes the ReferenceError into the label, so CONT, RESTART and
+ * UNREL printed zero for every arm rather than erroring. Any continuity number
+ * this harness printed between that commit and this one was zero by accident
+ * rather than by measurement. Task 13's topic arms are unaffected -- they were
+ * run with --nojudge, which skips this path entirely. */
+const JUDGE_PROMPT =
+  "Below is the beginning of a short Chinese story for a beginner, then ONE " +
+  "further segment.\n\n" +
+  "Question: does the further segment continue the story before it?\n\n" +
+  "Answer with exactly one of these words and nothing else:\n" +
+  "CONTINUES - it carries on the same story, with the same characters and situation\n" +
+  "RESTARTS - it begins the story again, or re-introduces characters already introduced\n" +
+  "UNRELATED - it is about something else entirely\n";
+
+async function judge(before, after) {
+  const res = await callModel(JUDGE, [
+    { role: "user", content: JUDGE_PROMPT +
+      "\n=== STORY SO FAR ===\n" + before.join("\n") +
+      "\n\n=== FURTHER SEGMENT ===\n" + after + "\n\nOne word:" }
+  ], 8, 0);
+  const m = /CONTINUES|RESTARTS|UNRELATED/.exec(res.text.toUpperCase());
+  return { label: m ? m[0] : "UNPARSED", cost: res.cost };
+}
+
 async function pool(tasks, n) {
   const out = [];
   let i = 0, done = 0;

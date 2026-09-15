@@ -704,9 +704,14 @@ Any continuity number that harness has printed recently was zero by accident rat
 measurement. Task 13's topic arms were run with `--nojudge` to route around it, which is why
 those numbers are trustworthy despite this.
 
-**What would settle it:** restore or rewrite `judge()` — `clarity()` next to it is the template
-for the request shape — and re-run any measurement that reported continuity since the break to
-find out which of those zeros were real.
+**Fixed** 2026-09-14: `judge()` restored next to `clarity()`, which was already the template
+for the request shape, returning the same three labels the counters read.
+
+**Still open, and the reason this entry stays:** which published continuity numbers were zero
+by accident. Task 13's topic arms were run with `--nojudge` and never touched this path, so
+they are unaffected. Any *other* run that reported CONT / RESTART / UNREL since the break needs
+re-running before its numbers can be quoted — RESEARCH.md's story-time sections are where to
+look. Fixing the instrument does not retroactively fix the measurements it spoiled.
 
 ---
 
