@@ -36,7 +36,7 @@
  * grader's judgement of learner Chinese at a register near the app's, which is
  * the closest thing to ground truth available without hand-labelling.
  *
- *   node tools/grader-bench.js --build          # fetch and filter the corpus
+ *   node tools/grader-bench.js --build          # MuCGEC pairs\n *   node tools/grader-bench.js --build-clean    # MuCGEC wrong + written-correct\n *   node tools/grader-bench.js --clean [--arm ...]   # score against that
  *   node tools/grader-bench.js [--n 80] [--model <id>] [--arm shipped|checklist|correctionFirst]
  */
 "use strict";
@@ -78,6 +78,107 @@ const cleanAt = (t, n) => HSK.validate(t, lex[n]).filter(v => !v.name).length ==
 function levelOf(text) {
   for (const n of [2, 3, 4, 5, 6, 7]) if (cleanAt(text, n)) return n;
   return 0;
+}
+
+/* ------------------------------------------------- the clean positive class
+ *
+ * MuCGEC's "correct" half is a MINIMAL human fix: the annotator repaired the
+ * error they were annotating and left the rest of the sentence alone, so
+ * 我不愿意这么过分地喜欢歌手 counts as correct while still not being anything a
+ * native speaker would say. That made specificity unreadable -- on that set
+ * claude-sonnet-4.5 flagged half the "correct" sentences, and reading them, most
+ * of its complaints were defensible. A judge that is right cannot be told from a
+ * judge that is harsh.
+ *
+ * So: keep MuCGEC's wrong half, which is solid ground truth (three annotators
+ * edited it), and replace the right half with text written to BE correct.
+ *
+ * Two sources, scored separately rather than pooled, because they are not
+ * equally clean:
+ *
+ *   app       STARTERS and LEVEL_STYLE samples -- hand-written for this app,
+ *             already test-enforced to validate at their own level, and the
+ *             app's actual register: chat turns, not essay prose. Never tuned
+ *             against the grader, so there is no circularity. Only 43 at HSK 4
+ *             and below, but enough to tell 5% from 40%.
+ *   tatoeba   CC-BY 2.0 FR, crowd-sourced, filtered by this repo's own validator
+ *             to the level and to 5-30 characters. Scale, with noise: 很少人这么
+ *             认为 is in there and wants 很少有人. A judge flagging THOSE is not
+ *             wrong, which is exactly why it is reported apart from `app`.
+ *
+ * If a judge's false-alarm rate collapses on `app` it was the benchmark, not the
+ * judge. If it stays high on `app`, the judge is harsh.
+ */
+/* Tatoeba ships this export bz2-only, and node has no bunzip2 in the standard
+ * library. Rather than take the repo's first dependency for a step that runs
+ * once, --build-clean reads a local copy and tells you how to fetch it. The
+ * built JSON is committed, so nobody else has to. */
+const TATOEBA_FILE = process.env.TATOEBA_FILE || "/tmp/cmn.tsv";
+const TATOEBA_HOWTO =
+  "curl -sSL https://downloads.tatoeba.org/exports/per_language/cmn/cmn_sentences.tsv.bz2 " +
+  "| bunzip2 > " + TATOEBA_FILE;
+
+async function buildClean() {
+  const wrong = [];
+  {
+    const res = await fetch(DEV_URL);
+    if (!res.ok) throw new Error("MuCGEC fetch failed: HTTP " + res.status);
+    for (const l of (await res.text()).split("\n").filter(Boolean)) {
+      const p = l.split("\t");
+      if (!p[1] || !cleanAt(p[1], MAX_LEVEL)) continue;
+      // Only sentences every annotator actually edited: no disputed negatives.
+      if (!p.slice(2).filter(Boolean).every(r => r !== p[1])) continue;
+      wrong.push({ text: p[1], truth: "wrong", cls: "mucgec", level: levelOf(p[1]) });
+    }
+  }
+
+  const app = [];
+  for (const lv of Object.keys(HSKPrompt.STARTERS)) {
+    if (Number(lv) > MAX_LEVEL) continue;
+    HSKPrompt.STARTERS[lv].forEach(t =>
+      app.push({ text: t, truth: "right", cls: "app", level: Number(lv) }));
+  }
+  for (const lv of Object.keys(HSKPrompt.LEVEL_STYLE)) {
+    if (Number(lv) > MAX_LEVEL) continue;
+    app.push({ text: HSKPrompt.LEVEL_STYLE[lv].sample, truth: "right",
+               cls: "app", level: Number(lv) });
+  }
+
+  const tat = [];
+  {
+    if (!fs.existsSync(TATOEBA_FILE)) {
+      throw new Error("no Tatoeba export at " + TATOEBA_FILE + "\n  fetch it with:\n  " +
+                      TATOEBA_HOWTO);
+    }
+    const all = fs.readFileSync(TATOEBA_FILE, "utf8").split("\n").filter(Boolean)
+      .map(l => l.split("\t")[2])
+      .filter(t => t && t.length >= 5 && t.length <= 30 && cleanAt(t, MAX_LEVEL));
+    /* A fixed stride rather than a random sample: reproducible without carrying
+     * a seed, and spread across the corpus instead of clustered at its start,
+     * where the oldest and shortest sentences sit. */
+    const stride = Math.max(1, Math.floor(all.length / 200));
+    for (let i = 0; i < all.length && tat.length < 200; i += stride) {
+      tat.push({ text: all[i], truth: "right", cls: "tatoeba", level: levelOf(all[i]) });
+    }
+  }
+
+  fs.writeFileSync(path.join(__dirname, "grader-bench-clean.json"), JSON.stringify({
+    negative: { source: "MuCGEC dev set", url: "https://github.com/HillZhang1999/MuCGEC",
+      licence: "Apache-2.0",
+      citation: "Zhang et al., MuCGEC, NAACL 2022." },
+    positive: [
+      { source: "this repo's STARTERS and LEVEL_STYLE samples", licence: "same as this repo" },
+      { source: "Tatoeba", url: "https://tatoeba.org", licence: "CC-BY 2.0 FR",
+        note: "Sentences from Tatoeba (https://tatoeba.org), CC-BY 2.0 FR. " +
+              "Filtered by this repo's validator to HSK " + MAX_LEVEL + " and below." }
+    ],
+    built: new Date().toISOString(), maxLevel: MAX_LEVEL,
+    items: wrong.concat(app, tat)
+  }, null, 2));
+  console.log("built grader-bench-clean.json");
+  console.log("  wrong   (MuCGEC, every annotator edited): " + wrong.length);
+  console.log("  right   (this app, hand-written):         " + app.length);
+  console.log("  right   (Tatoeba, CC-BY, validator-filtered): " + tat.length);
 }
 
 async function build() {
@@ -240,6 +341,58 @@ async function pool(jobs, width) {
   return out;
 }
 
+/* Balanced by CLASS, not overall: the three classes answer different questions
+ * and pooling them would let the Tatoeba sample, which is the biggest and the
+ * noisiest, set the headline. Equal n each, deterministic slice. */
+async function scoreClean() {
+  const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
+  if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
+  const file = path.join(__dirname, "grader-bench-clean.json");
+  if (!fs.existsSync(file)) { console.error("run --build-clean first"); process.exit(1); }
+  const bench = JSON.parse(fs.readFileSync(file, "utf8"));
+  const per = Number(arg("n", 60));
+
+  const items = [];
+  for (const cls of ["mucgec", "app", "tatoeba"]) {
+    items.push.apply(items, bench.items.filter(i => i.cls === cls).slice(0, per));
+  }
+  console.log("model: " + MODEL + "  arm: " + ARM + "  items: " + items.length +
+              "  (" + ["mucgec", "app", "tatoeba"]
+                .map(c => c + "=" + items.filter(i => i.cls === c).length).join(" ") + ")\n");
+
+  const rows = await pool(items.map(it => async () => {
+    try {
+      const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
+      return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
+    } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
+  }), CONCURRENCY);
+
+  const pct = (a, b) => b ? (100 * a / b).toFixed(0) + "%" : "--";
+  const line = (label, cls, want) => {
+    const r = rows.filter(x => x.cls === cls && x.ok !== null);
+    const hit = r.filter(x => x.ok === want).length;
+    console.log("  " + label.padEnd(38) + String(r.length).padStart(4) + "   " +
+                String(hit).padStart(3) + "  " + pct(hit, r.length));
+    return [hit, r.length];
+  };
+  console.log("                                          n   correct");
+  const rec = line("wrong Chinese it faulted (MuCGEC)", "mucgec", false);
+  const appR = line("this app's own sentences it passed", "app", true);
+  const tatR = line("Tatoeba sentences it passed", "tatoeba", true);
+
+  console.log("\n--- false alarms on this app's own hand-written sentences ---");
+  rows.filter(x => x.cls === "app" && x.ok === false).forEach(x => console.log("  " + x.text));
+
+  console.log("\nspend: $" + spend.toFixed(4));
+  const out = path.join(__dirname, "grader-bench-clean-results-" + ARM + ".json");
+  const prior = fs.existsSync(out) ? JSON.parse(fs.readFileSync(out, "utf8")) : {};
+  fs.writeFileSync(out, JSON.stringify(Object.assign(prior, {
+    model: MODEL, arm: ARM, when: new Date().toISOString(),
+    recall: rec, appSpecificity: appR, tatoebaSpecificity: tatR, rows: rows
+  }), null, 2));
+  console.log("written: " + path.relative(ROOT, out));
+}
+
 async function score() {
   const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
   if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
@@ -299,7 +452,11 @@ async function score() {
   console.log("written: " + path.relative(ROOT, out));
 }
 
-(args.indexOf("--build") !== -1 ? build() : score()).catch(e => {
+const MODE = args.indexOf("--build-clean") !== -1 ? buildClean
+           : args.indexOf("--build") !== -1 ? build
+           : args.indexOf("--clean") !== -1 ? scoreClean
+           : score;
+MODE().catch(e => {
   console.error(String((e && e.message) || e));
   process.exit(1);
 });

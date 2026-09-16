@@ -156,28 +156,48 @@ means Sonnet's 53% is not evidence that Sonnet is over-harsh — it may be evide
 that the positive class is not very positive. Recall is measured against three
 annotators agreeing a sentence is broken, and stays trustworthy.
 
-## The two jobs want opposite operating points
+## Round three: a positive class that is actually positive
 
-This is the finding that matters, and it cuts against the stated goal of one
-trusted grader everywhere.
+The conclusion drawn from round two — *"the two jobs want opposite operating
+points, use two models"* — **was wrong, and this round is why.** It rested on
+MuCGEC's minimal fixes being a fair positive class, which the round-two write-up
+itself warned they were not, and then reasoned from them anyway.
 
-- **Grading the learner's sentences.** A false ✗ is expensive: it puts a wrong
-  entry in the mistake ledger, moves the category counts, and picks the wrong
-  drill. Over-flagging actively teaches the wrong thing. This job wants
-  specificity.
-- **Gating the partner's replies.** Missing bad Chinese *is* the failure — the
-  whole point is that 你被妈妈帮忙过吗 must not render. Over-flagging only costs
-  a retry, and the learner has already chosen retrying over falling back. This
-  job wants recall, and can spend specificity to get it.
+Rebuilt: MuCGEC's wrong half tightened to sentences **every** annotator edited,
+and the right half replaced with text written to be correct. Two positive
+sources, scored apart rather than pooled, because they are not equally clean.
 
-Sonnet at 97% recall is close to an ideal gate and a poor grader. qwen at 83%
-specificity is the better grader and a leaky gate. One prompt on one model cannot
-be at both ends of a trade-off curve, and no arm here moved the curve itself.
+| arm | catches wrong | passes this app's own | passes Tatoeba |
+|---|---|---|---|
+| `shipped` | 35/43 81% | **43/43 100%** | 36/43 84% |
+| `checklist` | 34/43 79% | 43/43 100% | 38/43 88% |
+| `correctionFirst` | 31/40 78% | 43/43 100% | 38/43 88% |
+| `claude-sonnet-4.5` | **40/42 95%** | **42/43 98%** | 30/43 70% |
 
-**Cost.** Sonnet ran $0.6728 for 116 calls — about $0.0058 each, against well
-under a cent for all 120 of a qwen arm. A gate on every partner turn at that rate
-is roughly 690 turns a month against the app's ~$4 budget, before the chat calls
-those turns also need.
+**Sonnet's 53% specificity was the benchmark, not Sonnet.** On text written to be
+correct at level it is 98% — against 53% on minimal fixes, p < 0.000001.
+
+Pooled recall across both builds: Sonnet **97/101 (96%)** against shipped
+**83/103 (81%)**, p = 0.0008, at one extra false alarm in 43 (p = 1.0, no
+difference). There is no trade-off to navigate. Sonnet is better at both jobs.
+
+Its single false alarm is this repo's own HSK 2 partner sample —
+我今天很忙。上午我去了商店，买了一些水果。你今天做什么了？ — where 上午 sits
+ahead of the subject. Acceptable Chinese, so a marginal call rather than an error.
+
+The Tatoeba column is crowd-sourcing showing through: 很少人这么认为 wants
+很少**有**人, and Sonnet flagging 30% of that set is mostly Sonnet being right.
+Which is the reason the two positive sources are reported apart.
+
+**All three prompt rewrites are dead.** None beat the shipped prompt on anything,
+and all three are indistinguishable from it on clean text. The gain was never in
+the wording.
+
+### What is left is cost, not accuracy
+
+Sonnet runs **$0.00486 a call**, about 26× a qwen call. As both grader and gate
+that is two calls an exchange — roughly **410 exchanges a month** against the
+app's ~$4 budget. As the grader alone it is pennies at any realistic volume.
 
 ## What to measure next
 
