@@ -347,10 +347,12 @@ one-line note — in a 200-token budget, and produces nothing else. In
 `naturalFraming` the same question arrives bundled with `meant`, `better`, four
 `cats` and a tagged `errors` array, and the verdict degrades.
 
-That is the drill-check finding again, which this repo already measured and wrote
-down: the target check fused into the grader's answer came back wrong 9 times in
-15, and split into its own call, 15/15. **Separating the verdict from the
-categorisation is what buys the accuracy** -- not the wording of either.
+That looked like the drill-check finding again -- the target check fused into the
+grader's answer came back wrong 9 times in 15, split into its own call 15/15 --
+and the conclusion drawn was that *separating the verdict from the categorisation
+is what buys the accuracy.* **Round seven tested that directly and it is also
+wrong**: a detector carrying no categorisation load at all scores 84%, identical
+to this arm. See round seven.
 
 ### Which suggests a cheaper design than either
 
@@ -361,6 +363,67 @@ decomposed accuracy at close to `naturalFraming` cost -- two calls on a faulty
 sentence, one on a clean one, and most sentences are clean.
 
 Untested. It is the obvious next arm and it is cheap.
+
+## Round seven: it was not separation either. It is diversity of lens.
+
+Round six concluded that separating the verdict from the categorisation is what
+buys the accuracy. This arm tests that directly: one detector answering nothing
+but "is there a fault here", then a categorisation call only when it says yes.
+Verdict and tagging fully separated, one lens.
+
+| | design | catches wrong | clean | cost/sentence |
+|---|---|---|---|---|
+| `shipped` | 1 call, general Q, full contract | 79/99 80% | 43/43 | $0.000093 |
+| `naturalFraming` | 1 call, naturalness Q, full contract | 82/98 84% | 43/43 | $0.000106 |
+| `split` | detector + categoriser, no contract on the verdict | 84/100 84% | 43/43 | **$0.000081** |
+| `decomposed` | 4 narrow Qs in parallel + integrator | **90/99 91%** | 43/43 | $0.000184 |
+
+`split` against `naturalFraming`: **p = 1.000**. Identical. Removing the entire
+categorisation load from the verdict call changed **nothing**.
+
+**So round six was wrong too.** Separation is not the mechanism.
+
+### What three failed explanations leave
+
+Four experiments, each removing one candidate:
+
+| what was varied | result | |
+|---|---|---|
+| the same call, five times | 84% | repetition does not help |
+| the question's framing | 84% | wording does not help |
+| verdict split from categorisation | 84% | separation does not help |
+| **four different narrow questions** | **91%** | this does |
+
+Every single-lens arm lands in 80–84% whatever is done to it. Pooled across all
+of them, 280/340 (82%) against the four-lens design's 130/142 (92%),
+**p = 0.011**.
+
+The mechanism that survives is **diversity of lens**: several passes each looking
+for a different kind of fault beat one pass however it is framed, however much
+load is taken off it, and however many times it is repeated. Attention, not
+capability and not contamination — the model can see these errors when asked
+about that class of error specifically, and cannot when asked to look at
+everything at once.
+
+**Honest limit:** `decomposed` against `split` alone is p = 0.199, not
+significant at n=100. The claim rests on the pooled comparison and on four arms
+pointing the same way, not on any single pairwise test. Worth a larger run before
+it is treated as settled.
+
+### What this changes about what to build
+
+`split` is the cheapest arm measured — $0.000081 a sentence, below even the
+shipped single call, because a clean sentence costs one small call and most
+sentences are clean. But it buys nothing over the current grader that survives a
+significance test.
+
+`decomposed` is the one with the evidence. Twice the cost of the shipped call,
+26x cheaper than Sonnet, and it is the only design that moved.
+
+Two open questions worth a run each before wiring anything in: whether four
+lenses are needed or two or three would do, and whether the same gain appears on
+the partner's Chinese, which is the gate's actual job and a different
+distribution from learner essay error.
 
 ## What to measure next
 

@@ -434,6 +434,72 @@ function integratorPrompt(text, label, findings) {
     "The sentence: " + text;
 }
 
+/* ------------------------------------------------------ the two-call split
+ *
+ * Round six: the decomposed grader's gain is not the naturalness question (worth
+ * four points, p = 0.58) and not breadth either. It is that each specialist
+ * answers ONE binary and is asked for nothing else, while the single-call grader
+ * answers the same question with `meant`, `better`, four `cats` and a tagged
+ * `errors` array riding along, and the verdict degrades under the load. Same
+ * thing the drill check found: fused 9-wrong-in-15, split 15/15.
+ *
+ * If that is the mechanism, four specialists are more than the job needs. One
+ * detector answering nothing but "is there a fault", then a categoriser only
+ * when it says yes. Two calls on a faulty sentence, one on a clean one, and most
+ * sentences are clean.
+ *
+ * The detector owns the verdict outright -- a detection is not re-litigated
+ * downstream. Letting the categoriser overturn it would put the verdict back
+ * into a call that is also producing tags, which is the fusion this design
+ * exists to avoid. It also makes specificity exactly the detector's specificity,
+ * which is the number worth being able to read.
+ *
+ * For the correctness gate this is ONE call: the gate needs the yes/no and never
+ * a tag, because nothing from the partner's Chinese enters the mistake ledger.
+ */
+function detectPrompt(text, label) {
+  return "You are checking one Chinese sentence written by a learner at " + label +
+    ". One question only: is there anything wrong with it?\n\n" +
+    "Wrong means either of two things and both count. The sentence breaks a rule " +
+    "-- a particle, a measure word, aspect, word order, a character that is a " +
+    "homophone of the one intended. Or it breaks no rule and is still not what a " +
+    "native speaker would say.\n\n" +
+    "Fluency is not evidence of correctness. An error that reads smoothly is " +
+    "still an error, and those are the ones that get missed.\n\n" +
+    "Most sentences are fine. Finding nothing is the normal answer and the right " +
+    "one when it is true -- do not hunt for something to report.\n\n" +
+    'Reply with only a JSON object: {"found":false,"note":""}\n' +
+    "found  — true if there is a fault.\n" +
+    "note   — one short sentence in English naming it. Empty when found is false.\n\n" +
+    "The sentence: " + text;
+}
+
+function categorisePrompt(text, label, note) {
+  return "A check has found a fault in the Chinese sentence below, written by a " +
+    "learner at " + label + ". What it reported:\n\n  " + note + "\n\n" +
+    "Your job is to write that up, not to decide again whether the sentence is " +
+    "wrong. It is wrong; say how.\n\n" +
+    "Reply with only a JSON object, no prose and no code fence:\n" +
+    '{"meant":"","better":"",' +
+    '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
+    "meant   — in English, what they were trying to say.\n" +
+    "better  — the sentence as a native speaker would write it, inside " + label +
+    " vocabulary where possible.\n" +
+    "cats    — false for each area the fault is in, true for the others.\n" +
+    "errors  — one {\"tag\":\"\",\"note\":\"\"} per distinct fault. tag is copied " +
+    "EXACTLY from: " + HSKPrompt.ERROR_TAGS.join(", ") + "\n\n" +
+    "The sentence: " + text;
+}
+
+async function judgeSplit(text, label, KEY) {
+  const raw = await callModel(detectPrompt(text, label), 200, KEY);
+  const d = jsonIn(raw);
+  if (!d || !d.found) return { ok: true, second: false };
+  // Detection owns the verdict; the second call only characterises it.
+  await callModel(categorisePrompt(text, label, String(d.note || "a fault")), 600, KEY);
+  return { ok: false, second: true };
+}
+
 async function judgeDecomposed(text, label, KEY) {
   const keys = Object.keys(SPECIALISTS);
   const reports = await Promise.all(keys.map(async k => {
@@ -526,6 +592,10 @@ async function scoreClean() {
         const d = await judgeDecomposed(it.text, "HSK " + it.level, KEY);
         return Object.assign({}, it, { ok: d.ok, reports: d.reports });
       }
+      if (ARM === "split") {
+        const d = await judgeSplit(it.text, "HSK " + it.level, KEY);
+        return Object.assign({}, it, { ok: d.ok, second: d.second });
+      }
       const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
       return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
     } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
@@ -555,6 +625,12 @@ async function scoreClean() {
         return (n + "/" + r.length).padStart(9);
       }).join(""));
     }
+  }
+
+  if (ARM === "split") {
+    const s = rows.filter(x => x.second).length;
+    console.log("\nsecond (categorisation) calls made: " + s + "/" + rows.length +
+                " -- the rest were one call");
   }
 
   console.log("\n--- false alarms on this app's own hand-written sentences ---");
