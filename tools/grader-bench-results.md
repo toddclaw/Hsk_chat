@@ -254,6 +254,63 @@ model is not sampling past them. It does not see them.
 **Scope:** this measured the grader against learner essay errors. The gate's job
 is the partner's Chinese, and there is no equivalent blind-spot map for that.
 
+## Round five: decomposition works, at a 26th of the price
+
+Four specialists — word, grammar, order, natural — each asked ONE narrow
+question, run in parallel, then an integrator that reconciles their reports into
+the app's verdict shape without re-judging. Precedent: this repo already found
+that fusing the drill check into the grader's answer gave 9-wrong-in-15 and
+splitting it gave 15/15.
+
+Same items, same model, `--arm decomposed` against `--arm shipped`, n=100:
+
+| | catches wrong | passes hand-written | passes Tatoeba | cost/sentence |
+|---|---|---|---|---|
+| `shipped` | 79/99 80% | 43/43 | 86/100 | $0.000093 |
+| **`decomposed`** | **90/99 91%** | **43/43** | 74/100 | $0.000184 |
+| `claude-sonnet-4.5` (n=43) | 95% | 42/43 | 70% | $0.004820 |
+
+p = 0.043 on the same items; pooled with the n=43 run, 130/142 against 114/142,
+**p = 0.0098**. Twice the cost of one call and **26x cheaper than Sonnet**, for
+accuracy that is not distinguishable from it. Both jobs on the decomposed grader
+fit about 10,900 exchanges a month in the app's ~$4 budget, against 410 on
+Sonnet.
+
+**No over-flagging.** The obvious risk of four checks each primed to find a fault
+is that they find one; every specialist fired 0/43 on hand-written text. Tatoeba
+falls to 74%, but Sonnet scores 70% there and Tatoeba is known-noisy, so being
+stricter on it is probably being right.
+
+### One specialist is doing almost all the work
+
+Of 90 correct catches, **89 had `natural` firing**. Exactly one was caught
+without it, by `word`. `grammar` and `order` never caught anything on their own.
+
+`natural` is also not doing what its prompt says. It is told to look *only* at
+idiom and explicitly not at anything ungrammatical, and it fires on 90 of 100
+sentences whose faults are mostly grammatical. It has become a general "does this
+read wrong" detector — and a well-calibrated one: 0/43 on hand-written text,
+25/100 on noisy Tatoeba.
+
+The reading: **"would a native speaker say it this way?" is a better-calibrated
+question than "is this correct?"**, and most of the 11-point gain is that
+question rather than the decomposition around it. The other three specialists
+still earn their place for CATEGORISATION — the four `cats` and seventeen tags
+drive the mistake ledger and drill selection, and detection alone does not
+produce them — but they are not what is finding the errors.
+
+That makes a one-call naturalness-framed grader the obvious next arm, at a
+quarter of the decomposed cost. Untested.
+
+### A retraction from round five's own first run
+
+At n=43 this was reported as fixing six of the seven blind spots "including the
+homophone case". At n=100 除了母亲以外，父亲对我的影响也不少 (少 for 小) is
+**missed again**. Same sentence, same arm, different sample: it is borderline
+rather than fixed, and the earlier claim rested on one draw. The nine still
+missed at n=100 include it, the 一下儿 case and 女服务员回去后，我们一起笑了起来,
+which no configuration has ever caught.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

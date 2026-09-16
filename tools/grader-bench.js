@@ -294,6 +294,118 @@ function promptFor(arm, text, label) {
   return base.replace(JSON_ANCHOR, extra + JSON_ANCHOR);
 }
 
+/* ------------------------------------------------- the decomposed candidate
+ *
+ * One call currently answers "is this correct, which of four categories is
+ * wrong, and which of seventeen tags applies" all at once. There is precedent in
+ * this repo for that being the problem rather than the prompt's wording: the
+ * drill check was originally an extra field on the grader's answer, the two
+ * verdicts FUSED, and the partial-credit case came back wrong 9 times in 15.
+ * Asked as its own call: 15/15. See gradeTurn() in index.html.
+ *
+ * And round four says the misses are structural rather than noisy -- seven
+ * sentences missed by five calls out of five, all of them fluent-reading errors
+ * of a specific kind: a homophone substitution, 儿化, modifier order, word order
+ * inside a phrase. A single general question does not have attention left over
+ * for any of them.
+ *
+ * So: four specialists, each asked ONE question with a narrow remit, then an
+ * integrator that aggregates without re-judging. Five cheap calls cost about a
+ * fifth of one Sonnet call -- the same budget voting failed to earn out.
+ *
+ * Two design rules, both aimed at the failure this invites. Four specialists
+ * each primed to find something will find something, and specificity is what
+ * pays for it -- every qwen arm is currently 43/43 on hand-written text and that
+ * must survive. So each specialist is told the other three exist and to stay off
+ * their ground, and each is told explicitly that finding nothing is a normal
+ * answer. The clean positive class is what checks whether that worked.
+ *
+ * The specialists run in PARALLEL: four calls, one round trip, then the
+ * integrator. Latency is two round trips rather than five.
+ */
+const SPECIALISTS = {
+  word:
+    "Look ONLY at whether each word is the right word. In scope: a word that " +
+    "does not mean what the writer needed, a word used in a sense it does not " +
+    "carry, a missing or redundant word, and -- this one matters most -- a " +
+    "character that is a HOMOPHONE of the intended one. The writer types pinyin " +
+    "and picks a character from a list, so 少 for 小, 做 for 坐, 在 for 再 are " +
+    "the common shape, and they read fluently. Check every character that has a " +
+    "common homophone.",
+  grammar:
+    "Look ONLY at grammatical machinery: measure words, aspect (了 过 着 在), " +
+    "的 / 地 / 得, 不 against 没, comparison with 比, 把, 被, and verb " +
+    "complements. For 被 specifically: the agent must differ from the subject, " +
+    "and the verb must be one that can passivise at all. For 把 the verb needs a " +
+    "result or direction.",
+  order:
+    "Look ONLY at word order. Where adverbials and time words sit relative to " +
+    "the subject and verb, where attributives sit relative to what they modify, " +
+    "and the order of elements inside a noun phrase. A sentence can use every " +
+    "right word and put one in the wrong place, and it will read almost fluently.",
+  natural:
+    "Look ONLY at whether a native speaker would say it this way. In scope: " +
+    "phrasing that breaks no rule but is a calque from English, stiff, abrupt, " +
+    "or simply not the collocation anyone uses. NOT in scope: anything " +
+    "ungrammatical -- that belongs to another check."
+};
+
+function specialistPrompt(key, text, label) {
+  return "You are one of four checks on a single Chinese sentence written by a " +
+    "learner at " + label + ". The other three cover the areas you are not " +
+    "looking at, so report nothing outside your own -- a fault you can see but " +
+    "that belongs to another check is not yours to raise.\n\n" +
+    SPECIALISTS[key] + "\n\n" +
+    "Most sentences have nothing wrong in any one area. Finding nothing is the " +
+    "normal answer and the right one when it is true. Do not reach.\n\n" +
+    'Reply with only a JSON object: {"found":false,"note":""}\n' +
+    "found  — true only if there is a fault in YOUR area.\n" +
+    "note   — one short sentence naming it, in English. Empty when found is false.\n\n" +
+    "The sentence: " + text;
+}
+
+function integratorPrompt(text, label, findings) {
+  const tags = HSKPrompt.ERROR_TAGS.join(", ");
+  return "Four separate checks have looked at one Chinese sentence written by a " +
+    "learner at " + label + ". Their reports:\n\n" + findings + "\n\n" +
+    "Your job is to settle it, not to grade the sentence again from scratch. " +
+    "Take the reports as evidence: a check that found nothing is evidence the " +
+    "sentence is fine in that area. Discard a report only when it is plainly " +
+    "wrong about the sentence in front of you, and do not add a fault none of " +
+    "them raised.\n\n" +
+    "Reply with only a JSON object, no prose and no code fence:\n" +
+    '{"ok":true,"meant":"","better":"",' +
+    '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
+    "ok      — true only if the sentence should stand as written.\n" +
+    "meant   — in English, what they were trying to say.\n" +
+    "better  — the sentence as a native speaker would write it, inside " + label +
+    " vocabulary where possible. Empty string when ok is true.\n" +
+    "cats    — false for each area a check faulted, true otherwise.\n" +
+    "errors  — one {\"tag\":\"\",\"note\":\"\"} per distinct fault, [] when ok is " +
+    "true. tag is copied EXACTLY from: " + tags + "\n\n" +
+    "The sentence: " + text;
+}
+
+async function judgeDecomposed(text, label, KEY) {
+  const keys = Object.keys(SPECIALISTS);
+  const reports = await Promise.all(keys.map(async k => {
+    try {
+      const raw = await callModel(specialistPrompt(k, text, label), 200, KEY);
+      const j = jsonIn(raw);
+      return { k: k, found: !!(j && j.found), note: (j && String(j.note || "")) || "" };
+    } catch (e) { return { k: k, found: false, note: "", error: true }; }
+  }));
+  /* An all-clear from every specialist needs no integrator call: there is
+   * nothing to reconcile and nothing to tag. Saves the fifth call on the
+   * majority of sentences, which is most of what this design costs. */
+  if (!reports.some(r => r.found)) return { ok: true, reports: reports };
+  const findings = reports.map(r =>
+    "- " + r.k + ": " + (r.found ? (r.note || "a fault, unspecified") : "nothing found")
+  ).join("\n");
+  const raw = await callModel(integratorPrompt(text, label, findings), 600, KEY);
+  return { ok: verdictOk(raw, text), reports: reports };
+}
+
 let spend = 0;
 async function callModel(content, maxTokens, KEY) {
   const r = await fetch(API_URL, {
@@ -362,6 +474,10 @@ async function scoreClean() {
 
   const rows = await pool(items.map(it => async () => {
     try {
+      if (ARM === "decomposed") {
+        const d = await judgeDecomposed(it.text, "HSK " + it.level, KEY);
+        return Object.assign({}, it, { ok: d.ok, reports: d.reports });
+      }
       const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
       return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
     } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
@@ -379,6 +495,19 @@ async function scoreClean() {
   const rec = line("wrong Chinese it faulted (MuCGEC)", "mucgec", false);
   const appR = line("this app's own sentences it passed", "app", true);
   const tatR = line("Tatoeba sentences it passed", "tatoeba", true);
+
+  if (ARM === "decomposed") {
+    console.log("\nwhich specialist fired, by class");
+    console.log("              " + Object.keys(SPECIALISTS).map(k => k.padStart(9)).join(""));
+    for (const cls of ["mucgec", "app", "tatoeba"]) {
+      const r = rows.filter(x => x.cls === cls && x.reports);
+      if (!r.length) continue;
+      console.log("  " + cls.padEnd(12) + Object.keys(SPECIALISTS).map(k => {
+        const n = r.filter(x => x.reports.some(p => p.k === k && p.found)).length;
+        return (n + "/" + r.length).padStart(9);
+      }).join(""));
+    }
+  }
 
   console.log("\n--- false alarms on this app's own hand-written sentences ---");
   rows.filter(x => x.cls === "app" && x.ok === false).forEach(x => console.log("  " + x.text));

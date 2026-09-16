@@ -1,0 +1,7066 @@
+{
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "arm": "decomposed",
+  "when": "2026-09-16T12:11:16.048Z",
+  "recall": [
+    90,
+    99
+  ],
+  "appSpecificity": [
+    43,
+    43
+  ],
+  "tatoebaSpecificity": [
+    74,
+    100
+  ],
+  "rows": [
+    {
+      "text": "再说，他们可能以为自己吸烟时对别人带来的不便和不舒服也不可能很大。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '在' is a homophone error; '再' is incorrectly used where '在' (meaning 'currently') is intended, but here '再说' is correct as a discourse marker meaning 'besides' or 'furthermore', so no error in homophone use. However, '在' is not present; the issue is that '再' is correct. Rechecking: '再' is correct in '再说'. No homophone error. Final: no error found."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '带来的不便和不舒服也不可能很大' is stiff and unidiomatic; a native speaker would more naturally say something like '影响不了别人太多' or '不会给别人造成太大困扰'."
+        }
+      ]
+    },
+    {
+      "text": "我不愿意这么过分的喜欢歌手。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"这么过分的喜欢\" is unnaturally stiff and not a collocation native speakers would use; \"这么疯狂地喜欢\" or \"这么迷\" would be more natural."
+        }
+      ]
+    },
+    {
+      "text": "学生大概做飞机去北京。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "做 should be 坐 (homophone error for 'to take a plane')."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '大概' should come before the subject or after the verb '做', not between the subject and verb."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"做飞机\" is a calque from English; the correct and natural collocation is \"坐飞机\"."
+        }
+      ]
+    },
+    {
+      "text": "如果父母本身的行为已经是很差，那他们的孩子也很有可能变坏了。父母应该好好地改他们自己的态度才教他们的孩子。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '改他们自己的态度' is awkward; a more natural collocation would be '改正自己的行为' or '端正自己的态度'."
+        }
+      ]
+    },
+    {
+      "text": "除了母亲以外，父亲对我的影响也不少。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "所以我从小到现在在这些快餐吃饭的机会很少。对我来说每次饭都很重要。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character 在 is a homophone error; 光 should be used instead of 在 for 'opportunity'. However, the intended word might be 餐, making '这些快餐吃饭' redundant. The correct phrase should be '吃快餐的机会'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The measure word is missing before '饭' in the second sentence; it should be '每次吃饭' or '每顿饭'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The time phrase '从小到现在' should be placed after the subject and before the verb to follow standard word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"在这些快餐吃饭\" is unnatural; a native speaker would say \"吃这些快餐\" instead."
+        }
+      ]
+    },
+    {
+      "text": "再见，我有要很多功课要做。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character '再' is a homophone error; '在' is intended for 'have to' as '再' means 'again' or 'goodbye'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The word order is incorrect; '要' should come after the measure word phrase '很多功课'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverb '很多' should precede the noun phrase '功课' directly, and '要' should come before '做' in the verb complement; correct order is '很多功课要做'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"有要很多功课要做\" is awkward and unidiomatic; a native speaker would typically say \"有很多功课要做\" or \"得赶紧做功课\"."
+        }
+      ]
+    },
+    {
+      "text": "我也来介绍一下儿我的家吧。我家有四口人。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "女服务员回去后，我们一起笑了起来。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我生了第一个孩子的时候完全不知道怎么照顾孩子。可是我母亲住在我家附近，常常问她怎么做好。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '问' is incorrect; the intended word is likely '向', as '问她怎么做好' should be '向她请教怎么照顾孩子' or similar."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '常常' should precede the subject '我' to modify the entire clause correctly."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "'常常问她怎么做好' is stiff and unnatural; a native speaker would typically say '常常问她该怎么做' or '常常向她请教'."
+        }
+      ]
+    },
+    {
+      "text": "”这样注意的话，肯定对孩子好的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "缺少动词，\"好的影响\"前应加“有”或“产生”等动词，应为“对孩子有好的影响”"
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The measure word or grammatical structure after '影响' is incorrect; '好的影响' should be modified with a measure word like '很大的影响' or rephrased for grammatical correctness."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '这样注意的话' should precede the subject, but the word order '对孩子好的影响' is incorrect; '好的' should follow '影响' as '影响好的' is not standard, and the correct structure should be '对孩子有好的影响'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '肯定对孩子好的影响' is stiff and not a natural collocation; a native speaker would more naturally say '肯定对孩子有好的影响' or '肯定有利于孩子'."
+        }
+      ]
+    },
+    {
+      "text": "总之，我想应该父母使孩子在健康的环境中长大。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '使' is incorrect; '让' should be used instead to mean 'allow' or 'let' in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence incorrectly uses '使' without a resulting complement or direction; '使' requires a result, but '长大' already includes its own result, making the construction ungrammatical."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '在健康的环境中' should precede the verb '使' to correctly modify the resultative clause."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"父母使孩子\" is awkward; a more natural collocation would be \"父母应该让孩子\" or \"父母应使孩子\" without the redundant \"想\"."
+        }
+      ]
+    },
+    {
+      "text": "这好像影响到现在我在上海读书的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '的' at the end is redundant and does not fit grammatically; it should be omitted."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The final '的' is incorrectly used and should be removed; it does not serve as a valid structural particle here and creates an incomplete or ungrammatical construction."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '到现在' is incorrectly placed; it should come after the verb '影响' rather than before the object clause."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '影响到现在我在上海读书的' is awkward and unidiomatic; a native speaker would not use this structure to express ongoing impact on studying in Shanghai."
+        }
+      ]
+    },
+    {
+      "text": "可是有一些人呢肯定没有特别的爱好的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverb '肯定' is incorrectly placed before the verb phrase; it should follow the subject and precede the main verb, but here it disrupts the topic-comment structure marked by '呢'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '有一些人呢肯定没有' is awkward and unidiomatic; native speakers would typically say '有些人肯定没有' or '当然有些人没有什么特别的爱好' without the redundant and stiff structure."
+        }
+      ]
+    },
+    {
+      "text": "吃惊的是虽然这些男人都是二十几岁，其中六个却不工作。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"吃惊的是\" is stiff and unnatural; a more natural expression would be \"让人吃惊的是\" or simply \"令人吃惊的是\"."
+        }
+      ]
+    },
+    {
+      "text": "有这个事情后天天很早回来，然后我帮妈妈做菜。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '有' is a homophone error; '从' or '自从' should be used to mean 'since' in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect particle 了 is missing to indicate the completion of the event '有这个事情后'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '天天' should come before the time phrase '很早' to correctly modify the verb '回来'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '有这个事情后' is unnatural; a native speaker would typically say '从那以后' or '那件事之后' instead."
+        }
+      ]
+    },
+    {
+      "text": "还有想作为好老师的话，不能给孩子一个答案。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '还有' is incorrectly placed at the beginning; it disrupts the logical flow of the conditional clause and should not introduce the main clause in this context."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '作为好老师' is stiff and unnatural; a native speaker would more likely say '想当个好老师' or '要做个好老师'."
+        }
+      ]
+    },
+    {
+      "text": "她有两个姐姐、一个妹妹和西个哥哥。但是，在她的家只有西个养：父母、妹妹和她。他们有四个猫。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'西' is a homophone error; should be '四' for 'four'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'西个' is incorrect; the numeral '四' should be used instead of '西' for 'four'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The numeral '西' is incorrect and misplaced; it should be '四' (four) in both instances where it appears."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "'西个' is a homophonic error for '四' (four), but since this is a phonetic mistake and not a phrasing or collocation issue, it's outside the scope; however, '四个猫' is unnatural—native speakers would say '四只猫' using the correct measure word."
+        }
+      ]
+    },
+    {
+      "text": "还有我要感谢我的父母，他们不仅对我来说是非常好的老师，他们也是非常好的朋友。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"对我来说是\" is unnecessarily stiff; a native speaker would more naturally say \"对我而言\" or simply \"是我的\"."
+        }
+      ]
+    },
+    {
+      "text": "这是我最后的一封信，分开不是容易事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "“分开” should be “分离” or “分离” is more appropriate than “分开” in this context, but “分开” is a homophone issue if the intended word was “分离”."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '最后的' should come after the possessive '我' and before the noun '一封信', but '我最后的一封信' is correct; however, '不是容易事情' has incorrect word order—'容易' should be after '是' as '不是一件容易的事情' or '不容易的事情'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"分开不是容易事情\" is stiff and unidiomatic; a native speaker would say \"分开不容易\" or \"分开不是件容易的事\"."
+        }
+      ]
+    },
+    {
+      "text": "我的儿子已经大了两个月。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'大' is a homophone error; the intended word is likely '多' (duō), as '多了两个月' means 'two months more/older'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'大了两个月' incorrectly uses result complement; '大' cannot take '了' with a duration like '两个月'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The time phrase '两个月' is incorrectly placed after the adjective; it should precede the adverb '已经' to indicate duration."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would not say '已经大了两个月' to mean 'is already two months old'; the phrasing is unnatural and appears to be a calque from English."
+        }
+      ]
+    },
+    {
+      "text": "我很高兴她给我这个她做的礼物。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '她给我这个她做的礼物' is awkward; a native speaker would more naturally say '她送了我一份她自己做的礼物' or similar."
+        }
+      ]
+    },
+    {
+      "text": "这是我最后的一封信分开分手",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '分开' is redundant and incorrectly used after '分手', which already means 'to break up'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence lacks a measure word before '一封信' and has incorrect word order or structure with '分开分手' which disrupts grammatical machinery."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '最后的' should come after the possessive '我' but before the noun '信'; however, '一封' should precede '最后的' in the noun phrase for correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '最后的一封信分开分手' is unnatural and awkward; a native speaker would not use this collocation to express breaking up."
+        }
+      ]
+    },
+    {
+      "text": "那可以减少吸烟人的增加。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word \"人\" is redundant and incorrect in this context; \"吸烟人的增加\" should be \"吸烟的增加\" or \"吸烟人数的增加\" to correctly express \"increase in smoking\" or \"increase in the number of smokers.\""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"吸烟人的增加\" is stiff and unnatural; a native speaker would more likely say \"吸烟人数的增加\" or \"新吸烟者的人数\"."
+        }
+      ]
+    },
+    {
+      "text": "就一个人的生命有关。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word 就 is a homophone error; the intended word is 跟 or 与, as 就 does not correctly mean 'regarding' in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence lacks a proper grammatical structure; '有关' requires a subject and object connection, and the use of '就' here is incorrect without a clear context or preceding clause."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '就' is incorrectly placed before the subject; it should follow the subject or be repositioned for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is awkward and not a natural collocation; a native speaker would not typically phrase a sentence this way when discussing life-related matters."
+        }
+      ]
+    },
+    {
+      "text": "但将来还是愿意做一个母亲，因此现在还是坚持下去看多点的世界，教我将来的孩子多点的事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'多点' should be '更多' in both instances; '点' is a homophone error for the intended comparative meaning."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect particle '了' is missing to indicate the completion of '坚持' in a future context with change of state."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '看多点的世界' is incorrectly placed and disrupts the verb-object structure; it should be rephrased or moved to a proper adjunct position."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '看多点的世界' is unnatural; a native speaker would typically say 'see more of the world' as '多看看这个世界' or similar."
+        }
+      ]
+    },
+    {
+      "text": "在山上有比较多雪。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character 在 should be 是 for 'there is'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'比较' should be followed by '多' as '比较多', but '比较多' is incorrectly used with '雪'; measure word '些' or '很多' should be used instead."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '在山上' should come after the subject, not at the beginning when no subject is present; the correct word order would place the location after the subject (if implied, it should be clear) and before the verb."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say \"山上雪比较多\" instead; the given phrasing is stiff and unnatural."
+        }
+      ]
+    },
+    {
+      "text": "不是请假，而且不上课、不上班、没有学习、没有工作那样的人是一种病。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "而且 should be 而是, as 做 is a homophone error for 作."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The conjunction '而且' is incorrectly used; '而是' should be used after '不是' to contrast alternatives."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial phrase '不是请假' is incorrectly placed at the beginning; it should follow the subject to properly modify the predicate."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"不上班、没有工作\" and \"不上课、没有学习\" is redundant and unidiomatic; native speakers would not repeat nearly synonymous phrases this way."
+        }
+      ]
+    },
+    {
+      "text": "父母当孩子的老师，这不只是孩子小时候的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '的' at the end is redundant and does not complete a meaningful phrase; it should be '时候' or another noun to match '这不只是孩子小时候的' properly."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"这不只是孩子小时候的\" is awkward and not a natural collocation; a native speaker would more naturally say something like \"这不仅限于孩子小时候\" or \"这种情况不仅出现在孩子小时候\"."
+        }
+      ]
+    },
+    {
+      "text": "虽然有苦难，我知道世界上应该有更辛苦的人。我不饿，不渴，我知道哪去睡觉，有家庭，有朋友。我真的不是最辛苦的人。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "这样一个月很快过去了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '这样' is incorrectly placed at the beginning; it should follow the subject or be rephrased to fit naturally within the sentence structure."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '这样一个月很快过去了' sounds stiff and unnatural; a native speaker would more likely say '转眼间一个月就过去了.'"
+        }
+      ]
+    },
+    {
+      "text": "我觉得这个暑假学校很有意思。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '这个暑假' is incorrectly placed; it should follow the subject '学校' or be rephrased to modify the verb properly."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is awkward; a native speaker would more naturally say something like \"我觉得这个暑假的学校生活很有意思\" or \"我觉得今年暑假的经历很有意思.\""
+        }
+      ]
+    },
+    {
+      "text": "他们用很长时间学这些东西，因为他们是第一位人这样做的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "第一位人 should be 第一批人 or 第一群人; 第一位 means 'first in order' but implies a single individual, not a group."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The use of '第一位人' is incorrect; '位' is a measure word and should not be used directly after a numeral without a noun, and '第一位' alone means 'the first one,' making '人' redundant."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '第一位' should be '第一批' or '第一个' to correctly modify '人'; '第一位人' has incorrect word order for the intended meaning."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"第一位人\" is an unnatural calque; native speakers would say \"第一批人\" (the first group of people) instead."
+        }
+      ]
+    },
+    {
+      "text": "昨天下雨很多。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "\"很多\" is redundant; \"雨\" already implies rain, so \"很多\" should be removed or replaced with a measure word like \"大雨\"."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'很多' after '下雨' requires a complement or adverb; '下得很多' is correct."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '昨天' is correctly placed, but '很多' should precede the verb '下雨' as an adverb, not follow it; correct word order is '昨天下雨下了很多' or '昨天下了好多雨'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would say \"昨天下雨下得很多\" or more naturally \"昨天下了很多雨\"; \"下雨很多\" is not a natural collocation."
+        }
+      ]
+    },
+    {
+      "text": "我也机场工作。虽然我的工作很无聊，我很喜欢我的同事。目前我的梦是去亚洲工作。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "Missing verb '在' before '机场' to indicate location."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "Missing preposition '在' before '机场' for location of work."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '也' is incorrectly placed before the location; it should follow the subject and precede the verb, but here it disrupts the subject-verb-location order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"我也机场工作\" is unidiomatic; a native speaker would say \"我也在机场工作\"."
+        }
+      ]
+    },
+    {
+      "text": "我说我有很好的朋友，还有很好同学。他们在一起，我感到很愉快。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '很好同学' is missing the particle '的' before '同学'; also, '很好同学' should be '很多同学' as '很好' (very good) is a homophone error for '很多' (many)."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"很好同学\" is a calque; native speakers would say \"很好的同学\" instead."
+        }
+      ]
+    },
+    {
+      "text": "在我的家有四家人：我爸爸，妈妈，哥哥和我。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '家' is incorrectly used to mean 'people'; the correct word should be '口' as in '四口人' to count family members."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The prepositional phrase '在我的家' should come after the subject or be rephrased to '我家有四个人' for correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would not list family members as 'four people' in this context; it's more natural to say 'there are four people in my family' rather than 'in my home there are four people' with a colon introducing the list."
+        }
+      ]
+    },
+    {
+      "text": "我不想开车在法国。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'在法国' should be '在法国开车' or '开车去法国'; incorrect word order after verb."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '在法国' should come before the verb '开车'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"开车在法国\" is a calque from English; a native speaker would say \"在法国开车\" instead."
+        }
+      ]
+    },
+    {
+      "text": "几年前，虽然吸烟对个人健康，但吸不吸烟是个人的选择。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '虽然' is incorrectly used without a corresponding '但是'; it creates a grammatical error in context."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '虽然' should come before the time phrase '几年前' to maintain correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '虽然...但...' is redundant in Chinese; '虽然' alone is sufficient, making the sentence sound unnatural."
+        }
+      ]
+    },
+    {
+      "text": "但是现在的压岁钱变成一种大家的烦恼事情",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character 压 should be 派, as 压岁钱 is a homophone error for 派岁钱 (the correct term is 压岁钱, but 压 is incorrectly used here due to pinyin confusion; however, 压岁钱 is actually correct—re-evaluating: no error in homophones. Final decision: found false."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The measure word '种' is missing after '一种' and before '大家的烦恼事情'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '大家的烦恼' should precede the noun '事情' directly, but '一种' is incorrectly placed before it, disrupting the noun phrase order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"变成一种大家的烦恼事情\" is awkward and unidiomatic; a native speaker would more naturally say \"成了让人烦恼的事\" or \"变成了大家的烦恼\"."
+        }
+      ]
+    },
+    {
+      "text": "那个是多有意思啊！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '多有意思' is grammatically correct but sounds exaggerated and unnatural in this context; a native speaker would more naturally say '那真有意思啊！' or '那个挺有意思的！'"
+        }
+      ]
+    },
+    {
+      "text": "如果父母是很努力工作的人，他们的孩子一定将来关于任何的事努力做。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'关于' is a homophone error; the intended word is likely '为了' or '对', as '关于' means 'regarding' and does not fit the context."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '将来' is incorrectly placed after '一定' and should precede the verb phrase '努力做'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '关于任何的事努力做' is an unnatural collocation; a native speaker would typically say '对任何事情都会努力' instead."
+        }
+      ]
+    },
+    {
+      "text": "我一心告诉他我自行车丢了。我也告诉他我十分对不起。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '一心' is a homophone error; the intended word is likely '一' or '马上', as '一心' means 'single-mindedly', which does not fit the context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb '告诉' requires a result or direction complement when used with '把', but '把' is missing here."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"我一心告诉他\" is unnatural; a native speaker would typically say \"我赶紧告诉他\" or \"我马上告诉他\" to convey urgency."
+        }
+      ]
+    },
+    {
+      "text": "”他跟我说“我想做医生因为我父母都是医生”。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word 做 (to do/make) is a homophone error; the correct word should be 当 (to be/become) for 'become a doctor'."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我活美国。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '活' is incorrect; the intended word is likely '在' (to live in a place), as '活' means 'to live' in the sense of being alive, not residing."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb '活' requires a preposition like '在' to indicate location, and a measure word or additional complement is needed for grammatical completeness."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The preposition '在' is missing before the location '美国' to indicate where the subject lives."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"活美国\" is not a natural collocation; a native speaker would say \"住在美国\" instead."
+        }
+      ]
+    },
+    {
+      "text": "我没有够朋友。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '够' is a homophone error; the intended word is likely '够多' or '很多', but '够' alone is incorrect here. The correct word should be '多' as in '很多朋友'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence lacks a measure word or proper noun after '朋友'; '够' is incorrectly placed and should not modify '朋友' in this context."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The word order is incorrect; '够朋友' should follow a different structure, such as '够得上朋友' or '是够朋友的', to be grammatically correct."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"够朋友\" is not used with \"没有\" this way; a native speaker would say \"不够朋友\" to mean \"not a good friend.\""
+        }
+      ]
+    },
+    {
+      "text": "我知道爷爷，奶奶有这样的想法，但是我自己的父母？！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '我自己的父母' is unnecessarily emphatic and stiff; a native speaker would typically just say '我父母' in this context."
+        }
+      ]
+    },
+    {
+      "text": "我又感觉到了被深深的感动。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '被深深的感动' is incorrectly ordered; '深深的' should modify '感动' directly as '深深的感动', but '被' should not precede the entire phrase in this context."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"被深深的感动\" is awkward; a native speaker would more naturally say \"深深地被感动\" or simply \"深受感动\"."
+        }
+      ]
+    },
+    {
+      "text": "人生可以说是个练习不生气。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '练习' (practice) is incorrect; the intended word is likely '经历' (experience), a common homophone confusion."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The measure word is missing after '个'; it should be '个' + noun, but '练习' here is used as a noun without proper measure word usage."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '可以说' is incorrectly placed; it should precede the subject '人生' to modify the entire predicate."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"是个练习不生气\" is awkward and not a natural collocation; a native speaker would more likely say \"是一种修炼情绪的过程\" or similar."
+        }
+      ]
+    },
+    {
+      "text": "我想这样的态度是对自己和国家都不好。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我看世界上最有名的人可能也有五年吧，甚至十年。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word \"五年\" (five years) is a homophone error; the intended word is likely \"烦恼\" (worries/troubles), as \"五年\" does not fit the context of famous people having troubles."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The time phrase '可能也有五年吧，甚至十年' is incorrectly placed at the end; it should precede the verb or be positioned before the object to modify the duration of the action properly."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '我看世界上最有名的人可能也有五年吧' is awkward and non-idiomatic; a native speaker would not use this structure to express duration related to fame."
+        }
+      ]
+    },
+    {
+      "text": "希望将来吸烟者会越来越减少。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "“减少” is redundant; “少” would suffice, but “减少” is used correctly. However, “越来越减少” is awkward; “越来越少” is the natural collocation."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'减少' is a verb that does not typically take '越来越' as a complement; '越来越少' should be used instead for correct grammatical structure."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '将来' should come after the subject and before the verb phrase for correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '越来越减少' is unnatural; native speakers would typically say '逐渐减少' or '越来越少' instead."
+        }
+      ]
+    },
+    {
+      "text": "我爸爸和妈妈越来越老，我爸爸快六十五岁，而且他的心不太好，我害怕有问题。所有机会我就去看他。一起吃饭，天儿。对我说，这个是非常重要的！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'所有' should be '每次' or '每有', as '所有' means 'all' and is a homophone error for the intended '每次' (every time)."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The phrase '所有机会我就去看他' is missing the measure word '个' or another appropriate measure word for '机会'; it should be '所有（的）机会' with a measure word."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial phrase '所有机会' is incorrectly placed; it should be '一有机会' or '每次有机会' and positioned before the verb phrase."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '所有机会我就去看他' is a calque from English and not a natural Chinese collocation; a native speaker would say '一有机会我就去看他.'"
+        }
+      ]
+    },
+    {
+      "text": "什么是我的梦想呢？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "其次，吸烟给周围人比自己更深刻的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '深刻' (profound) is incorrect; '严重' (serious) or '大' (greater) would be more appropriate for describing the impact of smoking on others."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The comparison structure with 比 is incorrect; it should be 'subject + 比 + object + adjective/adverb' but here the word order is wrong."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The comparative structure is incorrect; '比' should be followed by the standard of comparison, but '给周围人比自己' reverses the expected order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"给...更深刻的影响\" is awkward; a native speaker would typically say \"对...造成更大的影响\" or \"对...的影响比对自身更严重\"."
+        }
+      ]
+    },
+    {
+      "text": "如果你不知道将来你应该丢面子”。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character 丢 (to lose) is a homophone error; the intended word is probably 失, as in 失去面子 (lose face), though 丢 can colloquially mean 'to lose face' in some contexts, it's less accurate here."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '将来' is incorrectly placed after the conditional clause and should precede the main verb '丢' to modify the future time of the action."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '你应该丢面子' is an unnatural calque; a native speaker would not link 'not knowing the future' to 'losing face' in this way."
+        }
+      ]
+    },
+    {
+      "text": "但是连有孙女以后父母给他们留下的经验、知识，他们永远不会忘记。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "连 has a homophone error; should be 连同 or simply removed, as 连 does not fit the intended meaning of 'including' here."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '连有孙女以后' is incorrectly positioned and disrupts the logical flow; it should follow the subject or be rephrased for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"连有孙女以后\" is awkward and not a natural collocation; native speakers would not typically link having a granddaughter with the timing of retaining knowledge."
+        }
+      ]
+    },
+    {
+      "text": "因为，孩子在生长的过程上很受父母的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "“上” should be “中” as in “过程中” (process), not “上” (on)."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial phrase '在生长的过程上' is incorrectly ordered; it should be '在生长过程中' without '上' and placed properly before the verb."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '在生长的过程上' is an awkward calque; native speakers would say '在成长过程中' instead."
+        }
+      ]
+    },
+    {
+      "text": "那么谁给我们知识呢，大大概的情况下父母教我们最基本的东西。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'大大概' should be '大概' (redundant character '大')."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial phrase '大大概的情况下' is incorrectly placed and should precede the subject for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '大大概的情况下' is not a natural collocation; native speakers would not use this expression."
+        }
+      ]
+    },
+    {
+      "text": "还要提一个事。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is slightly abrupt and unnatural; a more typical native expression would be \"顺便提一下\" or \"还有一件事要说\"."
+        }
+      ]
+    },
+    {
+      "text": "我小时候记得她常常很晚回到家。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '记得' is incorrectly placed after the time phrase '我小时候'; it should precede the time phrase to correctly modify the clause."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '记得她常常很晚回到家' is awkward; a native speaker would more naturally say '记得她经常很晚才回家'."
+        }
+      ]
+    },
+    {
+      "text": "在学校能学到什么数学呀、音乐呀、技术呀什么什么的，可是那样的课并没有关系跟他们的性格。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The phrase \"没有关系跟\" uses the wrong word order and preposition; \"跟\" should be \"和\" or the structure should be \"跟...没有关系\", but here it is incorrectly used as \"没有关系跟\", making \"跟\" the wrong word in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The phrase '并没有关系跟他们的性格' has incorrect word order; '跟他们的性格' should follow '关系' as '跟他们的性格没有关系' to correctly express 'has nothing to do with their personality'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The phrase '并没有关系跟他们的性格' has incorrect word order; '跟他们的性格' should precede '并没有关系' to correctly modify it as '跟他们的性格并没有关系'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '数学呀、音乐呀、技术呀什么什么的' is overly verbose and unnatural; a native speaker would typically use a simpler expression like '数学、音乐、技术之类的科目'."
+        }
+      ]
+    },
+    {
+      "text": "我在三年之间一直跟一样的人在一起，从来没有换过班。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"在三年之间\" is stiff; a native speaker would more naturally say \"三年来\" or \"这三年里\"."
+        }
+      ]
+    },
+    {
+      "text": "我想没有这个网站的话，我不会学习这样开心。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '这样' is incorrectly used; '这么' should be used instead to modify the adjective '开心' in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The complement '这样开心' is incorrectly structured; '得' should be used before an adverbial complement of degree or manner, so it should be '学得这样开心.'"
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '这样' is incorrectly placed after '学习'; it should modify the adjective '开心' directly, so '这样开心' is correct but '学习这样开心' has incorrect word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '学习这样开心' is an unnatural collocation; a native speaker would typically say '学得这么开心' instead."
+        }
+      ]
+    },
+    {
+      "text": "我觉得中国也这几年慢慢开始减少吸烟者运动。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '也' is a homophone error; it should be '的' to modify '这几年' correctly."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect particle '了' is missing to indicate the change of state in '这几年慢慢开始减少'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The time phrase '这几年' is incorrectly placed; it should come before the verb and after the subject, not after '也'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"减少吸烟者运动\" is unnatural; a native speaker would not use this collocation, as it awkwardly combines \"reduce smokers\" with \"movement\" in a way that sounds like a direct translation from English."
+        }
+      ]
+    },
+    {
+      "text": "我看到杂志里的她一直读书的照片。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '杂志里的她一直读书的照片' is awkward; a native speaker would more naturally say '我在杂志上看到她专心读书的照片.'"
+        }
+      ]
+    },
+    {
+      "text": "西班牙的生活有好处和坏处。我来讲你们坏处之一。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb '讲' in '我来讲你们坏处之一' lacks a measure word or appropriate complement; '讲' requires an object or aspect marker when used this way."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The word order in '我来讲你们坏处之一' is incorrect; '你们' should follow '之一' to form '我来讲坏处之一给你们' or be rephrased to '我来告诉你们坏处之一.'"
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"我来讲你们坏处之一\" is unnatural; a native speaker would not address the listener this way in this context."
+        }
+      ]
+    },
+    {
+      "text": "这是我人生中最好的时间。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"最好的时间\" is a calque; native speakers would more naturally say \"最好的时光\" or \"最美好的时光\" for \"the best time of my life.\""
+        }
+      ]
+    },
+    {
+      "text": "有这样的教育，我们对健康和环境的看法也就变化。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence lacks aspect marker for completed action; '了' is missing after '变化' to indicate change has occurred."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"有这样的教育\" is stiff and unnatural; a native speaker would more naturally say \"有了这样的教育\" to express the conditional or causal relationship."
+        }
+      ]
+    },
+    {
+      "text": "这样的大会不但让人考虑到问题，而且各国能介绍自己的美丽的的地方。对没有旅游机会的人来说，是一个很像旅游的经验。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character '像' in '很像旅游的经验' is a homophone error; '像' means 'like' or 'resemble', but the intended word is likely '相', as in '相当', meaning 'quite' or 'fairly', or more likely '体验' instead of '像', making it '很好的旅游体验'; however, given homophone context, '像' should be '相' for '相当'."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '不但' should precede the subject '这样的大会' to maintain correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"很像旅游的经验\" is an unnatural calque; native speakers would say \"仿佛旅游一般\" or \"像旅游一样\"."
+        }
+      ]
+    },
+    {
+      "text": "刚好那道题很难，不想了半天也想不出来。我突然想出一个问题就是让他去问他的父母吧。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character '少' is missing and should replace '小' in '不想了半天' to correctly mean 'not for a short while'; '小' is a homophone error for '少'."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase \"想出一个问题就是让他去问他的父母吧\" is an unnatural calque; a native speaker would not frame a solution as \"thinking out a question that is\" something."
+        }
+      ]
+    },
+    {
+      "text": "坐快速火车去父亲家。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "坐 should be 坐 or take, but 坐 is correct; however, 快速火车 is unnatural, usually say 高铁 or 快车, but 快速火车 is not wrong. The real issue is that 坐快速火车 is ambiguous — it could mean 'sit on a fast train' literally, but the intended meaning is likely 'take a fast train'. However, 坐 is acceptable for 'take (a vehicle)'. No clear wrong word or homophone error. Rechecking: all characters are correct and used properly. No homophone error. Final judgment: no error in word choice."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The sentence lacks a subject and starts with a verb, making the word order incorrect for a complete sentence."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '坐快速火车' is unnatural; native speakers would typically say '坐高铁' or '坐动车' when referring to fast trains in this context."
+        }
+      ]
+    },
+    {
+      "text": "我父母以前都是动物员，所以对我来说父母就是体育老师。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'动物员' should be '运动员' (homophone error: '动' vs '运')."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The word order is incorrect; '动物员' should be '运动员' (athlete), but this is a lexical error, not word order. However, '以前' is correctly placed before the verb phrase. No actual word order error is present in the sentence."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"动物员\" is not a natural collocation; the correct term would be \"运动员\" (athlete), making the current phrasing sound like a calque or error."
+        }
+      ]
+    },
+    {
+      "text": "人还少时候什么都不知道，连说话也不会说。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "少 should be 小, as 少 means 'few' while 小 means 'young' in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect particle 了 is missing after 还少 to indicate the change of state in the comparison context."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '还少时候' is incorrectly ordered; it should be '还小的时候' to correctly modify the subject and time."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '人还少时候' is an unnatural calque; a native speaker would say '小时候' instead."
+        }
+      ]
+    },
+    {
+      "text": "那边的环境很漂亮，我感觉到了中国的香。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '香' (xiāng, meaning 'fragrant') is likely a homophone error; the intended word was probably '乡' (xiāng, meaning 'countryside' or 'hometown'), as '中国的乡' fits the context of describing an environment."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"中国的香\" is an unnatural collocation; a native speaker would not refer to a country's scent this way in this context."
+        }
+      ]
+    },
+    {
+      "text": "我的看法是家长和学者都在不同的出发点来看待这个问题。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '不同的出发点' is a calque from English and sounds unnatural; native speakers would typically say '不同的角度' or '立场不同' instead."
+        }
+      ]
+    },
+    {
+      "text": "在这个全世界人口中，一半以上的人吸烟，所以很多人病死。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '在这个全世界人口中' is incorrectly positioned; it should follow the subject or be rephrased for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '在这个全世界人口中' is an awkward calque; a native speaker would typically say '全球人口中' or '在全世界人口中' without '这个'."
+        }
+      ]
+    },
+    {
+      "text": "还有，吸烟对不吸烟还是有很多坏处。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '还是' should be '者' to mean 'non-smokers'; '还是' is a homophone error for '者'."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '还是' is incorrectly placed; it should come before the subject or verb it modifies, not after the object."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '对不吸烟' is an unnatural collocation; a native speaker would typically say '对不吸烟的人' or rephrase entirely for natural flow."
+        }
+      ]
+    },
+    {
+      "text": "当然不能说对孩子的教育教养只父母有责任，学校的老师也很重要。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '只' is a homophone error; it should be '只有' to mean 'only,' but '只' alone means 'just' or 'a pair,' making the sentence incorrect."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '只' is incorrectly placed before '父母' and should follow the noun it modifies or be restructured for correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '教育教养' is redundant and not a natural collocation; native speakers would typically use '教育' alone in this context."
+        }
+      ]
+    },
+    {
+      "text": "我已经订票飞机票。久后，为了我的职业，我要常常旅行。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'久后' should be '以后' as '久' is a homophone error for '后'."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb '订' requires a resultative complement or a direct object with a measure word; '订票飞机票' is ungrammatical. It should be '订了飞机票' or '订好了飞机票'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "'订票飞机票' has incorrect word order; it should be '订飞机票' or '订机票'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"订票飞机票\" is redundant and not a natural collocation; native speakers would say \"订了机票\" or \"买了飞机票\"."
+        }
+      ]
+    },
+    {
+      "text": "那么他们的年收入大概多少的呢？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '大概' is incorrectly placed after the subject and should precede the noun phrase it modifies for estimated income."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '大概多少的呢' is awkward and unidiomatic; a native speaker would typically say '大概是多少呢' or '有多少' instead."
+        }
+      ]
+    },
+    {
+      "text": "可是，迟早要用光。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '迟早' should precede the subject if one were present, but here the sentence lacks a subject and starts with an adverbial followed by a verb phrase, creating an incomplete and awkward structure in terms of word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and unnatural; a native speaker would more likely say something like “但早晚都会用完的.”"
+        }
+      ]
+    },
+    {
+      "text": "我会跟他联系说汉语。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "A native speaker would more naturally say '我会用汉语跟他联系' or '我会跟他用汉语联系' instead of '联系说汉语', which sounds awkward and unidiomatic."
+        }
+      ]
+    },
+    {
+      "text": "比如说是生活方式，吃的东西都会有区别。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '比如说' is redundant with the following '是' and makes the expression stiff; a native speaker would typically say '比如生活方式，吃的东西都会有区别。'"
+        }
+      ]
+    },
+    {
+      "text": "我们刚到公园就被天下雨了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'天' is a homophone error; should be '天就' or simply '就' to mean 'it started raining,' but '天下雨' incorrectly implies 'sky rains.' The correct word is '就' (just/then), not '天' (sky)."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The use of 被天下雨了 is incorrect because '天下雨' (it rains) is not a transitive verb and cannot be used in the passive construction with 被."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '刚' is incorrectly placed; it should follow the subject '我们' and precede the verb '到', but the sentence structure is disrupted by the incorrect '天下雨了' which should be '天就下雨了' or similar, affecting adverbial placement."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"被天下雨了\" is unnatural; native speakers would say \"天突然下雨了\" or \"就遇到下雨\" instead."
+        }
+      ]
+    },
+    {
+      "text": "还有我的父亲是厚道的人，所以我从他的身上学了待人的做法。我妈妈是因为以前家里没有什么钱所以为了养我们做生意很勇敢，我在她的身上学了要怎么面对困难而且勇敢。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "厚道 should be 低调"
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"待人的做法\" is an unnatural collocation; native speakers would say \"如何与人相处\" instead."
+        }
+      ]
+    },
+    {
+      "text": "我们小的时候，我们很喜欢在一起又比赛、又玩。我们在学校的操场常常打了网球、蓝球、排球，很有意思了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'蓝球' should be '篮球' (homophone error: 蓝 vs. 篮)."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'了' is incorrectly used after '很有意思' to indicate completed aspect; it should not be used here as the sentence describes a general past habit, not a specific completed event."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverb '常常' should precede the subject or be placed before the verb; '我们在学校的操场常常打了...' has incorrect word order for the frequency adverb."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '又比赛、又玩' is awkward and not a natural collocation; native speakers would typically say '一边比赛一边玩' or '比赛着玩' instead."
+        }
+      ]
+    },
+    {
+      "text": "但是，今天转换心情，想写比较轻松愉快的事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '转换心情' is a calque from English and sounds unnatural; a native speaker would more likely say '换个心情' or '调整心情'."
+        }
+      ]
+    },
+    {
+      "text": "但是昨天有了考试。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '有了' is incorrect; '有' means 'to have', but the intended meaning is likely 'there was a test yesterday', which should use '有' without '了' or a different verb. '了' is a homophone issue here, as it is redundant and changes the meaning unnecessarily."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect marker 了 is incorrectly used; 有 does not take 了 to indicate past tense in this context."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '昨天' should precede the subject, not the verb, in a standard sentence structure."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say \"但是昨天有考试\" instead, as \"有了\" is unnecessarily marked for completion in this context."
+        }
+      ]
+    },
+    {
+      "text": "一点浪漫也没有，但现在的她又觉得这样认识好多美丽。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '认识' (to know/meet) is incorrect; the intended word was likely '生活' (life) or another noun, as '这样认识' does not make sense in context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb complement or resultative is missing after '认识' which requires an object or complement to complete its meaning."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '一点浪漫也没有' is incorrectly placed at the beginning; it should follow the subject and verb structure for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '这样认识好多美丽' is an awkward calque and not a natural collocation; a native speaker would not express it this way."
+        }
+      ]
+    },
+    {
+      "text": "我想现在就自由地周游世界，但我知道不可以。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你现在这样能吃晚饭，是很幸福的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '你现在这样' is incorrectly placed; it should follow the subject or be restructured for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"你现在这样能吃晚饭，是很幸福的\" is stiff and unnatural; a native speaker would more naturally say something like \"你现在能吃上晚饭已经很幸福了.\""
+        }
+      ]
+    },
+    {
+      "text": "我花了才7个小时。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '才' is incorrectly placed; it should be before '花' to indicate 'only' or 'as few as,' so the correct word order is '我才花了7个小时.'"
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'才' should precede '7个小时' to correctly express 'only 7 hours', and the aspect marker '了' is misplaced; it should follow the object to indicate completion."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverb '才' should precede the time phrase '7个小时' directly, but here it is incorrectly placed after the verb '花'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing \"花了才7个小时\" is awkward; a more natural expression would be \"才花了7个小时\" to emphasize the short duration."
+        }
+      ]
+    },
+    {
+      "text": "现在已经晚了。我要去睡觉了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我想在这儿跟朋友们交流。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他们了解这些情况才可以吸烟。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial clause '他们了解这些情况' should come after the subject of the main clause or be restructured for proper word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and unnatural; a native speaker would more likely say something like \"只有了解这些情况的人才可以吸烟\" to express the intended meaning smoothly."
+        }
+      ]
+    },
+    {
+      "text": "父母对孩子的爱情是在世界上最重要的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word '爱情' (romantic love) is incorrect; '关爱' or '爱' should be used instead for parental love."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '在世界上' is incorrectly placed before the adjective '最重要' and should follow it to correctly modify the noun phrase."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '对孩子的爱情' is an unnatural calque; native speakers would say '对孩子的爱' instead of '爱情', which typically refers to romantic love."
+        }
+      ]
+    },
+    {
+      "text": "和别的音乐不一样有特别的颜色，尤其是吸引人能力。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": null,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The character '的' is missing after '不一样', and '能力' is a homophone error for '魅力' (attraction power vs. charm/attractiveness)."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'有特别的颜色' lacks a measure word for 'color' and '吸引人能力' should use '的' to connect the noun properly."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The attributive '有特别的颜色' is incorrectly placed after the noun it modifies; it should precede the noun or be restructured for correct word order."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '有特别的颜色' and '吸引人能力' is unnatural; native speakers would not describe music this way as it stands."
+        }
+      ]
+    },
+    {
+      "text": "但是我越看她越有了一种不能说明的感情，她不仅是漂亮，又唱歌唱得也很不错。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word \"说明\" is incorrect; the intended word is likely \"描述\" (describe), as \"说明\" means 'to explain' and does not fit the context of being unable to express a feeling."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The aspect particle '了' is incorrectly used; '越...越...' structure does not require '了' to indicate change."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '不能说明的感情' is a calque from English and sounds unnatural; a native speaker would typically say '说不清的感觉' or '难以言喻的情感'."
+        }
+      ]
+    },
+    {
+      "text": "说明了流行音乐对社会没有一点好处。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '没有一点好处' sounds overly absolute and stiff; a native speaker would more naturally say '没什么好处' or '好处不大' in this context."
+        }
+      ]
+    },
+    {
+      "text": "你好！你叫什么名字？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你是哪国人？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你今天好吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你喜欢吃什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你会说中文吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你家有几个人？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "今天热吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你几点睡觉？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你想喝茶还是喝水？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你有中国朋友吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你家在哪儿？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你想去哪儿？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你昨天做什么了？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你有什么爱好？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你喜欢什么运动？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你去过中国吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你几点起床？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你今天想做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你会做饭吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你最喜欢什么颜色？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得中文有意思吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你家离公司远吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你为什么开始学中文？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你喜欢夏天还是冬天？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得学中文难吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你以后有什么打算？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你喜欢住在大城市还是小地方？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你最近在忙什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你昨天晚上做了什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得朋友最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你周末一般怎么过？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得工作最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你小时候的梦想是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你旅行的时候喜欢做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得学一门语言最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你怎么安排自己的时间？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你最近有没有养成什么好习惯？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你觉得网上购物方便吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你更喜欢一个人还是跟朋友一起？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你好！我很高兴。你叫什么名字？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我今天很忙。上午我去了商店，买了一些水果。你今天做什么了？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "这本书我已经看了一半，虽然有点难，但是越看越有意思。除了小说以外，我也喜欢看历史书。你最近在看什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我该去睡觉了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "护士会告诉你怎么做。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你更喜欢哪个，这个还是那个？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "把你的名字用大写写下来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The verb '写' lacks a result or direction complement after 把."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say '用大写字母写下你的名字' instead; the original phrasing sounds stiff and unnatural."
+        }
+      ]
+    },
+    {
+      "text": "跳上一列正在开的火车是很危险的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say \"正在行驶的火车\" rather than \"正在开的火车\"; \"开\" is less natural for trains in this context."
+        }
+      ]
+    },
+    {
+      "text": "我不觉得她像她妈妈。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她喜欢网球并成为了一个网球教练。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '并成为了一个网球教练' is awkward; a more natural collocation would be '后来当上了网球教练' or '成了一名网球教练'."
+        }
+      ]
+    },
+    {
+      "text": "这是我的自行车。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我没有一个愿意跟我一起旅行的人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and unnatural; a native speaker would more likely say something like \"我找不到一个愿意跟我一起旅行的人\" or \"没人愿意跟我一起旅行\"."
+        }
+      ]
+    },
+    {
+      "text": "不管发生什么，都不要改变主意。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "昨天我第一次打了网球。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你不该吃太多。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我和他都不相信。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我不太喜欢看电视。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我能坐在这儿吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你的年龄是多少？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "马是种很有用的动物。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他可以用12秒跑100米。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我很累，早早就上床了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他死得不幸福。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "The word 死 (die) is likely a homophone error; the intended word may have been 是 (be) or another character, as 'dying unhappily' is semantically odd in this context."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The use of 得 is incorrect; it should be 的 to modify the adjective 幸福 with the adverbial phrase 不."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would not describe death as 'unhappy'; this phrasing sounds unnatural and overly literal."
+        }
+      ]
+    },
+    {
+      "text": "你用完了把它放回去。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The 把 construction requires the verb to have a result or direction complement, but '放回去' is a separable verb phrase and does not function as a single verb with a result; it should be '放回原处' or similar to properly complete the 把 structure."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and not a natural collocation; a native speaker would more naturally say something like \"用完记得放回去\" or \"用完了记得放回去.\""
+        }
+      ]
+    },
+    {
+      "text": "我想那是真的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我喜欢他不是因为他人好，而是因为他诚实。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我弟弟今年十一岁。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我支持你们。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "请问新桥饭店离这儿远不远？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我在公园散步。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "在你的词典查一查这个词。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '在你的词典' should precede the subject, but here it incorrectly follows the subject implied by context and disrupts the verb-object order; it should be placed before the verb '查' but requires a preposition like '用' to indicate instrument."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '在你的词典查一查' is a calque from English; a native speaker would more naturally say '用你的词典查一查' or simply '查一下词典'."
+        }
+      ]
+    },
+    {
+      "text": "他们继续谈了几小时。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我很高兴遇见了你。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他每天早上洗澡。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "今天早上我去了公园。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "郊区很安静......",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "叫一个腌笃鲜汤吧。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '叫一个腌笃鲜汤' is unnatural; a native speaker would typically say '点一份腌笃鲜汤' when ordering food."
+        }
+      ]
+    },
+    {
+      "text": "你为什么要到我们公司来应聘？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "哦，能不能请你帮我听一下电话？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say '帮我接一下电话' instead of '帮我听一下电话' when asking someone to answer the phone."
+        }
+      ]
+    },
+    {
+      "text": "我当时每个月都会购买五本书。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她总是把自己的房子打扫得很干净。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "不要进来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "两个男孩子从房间里跑出来了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我今天得把这本书还给图书馆。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我数年来都和这家商店做生意。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"数年来\" is stiff; a native speaker would more naturally say \"这几年\" or \"这些年来\"."
+        }
+      ]
+    },
+    {
+      "text": "你喜欢做什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你应该更小心的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The sentence should use '地' instead of '的' to modify the adjective '小心' with the adverb '更'."
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "打网球是他的兴趣。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你为什么不相信我？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我爱看足球。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我们能在哪儿打电话？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你气死我了！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她申请了签证。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "一种语言永远不够。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and unnatural; a native speaker would more likely say \"一种语言永远是不够的\" or \"一种语言永远不够用\" for better collocation."
+        }
+      ]
+    },
+    {
+      "text": "我本想去参加音乐会的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "一开始许多事情看上去不同了，但我很快习惯了我的新生活。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '看上去不同了' is awkward; a more natural collocation would be '看起来不太一样' or '看起来很不一样'."
+        }
+      ]
+    },
+    {
+      "text": "鸟喜欢大米。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他说得很快。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我真的很喜欢狗。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你昨天打棒球了没有？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她七点起床。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "祝你生日快乐。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我为自己的低分数对自己生气。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The reflexive pronoun '自己' is incorrectly placed after '对自己的生气', causing a redundant and ungrammatical structure; '对自己生气' should follow the verb directly, but '自己的' already indicates reflexivity, making the second '自己' unnecessary and misplaced."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say \"我因为分数低而生自己的气\" instead; the original phrasing is stiff and unnatural."
+        }
+      ]
+    },
+    {
+      "text": "这样呢，是对的吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '这样呢' is awkward here; a native speaker would more naturally say '这样对吗？' or '这样行吗？'"
+        }
+      ]
+    },
+    {
+      "text": "您觉得我是在开玩笑吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我决定告诉她我爱她。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "昨天是我的生日。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我想变成你。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "\"变成\" implies a physical or essential transformation; a native speaker would not use it to express a desire to be like someone in identity or role."
+        }
+      ]
+    },
+    {
+      "text": "他怕死吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他是个教师。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "2010这个数字里有两个零。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他很容易感冒。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我朋友问我是不是觉得还好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '是不是觉得还好' is awkward; a more natural phrasing would be '觉得怎么样' or '觉得还好吗' without the '是不是'."
+        }
+      ]
+    },
+    {
+      "text": "你最好去。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他把东西留给了他的儿子。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "昨天下小雨。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "爸爸回家了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "你喝咖啡吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "当他睡觉的时候，他让窗子一直开着。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "即使我穿得很多仍然是很冷。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "The complement after '穿得' should not use '很'; '穿得很多' is incorrect, it should be '穿很多衣服' or '穿得很厚'."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '即使' clause should come after the subject in natural word order, but here it is correctly placed; however, '仍然' should precede the adjective '很冷' more directly, so '仍然是很冷' should be '仍然很冷' for correct adverbial placement."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "Native speakers would typically say \"就算穿得再多还是觉得冷\" instead; \"即使...仍然\" sounds stiff and unnatural in this context."
+        }
+      ]
+    },
+    {
+      "text": "你是哪国人？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "虽然她很累了，她还是继续工作。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她会说中文，却不会说普通话。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "A native speaker would not contrast '中文' and '普通话' this way, as 普通话 is the standard form of 中文; the phrasing suggests they are separate languages."
+        }
+      ]
+    },
+    {
+      "text": "今天我爱整个世界。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '我爱整个世界' is unnaturally literal and not a typical collocation; a native speaker would more naturally say something like '我觉得今天心情特别好' to express a similar sentiment."
+        }
+      ]
+    },
+    {
+      "text": "你的头发有春天的味道。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '有春天的味道' is poetic but not a natural collocation for describing hair; native speakers wouldn't typically say this."
+        }
+      ]
+    },
+    {
+      "text": "把门打开一点。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我想和你讨论一些事情。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我同意你一部分的意见。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "A native speaker would more naturally say '我部分同意你的意见' instead of '我同意你一部分的意见'."
+        }
+      ]
+    },
+    {
+      "text": "这个主意不错。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我能在这里学习吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "她们没有心吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "甚至在夏天，这里都很冷。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "我的母亲从不早起来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing '早起来' is awkward; a native speaker would typically say '早起' without '来'."
+        }
+      ]
+    },
+    {
+      "text": "他的腿受伤了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "哪一本书都好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The adverbial '都' is incorrectly placed before the predicate; it should follow the subject '哪一本书' to modify the entire subject, but in this construction, it creates an incorrect universal quantification."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrasing is stiff and unnatural; a native speaker would typically say something like \"哪本书都行\" or \"随便哪本都行\" in casual context."
+        }
+      ]
+    },
+    {
+      "text": "又开始刮台风了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "那个路口发生过什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "请再说一遍!",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他告诉我她生病了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "他过来请我去帮那个他。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "\"他\" at the end should be \"它\" or \"她\" depending on context; \"他\" is a homophone misuse for the intended object pronoun."
+        },
+        {
+          "k": "grammar",
+          "found": true,
+          "note": "'把' is missing before '那个他' to properly structure the object with the resultative complement."
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The pronoun '他' as an object should not come after the noun it modifies; '那个他' should be '他那个' or simply '他'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '帮那个他' is unnatural; a native speaker would not use this phrasing."
+        }
+      ]
+    },
+    {
+      "text": "我喜欢看篮球比赛。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "车后座可以坐三个人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4,
+      "ok": true,
+      "reports": [
+        {
+          "k": "word",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "natural",
+          "found": false,
+          "note": ""
+        }
+      ]
+    },
+    {
+      "text": "多好的一天那！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2,
+      "ok": false,
+      "reports": [
+        {
+          "k": "word",
+          "found": true,
+          "note": "'那' is a homophone error; should be '啊' for exclamation."
+        },
+        {
+          "k": "grammar",
+          "found": false,
+          "note": ""
+        },
+        {
+          "k": "order",
+          "found": true,
+          "note": "The demonstrative '那' is incorrectly placed at the end; it should precede the noun phrase as '那一天'."
+        },
+        {
+          "k": "natural",
+          "found": true,
+          "note": "The phrase '多好的一天那！' ends with '那' which is not a natural exclamation in Mandarin; a native speaker would typically say '多好的一天啊！' instead."
+        }
+      ]
+    }
+  ]
+}
