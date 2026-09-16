@@ -29,6 +29,13 @@ story-segment entry had the wrong model in it. A third — the empty-completion 
 was never blocked on anything but a `throw` sitting three lines above the field that
 would have explained it.
 
+**The grader has a number, 2026-09-15.** It had never been scored against
+anything, and it drives the ✓/✗, the mistake ledger, the category counts and
+drill selection. Against human corrections from MuCGEC it is right **79%** of the
+time — 78% recall, 80% specificity. About one verdict in five is wrong, and it
+invents errors about as often as it misses them. That number sits underneath item
+1 below and underneath the correctness gate; both are building on it.
+
 **Next.** Two builds, no new measurement gate.
 
 1. **Let me rewrite a sentence the grader failed.** Independent of the above and just
@@ -93,6 +100,52 @@ honest version of that ambition. Role-play scenarios — that is Chat with a top
 string, one `ACTIVITIES` row if it is ever wanted, not a project.
 
 ---
+
+## The partner's Chinese is never checked for correctness
+
+Every reply is validated word by word against the level's allowlist and graded
+not at all. Word-by-word validation says nothing about whether the words form a
+sentence, so 你被妈妈帮忙过吗？ — 被 on an intransitive verb — passes every check
+the app has and renders. The learner found it by opening the English explanation,
+which explained at length that the partner's own Chinese was wrong.
+
+That is the reported shape of the whole thing: the partner mirrors back errors
+that the grader and the explanation then tell the learner are mistakes. It
+undercuts the premise of the app, which is that the Chinese on screen is worth
+imitating.
+
+**Decided with the learner, 2026-09-15:**
+
+- **Never display model-corrected Chinese.** The grader's `better` field has not
+  been through the validator and leaks: measured, 1 of 6 corrections showed an
+  HSK 2 learner 杯 — unmarked, unglossed, no card. That is a live defect in the
+  grade sheet today, independent of any gate. A correction is repair *guidance*
+  fed back into the retry loop, never text on screen.
+- **Retry rather than fall back**, past ten attempts if that is what it takes. A
+  chat that regularly answers 我不知道 is its own failure.
+- **Gate every chat session**, not only Ghost Words.
+
+**Open: what the loop gives up as it retries.** Unbounded retry can genuinely not
+terminate, at a full chat call each time — and at HSK 2 every call carries all 497
+words of the level. Proposed but not agreed: a ladder of soft constraints to
+abandon under pressure — required ghost word, then reply length, then the
+answer/share/ask turn shape, then complexity — with vocabulary and correctness
+never on it. A correct, in-level, boring reply beats both a wrong one and the
+fallback.
+
+**Blocked on the grader.** The cheap version — point `grade()` at the partner's
+reply, use `ok` as the gate and `better` as the repair — builds a gate that
+passes the exact sentence the gate exists to stop: 我的手表被我放在桌子上了 comes
+back "Natural." 3/3. An enumerated-failure-mode judge on the *same model* catches
+it, which is the evidence that framing rather than capability is the ceiling. So
+the work is a grader prompt rewrite scored on `tools/grader-bench.js`, then the
+gate. `tools/grader-bench-results.md` and `tools/ghost-grammar-ab-results.md`
+have the measurements.
+
+**Not covered by the benchmark:** the seventeen error tags (MuCGEC has
+corrections, not categories) and the partner's own distribution, which is fluent
+model Chinese with occasional structural oddity rather than learner error. Both
+would need hand-labelling.
 
 ## Whether a migration has actually been run is unanswerable from the client — checked
 

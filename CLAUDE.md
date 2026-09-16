@@ -77,13 +77,27 @@ opposite of the obvious one. Run an A/B against the real model with counted
 outcomes before shipping a prompt edit — the worked examples in DEVELOPING.md
 show the shape, including a "fix" that made the failure eight times more likely.
 
-Two rules learned the hard way:
+The grader has a benchmark now — `tools/grader-bench.js`, scored against human
+corrections from MuCGEC. It sits at **79%** (78% recall, 80% specificity), so
+roughly one verdict in five is wrong, in both directions. Score any change to
+`grade()` against it rather than arguing about the wording, and read
+`tools/grader-bench-results.md` first for what the number does and does not
+cover — no error tags, and not the partner's Chinese.
+
+Three rules learned the hard way:
 
 - **An output-shape instruction belongs to the turn it shapes.** Put it in the
   system role and it governs every later turn — a follow-up question gets
   answered with the original verdict again.
 - **Names contaminate a vocabulary measurement.** 王, 李 and 明 are all above
   HSK 1. Run name-free when measuring anything about out-of-level words.
+- **A constraint may be doing work other than constraining.** `LEVEL_STYLE`'s
+  grammar ban reads as a pure prohibition and is also the only thing telling the
+  partner a structure is hard. Lifting it for words the learner had been taught —
+  the obvious repair for a prompt that forbids 被 and demands it four rules apart
+  — measured half as good (8/50 against 21/50) and reproduced the defect it was
+  meant to cure. Before resolving a contradiction, ask what the redundant half is
+  signalling. DEVELOPING.md has the worked example.
 
 ## Secrets
 

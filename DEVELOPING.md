@@ -209,6 +209,68 @@ almost no name characters, and `王` is HSK 4 (see [The validator](#the-validato
 noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
 must be namefree, or the thing being measured is the name.
 
+### Worked example: the contradiction that was load-bearing
+
+Ghost Words targets words the learner was taught and has never produced. Pacing
+teaches above the level, so at HSK 2 that list held 被 and 把 — and the level's
+own grammar rule forbids exactly those. One system prompt, four rules apart:
+
+```
+3.  可以用「了」「过」…。还不要用：把、被、难的动词补语。
+13. 学生最近学了这些词，请多用：被、把、为了、放、生活、手表。
+```
+
+The partner shipped 我的书被我放在桌子上了。为了生活好，我把手表也放好。你被妈妈帮
+忙过吗？ — 被 three times, 被字句 none. A reflexive agent, then 被 bolted onto
+帮忙, which is intransitive and cannot passivise. Every word validated; vocabulary
+was never the problem.
+
+Two candidate fixes, and only one of them is real.
+
+The first: the demand was nested inside `if (offer.length)`, and Ghost Words
+carries `newWords: false`, so `offer` is empty on every one of its turns. The
+requirement was enforced in `turn()`'s retry loop and **printed nowhere**. That
+one is a plain bug.
+
+The second is the trap. A grammar word *is* its grammar, so a ghost 被 is the
+most valuable item the unused list can hold — taught, never once produced. Since
+rule 3 forbids what rule 13 demands, lift the ban for words the learner has been
+taught. Obviously correct, argued for on pedagogical grounds by the learner, and
+backwards. `tools/ghost-grammar-ab.js`, end-to-end usable replies:
+
+| | | end to end |
+| --- | --- | --- |
+| demand unstated, ban intact | as shipped | 1/20 (5%) |
+| demand stated, ban intact | the bug fix | **21/50 (42%)** |
+| demand stated, ban lifted | the "obvious" fix | 8/50 (16%) |
+
+`p = 0.0034` for the fix, `p = 0.0076` for lifting the ban making it worse.
+
+**The ban was not only a prohibition. It was the only thing in the prompt telling
+the partner the structure is hard.** Forbidden and required at once, the model
+used 被 once, in the safest passive it knows — 被猫吃了一点儿, 被朋友拿走了.
+Lift the ban and 被 becomes ordinary, 把 unlocks alongside it (1.44 per reply
+against 0.64), and the partner chains them into two-clause sentences while
+cramming four ghost words a reply instead of three. It reproduces the reported
+defect rather than curing it.
+
+A second round asked whether the caution could be stated out loud instead — a
+2×2 over ban on/off × caution explicit/implicit, 30 runs an arm. Nothing beat
+leaving the ban alone, and the explicit caution failed in **two opposite
+directions**: with the ban it invited overreach (highest 被 rate, lowest
+accuracy), without it invited avoidance (lowest 被 rate of any arm).
+
+Rules of thumb this adds to the list above:
+
+- **A constraint may be doing work other than constraining.** Before removing a
+  contradiction, ask what the redundant half is signalling. Difficulty, register
+  and caution all ride on prohibitions that look purely restrictive.
+- **Put the control arm in to be falsified.** `stated` was included expecting it
+  to lose. It won, and that is the only reason the wrong fix did not ship.
+- **Replicate the control.** Its first run read 55%, its second 33% — consistent
+  (`p = 0.15`) and poolable at 42%, but the first figure alone was optimistic and
+  had already been quoted.
+
 ### Worked example: story time's position rule, and its names
 
 Story time generates five segments in sequence — one per tap since v63, back to back before
