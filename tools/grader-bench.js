@@ -266,6 +266,45 @@ const CHECKS =
   "A sentence that survives all of them is correct, and saying so is the right " +
   "answer. Do not walk the list looking for something to report.\n\n";
 
+/* The question, changed. Round five's finding was that of 90 catches by the
+ * four-specialist design, 89 had the `natural` check firing -- and that check
+ * was not obeying its own prompt. Told to look only at idiom and explicitly not
+ * at grammar, it fired on sentences whose faults were grammatical, while still
+ * scoring 0/43 on hand-written text. It had become a well-calibrated "does this
+ * read wrong" detector.
+ *
+ * Which suggests the gain was the QUESTION rather than the decomposition around
+ * it: "would a native speaker say it this way?" beating "is this correct?". This
+ * arm tests that at one call instead of five. Everything else -- the JSON
+ * contract, the seventeen tags, the two failure-mode warnings -- is untouched,
+ * so the only variable is what the model is asked.
+ *
+ * It also has to replace the `ok` line, because that line IS the question in its
+ * operative form: a framing paragraph that contradicts the field definition
+ * below it would just be a contradiction, and this session has already measured
+ * what models do with one of those.
+ */
+const NATURAL_FRAMING =
+  "The question is not whether you can work out what they meant, and not only " +
+  "whether the sentence breaks a rule. It is whether a native speaker would say " +
+  "it this way.\n\n" +
+  "Those come apart in both directions and both directions are faults. Chinese " +
+  "can be perfectly grammatical and still be something nobody would ever say -- " +
+  "a calque from English, a stiff or abrupt phrasing, a word that is technically " +
+  "right and not the one used here. And a sentence can read smoothly while a " +
+  "particle, a measure word, a character or the order of two phrases is wrong; " +
+  "fluency is not evidence of correctness, and an error that reads well is still " +
+  "an error.\n\n" +
+  "Ask it the way a native speaker reads: would I say this? If yes, the sentence " +
+  "is fine and saying so is the right answer -- most sentences are fine, and " +
+  "hunting for something to report is its own failure.\n\n";
+
+const NATURAL_OK_LINE =
+  "ok        — true only if a native speaker would say it this way, as written.\n";
+
+const SHIPPED_OK_LINE =
+  "ok        — true only if you would let the sentence stand as written.\n";
+
 const CORRECTION_FIRST =
   "Work in this order.\n\n" +
   "First, write the sentence as a native speaker would write it, changing as " +
@@ -286,12 +325,21 @@ function promptFor(arm, text, label) {
   const base = HSKPrompt.grade({ text: text, label: label });
   if (arm === "shipped") return base;
   const extra = arm === "checklist" ? CHECKS
-              : arm === "correctionFirst" ? CORRECTION_FIRST : null;
+              : arm === "correctionFirst" ? CORRECTION_FIRST
+              : arm === "naturalFraming" ? NATURAL_FRAMING : null;
   if (!extra) throw new Error("unknown arm: " + arm);
   if (base.indexOf(JSON_ANCHOR) === -1) {
     throw new Error("grade() no longer contains the JSON anchor -- this harness has drifted");
   }
-  return base.replace(JSON_ANCHOR, extra + JSON_ANCHOR);
+  let out = base.replace(JSON_ANCHOR, extra + JSON_ANCHOR);
+  if (arm === "naturalFraming") {
+    if (out.indexOf(SHIPPED_OK_LINE) === -1) {
+      throw new Error("grade()'s ok line has been reworded -- this arm would leave " +
+                      "the old question standing next to the new framing");
+    }
+    out = out.replace(SHIPPED_OK_LINE, NATURAL_OK_LINE);
+  }
+  return out;
 }
 
 /* ------------------------------------------------- the decomposed candidate

@@ -292,9 +292,11 @@ sentences whose faults are mostly grammatical. It has become a general "does thi
 read wrong" detector — and a well-calibrated one: 0/43 on hand-written text,
 25/100 on noisy Tatoeba.
 
-The reading: **"would a native speaker say it this way?" is a better-calibrated
-question than "is this correct?"**, and most of the 11-point gain is that
-question rather than the decomposition around it. The other three specialists
+The reading at the time: *"would a native speaker say it this way?" is a
+better-calibrated question than "is this correct?", and most of the 11-point gain
+is that question rather than the decomposition around it.* **Round six tested
+that directly and it is wrong** -- the question alone is worth four points and
+fails a significance test. See round six for what the breakdown actually meant. The other three specialists
 still earn their place for CATEGORISATION — the four `cats` and seventeen tags
 drive the mistake ledger and drill selection, and detection alone does not
 produce them — but they are not what is finding the errors.
@@ -310,6 +312,55 @@ homophone case". At n=100 除了母亲以外，父亲对我的影响也不少 (�
 rather than fixed, and the earlier claim rested on one draw. The nine still
 missed at n=100 include it, the 一下儿 case and 女服务员回去后，我们一起笑了起来,
 which no configuration has ever caught.
+
+## Round six: it was not the question, and the retraction points somewhere better
+
+Round five read the specialist breakdown -- 89 of 90 catches had `natural`
+firing -- and concluded the gain was the QUESTION, "would a native speaker say
+it this way?" beating "is this correct?". This arm tests exactly that: the same
+framing as a single call, JSON contract and seventeen tags untouched, so the only
+variable is what is asked.
+
+Same items, same model, n=100:
+
+| | catches wrong | passes hand-written | passes Tatoeba | cost/sentence |
+|---|---|---|---|---|
+| `shipped` | 79/99 80% | 43/43 | 86/100 | $0.000093 |
+| `naturalFraming` | 82/98 84% | 43/43 | 83/100 | $0.000106 |
+| `decomposed` | **90/99 91%** | 43/43 | 74/100 | $0.000184 |
+
+`naturalFraming` against `shipped`: **p = 0.58**. Against `decomposed`: p = 0.14.
+`decomposed` against `shipped`: p = 0.043.
+
+**The hypothesis is not supported.** The question is worth about four points and
+nothing that survives a significance test. The decomposition is worth eleven and
+does. Round five's reading was wrong.
+
+### Why the specialist breakdown misled
+
+`natural` firing on 89 of 90 catches does not mean `natural` *alone* would catch
+them, and this arm is the proof. The difference between the two is not the
+question. It is everything else the call is being asked for at the same time.
+
+In the decomposed design each specialist answers one binary — found, and a
+one-line note — in a 200-token budget, and produces nothing else. In
+`naturalFraming` the same question arrives bundled with `meant`, `better`, four
+`cats` and a tagged `errors` array, and the verdict degrades.
+
+That is the drill-check finding again, which this repo already measured and wrote
+down: the target check fused into the grader's answer came back wrong 9 times in
+15, and split into its own call, 15/15. **Separating the verdict from the
+categorisation is what buys the accuracy** -- not the wording of either.
+
+### Which suggests a cheaper design than either
+
+If the mechanism is separation rather than breadth, four specialists are more
+than the job needs. One detection call answering nothing but "is there a fault
+here", then a categorisation call only when the first says yes, should reach
+decomposed accuracy at close to `naturalFraming` cost -- two calls on a faulty
+sentence, one on a clean one, and most sentences are clean.
+
+Untested. It is the obvious next arm and it is cheap.
 
 ## What to measure next
 
