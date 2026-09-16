@@ -199,6 +199,61 @@ Sonnet runs **$0.00486 a call**, about 26× a qwen call. As both grader and gate
 that is two calls an exchange — roughly **410 exchanges a month** against the
 app's ~$4 budget. As the grader alone it is pennies at any realistic volume.
 
+## Round four: self-consistency does not work here
+
+A Sonnet call costs about 26x a qwen call, so five qwen votes cost a fifth of
+one Sonnet call. If the shipped grader's misses were sampling variance -- it runs
+at temperature 0.7 -- voting would recover most of them for almost nothing.
+
+`--vote 5 --n 43`, 430 calls, $0.026.
+
+```
+how many of 5 calls faulted each sentence
+              0   1   2   3   4   5
+  wrong       7   1   0   1   0  34
+  app-clean  43   0   0   0   0   0
+```
+
+**41 of 43 sentences got either zero votes or all five.** Two showed any
+disagreement at all. These are blind spots, not variance.
+
+| rule | recall | false alarms on clean |
+|---|---|---|
+| any of 5 faulted | 36/43 84% | 0/43 |
+| majority of 5 | 35/43 81% | 0/43 |
+| single call (round three) | 35/43 81% | 0/43 |
+| `claude-sonnet-4.5`, one call | **40/42 95%** | 1/43 |
+
+Majority voting is indistinguishable from one call. The most permissive rule buys
+**one sentence** for five times the cost, where Sonnet buys fourteen for 5.4x
+that again. The cheap route out of the budget problem is not available.
+
+The clean half came back 43/43 unflagged at every threshold, so the cheap model
+is at least *stably* right about good Chinese.
+
+### What it structurally cannot see
+
+The seven missed by all five calls have a character:
+
+```
+除了母亲以外，父亲对我的影响也不少。      少 for 小
+我也来介绍一下儿我的家吧。                一下儿 for 一下
+我很高兴她给我这个她做的礼物。            modifier order
+我知道哪去睡觉                            哪 for 哪儿, and the order
+```
+
+The first is a **homophone substitution**, the failure mode this app exists to
+catch -- the learner types pinyin and picks from a candidate list, and the grader
+prompt carries a paragraph warning it about exactly this. Missed 5/5.
+
+The rest are misplaced modifiers, 儿化 and phrase-internal word order. Every one
+reads fluently at a glance, which is the same shape as the reflexive 被: errors
+that do not look wrong unless you are specifically checking the structure. The
+model is not sampling past them. It does not see them.
+
+**Scope:** this measured the grader against learner essay errors. The gate's job
+is the partner's Chinese, and there is no equivalent blind-spot map for that.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

@@ -393,6 +393,94 @@ async function scoreClean() {
   console.log("written: " + path.relative(ROOT, out));
 }
 
+/* Self-consistency: the same prompt, the same model, N times, at the
+ * temperature the app actually uses.
+ *
+ * A Sonnet call costs about 26x a qwen call, so five qwen votes cost a fifth of
+ * one Sonnet call. If the shipped grader's 19% miss rate is SAMPLING VARIANCE,
+ * voting recovers most of it for almost nothing and the budget ceiling on the
+ * gate disappears. If it is a BLIND SPOT -- the same sentences wrong every time
+ * -- voting buys nothing and the answer really is the expensive model.
+ *
+ * The vote histogram is what separates those two, and it is the point of this
+ * run: variance shows up as sentences scattered across 1/5, 2/5, 3/5, 4/5, and
+ * a blind spot shows up as a pile at 0/5 with almost nothing in between.
+ *
+ * The threshold sweep comes free once the votes exist, so the whole operating
+ * curve is reported rather than one arbitrary majority rule. The app can then
+ * pick its threshold per job: the gate wants recall and can spend false alarms
+ * on retries, the grader wants the opposite.
+ */
+async function scoreVote() {
+  const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
+  if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
+  const file = path.join(__dirname, "grader-bench-clean.json");
+  if (!fs.existsSync(file)) { console.error("run --build-clean first"); process.exit(1); }
+  const bench = JSON.parse(fs.readFileSync(file, "utf8"));
+  const VOTES = Number(arg("vote", 5));
+  const per = Number(arg("n", 43));
+
+  const items = [];
+  for (const cls of ["mucgec", "app"]) {
+    items.push.apply(items, bench.items.filter(i => i.cls === cls).slice(0, per));
+  }
+  console.log("model: " + MODEL + "  arm: " + ARM + "  votes: " + VOTES +
+              "  items: " + items.length + "  calls: " + items.length * VOTES + "\n");
+
+  const jobs = [];
+  items.forEach((it, i) => {
+    for (let v = 0; v < VOTES; v++) {
+      jobs.push(async () => {
+        try {
+          const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
+          return { i: i, ok: verdictOk(raw, it.text) };
+        } catch (e) { return { i: i, ok: null }; }
+      });
+    }
+  });
+  const rows = await pool(jobs, CONCURRENCY);
+
+  // Votes to FAULT the sentence, out of the calls that came back parseable.
+  const faults = items.map((it, i) => {
+    const mine = rows.filter(r => r.i === i && r.ok !== null);
+    return { text: it.text, cls: it.cls, n: mine.length,
+             faulted: mine.filter(r => r.ok === false).length };
+  });
+
+  const wrong = faults.filter(f => f.cls === "mucgec");
+  const right = faults.filter(f => f.cls === "app");
+
+  console.log("vote histogram -- how many of " + VOTES + " calls faulted each sentence");
+  console.log("           " + Array.from({ length: VOTES + 1 }, (_, k) => String(k).padStart(4)).join(""));
+  for (const [label, set] of [["wrong    ", wrong], ["app-clean", right]]) {
+    const h = Array.from({ length: VOTES + 1 }, (_, k) => set.filter(f => f.faulted === k).length);
+    console.log("  " + label + h.map(x => String(x).padStart(4)).join(""));
+  }
+
+  console.log("\nthreshold sweep (fault the sentence when >= k of " + VOTES + " calls do)");
+  console.log("   k    recall        false alarms on clean");
+  for (let k = 1; k <= VOTES; k++) {
+    const rec = wrong.filter(f => f.faulted >= k).length;
+    const fa = right.filter(f => f.faulted >= k).length;
+    console.log("   " + k + "   " + (rec + "/" + wrong.length).padEnd(8) +
+                (100 * rec / wrong.length).toFixed(0).padStart(3) + "%   " +
+                (fa + "/" + right.length).padEnd(8) +
+                (100 * fa / right.length).toFixed(0).padStart(3) + "%");
+  }
+  const single = wrong.filter(f => f.faulted >= Math.ceil(f.n / 2)).length;
+  console.log("\n  for reference: claude-sonnet-4.5 single call was 95% recall, 98% clean");
+
+  console.log("\n--- never caught by any of " + VOTES + " calls (blind spots) ---");
+  wrong.filter(f => f.faulted === 0).forEach(f => console.log("  " + f.text));
+
+  console.log("\nspend: $" + spend.toFixed(4));
+  const out = path.join(__dirname, "grader-bench-vote-results.json");
+  fs.writeFileSync(out, JSON.stringify({
+    model: MODEL, arm: ARM, votes: VOTES, when: new Date().toISOString(), faults: faults
+  }, null, 2));
+  console.log("written: " + path.relative(ROOT, out));
+}
+
 async function score() {
   const KEY = fs.readFileSync(KEY_FILE, "utf8").trim();
   if (!KEY) { console.error("No key in " + KEY_FILE); process.exit(1); }
@@ -452,7 +540,8 @@ async function score() {
   console.log("written: " + path.relative(ROOT, out));
 }
 
-const MODE = args.indexOf("--build-clean") !== -1 ? buildClean
+const MODE = args.indexOf("--vote") !== -1 ? scoreVote
+           : args.indexOf("--build-clean") !== -1 ? buildClean
            : args.indexOf("--build") !== -1 ? build
            : args.indexOf("--clean") !== -1 ? scoreClean
            : score;
