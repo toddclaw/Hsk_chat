@@ -1,4 +1,54 @@
-# How good is the grader? 79%
+# Measuring the grader
+
+Every ✓ and ✗ in this app comes from one model call that had never been scored
+against anything. It drives the badge on each message, the mistake ledger, the
+category counts, and which drill comes next. Seven rounds, in order, each
+answering the question the one before it raised.
+
+## Summary
+
+**The grader is right about 80% of the time, and the only thing that has moved
+that is asking several narrow questions instead of one broad one.**
+
+| round | question | answer |
+|---|---|---|
+| 1 | how good is it? | 79% — about one verdict in five is wrong, in both directions |
+| 2 | do prompt rewrites help? | no; and a stronger model looked like a different instrument |
+| 3 | was that a real trade-off? | no — round 2's positive class was weak. Sonnet is simply better: 95% recall at 26× the cost |
+| 4 | is the miss rate sampling variance? | no — blind spots. 41 of 43 sentences got 0 or 5 votes out of 5 |
+| 5 | does decomposing into four specialists help? | **yes — 91% against 80%, p = 0.043, at a 26th of Sonnet's cost** |
+| 6 | is the gain the naturalness question? | no — worth 4 points, p = 0.58 |
+| 7 | is it separating verdict from categorisation? | no — a detector with no categorisation load scores the same 84% |
+
+What survives all seven: **diversity of lens.** Repetition doesn't help, wording
+doesn't help, unloading the call doesn't help. Several passes each hunting a
+different *kind* of fault do. Pooled, every single-lens arm is 280/340 (82%)
+against the four-lens design's 130/142 (92%), p = 0.011.
+
+That is an attention limit rather than a capability one — the same shape as the
+reflexive 被 this work started from, which the model misses when asked "is this
+correct?" and catches when asked whether the agent differs from the subject.
+
+| design | catches wrong | clean | cost/sentence |
+|---|---|---|---|
+| shipped, one call | 80% | 43/43 | $0.000093 |
+| naturalness framing | 84% | 43/43 | $0.000106 |
+| detector + categoriser | 84% | 43/43 | $0.000081 |
+| five-vote self-consistency | 84% | 43/43 | $0.000300 |
+| **four specialists + integrator** | **91%** | **43/43** | $0.000184 |
+| `claude-sonnet-4.5`, one call | 95% | 42/43 | $0.004820 |
+
+**Nothing shipped yet.** Two things are unmeasured and both matter: whether four
+lenses are needed or two would do, and whether any of this transfers to the
+partner's Chinese, which is the correctness gate's actual job and a different
+distribution from learner essay error.
+
+Three conclusions in this document were drawn and then falsified by the next
+round. They are corrected in place, with the correction next to the claim.
+
+---
+
+## Round one: how good is it?
 
 `node tools/grader-bench.js --build && node tools/grader-bench.js --n 120` —
 120 calls, well under a cent. Model `qwen/qwen3-235b-a22b-2507`, the
