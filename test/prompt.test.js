@@ -45,6 +45,19 @@ for (const n of [5, 6, 7]) {
     P.LEVEL_STYLE[n].grammar);
 }
 
+/* 3b. The ban stays put when the learner has been taught the word, and when the
+ *     prompt's own reuse rule is asking for it -- the two conditions that look
+ *     most like a bug and measured worst when acted on. See LEVEL_STYLE's
+ *     comment and tools/ghost-grammar-ab-results.md: lifting the ban halved how
+ *     often 被 came back well-formed. This is a regression test against fixing
+ *     the contradiction the obvious way a second time. */
+const l2ghost = P.build({ level: 2, label: "HSK 2", length: "medium", activity: "focused",
+  reuse: [{ w: "被" }, { w: "把" }], require: "被" });
+check(/还不要用：把、被/.test(l2ghost),
+  "L2: 把 and 被 stay banned even while the reuse rule demands them", l2ghost);
+check(/一定要用「被」/.test(l2ghost),
+  "L2: and the demand is printed alongside the ban, which is the part that matters");
+
 // 4. Assembly: the level's own rules go in, the machinery survives, and the
 //    wordlist appears only when asked for.
 for (const n of levels) {
@@ -161,6 +174,21 @@ check(!/都不用/.test(rule10), "and the escape clause is gone", rule10);
 check(!rule10.includes("但"), "only the one word is named, so there is no ambiguity", rule10);
 check(/除外/.test(forced.split("\n").find(l => l.startsWith("1. "))),
   "rule 1 still grants the exception while forcing");
+
+/* 9b. Forcing with no offer at all. Ghost Words sets `require` from the unused
+ *     list and carries newWords:false, so `offer` is empty on every one of its
+ *     turns -- and turn() rejects a reply that omits the word regardless. While
+ *     the demand was nested inside `if (offer.length)` this combination
+ *     enforced a rule it had never stated, which is the shape that put 被
+ *     through an HSK 2 partner in a retry it could not satisfy. The required
+ *     word here is one the learner already knows, so rule 1 needs no exception:
+ *     it forbids unknown words, and a ghost word is not one. */
+const forcedNoOffer = P.build({ level: 2, label: "HSK 2", length: "medium",
+  activity: "focused", offer: [], reuse: [{ w: "被" }], require: "被" });
+const demand = forcedNoOffer.split("\n").find(l => l.includes("一定要用「"));
+check(demand && demand.includes("被"), "the required word is demanded with no offer present", demand);
+check(!/学生现在可以学一个新词/.test(forcedNoOffer),
+  "and no new word is offered alongside it");
 
 /* Grammar correction. Restating a fixed version of what the student meant is
  * a different failure mode from echoing (rule 6): an echo hands back the

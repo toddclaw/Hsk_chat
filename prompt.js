@@ -12,7 +12,29 @@
   /* Register and grammar per HSK band. The bans shrink as the level rises --
    * telling an HSK 5 partner to avoid 把 and 被 forbids grammar the learner met
    * at HSK 2 and 4 -- and above HSK 5 the direction reverses into encouragement.
-   * Every sample validates clean against its own level (see the test suite). */
+   * Every sample validates clean against its own level (see the test suite).
+   *
+   * DO NOT lift a ban because the learner has been taught the word. It reads as
+   * the obvious repair, and it is wrong. Pacing teaches above the level -- 被 and
+   * 把 are HSK 3 and reach an HSK 2 learner as soon as the slate offers them --
+   * and Ghost Words then demands the very word this rule forbids, so one prompt
+   * says "don't use 被" and "you must use 被" four rules apart. Lifting the ban
+   * for taught words is the obvious way out of that. Measured over two rounds it
+   * HALVED how often 被 came back in a well-formed 被字句 (21/50 against 8/50,
+   * p = 0.0076) and reproduced the reflexive 被 and the 把…被 chaining it was
+   * meant to cure.
+   *
+   * The ban is not only a prohibition. It is the only thing telling the partner
+   * the structure is hard, and a partner that believes 被 is an ordinary word
+   * writes 我的书被我放在桌子上了. Saying "use it carefully" out loud does not
+   * substitute for it: paired with the ban it invites overreach, without the ban
+   * it invites avoidance. Both were measured; neither beat leaving the ban
+   * alone. tools/ghost-grammar-ab-results.md has the counts.
+   *
+   * What that contradiction actually needed was for the demand to be PRINTED --
+   * see the require branch further down. Unstated, it was enforced by the retry
+   * loop and by nothing else, and the partner complied with the character rather
+   * than the structure: 1/20 usable replies against 21/50 once stated. */
   var LEVEL_STYLE = {
     /* A first-week level: the 150 commonest and most-taught words of HSK 1.
      * The grammar rule is stricter than HSK 1's -- no 了 at all, and sentences
@@ -655,18 +677,27 @@
     }
     /* Gradual introduction. The offer is permission, not an instruction: a word
      * forced into a conversation it does not fit reads as a vocabulary drill,
-     * and the credit simply carries to the next turn instead. */
-    if (opts.offer && opts.offer.length) {
-      if (opts.require) {
-        // No longer a suggestion: the reply is rejected without it.
-        rules.push(convert("这次一定要用「") + opts.require +
-                   convert("」这个词，放在一句话里。这是必须的。"));
-      } else {
-        rules.push(convert("学生现在可以学一个新词。这次请用下面的一个：") +
-                   opts.offer.map(function (e) { return e.w; }).join("、") +
-                   convert("。只用一个，放在自然的句子里；" +
-                           "只有在实在放不进去的时候，才一个都不用。"));
-      }
+     * and the credit simply carries to the next turn instead.
+     *
+     * `require` is tested FIRST and independently of `offer`, because the two
+     * have different sources and only one of them implies the other. A forced
+     * offer sets both; Ghost Words sets `require` from the unused list with
+     * `offer` empty, since newWords:false suppresses the offer entirely. Nested
+     * under `if (offer.length)` -- which is how this read until it was found --
+     * the requirement was enforced in turn() and never stated in the prompt, so
+     * the one activity that always sets `require` was the one activity that
+     * never asked for it: the partner omitted the word, failed the check, and
+     * met the retry nudge having never been told. Matches the custom-prompt
+     * path in index.html, which already branched this way round. */
+    if (opts.require) {
+      // No longer a suggestion: the reply is rejected without it.
+      rules.push(convert("这次一定要用「") + opts.require +
+                 convert("」这个词，放在一句话里。这是必须的。"));
+    } else if (opts.offer && opts.offer.length) {
+      rules.push(convert("学生现在可以学一个新词。这次请用下面的一个：") +
+                 opts.offer.map(function (e) { return e.w; }).join("、") +
+                 convert("。只用一个，放在自然的句子里；" +
+                         "只有在实在放不进去的时候，才一个都不用。"));
     }
     if (opts.reuse && opts.reuse.length) {
       rules.push(convert("学生最近学了这些词，请多用：") +

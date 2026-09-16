@@ -1,0 +1,1122 @@
+{
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "level": "HSK 2",
+  "require": "被",
+  "ghosts": [
+    "被",
+    "把",
+    "为了",
+    "放",
+    "生活",
+    "手表"
+  ],
+  "note": "Recovered from the run logs after a --runs 1 smoke test overwrote this file with four rows. `wellformed` is the enumerated judge's verdict and is null where the reply never used 被, so it is not a judgement of the reply as a whole -- only of its 被. The harness now refuses to overwrite this file from a run shorter than 10.",
+  "rounds": {
+    "one": {
+      "label": "round one: v103 / stated / fixed",
+      "runs": 20,
+      "results": {
+        "v103": [
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我吃了米饭和菜。你昨天吃饭的时候，菜是什么？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了米饭和菜。饭后我看了一点儿电视。你们吃饭的时候说话了吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭后我看了一点儿电视。你朋友家的饭好吃吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在看书呢。我吃了苹果，喝了一点儿水。你昨天吃饭在哪儿？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭了。我放了米饭和菜在桌子上。饭后我看了一点儿电视。你昨天吃饭时放什么在桌子上？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我的手机昨天被拿走了。我现在找不到它。你有把东西放好过吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了。饭不好吃，因为我放错了东西。你做饭的时候喜欢放什么？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了鸡蛋和米饭。饭后我休息了，很快乐。你昨天和朋友吃什么饭了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭，放了菜和肉，很好吃。你做饭的时候放什么？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭很好吃，我吃了很多。我的手机被拿走了。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭，吃了鸡蛋。饭后我看了一会儿电视。你把饭菜放在桌子上吃吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭，唱歌了，很快乐。你昨天吃饭的时候做什么了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭，吃了鸡蛋和米饭。饭后我看了一会儿电视。你昨天和朋友吃什么了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "我昨天在家做饭了，吃了面条。饭后我看了一会儿电视。你朋友家离你家远吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了鸡蛋和米饭。饭后我看了电视，不忙。你昨天和朋友吃了什么？"
+          }
+        ],
+        "stated": [
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家看书了。书很好，我很高兴。我的手表被朋友拿走了，现在我没有。你昨天把东西给朋友了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。我把饭放在桌子上，猫在桌子上了。你吃饭的时候，把饭放在哪里？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是我的手表被朋友拿走了。我把东西放在桌子上了。你昨天放东西了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，朋友来我家。饭做好了，但是被猫吃了一点儿。我把菜放回去，再做一次。你做饭吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。我不高兴。你朋友家的饭好吃吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。我把饭放在桌子上，猫在桌子上了。你昨天吃饭的时候，在家吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，米饭和菜。我的手表被朋友拿走了，现在还没有还。我现在找手表很慢。你昨天在家吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭很好吃，我吃了很多。你昨天吃饭了吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了米饭和菜。我的手表被朋友拿走了，现在还没有还。你吃饭的时候喜欢放什么吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，菜很好吃。我的手表被朋友拿走了，现在还没有还。我每天把手表放在桌子上。你呢？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭。饭不好吃。我的手表被朋友拿走了。你昨天吃饭了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭了，因为下雨了，不能出去。我的手机被朋友拿走了，现在还没有还。为了做饭，我把菜放在桌子上。你的朋友喜欢做饭吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家吃饭了，吃了米饭和菜。我的手表被我放在桌子上了。你昨天吃饭的时候，把东西放在哪里了？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，饭很好吃。我的手表被朋友拿走了，现在还没有还。我想买新手表，你呢？你有手表吗？"
+          }
+        ],
+        "fixed": [
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了。我把菜放错了，被妈妈笑了。为了吃好吃的，我学做饭。你做饭吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭了。我把米饭放桌子上，被猫吃了。为了找猫，我找了很长时间。你做饭的时候，把东西放好了吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家。我把手表放到了桌子上，后来被我看见了。为了找它，我看了床下面。你昨天把饭放在哪里了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了。我把米饭和菜放好了。我的手表被朋友拿走了，现在不在。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我把米饭放错了，被妈妈看见了。妈妈笑了。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了。我把菜放错了，被妈妈笑了。为了吃好吃的，我学做饭。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是被小猫吃了一点儿。我把饭放在桌子上，小猫来了。你吃饭的时候，把饭放在哪里呢？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。我把米饭和菜放在桌子上，吃了一点儿。我的手表被朋友拿走了。你昨天吃饭的时候，把手机放在哪儿了？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了。我把菜放错了，被妈妈看见了。为了生活好，我买了一个新手表。你做饭的时候被谁教过？"
+          }
+        ]
+      }
+    },
+    "two": {
+      "label": "round two: 2x2 over ban x explicit caution",
+      "runs": 30,
+      "results": {
+        "stated": [
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我说错了。"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。我不高兴。"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，因为下雨了，不能出去。我的手机被朋友拿走了，现在还没有还。为了做饭，我把菜放在桌子上。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了面条。我的手表被朋友拿走了，现在不在桌子上。你吃饭的时候喜欢放电视吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了。朋友来我家，我们一起吃饭。你昨天在哪儿吃饭了？你被朋友叫去过家里吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，饭很好吃。我的手表被朋友拿走了，现在还没有还。为了朋友，我等一等。你把东西给别人过吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家。我做饭了，还看了电影。我的手表被我放在桌子上了，后来找不到了。你朋友家离你家远吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家看书了，书很好看。我的手表被朋友拿走了，现在不在我的手里。为了找手表，我找了桌子、椅子下面。你把东西放在朋友家了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了面条。我的手表被朋友拿走了，现在还没有还。我把苹果放桌子上了。你把好吃的东西放哪儿了？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，饭很好吃。我的手表被朋友拿走了，现在没有。我请朋友吃饭了，他很高兴。你昨天和朋友吃什么了？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我说错了。"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，饭和菜。饭做好了，但是我的手表被朋友拿走了，现在还没有还。你吃饭的时候高兴吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了面条。我的手表被朋友拿走了，现在还没有还。我找了桌子下面，找了床下面。"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。手表放在桌子上，现在找不到了。你朋友家在哪里？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          }
+        ],
+        "fixed": [
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我把手表放在桌子上，后来被猫打下来了。我找了一会儿。你昨天和朋友吃什么饭了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家吃饭了。我把饭放在桌子上。我的手表被朋友拿走了。你吃饭的时候喜欢做什么？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，饭被我做坏了。我把饭放着，没有看。为了吃得好，我学做饭了。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我把菜放在桌子上，被猫拿走了。我找了很长时间。你做饭的时候，猫拿走过你的东西吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家吃面包。我把牛奶放在杯子里，喝了。我的手表被我放在床上了，后来不见了。你昨天把东西放在哪里了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家。我把手表放在床上，后来被我找到了。为了找它，我看了床下面。你昨天把东西放在哪里了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，饭被我做得不好吃。我把饭放太多水了。你做饭的时候放水吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家。我把书放在桌子上，看了电影。我的手表被朋友拿走了。你昨天把东西放在哪儿了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭了。我把菜放错了，被妈妈说了。为了吃好吃的，我学做饭了。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家吃饭了。我把饭放在桌子上。我的手表被朋友拿走了。你喜欢把东西放在哪里？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我把菜放在桌子，猫把菜吃了。为了找猫，我找了很长时间。你昨天吃饭的时候，猫在吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          }
+        ],
+        "statedCare": [
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。我的手表坏了，被我放在桌子上了。你吃饭的时候喜欢说话吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。手表放在桌子上了，现在找不到。你朋友家离你家远吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了面条。我的手表坏了，被我放在桌子上了。你吃饭的时候喜欢做什么？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。手表放在桌子上，现在找不到。你朋友家离你家远吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。饭后我看了一点儿电视。我的手表被我放在桌子上了，现在找不到了。你昨天把东西放在朋友家了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭了，吃了米饭和菜。我的手表被我放在桌子上了，现在找不到。你昨天在朋友家吃饭，饭好吃吗？你经常去朋友家吗？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。手表放在桌子上，现在找不到了。你朋友家离你家远吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是我的手机被朋友拿走了。我不能看时间。你昨天去朋友家的时候，手表放在哪儿了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。我的手表坏了，被我放在桌子上了。你吃饭的时候喜欢说话吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。饭后我看了一会儿电视，因为很累。我的手表被我放在桌子上了，现在找不到了。你昨天把东西放在朋友家了吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了，吃了面条。饭后我看了一本书，书里说一个人找手表。朋友来的时候，我的书被他拿走了。你吃饭的时候，把什么菜放在前面？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。饭后我看了一会儿电视。你被朋友叫去过几次了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。我的手表坏了，被我放在桌子上了。你昨天吃饭的时候，喜欢说话吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了，吃了面条。我的手表坏了，被我放在桌子上了。你朋友家远吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了面条。饭后我看了一会儿电视。你被朋友叫去过几次？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我说错了。昨天我吃了米饭和菜，饭后我看了一会儿电视，就睡觉了。我的手表被我放在桌子上了，今天早上找不到。你昨天把东西放在朋友家了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了，吃了米饭和菜。我的手表坏了，被我放在桌子上。今天你吃饭了吗？"
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "我昨天在家做饭了，吃了面条。我的手表被朋友拿走了，今天还是没有还。你朋友喜欢吃什么？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我说错了。"
+          }
+        ],
+        "liftedCare": [
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭被我做坏了，所以我很不高兴。为了吃好饭，我把菜放好。你做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家做饭了。饭被我做坏了，不好吃。为了朋友高兴，我下次要慢慢做。你把好吃的饭放在哪儿？"
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我把米饭放在桌子上。饭好了，但是饭被猫吃了。你吃饭的时候，把饭放在哪里？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起，我错了。我昨天在家吃饭了。我把饭放在桌子上。我的手表被朋友拿走了。你吃饭的时候喜欢看电视吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "我昨天在家吃面条了。我把面条放在水里了。我的手表被朋友拿走了。你昨天在家做什么了？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。我把米饭和菜放在桌子上。饭做好了，但是我的手表被朋友拿走了。你吃饭的时候笑吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": true,
+            "validates": true,
+            "text": "对不起。我昨天在家做饭了。饭做好了，但是被猫吃了一点儿。我把饭放在桌子上，猫在桌子上了。你吃饭的时候，把饭放在哪里？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": true,
+            "wellformed": false,
+            "validates": true,
+            "text": "对不起，我说错了。我昨天在家做饭，饭被我做坏了。为了朋友高兴，你做了什么？你喜欢做饭吗？"
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          },
+          {
+            "used": false,
+            "wellformed": null,
+            "validates": false,
+            "text": null
+          }
+        ]
+      }
+    }
+  }
+}
