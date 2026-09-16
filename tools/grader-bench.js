@@ -37,7 +37,7 @@
  * the closest thing to ground truth available without hand-labelling.
  *
  *   node tools/grader-bench.js --build          # fetch and filter the corpus
- *   node tools/grader-bench.js [--n 80] [--model <id>]
+ *   node tools/grader-bench.js [--n 80] [--model <id>] [--arm shipped|checklist|correctionFirst]
  */
 "use strict";
 
@@ -63,6 +63,7 @@ const arg = (name, dflt) => {
 const MODEL = arg("model", "qwen/qwen3-235b-a22b-2507");   // TEACH_MODEL
 const CONCURRENCY = Number(arg("concurrency", 6));
 const MAX_LEVEL = Number(arg("level", 4));
+const ARM = arg("arm", "shipped");
 
 const lex = {};
 for (const n of [2, 3, 4, 5, 6, 7]) {
@@ -118,6 +119,78 @@ async function build() {
   items.forEach(i => { byLevel[i.level] = (byLevel[i.level] || 0) + 1; });
   console.log("  by level: " + Object.keys(byLevel).sort()
     .map(k => "HSK " + k + "=" + byLevel[k]).join("  "));
+}
+
+/* ---------------------------------------------------------------- candidates
+ *
+ * The shipped prompt asks one open question -- "would you let this sentence
+ * stand?" -- and then, separately, for a tag. Decision and categorisation are
+ * fused in one call, and the decision half is asked in the general form that
+ * measured worst: the same model that returns "Natural." 3/3 for 我的手表被我放
+ * 在桌子上了 catches it when the question names what to look for. So the arms
+ * below vary the DECISION and leave everything else alone.
+ *
+ *   shipped          HSKPrompt.grade(), untouched. Must land near 79% again or
+ *                    the benchmark is noisier than it looks and nothing here
+ *                    means anything.
+ *   checklist        The seventeen tags reframed as a pre-decision checklist.
+ *                    The app already carries the taxonomy; it just never asks
+ *                    the model to walk it before deciding.
+ *   correctionFirst  Rewrite first, derive the verdict from whether the rewrite
+ *                    changed anything. parseGrade() already treats an identical
+ *                    `better` as a pass, so this promotes an existing signal to
+ *                    the primary one. It is also how MuCGEC itself is built.
+ *
+ * The checklist carries NO examples. The shipped prompt's tag examples are
+ * measured-necessary for picking the right tag and stay where they are, but
+ * DEVELOPING.md's rule holds for the decision half: an example of the bad output
+ * is an instruction to produce something adjacent to it.
+ */
+const CHECKS =
+  "Before you answer, walk this list and pass the sentence only if it survives " +
+  "every line. Most learner errors are one of these:\n" +
+  "- measure words: required where a number modifies a noun, and the right one\n" +
+  "- aspect: 了 过 着 在 present where the sentence needs one, absent where it does not\n" +
+  "- 的 / 地 / 得 in the right one of their three roles\n" +
+  "- word order: where adverbials and attributives sit relative to the verb\n" +
+  "- 把: the object moved forward, and a verb carrying a result or direction\n" +
+  "- 被: an agent distinct from the subject, and a verb that can passivise at all. " +
+  "A speaker who is both the subject's owner and the agent is not a passive, and " +
+  "an intransitive verb has no object to promote\n" +
+  "- 不 against 没, by tense and by verb\n" +
+  "- comparison with 比, which takes no 很\n" +
+  "- word choice: a word used in a sense it does not carry, or a character that is " +
+  "a homophone of the intended one\n" +
+  "- collocation: legal Chinese that no native speaker would actually say\n\n" +
+  "A sentence that survives all of them is correct, and saying so is the right " +
+  "answer. Do not walk the list looking for something to report.\n\n";
+
+const CORRECTION_FIRST =
+  "Work in this order.\n\n" +
+  "First, write the sentence as a native speaker would write it, changing as " +
+  "little as possible and keeping the student's meaning and their vocabulary " +
+  "level. If nothing needs changing, reproduce it character for character -- a " +
+  "sentence that is already correct must come back untouched, and rewriting it " +
+  "to taste is a wrong answer.\n\n" +
+  "Then judge: the sentence was correct if and only if your version is identical " +
+  "to it.\n\n";
+
+/* Spliced in immediately before the JSON specification, so the framing changes
+ * and the output contract does not. Anchored on the literal line rather than an
+ * offset: if that line is reworded, this raises instead of silently appending
+ * the candidate text somewhere harmless. */
+const JSON_ANCHOR = "Reply with only a JSON object, no prose and no code fence:";
+
+function promptFor(arm, text, label) {
+  const base = HSKPrompt.grade({ text: text, label: label });
+  if (arm === "shipped") return base;
+  const extra = arm === "checklist" ? CHECKS
+              : arm === "correctionFirst" ? CORRECTION_FIRST : null;
+  if (!extra) throw new Error("unknown arm: " + arm);
+  if (base.indexOf(JSON_ANCHOR) === -1) {
+    throw new Error("grade() no longer contains the JSON anchor -- this harness has drifted");
+  }
+  return base.replace(JSON_ANCHOR, extra + JSON_ANCHOR);
 }
 
 let spend = 0;
@@ -182,13 +255,13 @@ async function score() {
   const take = pairs.slice(0, want);
   const items = [].concat.apply([], take);
 
-  console.log("model: " + MODEL + "  items: " + items.length +
+  console.log("model: " + MODEL + "  arm: " + ARM + "  items: " + items.length +
               " (" + take.length + " pairs)  source: " + bench.source + "\n");
 
   const rows = await pool(items.map(it => async () => {
     try {
       const raw = await callModel(
-        HSKPrompt.grade({ text: it.text, label: "HSK " + it.level }), 600, KEY);
+        promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
       return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
     } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
   }), CONCURRENCY);
@@ -218,9 +291,9 @@ async function score() {
   right.filter(r => r.ok === false).slice(0, 12).forEach(r => console.log("  " + r.text));
 
   console.log("\nspend: $" + spend.toFixed(4));
-  const out = path.join(__dirname, "grader-bench-results.json");
+  const out = path.join(__dirname, "grader-bench-results-" + ARM + ".json");
   fs.writeFileSync(out, JSON.stringify({
-    model: MODEL, when: new Date().toISOString(), source: bench.source,
+    model: MODEL, arm: ARM, when: new Date().toISOString(), source: bench.source,
     recall: [caught, wrong.length], specificity: [passed, right.length], rows: rows
   }, null, 2));
   console.log("written: " + path.relative(ROOT, out));

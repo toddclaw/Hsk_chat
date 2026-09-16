@@ -113,6 +113,83 @@ Fine-tuning is the wrong shape for this project: static files, no build step, no
 backend, the learner's own OpenRouter key. A fine-tune needs a hosted endpoint
 and that is a different application.
 
+## Round two: four candidate graders
+
+`--arm shipped|checklist|correctionFirst`, 120 items each, plus the shipped
+prompt on a stronger model.
+
+| arm | | recall | specificity | overall |
+|---|---|---|---|---|
+| `shipped` | control | 48/60 80% | 45/60 75% | 93/120 **78%** |
+| `checklist` | tags as a pre-decision list | 44/57 77% | 50/60 83% | 94/117 **80%** |
+| `correctionFirst` | rewrite, then compare | 46/60 77% | 50/60 83% | 96/120 **80%** |
+| `shipped` on `claude-sonnet-4.5` | | 57/59 **97%** | 30/57 **53%** | 87/116 75% |
+
+The control replicated at 93/120 against the first run's 95/120 (p = 0.876), so
+the benchmark is stable enough to read.
+
+**Neither prompt rewrite improved discrimination.** Both moved about eight points
+of specificity and lost about three of recall, for an overall change that is not
+significant (p = 0.64 and p = 0.75). That is sliding along the same trade-off
+curve, not getting better at the job. The enumerated checklist — the change with
+the actual hypothesis behind it, since enumerating failure modes is what caught
+the reflexive 被 — did not reproduce that gain on general learner error.
+
+**The stronger model is a different instrument, not a better one.** Sonnet
+catches 57 of 59 genuinely wrong sentences against qwen's 48 of 60 (p = 0.008),
+and flags half the correct ones (p = 0.013). Overall it scores *worse*.
+
+Except the specificity half of that is largely the benchmark's fault, exactly as
+flagged above. Its false alarms:
+
+```
+我不愿意这么过分地喜欢歌手。          ← the annotator's own 的→地 fix
+如果父母本身的行为已经是很差，…       ← 已经是很差 left unrepaired
+这是我的最后一封信，分开不是容易的事情。
+但将来还是愿意做一个母亲，…多教我的孩子点事情。
+```
+
+These are minimal fixes: the annotator repaired the error they were annotating
+and left the rest of the sentence alone. 过分地喜欢歌手 is still not what a
+native speaker would say. **A judge flagging them is not obviously wrong**, which
+means Sonnet's 53% is not evidence that Sonnet is over-harsh — it may be evidence
+that the positive class is not very positive. Recall is measured against three
+annotators agreeing a sentence is broken, and stays trustworthy.
+
+## The two jobs want opposite operating points
+
+This is the finding that matters, and it cuts against the stated goal of one
+trusted grader everywhere.
+
+- **Grading the learner's sentences.** A false ✗ is expensive: it puts a wrong
+  entry in the mistake ledger, moves the category counts, and picks the wrong
+  drill. Over-flagging actively teaches the wrong thing. This job wants
+  specificity.
+- **Gating the partner's replies.** Missing bad Chinese *is* the failure — the
+  whole point is that 你被妈妈帮忙过吗 must not render. Over-flagging only costs
+  a retry, and the learner has already chosen retrying over falling back. This
+  job wants recall, and can spend specificity to get it.
+
+Sonnet at 97% recall is close to an ideal gate and a poor grader. qwen at 83%
+specificity is the better grader and a leaky gate. One prompt on one model cannot
+be at both ends of a trade-off curve, and no arm here moved the curve itself.
+
+**Cost.** Sonnet ran $0.6728 for 116 calls — about $0.0058 each, against well
+under a cent for all 120 of a qwen arm. A gate on every partner turn at that rate
+is roughly 690 turns a month against the app's ~$4 budget, before the chat calls
+those turns also need.
+
+## What to measure next
+
+The positive class is now the binding constraint: it cannot distinguish a judge
+that is over-harsh from one that is right about sentences the annotators left
+awkward. Fixing it needs correct sentences that are *good*, not merely repaired —
+the app's own `STARTERS` and `LEVEL_STYLE` samples are hand-written, validated and
+at level, and native-written text at level would do.
+
+Until then, recall is the number to tune the gate on and specificity is the number
+to tune the grader on, and they should stop being treated as one problem.
+
 ## Other corpora surveyed
 
 - **[HSK Dynamic Composition Corpus](http://hsk.blcu.edu.cn/Login)** (BLCU) —

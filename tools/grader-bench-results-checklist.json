@@ -1,0 +1,856 @@
+{
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "arm": "checklist",
+  "when": "2026-09-16T01:31:10.104Z",
+  "source": "MuCGEC dev set",
+  "recall": [
+    44,
+    57
+  ],
+  "specificity": [
+    50,
+    60
+  ],
+  "rows": [
+    {
+      "text": "再说，他们可能以为自己吸烟时对别人带来的不便和不舒服也不可能很大。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 0,
+      "ok": false
+    },
+    {
+      "text": "再说，他们可能以为自己吸烟时给别人带来的不便和不舒服也不会很大。",
+      "truth": "right",
+      "level": 4,
+      "pair": 0,
+      "ok": true
+    },
+    {
+      "text": "我不愿意这么过分的喜欢歌手。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 2,
+      "ok": false
+    },
+    {
+      "text": "我不愿意这么过分地喜欢歌手。",
+      "truth": "right",
+      "level": 3,
+      "pair": 2,
+      "ok": true
+    },
+    {
+      "text": "学生大概做飞机去北京。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 4,
+      "ok": false
+    },
+    {
+      "text": "学生大概坐飞机去北京。",
+      "truth": "right",
+      "level": 3,
+      "pair": 4,
+      "ok": true
+    },
+    {
+      "text": "如果父母本身的行为已经是很差，那他们的孩子也很有可能变坏了。父母应该好好地改他们自己的态度才教他们的孩子。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 6,
+      "ok": false
+    },
+    {
+      "text": "如果父母本身的行为已经是很差，那他们的孩子也很有可能变坏了。父母应该好好地改变他们自己的态度再教他们的孩子。",
+      "truth": "right",
+      "level": 4,
+      "pair": 6,
+      "ok": false
+    },
+    {
+      "text": "除了母亲以外，父亲对我的影响也不少。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 8,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 8,
+      "ok": true
+    },
+    {
+      "text": "所以我从小到现在在这些快餐吃饭的机会很少。对我来说每次饭都很重要。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 10,
+      "ok": false
+    },
+    {
+      "text": "所以我从小到现在在这些快餐店吃饭的机会很少。对我来说每顿饭都很重要。",
+      "truth": "right",
+      "level": 4,
+      "pair": 10,
+      "ok": true
+    },
+    {
+      "text": "再见，我有要很多功课要做。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 12,
+      "ok": false
+    },
+    {
+      "text": "再见，我有很多功课要做。",
+      "truth": "right",
+      "level": 4,
+      "pair": 12,
+      "ok": true
+    },
+    {
+      "text": "我也来介绍一下儿我的家吧。我家有四口人。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 14,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 14,
+      "ok": true
+    },
+    {
+      "text": "女服务员回去后，我们一起笑了起来。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 16,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 16,
+      "ok": true
+    },
+    {
+      "text": "我生了第一个孩子的时候完全不知道怎么照顾孩子。可是我母亲住在我家附近，常常问她怎么做好。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 18,
+      "ok": false
+    },
+    {
+      "text": "我生下第一个孩子的时候完全不知道怎么照顾孩子。但是我母亲住在我家附近，所以我常常问她该怎么做。",
+      "truth": "right",
+      "level": 4,
+      "pair": 18,
+      "ok": true
+    },
+    {
+      "text": "”这样注意的话，肯定对孩子好的影响。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 20,
+      "ok": false
+    },
+    {
+      "text": "像这样注意的话，肯定对孩子有好的影响。",
+      "truth": "right",
+      "level": 4,
+      "pair": 20,
+      "ok": true
+    },
+    {
+      "text": "总之，我想应该父母使孩子在健康的环境中长大。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 22,
+      "ok": false
+    },
+    {
+      "text": "总之，我想父母应该使孩子在健康的环境中长大。",
+      "truth": "right",
+      "level": 4,
+      "pair": 22,
+      "ok": true
+    },
+    {
+      "text": "这好像影响到现在我在上海读书的。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 24,
+      "ok": false
+    },
+    {
+      "text": "这现在好像影响到我在上海读书。",
+      "truth": "right",
+      "level": 3,
+      "pair": 24,
+      "ok": true
+    },
+    {
+      "text": "可是有一些人呢肯定没有特别的爱好的。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 26,
+      "ok": false
+    },
+    {
+      "text": "可是有一些人肯定没有特别的爱好。",
+      "truth": "right",
+      "level": 4,
+      "pair": 26,
+      "ok": true
+    },
+    {
+      "text": "吃惊的是虽然这些男人都是二十几岁，其中六个却不工作。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 28,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 28,
+      "ok": true
+    },
+    {
+      "text": "有这个事情后天天很早回来，然后我帮妈妈做菜。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 30,
+      "ok": false
+    },
+    {
+      "text": "这个事情之后我天天很早回来，然后帮妈妈做菜。",
+      "truth": "right",
+      "level": 4,
+      "pair": 30,
+      "ok": true
+    },
+    {
+      "text": "还有想作为好老师的话，不能给孩子一个答案。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 32,
+      "ok": false
+    },
+    {
+      "text": "想做一名好老师的话，就不能只给孩子一个答案。",
+      "truth": "right",
+      "level": 4,
+      "pair": 32,
+      "ok": true
+    },
+    {
+      "text": "她有两个姐姐、一个妹妹和西个哥哥。但是，在她的家只有西个养：父母、妹妹和她。他们有四个猫。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 34,
+      "ok": false
+    },
+    {
+      "text": "她有两个姐姐、一个妹妹和四个哥哥。但是，在她家只有四个人养猫：父母、妹妹和她。他们只有四只猫。",
+      "truth": "right",
+      "level": 4,
+      "pair": 34,
+      "ok": true
+    },
+    {
+      "text": "还有我要感谢我的父母，他们不仅对我来说是非常好的老师，他们也是非常好的朋友。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 36,
+      "ok": true
+    },
+    {
+      "text": "还有我要感谢我的父母，对我来说他们不仅是非常好的老师，他们也是非常好的朋友。",
+      "truth": "right",
+      "level": 4,
+      "pair": 36,
+      "ok": true
+    },
+    {
+      "text": "这是我最后的一封信，分开不是容易事情。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 38,
+      "ok": false
+    },
+    {
+      "text": "这是我的最后一封信，分开不是容易的事情。",
+      "truth": "right",
+      "level": 3,
+      "pair": 38,
+      "ok": false
+    },
+    {
+      "text": "我的儿子已经大了两个月。",
+      "truth": "wrong",
+      "level": 2,
+      "pair": 40,
+      "ok": false
+    },
+    {
+      "text": "我的儿子已经两个月大了。",
+      "truth": "right",
+      "level": 2,
+      "pair": 40,
+      "ok": true
+    },
+    {
+      "text": "我很高兴她给我这个她做的礼物。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 42,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 42,
+      "ok": true
+    },
+    {
+      "text": "这是我最后的一封信分开分手",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 44,
+      "ok": false
+    },
+    {
+      "text": "这是我最后的一封分手信。",
+      "truth": "right",
+      "level": 3,
+      "pair": 44,
+      "ok": false
+    },
+    {
+      "text": "那可以减少吸烟人的增加。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 46,
+      "ok": false
+    },
+    {
+      "text": "那可以减少吸烟人数。",
+      "truth": "right",
+      "level": 4,
+      "pair": 46,
+      "ok": true
+    },
+    {
+      "text": "就一个人的生命有关。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 48,
+      "ok": false
+    },
+    {
+      "text": "就与一个人的生命有关。",
+      "truth": "right",
+      "level": 4,
+      "pair": 48,
+      "ok": false
+    },
+    {
+      "text": "但将来还是愿意做一个母亲，因此现在还是坚持下去看多点的世界，教我将来的孩子多点的事情。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 50,
+      "ok": false
+    },
+    {
+      "text": "但将来还是愿意做一个母亲，因此现在还是坚持多去看点世界，将来多教我的孩子点事情。",
+      "truth": "right",
+      "level": 4,
+      "pair": 50,
+      "ok": false
+    },
+    {
+      "text": "在山上有比较多雪。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 52,
+      "ok": false
+    },
+    {
+      "text": "山上有比较多的雪。",
+      "truth": "right",
+      "level": 3,
+      "pair": 52,
+      "ok": true
+    },
+    {
+      "text": "不是请假，而且不上课、不上班、没有学习、没有工作那样的人是一种病。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 54,
+      "ok": false
+    },
+    {
+      "text": "不请假，并且不上课、不上班、没有学习、没有工作的人是病人。",
+      "truth": "right",
+      "level": 4,
+      "pair": 54,
+      "ok": true
+    },
+    {
+      "text": "父母当孩子的老师，这不只是孩子小时候的。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 56,
+      "ok": false
+    },
+    {
+      "text": "父母是孩子的老师，不只是在孩子小时候。",
+      "truth": "right",
+      "level": 4,
+      "pair": 56,
+      "ok": true
+    },
+    {
+      "text": "虽然有苦难，我知道世界上应该有更辛苦的人。我不饿，不渴，我知道哪去睡觉，有家庭，有朋友。我真的不是最辛苦的人。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 58,
+      "ok": true
+    },
+    {
+      "text": "虽然有苦难，但是我知道世界上应该有更辛苦的人。我不饿，不渴，我知道去哪睡觉，有家庭，有朋友。我真的不是最辛苦的人。",
+      "truth": "right",
+      "level": 4,
+      "pair": 58,
+      "ok": true
+    },
+    {
+      "text": "这样一个月很快过去了。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 60,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 60,
+      "ok": true
+    },
+    {
+      "text": "我觉得这个暑假学校很有意思。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 62,
+      "ok": true
+    },
+    {
+      "text": "我觉得这个暑假待在学校很有意思。",
+      "truth": "right",
+      "level": 4,
+      "pair": 62,
+      "ok": true
+    },
+    {
+      "text": "昨天下雨很多。",
+      "truth": "wrong",
+      "level": 2,
+      "pair": 64,
+      "ok": false
+    },
+    {
+      "text": "昨天下了很多雨。",
+      "truth": "right",
+      "level": 2,
+      "pair": 64,
+      "ok": true
+    },
+    {
+      "text": "我也机场工作。虽然我的工作很无聊，我很喜欢我的同事。目前我的梦是去亚洲工作。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 66,
+      "ok": false
+    },
+    {
+      "text": "我也在机场工作。虽然我的工作很无聊，但是我很喜欢我的同事。目前我的梦想是去亚洲工作。",
+      "truth": "right",
+      "level": 4,
+      "pair": 66,
+      "ok": true
+    },
+    {
+      "text": "我说我有很好的朋友，还有很好同学。他们在一起，我感到很愉快。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 68,
+      "ok": false
+    },
+    {
+      "text": "我说我有很好的朋友，还有很好的同学。我们在一起，我感到很愉快。",
+      "truth": "right",
+      "level": 4,
+      "pair": 68,
+      "ok": true
+    },
+    {
+      "text": "在我的家有四家人：我爸爸，妈妈，哥哥和我。",
+      "truth": "wrong",
+      "level": 2,
+      "pair": 70,
+      "ok": false
+    },
+    {
+      "text": "我的家有四口人：爸爸、妈妈、哥哥和我。",
+      "truth": "right",
+      "level": 2,
+      "pair": 70,
+      "ok": true
+    },
+    {
+      "text": "我不想开车在法国。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 72,
+      "ok": false
+    },
+    {
+      "text": "我不想开车去法国。",
+      "truth": "right",
+      "level": 4,
+      "pair": 72,
+      "ok": true
+    },
+    {
+      "text": "几年前，虽然吸烟对个人健康，但吸不吸烟是个人的选择。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 74,
+      "ok": false
+    },
+    {
+      "text": "几年前，虽然吸烟对个人健康不好，但吸不吸烟是个人的选择。",
+      "truth": "right",
+      "level": 4,
+      "pair": 74,
+      "ok": true
+    },
+    {
+      "text": "但是现在的压岁钱变成一种大家的烦恼事情",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 76,
+      "ok": false
+    },
+    {
+      "text": "但是现在的压岁钱变成了一种大家烦恼的事情。",
+      "truth": "right",
+      "level": 4,
+      "pair": 76,
+      "ok": false
+    },
+    {
+      "text": "那个是多有意思啊！",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 78,
+      "ok": false
+    },
+    {
+      "text": "那个是多么有意思啊！",
+      "truth": "right",
+      "level": 4,
+      "pair": 78,
+      "ok": false
+    },
+    {
+      "text": "如果父母是很努力工作的人，他们的孩子一定将来关于任何的事努力做。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 80,
+      "ok": null
+    },
+    {
+      "text": "如果父母是很努力工作的人，他们的孩子将来一定会努力做任何的事。",
+      "truth": "right",
+      "level": 4,
+      "pair": 80,
+      "ok": false
+    },
+    {
+      "text": "我一心告诉他我自行车丢了。我也告诉他我十分对不起。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 82,
+      "ok": false
+    },
+    {
+      "text": "我告诉他我自行车丢了。我也告诉他我十分对不起。",
+      "truth": "right",
+      "level": 4,
+      "pair": 82,
+      "ok": false
+    },
+    {
+      "text": "”他跟我说“我想做医生因为我父母都是医生”。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 84,
+      "ok": true
+    },
+    {
+      "text": "他跟我说：“我想做医生，因为我父母都是医生。”",
+      "truth": "right",
+      "level": 4,
+      "pair": 84,
+      "ok": true
+    },
+    {
+      "text": "我活美国。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 86,
+      "ok": false
+    },
+    {
+      "text": "我生活在美国。",
+      "truth": "right",
+      "level": 4,
+      "pair": 86,
+      "ok": true
+    },
+    {
+      "text": "我没有够朋友。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 88,
+      "ok": false
+    },
+    {
+      "text": "我不够朋友。",
+      "truth": "right",
+      "level": 4,
+      "pair": 88,
+      "ok": false
+    },
+    {
+      "text": "我知道爷爷，奶奶有这样的想法，但是我自己的父母？！",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 90,
+      "ok": null
+    },
+    {
+      "text": "我知道爷爷、奶奶有这样的想法，但是我自己的父母呢？！",
+      "truth": "right",
+      "level": 4,
+      "pair": 90,
+      "ok": true
+    },
+    {
+      "text": "我又感觉到了被深深的感动。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 92,
+      "ok": false
+    },
+    {
+      "text": "我又感觉到了深深的感动。",
+      "truth": "right",
+      "level": 4,
+      "pair": 92,
+      "ok": true
+    },
+    {
+      "text": "人生可以说是个练习不生气。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 94,
+      "ok": false
+    },
+    {
+      "text": "人生可以说是个练习不生气的过程。",
+      "truth": "right",
+      "level": 4,
+      "pair": 94,
+      "ok": true
+    },
+    {
+      "text": "我想这样的态度是对自己和国家都不好。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 96,
+      "ok": true
+    },
+    {
+      "text": "我想，我这样的态度对自己和国家都不好。",
+      "truth": "right",
+      "level": 4,
+      "pair": 96,
+      "ok": true
+    },
+    {
+      "text": "希望将来吸烟者会越来越减少。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 98,
+      "ok": false
+    },
+    {
+      "text": "希望将来吸烟者会越来越少。",
+      "truth": "right",
+      "level": 4,
+      "pair": 98,
+      "ok": true
+    },
+    {
+      "text": "我爸爸和妈妈越来越老，我爸爸快六十五岁，而且他的心不太好，我害怕有问题。所有机会我就去看他。一起吃饭，天儿。对我说，这个是非常重要的！",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 100,
+      "ok": false
+    },
+    {
+      "text": "我爸爸和妈妈越来越老，我爸爸快六十五岁了，而且他的心脏不太好，我害怕有问题。所以有机会我就去看他。一起吃饭，聊天儿。要我来说，这个是非常重要的！",
+      "truth": "right",
+      "level": 4,
+      "pair": 100,
+      "ok": true
+    },
+    {
+      "text": "什么是我的梦想呢？",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 102,
+      "ok": true
+    },
+    {
+      "text": "我的梦想是什么呢？",
+      "truth": "right",
+      "level": 4,
+      "pair": 102,
+      "ok": true
+    },
+    {
+      "text": "其次，吸烟给周围人比自己更深刻的影响。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 104,
+      "ok": false
+    },
+    {
+      "text": "其次，吸烟给周围人带来比自己更严重的影响。",
+      "truth": "right",
+      "level": 4,
+      "pair": 104,
+      "ok": true
+    },
+    {
+      "text": "如果你不知道将来你应该丢面子”。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 106,
+      "ok": false
+    },
+    {
+      "text": "“如果你不知道，将来你会丢面子的”。",
+      "truth": "right",
+      "level": 4,
+      "pair": 106,
+      "ok": true
+    },
+    {
+      "text": "但是连有孙女以后父母给他们留下的经验、知识，他们永远不会忘记。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 108,
+      "ok": false
+    },
+    {
+      "text": "但是在有孙女以后，父母给他们留下的经验、知识，他们永远不会忘记。",
+      "truth": "right",
+      "level": 4,
+      "pair": 108,
+      "ok": true
+    },
+    {
+      "text": "那么谁给我们知识呢，大大概的情况下父母教我们最基本的东西。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 110,
+      "ok": false
+    },
+    {
+      "text": "那么谁给我们知识呢，在大部分的情况下，父母教我们最基本的东西。",
+      "truth": "right",
+      "level": 4,
+      "pair": 110,
+      "ok": true
+    },
+    {
+      "text": "还要提一个事。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 112,
+      "ok": true
+    },
+    {
+      "text": "没有错误",
+      "truth": "right",
+      "level": 4,
+      "pair": 112,
+      "ok": true
+    },
+    {
+      "text": "我小时候记得她常常很晚回到家。",
+      "truth": "wrong",
+      "level": 3,
+      "pair": 114,
+      "ok": false
+    },
+    {
+      "text": "我记得小时候她常常很晚回到家。",
+      "truth": "right",
+      "level": 3,
+      "pair": 114,
+      "ok": true
+    },
+    {
+      "text": "在学校能学到什么数学呀、音乐呀、技术呀什么什么的，可是那样的课并没有关系跟他们的性格。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 116,
+      "ok": null
+    },
+    {
+      "text": "在学校能学到什么数学呀、音乐呀、技术呀什么什么的，可是那样的课跟他们的性格并没有关系。",
+      "truth": "right",
+      "level": 4,
+      "pair": 116,
+      "ok": true
+    },
+    {
+      "text": "我在三年之间一直跟一样的人在一起，从来没有换过班。",
+      "truth": "wrong",
+      "level": 4,
+      "pair": 118,
+      "ok": false
+    },
+    {
+      "text": "我在这三年里一直跟一样的人在一起，从来没有换过班。",
+      "truth": "right",
+      "level": 4,
+      "pair": 118,
+      "ok": true
+    }
+  ]
+}
