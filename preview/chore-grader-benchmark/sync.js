@@ -304,8 +304,8 @@
   var PREFS_KEYS = [
     "level", "goalLevel", "model", "teachModel", "storyModel", "twentyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "drillTurns", "ghostUses", "report", "reportAt", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "gate", "pace", "budget",
-    "teachPrompts"
+    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "gate", "debugLog",
+    "pace", "budget", "teachPrompts"
   ];
 
   /* chatTime rides in the same prefs blob but is deliberately NOT in the list
@@ -330,7 +330,61 @@
     });
   }
 
+  /* ------------------------------------------------------- the console log
+   *
+   * Secrets are stripped HERE, on the way into the buffer, not on the way out
+   * to the network. A line that was scrubbed late would already be sitting in
+   * localStorage, and the whole point of this table is that things get read
+   * long after the moment they happened.
+   *
+   * The OpenRouter key is the one secret in this app that a log could plausibly
+   * pick up -- it is pasted by hand, it appears in error text from some
+   * proxies, and CLAUDE.md's rule is that it never lands in a file or a
+   * message. `sk-or-...` and any Authorization value go to a marker instead. */
+  var SECRETS = [
+    [/sk-or-[A-Za-z0-9_\-]+/g, "sk-or-[REDACTED]"],
+    /* The optional second "bearer" matters: without it, "Authorization: Bearer
+     * sk-live-..." matched only as far as the word Bearer and left the token
+     * itself sitting in the log. */
+    [/(bearer|apikey|authorization)(["'\s:=]+)(bearer[\s:="']+)?[A-Za-z0-9_\-.]+/gi,
+     "$1$2[REDACTED]"],
+    [/sb_secret_[A-Za-z0-9_\-]+/g, "sb_secret_[REDACTED]"]
+  ];
+  function scrubSecrets(s) {
+    return SECRETS.reduce(function (t, r) { return t.replace(r[0], r[1]); }, String(s));
+  }
+
+  /* One console argument as a string. Objects are JSON where they can be, since
+   * a log full of "[object Object]" is a log that answers nothing, and the
+   * grader verdicts this exists to capture are all objects. */
+  function logArg(a) {
+    if (typeof a === "string") return a;
+    if (a instanceof Error) return (a.name || "Error") + ": " + (a.message || "");
+    try { return JSON.stringify(a); } catch (e) { return String(a); }
+  }
+
+  /* CLIP is per line, not per batch. One runaway model reply -- a story segment
+   * that hit the token ceiling -- would otherwise be the whole batch, and the
+   * lines around it are what say why it happened. */
+  var CLIP = 4000, KEEP = 1000;
+  function logLine(level, args) {
+    var text = Array.prototype.map.call(args, logArg).join(" ");
+    if (text.length > CLIP) text = text.slice(0, CLIP) + "…[+" + (text.length - CLIP) + "]";
+    return { t: new Date().toISOString(), l: level, m: scrubSecrets(text) };
+  }
+
+  // Newest KEEP lines. Dropping the oldest is right: a bug is diagnosed from
+  // what led up to it, and what led up to it is the end of the buffer.
+  function pushLine(buf, line) {
+    buf.push(line);
+    return buf.length > KEEP ? buf.slice(buf.length - KEEP) : buf;
+  }
+
   var api = {
+    scrubSecrets: scrubSecrets,
+    logLine: logLine,
+    pushLine: pushLine,
+    LOG_KEEP: KEEP,
     messageToRow: messageToRow,
     rowToMessage: rowToMessage,
     mergeMessages: mergeMessages,
@@ -345,6 +399,8 @@
     retrievalToRow: retrievalToRow,
     rowsToRetrievals: rowsToRetrievals,
     mergeRetrievals: mergeRetrievals,
+    pushDebugLog: pushDebugLog,
+    debugLogSupported: function () { return schemaHasDebugLog !== false; },
     PREFS_KEYS: PREFS_KEYS,
     prefsSnapshot: prefsSnapshot,
     applyPrefsSnapshot: applyPrefsSnapshot
@@ -442,6 +498,34 @@
     var r = await q;
     if (r.error) throw r.error;
     return r.data || [];
+  }
+
+  /* Whether this project has had the debug_log migration run. Probed once, and
+   * a miss turns the log off for the session rather than throwing on every
+   * flush -- same rule as the conversations columns, for the same reason:
+   * whoever deploys the app may not be whoever runs the SQL. */
+  var schemaHasDebugLog = null;
+  async function pushDebugLog(row) {
+    if (schemaHasDebugLog === false) return false;
+    var r = await client.from("debug_log").insert(row);
+    if (r.error) {
+      /* PostgREST answers a missing table two different ways depending on
+       * whether the schema cache has been reloaded -- PGRST205 "Could not find
+       * the table" is what this project actually returned, and 42P01 "relation
+       * does not exist" is what comes back once it has. Matching only the
+       * second is how a graceful degradation turns into an exception on every
+       * flush; found by pointing tools/pull-debug.js at the real database.
+       * Anything else -- a network blip, a policy problem -- is not a reason to
+       * stop logging for the session. */
+      if (/does not exist|42P01|PGRST205|Could not find the table/i
+            .test((r.error.message || "") + (r.error.code || ""))) {
+        schemaHasDebugLog = false;
+        return false;
+      }
+      throw r.error;
+    }
+    schemaHasDebugLog = true;
+    return true;
   }
 
   async function pushVocab(table, rows) {
@@ -679,8 +763,12 @@
    * cannot drift from the schema: a table added to db/schema.sql and forgotten
    * here would leave data behind that the app promised to remove, so
    * test/sync.test.js reads the schema and checks this list still matches it. */
+  /* debug_log belongs here and the suite enforces it: the log holds whole model
+   * replies and whole learner sentences, so "delete everything in the cloud"
+   * that left it standing would be a lie about the most verbatim copy of the
+   * conversation on the server. */
   var USER_TABLES = ["conversations", "messages", "vocab_extra", "vocab_learning",
-                     "vocab_known", "retrievals", "prefs"];
+                     "vocab_known", "retrievals", "prefs", "debug_log"];
 
   /* Sequential rather than Promise.all: the point of this call is that the user
    * is told the truth about what happened, and a partial failure buried inside a
