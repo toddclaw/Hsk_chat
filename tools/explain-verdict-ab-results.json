@@ -1,0 +1,781 @@
+{
+  "model": "qwen/qwen3-235b-a22b-2507",
+  "runs": 3,
+  "level": "HSK 2",
+  "when": "2026-09-15T18:46:02.607Z",
+  "sentences": [
+    "我昨天去公园了。",
+    "我很喜欢吃中国菜。",
+    "我们昨天看电影了，很有意思。",
+    "我买了三个书。",
+    "他比我很高。",
+    "我去商店昨天。",
+    "他不有钱。",
+    "给我水。",
+    "我每天走路去上班，因为公司很近。",
+    "我的手表被我放在桌子上了。",
+    "请你帮助我。",
+    "我不能说中文。",
+    "我很喜欢学习中文语言。",
+    "昨天的天气非常地好。",
+    "我要一个咖啡。"
+  ],
+  "grades": [
+    {
+      "ok": true,
+      "meant": "I went to the park yesterday.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "I really like to eat Chinese food.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "We watched a movie yesterday; it was very interesting.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": false,
+      "meant": "I bought three books.",
+      "better": "我买了三本书。",
+      "cats": {
+        "word": false,
+        "grammar": true,
+        "order": true,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "measure-word",
+          "note": "A measure word is required between the number and the noun for most nouns, including 书."
+        }
+      ]
+    },
+    {
+      "ok": false,
+      "meant": "He is much taller than me.",
+      "better": "他比我高。",
+      "cats": {
+        "word": true,
+        "grammar": false,
+        "order": true,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "comparison-bi",
+          "note": "A 比 sentence should not include 很 before the adjective."
+        }
+      ]
+    },
+    {
+      "ok": false,
+      "meant": "I went to the store yesterday.",
+      "better": "我昨天去商店。",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": false,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "word-order-adverbial",
+          "note": "Adverbial phrases like time expressions should come before the verb phrase."
+        }
+      ]
+    },
+    {
+      "ok": false,
+      "meant": "He is not rich.",
+      "better": "他没有钱。",
+      "cats": {
+        "word": true,
+        "grammar": false,
+        "order": true,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "negation-bu-mei",
+          "note": "Money possession uses 没有, not 不有钱."
+        }
+      ]
+    },
+    {
+      "ok": false,
+      "meant": "Give me water.",
+      "better": "请给我一杯水。",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "unnatural",
+          "note": "The sentence is grammatically correct but sounds abrupt; a native speaker would typically include a measure word and polite particle."
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "meant": "I walk to work every day because the company is very close.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "My watch was placed by me on the table.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "Please help me.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "I cannot speak Chinese.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": false,
+      "meant": "I really like studying Chinese language.",
+      "better": "我很喜欢学习中文。",
+      "cats": {
+        "word": false,
+        "grammar": true,
+        "order": true,
+        "natural": false
+      },
+      "errors": [
+        {
+          "tag": "wrong-word",
+          "note": "中文 already means 'Chinese language', so 语言 is redundant and incorrect."
+        },
+        {
+          "tag": "unnatural",
+          "note": "Native speakers would say 中文, not 中文语言, to refer to the Chinese language."
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "meant": "The weather yesterday was very good.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    },
+    {
+      "ok": true,
+      "meant": "I want a coffee.",
+      "better": "",
+      "cats": {
+        "word": true,
+        "grammar": true,
+        "order": true,
+        "natural": true
+      },
+      "errors": []
+    }
+  ],
+  "rows": [
+    {
+      "i": 0,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 0,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 0,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 0,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 0,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 0,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 1,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 2,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 3,
+      "arm": "independent",
+      "text": "Not correct.\n我买了三本书。\nThe word \"book\" requires a measure word \"本\" when used with a number; the structure is [number] + [measure word] + [noun], not [number] + [noun].",
+      "opened": "Not correct."
+    },
+    {
+      "i": 3,
+      "arm": "independent",
+      "text": "Not correct.  \n我买了三本书。  \nThe word \"book\" requires a measure word \"本\" when preceded by a number; \"个\" is a general measure word but not used with books.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 3,
+      "arm": "independent",
+      "text": "Not correct.  \n我买了三本书。  \nThe measure word 本 is required for books; without it, the sentence is grammatically incomplete. Measure words are used between numerals and nouns in Chinese.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 3,
+      "arm": "handed",
+      "text": "Not correct.  \n我买了三本书。  \nThe word \"书\" (book) requires the measure word \"本\" when counted, so \"三个书\" is incorrect because \"个\" is not the appropriate measure word for books. The correct structure is number + measure word + noun.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 3,
+      "arm": "handed",
+      "text": "Not correct.  \n我买了三本书。  \nThe word \"书\" requires a measure word after the number, and \"本\" is the correct measure word for books. The rule is that most nouns in Chinese need a measure word between the number and the noun.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 3,
+      "arm": "handed",
+      "text": "Not correct.  \n我买了三本书。  \nThe word 个 is a general measure word, but 书 (book) requires the specific measure word 本 when counting. In Chinese, most nouns must be paired with an appropriate measure word when preceded by a number.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "independent",
+      "text": "Not correct.  \n他比我高。  \nThe sentence incorrectly uses 很 with a comparative structure; 很 should not appear after 比 in standard comparisons.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "independent",
+      "text": "Not correct.  \n他比我高。  \nThe phrase \"很高\" is redundant here because the comparison structure \"比\" already implies a difference in degree, so the intensifier \"很\" should not be used. In comparative sentences with \"比\", the adjective stands alone without modifiers like \"很\".",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "independent",
+      "text": "Not correct.\n他比我高。\nThe structure \"比\" already implies comparison, so adding \"很\" (very) is redundant and ungrammatical. In comparative constructions with \"比\", adjectives stand alone without degree modifiers like \"很\".",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "handed",
+      "text": "Not correct.  \n他比我高。  \nThe mistake comes from using 很 in a comparison with 比. In Chinese, when making a comparison using 比, you should not include 很 before the adjective. The structure is simply A 比 B + adjective.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "handed",
+      "text": "Not correct.  \n他比我高。  \nThe phrase \"比我很高\" incorrectly includes 很 before the adjective in a 比 comparison sentence, which is not allowed. The structure \"A 比 B + adjective\" does not use 很 to modify the adjective.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 4,
+      "arm": "handed",
+      "text": "Not correct.  \n他比我高。  \nThe structure \"A 比 B + adjective\" does not allow 很 before the adjective because the comparison itself already expresses the degree. Using 很 in this context makes the sentence unnatural and grammatically incorrect at HSK 2 level.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "independent",
+      "text": "Not correct.\n昨天我去商店。\nTime expressions usually come at the beginning of the sentence in Chinese, before the subject and verb. The word order in the original sentence follows English syntax, which is not used in Chinese.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "independent",
+      "text": "Not correct.\n昨天我去商店。\nTime words usually come at the beginning of the sentence in Chinese, not at the end.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "independent",
+      "text": "Not correct.\n昨天我去商店。\nTime words usually come at the beginning of the sentence in Chinese, not at the end.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "handed",
+      "text": "Not correct.  \n我昨天去商店。  \nThe adverbial phrase \"昨天\" (yesterday) should come before the verb phrase in Chinese. Placing time expressions after the verb makes the sentence sound unnatural, even if the meaning is understandable.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "handed",
+      "text": "Not correct.  \n我昨天去商店。  \nThe adverbial phrase \"昨天\" should come before the verb phrase \"去商店\" to follow standard Chinese word order. Placing time expressions after the verb makes the sentence sound unnatural.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 5,
+      "arm": "handed",
+      "text": "Not correct.  \n我昨天去商店。  \nThe adverbial time expression \"昨天\" should come before the verb phrase, not after it. This follows the standard Chinese word order rule where time expressions precede the action.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "independent",
+      "text": "Not correct.\n他没有钱。\nThe structure \"不有钱\" is incorrect because \"有\" (to have) is a stative verb and uses \"没有\" for negation in most contexts, especially when stating possession. Use \"没有 + noun\" to negate possession, not \"不 + 有\".",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "independent",
+      "text": "Not correct.  \n他没有钱。\n\nThe phrase \"不有钱\" incorrectly combines the negative \"不\" with \"有\" (to have). The correct negative form of \"有\" is \"没有,\" not \"不有.\" Use \"没有\" to negate possession.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "independent",
+      "text": "Not correct.  \n他没有钱。\n\nThe structure \"不有钱\" is incorrect because \"有\" (to have) is a stative verb and uses \"没有\" for negation in most contexts, especially when talking about possession. Use \"没有 + noun\" for \"do not have [something]\".",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "handed",
+      "text": "Not correct.  \n他没有钱。  \nThe student used 不有钱, but possession of money (or lack thereof) requires 没有, not 不. The negative 没有 is used for absence or lack of something tangible, especially with nouns like 钱.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "handed",
+      "text": "Not correct.  \n他没有钱。  \nThe student used 不有钱, but to negate possession (especially with money or concrete things), 没有 must be used instead of 不有. The rule is that 没 negates existence or possession, while 不 negates adjectives or volitional actions.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 6,
+      "arm": "handed",
+      "text": "Not correct.  \n他没有钱。  \nThe student used 不有钱, but to negate possession or existence, especially with money, 没有 is required instead of 不. The word 不 is used for general negation, while 没有 specifically negates possession or past events.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 7,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 7,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 7,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 7,
+      "arm": "handed",
+      "text": "Understandable, but not how a native speaker would say it.  \n请给我一杯水。  \nThe student omitted a measure word (一杯) and a polite particle or softening structure like 请, which are typically used in requests to sound natural. In Chinese, giving quantities with measure words and using polite forms makes the sentence flow like native speech.",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 7,
+      "arm": "handed",
+      "text": "Understandable, but not how a native speaker would say it.  \n请给我一杯水。  \nThe student omitted a measure word (一杯) and a polite request structure (请...给), which are typically used in natural spoken Chinese when asking for something. Including these makes the sentence sound more complete and polite.",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 7,
+      "arm": "handed",
+      "text": "Understandable, but not how a native speaker would say it.  \n请给我一杯水。  \nThe student omitted a measure word (一杯) and a polite particle (请), which are typically used in requests to sound natural. In Chinese, nouns like \"water\" usually require a measure word when quantified, and politeness in requests often includes 请.",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 8,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 8,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 8,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 8,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 8,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 8,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 9,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 10,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 11,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 12,
+      "arm": "independent",
+      "text": "Understandable, but not how a native speaker would say it.  \n我很喜欢学习中文。  \n\"中文语言\" is redundant because \"中文\" already means \"Chinese language\"; native speakers would simply say \"中文\" without adding \"语言\".",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 12,
+      "arm": "independent",
+      "text": "Understandable, but not how a native speaker would say it.  \n我很喜欢学习中文。  \n\"语言\" is redundant after \"中文\" because \"中文\" already means \"the Chinese language\"; native speakers typically omit the general word for \"language\" in this context.",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 12,
+      "arm": "independent",
+      "text": "Understandable, but not how a native speaker would say it.  \n我很喜欢学习中文。  \n\"中文语言\" is redundant because \"中文\" already means \"Chinese language\"; native speakers would simply say \"中文\" without adding \"语言\".",
+      "opened": "Understandable, but not how a native speaker would say it."
+    },
+    {
+      "i": 12,
+      "arm": "handed",
+      "text": "Not correct.  \n我很喜欢学习中文。  \nThe word 中文 already means 'Chinese language', so adding 语言 makes it redundant and incorrect. Native speakers naturally say 中文, not 中文语言, when referring to the Chinese language.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 12,
+      "arm": "handed",
+      "text": "Not correct.  \nThe word choice is incorrect because 中文 already means 'Chinese language,' so adding 语言 creates redundancy and is unnatural. Native speakers naturally say 中文, not 中文语言.  \n我很喜欢学习中文。  \nThe student may have thought that adding 语言 clarifies the meaning, but in Chinese, 中文 alone is sufficient and more natural.  \nThe rule is that 中文 inherently includes the meaning of 'language,' so no additional word is needed.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 12,
+      "arm": "handed",
+      "text": "Not correct.  \n我很喜欢学习中文。  \nThe word 中文 already means 'Chinese language', so adding 语言 creates redundancy and is incorrect. Native speakers naturally say 中文, not 中文语言, when referring to the language.",
+      "opened": "Not correct."
+    },
+    {
+      "i": 13,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 13,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 13,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 13,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 13,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 13,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "independent",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    },
+    {
+      "i": 14,
+      "arm": "handed",
+      "text": "Natural.",
+      "opened": "Natural."
+    }
+  ]
+}
