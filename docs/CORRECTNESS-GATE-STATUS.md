@@ -1,8 +1,8 @@
 # Correctness gate — where this stands, and what to do next
 
-Written 2026-09-16, updated 2026-09-17 with round twenty-two, for a reader
+Written 2026-09-16, updated 2026-09-17 with rounds twenty-two and -three, for a reader
 starting cold.
-`tools/grader-bench-results.md` is the full study, twenty-two rounds. This is the
+`tools/grader-bench-results.md` is the full study, twenty-three rounds. This is the
 short version and the next three moves.
 
 ## The goal
@@ -45,11 +45,26 @@ from recall to over-firing:
 | `decomposed` four-lens | 95% 20/21 | 85% | 67% | 50% | $0.00035 |
 | lens cascade | 95% 20/21 | 88% | 50% | 62% | $0.00141 |
 
-**`nativeFrame` is the arm.** Free, already the best prompt on the learner side,
-and tied with the best paid option on the only axis with the power to separate
-anything — 198-201 negatives behind specificity against 21 strict positives
-behind recall. The four-lens design and the cascade are out: a gate firing on
-half the partner's turns is a retry loop with a random number generator in it.
+**Pair two arms rather than improve one** (round twenty-three). Two prompt
+ideas both failed — giving the four lenses the native frame cost 10 points of
+recall for nothing, and deleting the cascade's six judgement lenses made
+over-firing worse, so the rewrite proposer is where that comes from. But the
+arms already measured combine for free, and two combinations beat every single
+one (`tools/partner-pairs.js`):
+
+| | strict | loose | spec | fires | $/turn |
+|---|---|---|---|---|---|
+| `softBar`/glm alone | 100% | 60% | 86% | 28% | $0.00030 |
+| **`nativeFrame` OR `softBar`/glm** | **100%** | **73%** | **80%** | 37% | $0.00041 |
+| `decomposed` alone | 95% | 85% | 67% | 50% | $0.00035 |
+| **`decomposed` OR `softBar`/glm** | **100%** | **90%** | 62% | 55% | $0.00065 |
+
+Both catch every outright error in the corpus. The choice between them is how
+many retries are tolerable, which is the bar question below.
+
+A union needs two graders that disagree productively, and two prompts on one
+model do not: `decomposed OR nativeFrame` is no better than `decomposed` alone.
+The cheap qwen arm and the reasoning model are what make it work.
 
 **Strict recall is not comparable between the two corpora.** The two label
 passes drew the wrong/unnatural line in different places. A second blind pass
@@ -74,19 +89,22 @@ against synthetic, real and pooled. The answer is above.
 
 ### 3. Pick a bar and wire the gate
 
-The only thing left, and the bar is Todd's decision:
+The only thing left, and the bar is Todd's — he copies the partner's Chinese as
+his main learning channel, so a miss costs him a wrong sentence in his own
+writing and a false alarm costs him a retry. Those are not symmetric for him:
 
-- **"no outright errors"** → `nativeFrame`. Catches 18 of the 21 outright errors
-  in real traffic, including both reflexive 被 sentences, and retries 29% of
-  turns. Shippable today.
-- **"worth imitating"** → the same arm catches 61% of the merely-unnatural, and
-  the arms that reach 85% fire on half the corpus. The stiltedness channel costs
-  roughly 20 points of over-firing.
+| bar | arm | catches | retries |
+|---|---|---|---|
+| fewest retries | `softBar`/glm | every error, 60% of the stiltedness | 28% of turns |
+| **balanced** | `nativeFrame` OR `softBar`/glm | every error, 73% | 37% of turns |
+| most imitable | `decomposed` OR `softBar`/glm | every error, 90% | 55% of turns |
 
-What the numbers raise and measurement cannot answer: at 29% firing and 69%
-precision, **one partner turn in three is retried and one retry in three is
-spent on Chinese that was already fine.** Whether that latency is acceptable is
-a product call.
+At the balanced setting roughly **one partner turn in three is regenerated and
+one regeneration in three is spent on Chinese that was already fine** — a pause
+he will feel, not a wrong answer he will see. That is the trade to put to him.
+
+Whatever ships needs the retry loop built around it: the gate never displays a
+correction (`better` leaks out-of-level vocabulary), it regenerates.
 
 ## Two findings worth reusing anywhere
 
@@ -128,6 +146,7 @@ a product call.
 | `tools/partner-corpus.js` | generate and score partner turns |
 | `tools/partner-lens.js` | the lens cascade's prompts, pure and testable |
 | `tools/partner-corpus-table.js` | every arm and model, synthetic / real / pooled |
+| `tools/partner-pairs.js` | every PAIR of arms, unioned and intersected — free, no API calls |
 | `tools/real-qwen.js` | builds the real qwen corpus — joins labels to the activity column |
 | `tools/label-calibrate.js` | what a Claude label is worth (93%, blind) |
 | `~/Documents/chat-export.json` | real history — **outside the repo, no .gitignore here** |

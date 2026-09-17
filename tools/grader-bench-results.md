@@ -1675,6 +1675,96 @@ catches 18 of the 21 outright errors in real traffic, including both reflexive
 only 69% of those firings are justified by the loose bar. One partner turn in
 three is retried, and one retry in three is spent on Chinese that was fine.
 
+## Round twenty-three: two prompt ideas that failed, and a pair that did not
+
+Round twenty-two left two arms Todd liked and a hole between them. `softBar` on
+glm-5.3-flash catches every outright error and only 60% of the stiltedness;
+`decomposed` catches 85% of the stiltedness and fires on half the corpus. He
+copies the partner's Chinese as his main way of learning, so for him a miss costs
+a wrong sentence in his own writing and a false alarm costs a retry. He wants
+both numbers up.
+
+### The four lenses never got the frame, and do not want it
+
+Round eleven measured the frame on a single-call grader and it was worth fourteen
+points: say the partner wrote the text, name no level. The decomposed design
+predates that and still opens all five of its prompts with "written by a learner
+at HSK 2" — four separate chances to mark the partner's Chinese down as
+homework. Reframing all five looked free.
+
+| on 222 real turns | strict | loose | spec | fires |
+|---|---|---|---|---|
+| `decomposed` | 95% | 85% | 67% | 50% |
+| `decomposedNative` | 81% | 75% | 66% | 47% |
+
+**Ten points of recall for nothing.** The frame that is worth fourteen points to
+one broad call is worth minus ten to four narrow ones — and in hindsight the
+mechanism is not mysterious: a specialist asked about aspect is already narrow
+enough not to be nitpicking level, and telling it the writer is a native removes
+the only reason it had to report anything at all. This is the fourth time in this
+document a prompt fix has moved the number the wrong way.
+
+### The rewrite proposer is the cascade's over-firing, not its six judges
+
+The cascade fires on 62% of real turns. The obvious suspect was the six lenses
+that ask a judgement question, since this study has twice measured that this
+model judges badly and rewrites well. Deleting them leaves the rewrite proposer,
+its grounding filters and its confirm step — eight calls a turn instead of
+forty-five.
+
+| | strict | loose | spec | fires | $/turn |
+|---|---|---|---|---|---|
+| lens cascade | 95% | 88% | 50% | 62% | $0.00141 |
+| `rewriteLoose` | 67% | 76% | 40% | **65%** | $0.00030 |
+| `rewrite` | 48% | 56% | 75% | 35% | $0.00025 |
+
+Firing went **up**. So the six judges were not the false alarms — the rewrite
+proposer is, and it is structural: a model asked to rewrite a sentence rewrites
+it, every time, and the confirm step is what has to throw the difference away.
+"Ask it to rewrite, not to judge" still holds as a way to SEE a fault the model
+will not admit to. It does not hold as a gate, because it also sees faults that
+are not there, and at the same rate.
+
+### Pairing two arms beats improving either one
+
+Neither prompt idea moved anything, so the arms measured in round twenty-two are
+the arms there are. But there are 36 pairs of them, every pair costs nothing to
+evaluate because every arm has already judged all 222 turns, and two pairs beat
+every single arm (`tools/partner-pairs.js`):
+
+| | strict | loose | spec | fires | prec | $/turn |
+|---|---|---|---|---|---|---|
+| `softBar`/glm alone | 100% | 60% | 86% | 28% | 68% | $0.00030 |
+| **`nativeFrame` OR `softBar`/glm** | **100%** | **73%** | **80%** | 37% | 63% | $0.00041 |
+| `decomposed` AND `nativeFrame-glm` | 95% | 75% | 81% | 37% | 65% | $0.00065 |
+| `decomposed` alone | 95% | 85% | 67% | 50% | 55% | $0.00035 |
+| **`decomposed` OR `softBar`/glm** | **100%** | **90%** | 62% | 55% | 53% | $0.00065 |
+
+`nativeFrame` OR `softBar`/glm dominates `softBar` alone: thirteen points of
+stiltedness for six of specificity, at $0.0004. And `decomposed` OR `softBar`/glm
+is the ceiling — 90% of everything not worth imitating, and every outright error
+— bought at 55% firing.
+
+The two cheap qwen arms disagree productively with the reasoning model, which is
+what a union needs and what two prompts on the same model do not give you
+(`decomposed OR nativeFrame` is 85% loose at 65% specificity, no better than
+`decomposed` on its own).
+
+### Where the false alarms are not
+
+Not in one activity. For the recommended pair they run chat 17%, drill 19%,
+focused 31%, twenty 15% of clean turns — so there is no cheap win from exempting
+the formulaic activities, and the twenty-questions circumlocution that looked
+like the problem in round twenty-two is not it.
+
+### The honest caveat
+
+21 strict positives. 100%, 95% and 86% are one to three turns apart and nothing
+here separates them. The loose bar (72 positives) and specificity (150 negatives)
+are the columns that can carry an argument, and on those the pairs genuinely
+beat the singles. Six arms have now been compared on this corpus and a seventh
+would want a held-out split.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

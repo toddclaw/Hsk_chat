@@ -160,6 +160,11 @@ async function grade() {
   const bench = require("./grader-bench.js");
   const judge = arm === "decomposed"
     ? (text, label, KEY) => bench.judgeDecomposed(text, label, KEY)
+    : arm === "decomposedNative"
+    ? (text, label, KEY) => bench.judgeDecomposed(text, label, KEY, true)
+    : arm === "rewrite" || arm === "rewriteLoose"
+    ? (text, label, KEY) => bench.judgeRewrite(text, KEY,
+        arm === "rewriteLoose" ? "loose" : "strict")
     : arm === "lens" || arm === "lensLoose"
     ? (text, label, KEY) => bench.judgeLens(text, label, KEY, null,
         arm === "lensLoose" ? "loose" : "strict")
@@ -185,7 +190,7 @@ async function grade() {
    * enough to fail 164 of 204 turns -- and before failures were made loud, that
    * same limit had quietly scored the cascade at 24% instead of 76% by returning
    * "clean" for turns whose every call had died. Low and slow, overridable. */
-  const WIDTH = Number(arg("width", /^lens/.test(arm) ? 5 : 6));
+  const WIDTH = Number(arg("width", /^lens|^rewrite/.test(arm) ? 5 : 6));
   await Promise.all(Array.from({ length: WIDTH }, async () => {
     while (queue.length) {
       const it = queue.shift();

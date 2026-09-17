@@ -93,7 +93,16 @@ The grader has three benchmarks, and the one that counts is real traffic.
   raced on the difference.
 
 `nativeFrame` is the best prompt measured on both halves: it tells the grader the
-*partner* wrote the text and names no level.
+*partner* wrote the text and names no level. But on the partner, **pairing two
+arms beats improving either one** — `nativeFrame` OR `softBar`/glm-5.3-flash
+catches every outright error and 73% of the merely-stilted at 80% specificity
+for $0.0004 a turn, and `tools/partner-pairs.js` scores all 36 pairs from stored
+verdicts for free. A union needs two graders that disagree productively: two
+prompts on the same model do not.
+
+**Four prompt fixes in this study have moved the number the wrong way**, the
+latest being the native frame applied to the four-lens design — worth +14 points
+to one broad call and -10 to four narrow ones. Measure, do not reason.
 
 **Read the benchmark before you read the number.** Three times now a confident
 result came from a population nobody had asked about. Story turns are Sonnet's
