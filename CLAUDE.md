@@ -139,6 +139,25 @@ parsed as a sentence, `content` empty while `reasoning` filled the budget, and a
 swallowed exception that made a dead grader look clean. Every one looked
 plausible. Print the raw thing and count what did not come back.
 
+## The diagnostic log
+
+`debug_log` is where `console.log` goes, because the app is used on a phone and
+a phone has no console. `captureConsole()` wraps console once at boot, so every
+existing log line is captured without being touched and so is the next one
+somebody writes. Batched, flushed on a timer and on backgrounding, read with
+`tools/pull-debug.js`.
+
+Three rules it lives by:
+
+- **Secrets are scrubbed on the way IN** (`HSKSync.scrubSecrets`). A line
+  scrubbed on the way out is already in `localStorage`.
+- **It is in `USER_TABLES`.** It holds whole replies and whole sentences, so a
+  "delete cloud data" that skipped it would leave the most verbatim copy of the
+  conversation on the server. `test/sync.test.js` enforces the list.
+- **A missing table turns it off, it does not throw.** PostgREST reports that
+  two ways — `PGRST205` before the schema cache reloads and `42P01` after — and
+  matching only one is how the degradation becomes an exception on every flush.
+
 ## Secrets
 
 The OpenRouter key lives in a file **outside the repo** and is read into a

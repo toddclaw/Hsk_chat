@@ -659,6 +659,17 @@ footer{
       right in the allowed tries becomes 我不会说 instead. Not used for story time, which
       runs on a stronger model that writes better Chinese than the checks do.</div>
 
+    <label class="toggle" for="debugLogOn">
+        <input type="checkbox" id="debugLogOn">
+        <span>Keep a diagnostic log</span>
+      </label>
+      <div class="note">Records what the app and the models actually did — every reply,
+      every repair, every check — so a problem that happens once can be read afterwards
+      instead of reproduced. There is no console on a phone, which is why this exists.
+      It is stored in <b>your</b> Supabase project alongside your messages, holds your
+      Chinese and the partner's verbatim, and is removed by <b>Delete cloud data</b> like
+      everything else. Your API key is never written to it.</div>
+
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -1122,7 +1133,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v109 — 2026-09-17";
+const VERSION   = "v110 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1186,6 +1197,7 @@ const K = {
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   goalLevel:"hsk1chat.goalLevel",
   chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId", cost:"hsk1chat.cost",
+  debugLog:"hsk1chat.debugLog", logBuf:"hsk1chat.logBuf",
   teachPrompts:"hsk1chat.teachPrompts",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
@@ -1318,7 +1330,12 @@ const S = {
    * app is for -- but a switch, because it is the only feature here that can add
    * ten seconds to a reply and turn a turn into the fallback stub, and neither
    * of those should need a code change to stop. */
-  gate: store.get(K.gate, true)
+  gate: store.get(K.gate, true),
+  /* On by default, and that is the decision worth defending: a logger you have
+   * to remember to switch on before the bug is a logger that misses the bug.
+   * It is the user's own database and it already holds every message; what this
+   * adds is the model's side of it. The switch is how it stops. */
+  debugLog: store.get(K.debugLog, true)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -1670,6 +1687,71 @@ async function checkSenseViolations(text, lex, level) {
     }
   }
   return out;
+}
+
+/* ------------------------------------------------------------- console log
+ *
+ * The app is used on a phone, which has no console, so a bug that happens once
+ * and cannot be reproduced leaves nothing behind. Everything console.log sees
+ * goes into a buffer, and the buffer goes to `debug_log` where it can be read
+ * from another machine afterwards.
+ *
+ * Wrapping console rather than calling a logger from each site is the whole
+ * point: the eight `[gate]` / `[attempt]` / `[repair]` lines that already exist
+ * are captured without being touched, and so is the next one, written by
+ * someone who has never heard of this. The real console still gets everything.
+ *
+ * SECRETS ARE STRIPPED ON THE WAY IN, in HSKSync.logLine -- a line scrubbed on
+ * the way out would already be in localStorage. */
+let logBuf = store.get(K.logBuf, []);
+let logTimer = null;
+
+function captureConsole() {
+  ["log", "warn", "error"].forEach(level => {
+    const original = console[level].bind(console);
+    console[level] = function () {
+      original.apply(null, arguments);
+      /* Never let logging break the thing it is logging. A console call that
+       * threw would take down whatever was mid-turn, which is precisely when
+       * this is running. */
+      try {
+        if (!S.debugLog) return;
+        logBuf = HSKSync.pushLine(logBuf, HSKSync.logLine(level, arguments));
+        store.set(K.logBuf, logBuf);
+        queueLogFlush();
+      } catch (e) { /* ignore */ }
+    };
+  });
+}
+
+/* Batched, not per line: a row per console line is hundreds of round trips a
+ * session for text nobody reads unless something breaks. Also flushed when the
+ * app goes to the background, because closing the PWA is the most likely thing
+ * to happen straight after the bug worth reading about. */
+function queueLogFlush() {
+  if (logTimer) return;
+  logTimer = setTimeout(() => { logTimer = null; flushLog(); }, 20000);
+}
+
+async function flushLog() {
+  if (!S.debugLog || !logBuf.length || !syncUser || !HSKSync.debugLogSupported()) return;
+  const batch = logBuf;
+  logBuf = [];
+  store.set(K.logBuf, logBuf);
+  try {
+    const ok = await HSKSync.pushDebugLog({
+      id: crypto.randomUUID(), user_id: syncUser.id, device_id: deviceId(),
+      version: VERSION, created_at: new Date().toISOString(), lines: batch
+    });
+    // The table is not there yet. Keep the lines locally; the viewer still has
+    // them and a later deploy of the SQL picks the habit back up.
+    if (!ok) logBuf = HSKSync.pushLine(batch, { t: new Date().toISOString(), l: "warn",
+      m: "[log] debug_log table missing; logging locally only" });
+  } catch (e) {
+    // Put them back rather than lose them to a network blip.
+    logBuf = batch.concat(logBuf).slice(-HSKSync.LOG_KEEP);
+    store.set(K.logBuf, logBuf);
+  }
 }
 
 /* Reject if `p` has not settled in `ms`.
@@ -3236,6 +3318,7 @@ async function pullAndMerge() {
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
       store.set(K.grader, S.grader); store.set(K.gate, S.gate);
+      store.set(K.debugLog, S.debugLog);
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       store.set(K.goalLevel, S.goalLevel);
@@ -6701,6 +6784,7 @@ $("#btnSet").onclick = () => {
   $("#promptMode").value = S.mode;
   $("#graderOn").checked = S.grader;
   $("#gateOn").checked = S.gate;
+  $("#debugLogOn").checked = S.debugLog;
   renderMistakes();
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
@@ -7023,6 +7107,15 @@ $("#graderOn").onchange = e => {
 $("#gateOn").onchange = e => {
   S.gate = e.target.checked;
   store.set(K.gate, S.gate);
+  queueSync("prefs");
+};
+$("#debugLogOn").onchange = e => {
+  S.debugLog = e.target.checked;
+  store.set(K.debugLog, S.debugLog);
+  /* Turning it off drops what is already buffered. Leaving it to be pushed
+   * later would mean the switch does not mean what it says. */
+  if (!S.debugLog) { logBuf = []; store.set(K.logBuf, logBuf); }
+  else console.log("[log] diagnostic log on, " + VERSION);
   queueSync("prefs");
 };
 $("#paceOn").onchange = async e => {
@@ -7357,6 +7450,11 @@ $("#setSheet").addEventListener("click", e => {
 /* -------------------------------------------------------------------- boot */
 
 (async function boot() {
+  /* First thing, before anything else can log. Every console line the app emits
+   * from here on is captured -- including whatever goes wrong during boot
+   * itself, which is otherwise the least observable part of the session. */
+  captureConsole();
+  console.log("[boot] " + VERSION + " " + navigator.userAgent);
   applyFont(S.font);
   /* Before anything renders: S.history has to be the array inside S.chatMsgs,
    * not a separate copy, or every turn added this session lands in one and is
@@ -7410,6 +7508,11 @@ $("#setSheet").addEventListener("click", e => {
    * actually fires on mobile Safari (unload does not, reliably), and
    * visibilitychange covers the app being backgrounded and killed. */
   const flushNow = () => {
+    /* The log flushes first and on its own condition. Closing the app is the
+     * most likely thing to happen straight after the bug worth reading about,
+     * and a log that only survives a clean exit is no use for the crash. */
+    clearTimeout(logTimer); logTimer = null;
+    flushLog();
     if (!S.sync.on || !syncUser) return;
     clearTimeout(syncTimer);
     flushSync();

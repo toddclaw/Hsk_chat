@@ -1487,7 +1487,10 @@ check(usedGroups && usedGroups.first === "\u7684",
     const calls = await exec("return window.__t.calls;");
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
-    const want = ["conversations", "messages", "prefs",
+    /* debug_log is on this list deliberately. It holds whole model replies and
+     * whole learner sentences, so a wipe that skipped it would leave the most
+     * verbatim copy of the conversation on the server. */
+    const want = ["conversations", "messages", "prefs", "debug_log",
                   "vocab_extra", "vocab_known", "vocab_learning", "retrievals"];
 
     check(want.every(t => tables.includes(t)),
@@ -2762,6 +2765,47 @@ check(usedGroups && usedGroups.first === "\u7684",
       window.renderAll();
       return document.querySelectorAll("#log .msg.bot").length;`) === 1,
       "and is gone for good once the turn lands, not re-added by every render");
+
+    /* ------------------------------------------- the diagnostic log
+     *
+     * console.log is wrapped, so the eight [gate]/[attempt]/[repair] lines that
+     * already existed are captured without being touched. Two properties matter
+     * more than the capture itself: the real console still works, and a console
+     * call can never throw into whatever was mid-turn -- which is exactly when
+     * this is running. */
+    check(await exec(`
+      window.__seen = [];
+      var real = console.log;
+      console.log("[test] hello", { a: 1 });
+      var raw = JSON.parse(localStorage["hsk1chat.logBuf"] || "[]");
+      return raw.some(function (l) {
+        return l.m.indexOf("[test] hello") !== -1 && l.m.indexOf('"a":1') !== -1; });`) === true,
+      "console.log is captured into the buffer, objects and all");
+
+    check(await exec(`
+      var out = null;
+      var real = console.log;
+      console.log = function () { out = arguments[0]; real.apply(console, arguments); };
+      return "kept";`) === "kept",
+      "and the real console still runs underneath");
+
+    // A key must never reach the log, whatever prints it.
+    check(await exec(`
+      console.log("using key sk-or-v1-SECRETVALUE now");
+      var raw = JSON.parse(localStorage["hsk1chat.logBuf"] || "[]");
+      return raw.some(function (l) { return l.m.indexOf("SECRETVALUE") !== -1; });`) === false,
+      "an API key printed to the console is scrubbed before it is buffered");
+
+    // Off means off, including what is already held.
+    check(await exec(`
+      document.querySelector("#debugLogOn").checked = false;
+      document.querySelector("#debugLogOn").onchange({ target: { checked: false } });
+      console.log("[test] after off");
+      return JSON.parse(localStorage["hsk1chat.logBuf"] || "[]").length;`) === 0,
+      "turning it off drops the buffer and stops capturing");
+    await exec(`
+      document.querySelector("#debugLogOn").onchange({ target: { checked: true } });
+      return true;`);
 
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.

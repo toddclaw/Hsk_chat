@@ -243,3 +243,41 @@ create table if not exists public._keepalive (
 insert into public._keepalive (id, pinged_at) values (1, now())
   on conflict (id) do nothing;
 alter table public._keepalive enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- Console log, for diagnosing what a phone did.
+--
+-- RUN THIS BLOCK if you already have the tables above. Everything else in this
+-- file is unchanged; this is the only new statement.
+--
+-- The app has no console on the device it is mostly used on, so a bug that
+-- happens once and cannot be reproduced leaves nothing behind. This is where
+-- console.log goes so it can be read afterwards -- by a person, from another
+-- machine, hours later.
+--
+-- APPEND-ONLY AND ONE-WAY, which is why it is the simplest table here. A batch
+-- of log lines is written once by the device that produced them and never
+-- edited, never merged, and never deleted by another device -- so unlike every
+-- other table it needs no tombstone, no client-stable id for upserting, and no
+-- place in the merge. `id` is still client-generated for the same reason as
+-- messages.id: the row is created offline and pushed later.
+--
+-- `lines` is the batch, not one line: a row per console line would be hundreds
+-- of round trips a session for text nobody reads unless something breaks.
+--
+-- The app probes for this table once and turns itself off if it is missing, so
+-- forgetting to run this costs the log and nothing else.
+
+create table if not exists public.debug_log (
+  id          uuid primary key,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  device_id   text,
+  version     text,
+  created_at  timestamptz not null default now(),
+  lines       jsonb not null
+);
+create index if not exists debug_log_user_time on public.debug_log (user_id, created_at desc);
+alter table public.debug_log enable row level security;
+drop policy if exists "own rows" on public.debug_log;
+create policy "own rows" on public.debug_log
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
