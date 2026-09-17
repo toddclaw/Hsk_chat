@@ -1122,7 +1122,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v108 — 2026-09-17";
+const VERSION   = "v109 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2479,7 +2479,27 @@ function renderMessage(turnObj, shownExtra) {
   return el;
 }
 
+/* The bubble a running turn is writing its progress into, or null.
+ *
+ * Module-level because the thing that destroys it is nowhere near the thing
+ * that made it: renderAll() empties #log, and the learner's own grade calls
+ * renderAll() from its finally. The two run concurrently on every message sent,
+ * so a grade landing mid-turn deleted the spinner out from under a turn that
+ * was still running -- the counter climbed to 4/6, vanished, and the reply
+ * arrived minutes later with nothing on screen in between.
+ *
+ * It was always broken. It only became visible when the correctness gate made
+ * turns long enough that the grade reliably lands in the middle of one. */
+let thinkingEl = null;
+
 function renderAll() {
+  renderConversation();
+  /* Put it back. renderAll() has several early returns and the restore has to
+   * happen after every one of them, so it wraps rather than joins. */
+  if (thinkingEl) { log.appendChild(thinkingEl); log.scrollTop = log.scrollHeight; }
+}
+
+function renderConversation() {
   /* Ahead of the early return below: both of these describe the conversation
    * rather than its contents, and an empty one still has an activity and a
    * level. */
@@ -4526,6 +4546,16 @@ function thinkingBubble(label) {
   el.innerHTML = '<div class="bubble" style="font-size:' + (label ? "15px" : "18px") +
     ';color:var(--dim)">' + escapeHtml(label || "\u2026") + "</div>";
   log.appendChild(el); log.scrollTop = log.scrollHeight;
+  /* Registered for renderAll() to put back, and DE-registered by its own
+   * removal rather than by each of the three callers remembering to.
+   *
+   * Done by hand it was wrong the first time: runTurn() cleared the reference
+   * and story time's two bubbles did not, so a finished story left a stale
+   * "Thinking of a question…" that every later render faithfully restored. The
+   * lifetime belongs to the element, so it is the element that carries it. */
+  const drop = el.remove.bind(el);
+  el.remove = () => { if (thinkingEl === el) thinkingEl = null; drop(); };
+  thinkingEl = el;
   return el;
 }
 
@@ -4570,7 +4600,8 @@ async function runTurn(toGloss, text, ctx) {
     }
   } finally {
     // The bubble is about to be gone; a later turn() writing into it would
-    // throw into a detached node and lose the reason it was reporting.
+    // throw into a detached node and lose the reason it was reporting, and
+    // renderAll() would keep putting it back.
     status = () => {};
     thinking.remove();
     S.busy = false; renderBusy();
