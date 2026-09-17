@@ -95,26 +95,34 @@ a cached old client.
 activity column on their text); `tools/partner-corpus-table.js` prints every arm
 against synthetic, real and pooled. The answer is above.
 
-### 3. Pick a bar and wire the gate
+### 3. ~~Pick a bar and wire the gate~~ — shipped in v105
 
-The only thing left, and the bar is Todd's — he copies the partner's Chinese as
-his main learning channel, so a miss costs him a wrong sentence in his own
-writing and a false alarm costs him a retry. Those are not symmetric for him:
+Todd chose the balanced union and it is wired. `gateFault()` in `index.html`
+runs `nativeFrame` on the teaching model first (~2s) and `softBar` on
+`GATE_MODEL` (`z-ai/glm-5.3-flash`, 7-18s) only on what the first passed, inside
+the retry loop `turn()` already had.
 
-**Todd chose the balanced union** (2026-09-17). What remains is wiring it.
+Four things about the shape, each of which had a reason:
 
-| bar | arm | catches | retries |
-|---|---|---|---|
-| fewest retries | `softBar`/glm | every error, 60% of the stiltedness | 28% of turns |
-| **balanced** | `nativeFrame` OR `softBar`/glm | every error, 73% | 37% of turns |
-| most imitable | `decomposed` OR `softBar`/glm | every error, 90% | 55% of turns |
+- **It sits above the soft checks.** Echo and required-word keep their best
+  answer and show it when attempts run out; a gate below them would let that
+  kept answer through ungraded.
+- **It runs on every attempt, including the last.** The first version skipped
+  the final one, which showed ungated Chinese exactly when the partner had
+  proved hardest to correct.
+- **It reads the activity captured when the turn started**, not
+  `currentActivity()` — the learner can switch chats while a reply is in flight,
+  and the browser suite caught that as a hang.
+- **A failed grader call passes the turn.** A gate that blocked on API trouble
+  would take the conversation down with it.
 
-At the balanced setting roughly **one partner turn in three is regenerated and
-one regeneration in three is spent on Chinese that was already fine** — a pause
-he will feel, not a wrong answer he will see. That is the trade to put to him.
+The correction is never displayed; it goes into the next attempt's prompt as
+guidance and nowhere else. Story time is not gated. `Check the partner's
+Chinese too` in Settings turns it off.
 
-Whatever ships needs the retry loop built around it: the gate never displays a
-correction (`better` leaks out-of-level vocabulary), it regenerates.
+**Expect the stub rate to rise** from 7% toward 9%: a turn the gate cannot get
+right inside the attempt budget becomes 我不会说 rather than Chinese worth
+copying. More tries lowers it; the setting is already there.
 
 ## Two findings worth reusing anywhere
 
@@ -168,7 +176,11 @@ turns. More of a distribution that is already well represented.
 
 ## Not done
 
-Nothing ships. No gate is wired — but the arm is chosen and the bar is the only
-open question. 42 explanation threads in the export are
+The gate is shipped and unmeasured in production. The thing to do next is the
+cheapest measurement in this document: `tools/grade-audit.js` reads stored
+verdicts, the app now stores gate outcomes in the console rather than the
+database, and **nothing yet counts how often the gate fires, how often it
+retries, and how often a turn ends in the stub.** A week of real use answers all
+three. 42 explanation threads in the export are
 unexamined. The `[[NEED:]]` and Latin-script issues found in the synthetic corpus
 do not occur in real traffic and need no fixing.

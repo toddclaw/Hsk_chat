@@ -96,6 +96,14 @@ The grader has three benchmarks, and the one that counts is real traffic.
   kind, and eleven arms were raced on the difference. **If you need more partner
   data, replay the real learner; do not simulate one.**
 
+**The gate is wired (v105).** `gateFault()` in `index.html` runs the union
+inside `turn()`'s retry loop; `HSKPrompt.grade({partner:true})` and
+`{partner:true, bar:"soft"}` build the two prompts, and `test/prompt.test.js`
+asserts they are **character-for-character** the strings `tools/grader-bench.js`
+benchmarked — a measurement is worth nothing if what ships is a paraphrase.
+Story is not gated, correctness never degrades to "show it anyway", and a failed
+grader call passes the turn.
+
 `nativeFrame` is the best prompt measured on both halves: it tells the grader the
 *partner* wrote the text and names no level. But on the partner, **pairing two
 arms beats improving either one** — `nativeFrame` OR `softBar`/glm-5.3-flash

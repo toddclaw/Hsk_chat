@@ -1110,17 +1110,47 @@
       "No headings, no bullet lists, no bold, and no closing encouragement.";
   }
 
+  /* The same prompt, judging the PARTNER instead of the learner.
+   *
+   * `partner:true` is the arm round eleven measured at fourteen points: it says
+   * the conversation partner wrote the text and names no level. `bar:"soft"`
+   * is round fourteen's one-clause edit on top of that, which stops a grader
+   * condemning every sentence it would merely have phrased differently.
+   *
+   * Written as options on grade() rather than as a second prompt so there is
+   * one body to keep correct. tools/grader-bench.js builds the same two strings
+   * by substitution for the benchmark, and test/prompt.test.js asserts the two
+   * routes agree CHARACTER FOR CHARACTER -- so the prompt the gate ships is
+   * provably the prompt the 222-turn corpus measured, and stays that way. */
   function grade(opts) {
     var tags = TAGS.map(function (r) {
       return "  " + r[0] + "  (" + r[1] + ")  e.g. " + r[2];
     }).join("\n");
-    return "You are grading one sentence written by a student of Chinese at " +
-      opts.label + ".\n\n" +
+    var partner = !!opts.partner;
+    var okLine = partner
+      ? (opts.bar === "soft"
+          ? "ok        — false only when there is a real fault here: something wrong, " +
+            "or something no native speaker would say. A sentence that is plainer, " +
+            "shorter or less graceful than the one you would have written is not a " +
+            "fault -- pass it. Ask whether a learner copying this sentence would be " +
+            "copying a mistake, not whether you would have written it this way.\n"
+          : "ok        — true only if a native speaker would write this exactly as it " +
+            "stands.\n")
+      : "ok        — true only if you would let the sentence stand as written.\n";
+    return (partner
+      ? "You are checking one sentence of Chinese written by a language-learning " +
+        "app's conversation partner. The learner reads it and copies it, so it has " +
+        "to be Chinese a native speaker would actually write.\n\n"
+      : "You are grading one sentence written by a student of Chinese at " +
+        opts.label + ".\n\n") +
       /* Same framing explain() uses and for the same measured reason: without
        * being told the sentence may be wrong, a model answers as though it
        * were and grades everything correct. */
-      "The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
-      "correct. Equally, do not manufacture a problem to have something to teach -- a " +
+      (partner
+        ? "It was written by a model, so it reads fluently and may still be wrong. " +
+          "Fluent is not the same as correct -- do not assume it is correct."
+        : "The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
+          "correct.") + " Equally, do not manufacture a problem to have something to teach -- a " +
       "correct sentence must come back with every category true and no errors.\n\n" +
       "Two failure modes are easy to misread. The student types pinyin and picks a " +
       "character from a list, so a wrong character is usually a homophone of the right " +
@@ -1130,10 +1160,12 @@
       "Reply with only a JSON object, no prose and no code fence:\n" +
       '{"ok":true,"meant":"","better":"",' +
       '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
-      "ok        — true only if you would let the sentence stand as written.\n" +
+      okLine +
       "meant     — in English, your best guess at what they were trying to say.\n" +
-      "better    — the sentence as a native speaker would write it, staying inside " +
-      opts.label + " vocabulary where possible. Empty string when ok is true.\n" +
+      "better    — the sentence as a native speaker would write it, " +
+      (partner ? "keeping as close to the original as the fix allows"
+               : "staying inside " + opts.label + " vocabulary where possible") +
+      ". Empty string when ok is true.\n" +
       "cats      — true means that category is fine, false means it is where the " +
       "problem is. More than one may be false.\n" +
       "errors    — one entry per distinct mistake, [] when ok is true. Each is " +
@@ -1148,7 +1180,8 @@
       "edit -- a missing measure word is measure-word even though the fix inserts a " +
       "word, and a 比 sentence with 很 in it is comparison-bi even though the fix " +
       "deletes one.\n\n" +
-      contextBlock(opts.context) + "The student wrote: " + opts.text;
+      contextBlock(opts.context) +
+      (partner ? "The sentence: " : "The student wrote: ") + opts.text;
   }
 
   /* Who is in this story, asked before it is written.
@@ -1273,7 +1306,8 @@
        * the question -- but the thing being checked is still the one line, and
        * putting the transcript last keeps it read as background rather than as
        * more material to comment on. */
-      contextBlock(opts.context) + "The student wrote: " + opts.text;
+      contextBlock(opts.context) +
+      "The student wrote: " + opts.text;
   }
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,

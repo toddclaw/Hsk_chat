@@ -2575,14 +2575,117 @@ check(usedGroups && usedGroups.first === "\u7684",
       "story turns request the story model",
       JSON.stringify(await exec("return window.__models;")));
 
-    // A chat turn must not, or every conversation silently costs story money.
+    /* A chat turn must not, or every conversation silently costs story money.
+     * It is no longer true that every call a chat turn makes is on the chat
+     * model -- the correctness gate's slow half runs on GATE_MODEL -- so this
+     * asks what it always meant to ask: nothing here reaches for Sonnet. */
     await exec("window.__models = []; window.newChat('chat');");
     await exec("window.openingTurn();");
     await waitFor("window.__models.length > 0", "a chat turn");
     check(await exec(
-      "return window.__models.every(function (m) { return !m; });") === true,
+      "return window.__models.every(function (m) {" +
+      "  return m !== 'anthropic/claude-sonnet-4.5'; });") === true,
       "while a chat turn does not -- it uses the chat model",
       JSON.stringify(await exec("return window.__models;")));
+
+    /* ------------------------------------------- the correctness gate
+     *
+     * The thing the gate is FOR: a partner sentence the graders fault must never
+     * reach the screen. Todd copies the partner as his main way of learning, so
+     * a bad sentence shown is a bad sentence practised -- the repair happens in
+     * the retry loop and the learner only ever sees what came out clean.
+     *
+     * Both sentences are HSK 1 so the vocabulary validator has no opinion and
+     * the only thing deciding the outcome is the gate. */
+    const gateStub = `
+      window.__turns = ["\u6211\u5728\u5bb6\u3002", "\u6211\u5728\u5b66\u6821\u3002"];
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {     // a gate call
+          var faulty = c.indexOf("\u6211\u5728\u5bb6\u3002") !== -1;
+          window.__graded.push((model || "teach") + ":" + (faulty ? "fault" : "pass"));
+          return Promise.resolve(JSON.stringify(faulty
+            ? { ok: false, meant: "", better: "\u6211\u5728\u5b66\u6821\u3002",
+                cats: {}, errors: [{ tag: "wrong-word", note: "x" }] }
+            : { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        return Promise.resolve(window.__turns.shift() || "\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`;
+    await exec(gateStub);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a gated turn");
+    const shown = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(shown.indexOf("\u5728\u5bb6") === -1,
+      "a partner sentence the gate faults never reaches the screen", shown);
+    check(shown.indexOf("\u5728\u5b66\u6821") !== -1,
+      "and the repaired one does", shown);
+
+    // The fast grader first; the slow one only on what the fast one passed.
+    const graded = await exec("return window.__graded;");
+    check(graded[0] === "teach:fault",
+      "the cheap fast grader is asked first", JSON.stringify(graded));
+    check(graded.every(g => g !== "z-ai/glm-5.3-flash:fault") &&
+          graded.some(g => g.indexOf("z-ai/glm-5.3-flash") === 0),
+      "and the reasoning model is only spent on a turn the fast one passed",
+      JSON.stringify(graded));
+
+    /* And when it can never be satisfied, the learner gets the stub rather than
+     * the sentence. This is the case the gate exists for and the one an early
+     * version got wrong: skipping the check on the final attempt showed ungated
+     * Chinese exactly when the partner had proved hardest to correct. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {
+          window.__graded.push(model || "teach");
+          return Promise.resolve(JSON.stringify({ ok: false, meant: "",
+            better: "\u6211\u5728\u5b66\u6821\u3002", cats: {},
+            errors: [{ tag: "wrong-word", note: "x" }] }));
+        }
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a stubbed turn");
+    const exhausted = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(exhausted.indexOf("\u5728\u5bb6") === -1,
+      "a sentence the gate never passes does not reach the screen on the last try",
+      exhausted);
+    check(await exec("return window.__graded.length;") >= 3,
+      "and every attempt was checked, including the last",
+      JSON.stringify(await exec("return window.__graded;")));
+
+    // Off, it costs nothing and blocks nothing. S is not on window, so the
+    // setting is set where it lives and the page reloaded onto it.
+    await exec(`
+      localStorage.setItem("hsk1chat.gate", "false");
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(gateStub);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "an ungated turn");
+    check((await exec("return window.__graded;")).length === 0,
+      "with the setting off the gate spends no calls at all",
+      JSON.stringify(await exec("return window.__graded;")));
+    check((await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;"))
+        .indexOf("\u5728\u5bb6") !== -1,
+      "and the sentence it would have caught goes straight through");
+    await exec('localStorage.setItem("hsk1chat.gate", "true"); return true;');
+    await go(base);
 
     /* Questions are available at every pause, not only after the last segment,
      * and they run on the teaching model: a question about a story already

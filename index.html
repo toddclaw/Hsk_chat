@@ -647,6 +647,18 @@ footer{
       word order or naturalness went wrong. Runs on the teaching model, about a hundredth of a
       cent a message. What it finds is counted under <b>Your top mistakes</b> below.</div>
 
+    <label class="toggle" for="gateOn">
+        <input type="checkbox" id="gateOn">
+        <span>Check the partner's Chinese too</span>
+      </label>
+      <div class="note">Holds every reply you are shown to the same standard as your own
+      sentences, and quietly asks for a rewrite when it misses. You copy what the partner
+      writes, so this is the difference between practising Chinese and practising a mistake.
+      Two checks per reply, about four hundredths of a cent — but one of them thinks before
+      it answers, so a reply can take <b>ten seconds longer</b>, and a sentence it cannot get
+      right in the allowed tries becomes 我不会说 instead. Not used for story time, which
+      runs on a stronger model that writes better Chinese than the checks do.</div>
+
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -1063,6 +1075,21 @@ const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
  * $0.25", and DEVELOPING.md. */
 const STORY_MODEL = "anthropic/claude-sonnet-4.5";
 
+/* The slow half of the correctness gate. A reasoning model, and the price of it
+ * is not money -- $0.0003 a turn -- but SECONDS: measured at 7-18s a call
+ * against the teaching model's 2s, because it spends ~2.3k thinking tokens
+ * before answering. That is why gateFault() asks the cheap fast grader first
+ * and only reaches for this one when the fast one found nothing. */
+const GATE_MODEL = "z-ai/glm-5.3-flash";
+
+/* Story time is not gated. It runs on Sonnet, which writes measurably BETTER
+ * Chinese than the chat partner -- 2.5 errors per 100 sentences against qwen's
+ * 3.2, and twelve times fewer unnatural ones (RESEARCH notes, round nineteen) --
+ * and nothing in twenty-four rounds measured a grader against it. A story
+ * segment is also four times longer than a chat turn, so it would pay the
+ * reasoning model's wait several times over to police the better writer. */
+const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false };
+
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
@@ -1081,7 +1108,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v104 — 2026-09-15";
+const VERSION   = "v105 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1156,6 +1183,7 @@ const K = {
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly", grader:"hsk1chat.grader",
+  gate:"hsk1chat.gate",
   chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
   prefsPushedAt:"hsk1chat.prefsPushedAt",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
@@ -1271,7 +1299,12 @@ const S = {
   favOnly: store.get(K.favOnly, false),
   // Whether each message you send is graded. On by default: the badge is the
   // feature, and a grade costs about a hundredth of a cent.
-  grader: store.get(K.grader, true)
+  grader: store.get(K.grader, true),
+  /* The partner-side correctness gate. On by default -- it is the guarantee the
+   * app is for -- but a switch, because it is the only feature here that can add
+   * ten seconds to a reply and turn a turn into the fallback stub, and neither
+   * of those should need a code change to stop. */
+  gate: store.get(K.gate, true)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -1625,6 +1658,64 @@ async function checkSenseViolations(text, lex, level) {
   return out;
 }
 
+/* Is this partner turn Chinese the learner can safely copy?
+ *
+ * WHY TWO GRADERS. Measured on 222 real partner turns from this app's own
+ * database and confirmed on 282 fresh ones (tools/grader-bench-results.md,
+ * rounds 22-24), neither grader alone is good enough and the union of the two
+ * is: the fast one catches 87% of outright errors, the slow one 93%, and a
+ * turn either objects to catches 100% of them and 71% of the merely-stilted at
+ * 86% specificity. They work because they DISAGREE -- two prompts on one model
+ * scored no better than one.
+ *
+ * WHY IN THIS ORDER. Cost is seconds, not cents. The fast grader rejects about
+ * a quarter of turns on its own at 2s, and only the rest pay the reasoning
+ * model's 7-18s. Reversing them would pay it every time for the same verdict.
+ *
+ * WHAT COMES BACK is repair GUIDANCE, never text for the screen. `better` is
+ * written by a model that never saw the vocabulary allowlist -- one correction
+ * in six leaked an out-of-level word when this was measured -- so it goes into
+ * the next attempt's prompt and nowhere else.
+ *
+ * A FAILED CALL PASSES THE TURN. A gate that blocked on API trouble would take
+ * the conversation down with it, and an ungraded turn is the behaviour the app
+ * had for its whole life until now. */
+async function gateFault(text) {
+  for (const [model, opts] of [[null, { partner: true }],
+                               [GATE_MODEL, { partner: true, bar: "soft" }]]) {
+    let g;
+    try {
+      const raw = await callModel(
+        [{ role: "user", content: HSKPrompt.grade(Object.assign({ text: text }, opts)) }],
+        400, model);
+      g = parseGrade(raw, text);
+    } catch (e) {
+      console.warn("[gate] " + (model || "teach") + " failed, passing the turn:", e);
+      return null;
+    }
+    /* Unparseable is not a fault. parseGrade() already returns null for a reply
+     * it cannot read, and treating that as an objection would fail turns for
+     * the model's punctuation rather than the partner's Chinese. */
+    if (!g || g.ok) continue;
+    const notes = (g.errors || []).map(e => e.note).filter(Boolean).join(" ");
+    console.log("[gate] " + (model || "teach") + " faulted:", text, g.better, notes);
+    return { better: g.better || "", note: notes };
+  }
+  return null;
+}
+
+/* What to tell the partner, given a fault it cannot be shown.
+ *
+ * The correction goes in because round eight measured the shape: this model
+ * confirms a fault 5 times in 7 shown the original and the repair side by side,
+ * and 2 in 7 asked about the fault in the abstract. Telling it only "something
+ * was unnatural" is the phrasing that has scored near zero on three probes. */
+function gateRepairPrompt(fault) {
+  return "你刚才写的中文有问题：" + (fault.note || "不是中国人会说的话") + "。" +
+    (fault.better ? "更自然的说法是「" + fault.better + "」。" : "") +
+    "请用这个意思重新说一次，其他的规则不变。";
+}
+
 // Failures carry a kind, because the useful response differs: a missing key is
 // fixed in Settings, an empty completion by choosing another model.
 function callError(kind, message) {
@@ -1863,12 +1954,27 @@ function reuseFor(activity) {
   return S.learning.filter(HSKPace.isNew).slice(-6);
 }
 
+/* What turn() is doing right now, for whoever is showing a spinner.
+ *
+ * A no-op by default: turn() is called from three places and only one of them
+ * has a bubble on screen to write into. The gate can add ten seconds to a turn
+ * -- reasoning model -- and ten silent seconds reads as a hang, so the wait has
+ * to say that it is a wait. */
+let status = () => {};
+
 async function turn(ctx) {
   /* Offer next-level words only when a credit has been earned — and not at all
    * in an activity that practises what the learner already has. Ghost Words and
    * Drills both say so on their own row (`newWords: false`) rather than being
    * named here, so the next one that needs it needs no edit to this line. */
   const isFocused = currentActivity() === "focused";
+  /* Captured now, not read later. A turn takes seconds and a story segment most
+   * of a minute, and the learner can switch chats inside that window -- so by
+   * the time the gate runs, currentActivity() is whatever they navigated TO.
+   * Read there it would gate a story segment as a chat turn, which is both the
+   * wrong answer and, with a reply already in flight, a second model call the
+   * caller is not waiting for. Same bug storyStep() has a comment about. */
+  const activity = currentActivity();
   /* Story time's asking phase is the third case, and it is not a preference:
    * whatever turn() legalises here, settlePace() has to bank, or the word stays
    * above level in every later render -- validated clean, then painted red, with
@@ -1949,6 +2055,38 @@ async function turn(ctx) {
       violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
 
     if (!violations.length) {
+      /* THE CORRECTNESS GATE, and it sits here for two reasons.
+       *
+       * After the vocabulary check, because a reply already being repaired for
+       * an out-of-level word is not worth grading -- the same reason the sense
+       * check is spent only on replies that already passed.
+       *
+       * Before the echo and required-word checks, because those two are SOFT:
+       * they keep their best answer and show it when the attempts run out. Put
+       * the gate below them and that kept answer reaches the screen ungraded.
+       * Above them, one code path carries the whole invariant: nothing the
+       * learner can read was skipped by the gate.
+       *
+       * Correctness is never soft. A turn that cannot be repaired inside the
+       * attempt budget becomes the fallback stub rather than Chinese the
+       * learner would copy -- he copies the partner as his main way of
+       * learning, so a bad sentence shown is a bad sentence practised. */
+      /* No `attempt < tries` here, deliberately. Skipping the check on the last
+       * attempt would show ungated Chinese exactly when the partner has proved
+       * hardest to correct, which is the one case this feature exists for. A
+       * fault on the final attempt falls out of the loop instead, to the best
+       * earlier reply -- itself gated clean -- or the fallback stub. */
+      if (S.gate && GATED[activity] !== false) {
+        status("检查中…");
+        const fault = await gateFault(ex.text);
+        status("");
+        if (fault) {
+          scratch.push({ role: "assistant", content: raw });
+          scratch.push({ role: "user", content: gateRepairPrompt(fault) });
+          console.log("[gate] retrying");
+          continue;
+        }
+      }
       /* A reply that is otherwise legal but omits the required word is not a
        * vocabulary failure, so it is kept as the best answer so far and asked
        * about again rather than thrown away. */
@@ -3025,6 +3163,7 @@ async function pullAndMerge() {
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
+      store.set(K.grader, S.grader); store.set(K.gate, S.gate);
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       store.set(K.goalLevel, S.goalLevel);
@@ -4343,6 +4482,12 @@ async function runTurn(toGloss, text, ctx) {
   const thinking = thinkingBubble("");
   const hist = S.history;
 
+  const bubble = thinking.querySelector(".bubble");
+  status = label => {
+    bubble.textContent = label || "\u2026";
+    bubble.style.fontSize = label ? "15px" : "18px";
+  };
+
   try {
     const res = await turn(ctx || undefined);
     /* Pushed into the conversation this was asked for, not into whichever one
@@ -4372,6 +4517,9 @@ async function runTurn(toGloss, text, ctx) {
       persist();
     }
   } finally {
+    // The bubble is about to be gone; a later turn() writing into it would
+    // throw into a detached node and lose the reason it was reporting.
+    status = () => {};
     thinking.remove();
     S.busy = false; renderBusy();
     renderAll();
@@ -6469,6 +6617,7 @@ $("#btnSet").onclick = () => {
   fillModels();
   $("#promptMode").value = S.mode;
   $("#graderOn").checked = S.grader;
+  $("#gateOn").checked = S.gate;
   renderMistakes();
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
@@ -6786,6 +6935,11 @@ $("#fontSize").oninput = e => {
 $("#graderOn").onchange = e => {
   S.grader = e.target.checked;
   store.set(K.grader, S.grader);
+  queueSync("prefs");
+};
+$("#gateOn").onchange = e => {
+  S.gate = e.target.checked;
+  store.set(K.gate, S.gate);
   queueSync("prefs");
 };
 $("#paceOn").onchange = async e => {

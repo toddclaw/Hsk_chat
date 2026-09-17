@@ -304,7 +304,8 @@
   var PREFS_KEYS = [
     "level", "goalLevel", "model", "teachModel", "storyModel", "twentyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "drillTurns", "ghostUses", "report", "reportAt", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "pace", "budget", "teachPrompts"
+    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "gate", "pace", "budget",
+    "teachPrompts"
   ];
 
   /* chatTime rides in the same prefs blob but is deliberately NOT in the list

@@ -1140,5 +1140,51 @@ check(possessiveHits.length === 0,
 check(P.STARTERS[1].indexOf("你家在哪儿？") !== -1,
   "the HSK 1 home question survives the fix, without the 的");
 
+/* ---------------------------------------------------- the partner gate prompt
+ *
+ * The correctness gate judges the partner with grade({partner:true}) and
+ * grade({partner:true, bar:"soft"}). Those two strings were measured -- 222 real
+ * partner turns, rounds 22 to 24 -- as built by tools/grader-bench.js, which
+ * derives them from grade()'s default output by substitution.
+ *
+ * Two prompts claiming to be the same prompt is exactly the drift this suite
+ * exists to catch, and a measurement is worth nothing if what ships is a
+ * paraphrase of what was measured. So: character for character, both routes, or
+ * the number in the study stops describing the app.
+ *
+ * This is also the guard on grade() ITSELF. The harness substitutes on clauses
+ * of the default prompt; reword one and these comparisons fail rather than the
+ * benchmark silently grading something else. */
+const BENCH = require("../tools/grader-bench.js");
+const GT = "我家在城市下面，离银行很近。", GL = "HSK 2";
+[["shipped", {}], ["nativeFrame", { partner: true }],
+ ["softBar", { partner: true, bar: "soft" }]].forEach(([arm, opts]) => {
+  const mine = P.grade(Object.assign({ text: GT, label: GL }, opts));
+  check(mine === BENCH.promptFor(arm, GT, GL),
+    `grade(${JSON.stringify(opts)}) is character-for-character the benchmarked "${arm}"`,
+    "the shipped prompt has drifted from the measured one");
+});
+
+// The frame is the whole of round eleven's fourteen points: the partner arms
+// must not name a level, and must not call the writer a student.
+["nativeFrame", "softBar"].forEach(arm => {
+  const opts = arm === "softBar" ? { partner: true, bar: "soft" } : { partner: true };
+  const t = P.grade(Object.assign({ text: GT, label: GL }, opts));
+  check(t.indexOf(GL) === -1, `${arm} names no level`, t.slice(0, 120));
+  check(t.indexOf("written by a student") === -1,
+    `${arm} does not say a student wrote it`, t.slice(0, 120));
+  check(t.indexOf("conversation partner") !== -1, `${arm} says who wrote it`);
+  /* Inherited and deliberate: the homophone paragraph still explains that the
+   * writer "types pinyin and picks a character from a list", which is true of
+   * the learner and not of a model. It is in the string rounds 22-24 measured,
+   * so it stays until something re-measures without it. */
+  check(t.indexOf("types pinyin") !== -1,
+    `${arm} keeps the inherited homophone clause the measurement included`);
+});
+
+// And the learner prompt is untouched by their existence.
+check(P.grade({ text: GT, label: GL }).indexOf("student of Chinese at " + GL) !== -1,
+  "the learner prompt still names the level and the student");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
