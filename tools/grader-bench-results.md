@@ -87,6 +87,7 @@ never had the defect, so **the four-lens finding stands unchanged.**
 | 17 | **are any of these recall numbers real?** | **no. 21 strict positives; one catch is 5 points. Every recall comparison in rounds 12–16 is inside the noise. Specificity is well powered and says something different** |
 | 18 | **is the synthetic corpus even the right distribution?** | real turns are wrong 15.1% of the time against the synthetic 8.8% — **but see round nineteen, which is a correction, not a confirmation** |
 | 19 | **was that comparing like with like?** | **no. The real corpus pools two models. Story time runs on Sonnet; chat runs on qwen. Split, the synthetic corpus is an excellent match for the chat partner — and Sonnet is the better writer, not the worse one** |
+| 20 | what else is in the database? | **208 stored grader verdicts on the learner's own sentences, with error tags, already paid for. A benchmark for the student half that costs no API calls at all** |
 
 What survives all seven: **diversity of lens.** Repetition doesn't help, wording
 doesn't help, unloading the call doesn't help. Several passes each hunting a
@@ -1458,6 +1459,64 @@ population with another, and the new one was two populations wearing a coat.
 **Ask what generated each row before pooling it.** The app's own settings page
 has a dropdown labelled "Model for story time"; nothing about the data itself
 made the split visible, and the number it produced looked entirely plausible.
+
+## Round twenty: the activity column, and a benchmark that was already paid for
+
+Round nineteen split the real corpus by guessing at the story cast. The column
+exists: `conversations.activity`, alongside `level`, `side` and `kind`.
+`tools/pull-chats.js` replaces `pull-partner.js` and takes the lot — both roles,
+the grader's stored verdict, the explanation thread, the translation, and the
+activity that decides which model wrote a row.
+
+**545 messages across 98 conversations.** The guess was a good one:
+
+| activity | model | turns | wrong / 100 sentences | unnatural / 100 sentences |
+|---|---|---|---|---|
+| chat | qwen | 94 | **3.6** | **8.2** |
+| focused | qwen | 55 | 3.2 | 5.9 |
+| twenty | qwen | 42 | 2.7 | 8.1 |
+| drill | qwen | 31 | **0.0** | 4.8 |
+| story | **Sonnet** | 60 | 2.5 | **0.5** |
+
+Pooled by model: Sonnet 2.5 wrong and 0.5 unnatural per 100 sentences, qwen 3.1
+and 6.9. Round nineteen's proxy gave 2.5/0.6 and 3.2/7.2 — close enough that the
+correction stands unchanged, and now it rests on a column instead of a character
+name.
+
+Two new things fall out. **Chat is qwen's worst activity on both axes**, and it
+is the main one — a gate wired for chat is aimed at the right place. And **drill
+produces no errors at all**, which is what a heavily constrained output looks
+like.
+
+### 208 verdicts nobody had looked at
+
+`messages.grade` stores what the grader said about the learner's own sentence:
+`ok`, `meant`, `better`, `cats`, `errors` with tags. There are **208 of them**,
+all on `role=user`, accumulated over 23 days of real use.
+
+**That is a benchmark for the student half of the grader that costs nothing to
+run.** Every verdict is a judgement on a real sentence by the real prompt at the
+real level, already made and already stored. Labelling the 208 sentences by hand
+and scoring the stored verdicts against them needs no API calls at all — and
+unlike MuCGEC it is exactly the distribution the app faces, and unlike the
+partner corpus the labels would be about a human's writing, which is what the
+whole grader was built for.
+
+First look, unlabelled:
+
+- **44% of the learner's sentences were faulted** (91 of 208).
+- The tag distribution is dominated by `unnatural` (71), then `wrong-word` (46),
+  `word-order-adverbial` (17), `wrong-character` (15), `aspect-le` (12).
+- The corrections read well. 我也错说 → 我也说错了, 起来 → 起床, 星期七 → 星期日,
+  我说对不对吗 → 我说得对不对 are all right, and all four are the kind of thing
+  the MuCGEC benchmark said the grader gets wrong one time in five.
+
+Whether that impression survives labelling is the next measurement, and it is
+free. **Do that before anything else** — it is the only benchmark in this
+document that is simultaneously real, on-distribution, human-authored on the
+side being judged, and already bought.
+
+42 explanation threads came with it, unexamined.
 
 ## What to measure next
 
