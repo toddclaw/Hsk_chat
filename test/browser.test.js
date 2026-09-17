@@ -2606,6 +2606,7 @@ check(usedGroups && usedGroups.first === "\u7684",
       window.callModel = function (msgs, maxTok, model) {
         var c = msgs[msgs.length - 1].content;
         if (c.indexOf("conversation partner") !== -1) {     // a gate call
+          window.__gateTokens = maxTok;
           var faulty = c.indexOf("\u6211\u5728\u5bb6\u3002") !== -1;
           window.__graded.push((model || "teach") + ":" + (faulty ? "fault" : "pass"));
           return Promise.resolve(JSON.stringify(faulty
@@ -2626,6 +2627,15 @@ check(usedGroups && usedGroups.first === "\u7684",
       "a partner sentence the gate faults never reaches the screen", shown);
     check(shown.indexOf("\u5728\u5b66\u6821") !== -1,
       "and the repaired one does", shown);
+
+    /* The ceiling the prompts were measured at, asserted because getting it
+     * wrong is silent: a reasoning model spends its budget thinking before it
+     * writes, so a low ceiling returns finish_reason "length" with empty
+     * content, which gateFault reads as a failed call and passes the turn. It
+     * shipped at 400 and the slow grader never answered once. */
+    check(await exec("return window.__gateTokens;") === 4000,
+      "the gate asks for the token ceiling its prompts were benchmarked at",
+      JSON.stringify(await exec("return window.__gateTokens;")));
 
     // The fast grader first; the slow one only on what the fast one passed.
     const graded = await exec("return window.__graded;");
@@ -2806,6 +2816,85 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec(`
       document.querySelector("#debugLogOn").onchange({ target: { checked: true } });
       return true;`);
+
+    /* The badge counts work done, not which try survived.
+     *
+     * A reply the partner keeps echoing back is kept as the best answer so far
+     * and asked about again -- and `x = x || {...}` keeps the FIRST capture, so
+     * the attempt number it carried was the one it was captured on. Spread over
+     * the return it said "3 tries" while the progress counter had been watched
+     * climbing to 6, and under-counted the retries metric by everything after
+     * the reply it ended up showing. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      return true;`);
+    await go(base);                 // a clean app: send() refuses while S.busy
+    await exec(`
+      window.__gens = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1 ||
+            c.indexOf("student of Chinese") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        window.__gens++;
+        return Promise.resolve("\u4f60\u4eca\u5929\u597d\u5417\uff1f");  // echoes it back
+      };
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      window.newChat("chat");
+      document.querySelector("#input").value = "\u4f60\u4eca\u5929\u597d\u5417\uff1f";
+      document.querySelector("#send").click();
+      return true;`);
+    await waitFor("window.__gens > 0", "the partner to be asked at all");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the echoed reply to land");
+    const tries = await exec(`
+      var b = document.querySelector("#log .msg.bot .badge.warn");
+      return { badge: b ? b.textContent : "", gens: window.__gens };`);
+    check(tries.gens > 1, "the echo was retried at all", JSON.stringify(tries));
+    check(tries.badge === tries.gens + " tries",
+      "the badge counts every try on the echo path", JSON.stringify(tries));
+
+    /* Ghost Words is where this actually went wrong. The echo path above falls
+     * through to the ordinary return on its last attempt, which always counted
+     * correctly; a required word that never arrives does not, and comes back
+     * through the soft-miss return carrying the attempt it was CAPTURED on. */
+    await exec(
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify([" +
+      "{w:'\u82f9\u679c',p:'ping guo',d:'apple',seen:9,from:2}," +
+      "{w:'\u7c73\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));" +
+      "localStorage.setItem('hsk1chat.chats', '[]');" +
+      "localStorage.setItem('hsk1chat.chatMsgs', '{}');" +
+      "localStorage.setItem('hsk1chat.apiKey', JSON.stringify('test-key-never-sent'));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after reload");
+    await exec(`
+      window.__gens = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1 ||
+            c.indexOf("student of Chinese") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        window.__gens++;
+        return Promise.resolve("\u4eca\u5929\u5f88\u597d\u3002");  // never the ghost word
+      };
+      window.newChat("focused");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the reply that never used the ghost word");
+    const ghost = await exec(`
+      var b = document.querySelector("#log .msg.bot .badge.warn");
+      return { badge: b ? b.textContent : "", gens: window.__gens };`);
+    check(ghost.gens > 1, "a missing required word is retried", JSON.stringify(ghost));
+    check(ghost.badge === ghost.gens + " tries",
+      "and the badge reports every try spent, not the one that survived",
+      JSON.stringify(ghost));
 
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.

@@ -659,17 +659,6 @@ footer{
       right in the allowed tries becomes 我不会说 instead. Not used for story time, which
       runs on a stronger model that writes better Chinese than the checks do.</div>
 
-    <label class="toggle" for="debugLogOn">
-        <input type="checkbox" id="debugLogOn">
-        <span>Keep a diagnostic log</span>
-      </label>
-      <div class="note">Records what the app and the models actually did — every reply,
-      every repair, every check — so a problem that happens once can be read afterwards
-      instead of reproduced. There is no console on a phone, which is why this exists.
-      It is stored in <b>your</b> Supabase project alongside your messages, holds your
-      Chinese and the partner's verbatim, and is removed by <b>Delete cloud data</b> like
-      everything else. Your API key is never written to it.</div>
-
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
         <span>Introduce words from the next level</span>
@@ -773,6 +762,17 @@ footer{
 
   <details class="sec" id="secSync">
     <summary>Sync &amp; backup<span class="secnote" id="secSyncNote"></span></summary>
+    <label class="toggle" for="debugLogOn">
+        <input type="checkbox" id="debugLogOn">
+        <span>Keep a diagnostic log</span>
+      </label>
+      <div class="note">Records what the app and the models actually did — every reply,
+      every repair, every check — so a problem that happens once can be read afterwards
+      instead of reproduced. There is no console on a phone, which is why this exists.
+      It is stored in <b>your</b> Supabase project alongside your messages, holds your
+      Chinese and the partner's verbatim, and is removed by <b>Delete cloud data</b> like
+      everything else. Your API key is never written to it.</div>
+
     <label class="toggle" for="syncOn">
         <input type="checkbox" id="syncOn">
         <span>Cloud sync</span>
@@ -1107,6 +1107,22 @@ const GATE_MODEL = "z-ai/glm-5.3-flash";
  * what the app did for its whole life before this existed. */
 const GATE_TIMEOUT_MS = 25000;
 
+/* The ceiling the gate's prompts were MEASURED at (tools/grader-bench.js's
+ * MAX_TOKENS), and it has to stay that number.
+ *
+ * Shipped at 400 -- a chat reply's ceiling, which looked generous for a one-line
+ * JSON verdict -- the slow half of the gate never worked once in production. A
+ * reasoning model spends its budget thinking BEFORE it writes anything, so 400
+ * bought a few hundred tokens of reasoning, `finish_reason: "length"`, and an
+ * empty `content`. That surfaces as callError("empty"), which gateFault treats
+ * as a failed call and passes the turn -- so the union quietly degraded to its
+ * fast half alone and nothing said so.
+ *
+ * Found by reading debug_log: five empty completions from glm-5.3-flash, zero
+ * answers. It is the fourth silent failure in this study and the one CLAUDE.md
+ * already warns about in as many words -- max_tokens is not a cost control. */
+const GATE_MAX_TOKENS = 4000;
+
 /* Story time is not gated. It runs on Sonnet, which writes measurably BETTER
  * Chinese than the chat partner -- 2.5 errors per 100 sentences against qwen's
  * 3.2, and twelve times fewer unnatural ones (RESEARCH notes, round nineteen) --
@@ -1133,7 +1149,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v110 — 2026-09-17";
+const VERSION   = "v112 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1801,7 +1817,7 @@ async function gateFault(text) {
     try {
       const raw = await withTimeout(callModel(
         [{ role: "user", content: HSKPrompt.grade(Object.assign({ text: text }, opts)) }],
-        400, model), GATE_TIMEOUT_MS, (model || "teach") + " grader");
+        GATE_MAX_TOKENS, model), GATE_TIMEOUT_MS, (model || "teach") + " grader");
       g = parseGrade(raw, text);
     } catch (e) {
       console.warn("[gate] " + (model || "teach") + " failed after " +
@@ -2255,9 +2271,18 @@ async function turn(ctx) {
     }
     if (!violations.length) {
       // Attempts exhausted: show the best legal reply rather than nothing.
+      /* `attempts` LAST, and deliberately after the spread.
+       *
+       * `missed` and `echoed` carry the attempt they were captured on -- and
+       * `x = x || {...}` keeps the FIRST one -- so a reply kept on try 3 and
+       * then retried up to the ceiling came back saying "3 tries" while the
+       * progress counter had been watched climbing to 6. Spread over the top,
+       * that stale number also reached recordTurn(), which under-counted the
+       * retries metric by everything after the reply it ended up showing. The
+       * badge means work done, not which try happened to survive. */
       return Object.assign({}, missed || echoed,
         { offer: offer, required: required, softMiss: true,
-          truncated: genFinish === "length" });
+          truncated: genFinish === "length", attempts: attempt });
     }
 
     last = ex.text;
@@ -2272,8 +2297,9 @@ async function turn(ctx) {
   // A reply that only ever lacked the required word, or only echoed, still
   // beats the fallback.
   if (missed || echoed) {
+    // Same as above: the count is the work, not the survivor.
     return Object.assign({}, missed || echoed,
-      { offer: offer, required: required, softMiss: true });
+      { offer: offer, required: required, softMiss: true, attempts: attempt });
   }
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
