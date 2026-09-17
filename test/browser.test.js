@@ -2666,6 +2666,49 @@ check(usedGroups && usedGroups.first === "\u7684",
       "and every attempt was checked, including the last",
       JSON.stringify(await exec("return window.__graded;")));
 
+    /* A gate that cannot answer must never take the conversation with it.
+     *
+     * The check runs a reasoning model on the critical path of every turn, and
+     * callModel has no timeout because until the gate existed every call
+     * answered in about two seconds. Both ways it can go wrong -- an error, and
+     * a stall -- have to end with the learner reading Chinese. */
+    check(await exec(`
+      return window.withTimeout(Promise.resolve("ok"), 50, "x");`) === "ok",
+      "withTimeout passes a value through when the call beats the clock");
+    check(await exec(`
+      return window.withTimeout(new Promise(function () {}), 20, "slow grader")
+        .then(function () { return "resolved"; },
+              function (e) { return e.kind + ":" + /slow grader/.test(e.message); });`)
+        === "timeout:true",
+      "and rejects with a timeout naming the call when it does not");
+
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {
+          window.__graded.push(model || "teach");
+          return Promise.reject(new Error("grader is down"));
+        }
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "a turn whose gate is broken");
+    check((await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;"))
+        .indexOf("\u5728\u5bb6") !== -1,
+      "a gate that throws passes the turn rather than blocking the conversation");
+    check(await exec("return window.__graded.length;") === 1,
+      "and gives up on the first failure instead of trying the slow one too",
+      JSON.stringify(await exec("return window.__graded;")));
+
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.
     await exec(`
