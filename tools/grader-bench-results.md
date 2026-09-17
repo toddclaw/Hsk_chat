@@ -10,6 +10,11 @@ answering the question the one before it raised.
 **The grader is right about 80% of the time, and the only thing that has moved
 that is asking several narrow questions instead of one broad one.**
 
+**Round twenty-one is the best number in this document, and it cost nothing.**
+Scored blind against 208 of the grader's own production verdicts on Todd's real
+sentences: **83% recall, 86% specificity, 85% overall.** Every other measurement
+here is a proxy for this one.
+
 **Round nineteen corrects round eighteen.** The real corpus mixes two models:
 `STORY_MODEL` is `claude-sonnet-4.5` and everything else is qwen. Pooled, that
 produced a partner "wrong 15.1% of the time" and a dominant 得 defect. Split, the
@@ -88,6 +93,7 @@ never had the defect, so **the four-lens finding stands unchanged.**
 | 18 | **is the synthetic corpus even the right distribution?** | real turns are wrong 15.1% of the time against the synthetic 8.8% — **but see round nineteen, which is a correction, not a confirmation** |
 | 19 | **was that comparing like with like?** | **no. The real corpus pools two models. Story time runs on Sonnet; chat runs on qwen. Split, the synthetic corpus is an excellent match for the chat partner — and Sonnet is the better writer, not the worse one** |
 | 20 | what else is in the database? | **208 stored grader verdicts on the learner's own sentences, with error tags, already paid for. A benchmark for the student half that costs no API calls at all** |
+| 21 | **how good is the grader in production?** | **85% — and its specificity is 86%, not the 66% MuCGEC said. The over-harshness finding does not survive contact with real sentences** |
 
 What survives all seven: **diversity of lens.** Repetition doesn't help, wording
 doesn't help, unloading the call doesn't help. Several passes each hunting a
@@ -1517,6 +1523,76 @@ document that is simultaneously real, on-distribution, human-authored on the
 side being judged, and already bought.
 
 42 explanation threads came with it, unexamined.
+
+## Round twenty-one: the grader, in production, on the sentences it was built for
+
+208 verdicts, stored by the app over 23 days, on the learner's own Chinese.
+Blind-labelled — `tools/grade-audit.js --blind` writes id and text in shuffled
+order and puts `ok`, `better` and the tags somewhere the labeller is not reading,
+because verdict and label live in the same row and a labeller who can see the
+answer is agreeing rather than labelling.
+
+| | n | | |
+|---|---|---|---|
+| faulty sentences it faulted | 90 | **75 — 83%** | recall |
+| correct sentences it passed | 118 | **102 — 86%** | specificity |
+| overall | 208 | **177 — 85%** | |
+
+Set against everything else measured:
+
+| benchmark | what it is | recall | specificity | overall |
+|---|---|---|---|---|
+| MuCGEC, repaired | advanced learner essays, human labels | 90% | 66% | 78% |
+| **production** | **this app's user, real prompt, blind labels** | **83%** | **86%** | **85%** |
+
+**The over-harshness that round eight found does not survive contact with real
+sentences.** 66% specificity became 86%. The two numbers measure different
+things and the document already half-said why: MuCGEC's positive class is a
+*minimal human fix*, correct but frequently still ungainly, and "specificity is a
+floor, not an estimate" was written about exactly that. Todd's correct sentences
+are short and genuinely correct, and the grader leaves them alone.
+
+Round eight's other half stands: the grader is not evenly wrong in both
+directions. It is just that in production it errs the *other* way from what
+MuCGEC implied.
+
+### Reading the disagreements is worth more than the number
+
+**Sixteen sentences the grader faulted and the labels passed.** On inspection
+roughly ten of them are the grader being right and the labeller being lenient:
+
+| the learner wrote | the grader wanted | who is right |
+|---|---|---|
+| 我把书放**桌子上**了 | 放**在**桌子上了 | the grader |
+| **你的家**在哪儿？ | **你家**在哪儿？ | the grader |
+| 我只**听书** | 我只听**有声书** | the grader |
+| 爸爸**，**妈妈**，**弟弟 | 爸爸**、**妈妈**、**弟弟 | the grader |
+| 我爸爸**死了** | 我爸爸**不在了** | the grader |
+
+Which puts the real specificity above the measured 86%, and is consistent with a
+labeller round nine put at 93%. **The labels have not been changed to say so** —
+moving them after seeing the answer key is the one thing this design exists to
+prevent, and the number stands as measured.
+
+The genuine false alarms are smaller and duller: a preference between
+怎么说 sci-fi and sci-fi 怎么说, an optional 所以, and 我希望我可以不做事 →
+我希望我可以**休息**, which is a change of meaning rather than a correction.
+
+### A defect worth fixing
+
+**Two of 208 verdicts fault a sentence and then offer the identical sentence
+back** as `better` — G064 我要用手把菜送到医院 and G094 我朋友要看书，可是我不行.
+A cross with nothing to show for it. `grader-bench.js`'s own `verdictOk()`
+already treats an unchanged `better` as a pass; the app stored `ok:false`
+anyway, so the two disagree about what a no-edit verdict means. Cheap to fix and
+it is a visible ✗ on the learner's screen with no explanation behind it.
+
+### What this benchmark is worth keeping for
+
+It is the only measurement in this study that is at once real, on-distribution,
+human-authored on the side being judged, and free to re-run. It also grows by
+itself: every sentence Todd writes adds a row. **Re-running it after any change
+to `grade()` costs one hand-labelling pass over the new rows and nothing else.**
 
 ## What to measure next
 
