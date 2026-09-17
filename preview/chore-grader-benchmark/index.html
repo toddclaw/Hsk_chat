@@ -1122,7 +1122,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v107 — 2026-09-17";
+const VERSION   = "v108 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2045,6 +2045,14 @@ async function turn(ctx) {
 
   while (attempt < tries) {
     attempt++;
+    /* Which try this is, on screen, from the second one onward.
+     *
+     * A turn is allowed six tries and each one can cost two grader calls on top
+     * of a generation, so a partner reply that keeps coming back wrong can take
+     * minutes -- and an unchanging "..." through all of it reads as a hang
+     * rather than as work. The first try says nothing: the common case is fast
+     * and does not need a counter to explain itself. */
+    if (attempt > 1) status("再写… " + attempt + "/" + tries);
     /* An empty completion is about one call in eight on some routes and is not
      * a vocabulary problem, so it must not spend a repair attempt -- and it used
      * to end a story mid-narrative on an error card. Retried once, here rather
@@ -2122,7 +2130,7 @@ async function turn(ctx) {
          * vanish, and then nothing for ten seconds, which reads as the app
          * having finished and lost the answer. The wait is one wait; it says
          * so once. */
-        status("检查中…");
+        status("检查中… " + attempt + "/" + tries);
         const fault = await gateFault(ex.text);
         if (fault) {
           scratch.push({ role: "assistant", content: raw });
