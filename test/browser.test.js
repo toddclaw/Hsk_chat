@@ -2735,11 +2735,33 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the waiting bubble says which try it is on while the gate runs", waiting);
     check(waiting.indexOf("\u68c0\u67e5\u4e2d") === 0,
       "and still says it is checking", waiting);
+
+    /* And a render must not delete it out from under the turn.
+     *
+     * renderAll() empties #log, and the learner's own grade calls renderAll()
+     * from its finally -- so on every message sent, a grade landing mid-turn
+     * took the progress bubble with it. Latent for as long as turns were short;
+     * certain once the gate made them long enough that the grade reliably lands
+     * in the middle of one. */
+    const survived = await exec(`
+      window.renderAll();
+      var b = document.querySelector("#log .msg.bot .bubble");
+      return b ? b.textContent : "";`);
+    check(survived === waiting,
+      "a re-render mid-turn leaves the progress bubble standing, counter and all",
+      JSON.stringify([waiting, survived]));
+
     // Let it finish so the next test starts from a quiet app.
     await exec(`window.__resolve(JSON.stringify(
       { ok: true, meant: "", better: "", cats: {}, errors: [] })); return true;`);
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
       "the turn to land");
+    // ...and stops being restored the moment the turn is over, or a finished
+    // story would leave "Thinking of a question..." on screen for ever.
+    check(await exec(`
+      window.renderAll();
+      return document.querySelectorAll("#log .msg.bot").length;`) === 1,
+      "and is gone for good once the turn lands, not re-added by every render");
 
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.
