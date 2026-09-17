@@ -34,6 +34,9 @@ const TODAY = new Date().toLocaleDateString("en-CA");
 /* UTC, matching HSKRetrieval.dayOf()/ghostDayKey() (both slice an ISO string,
  * not a local calendar day) -- computed per run for the same reason as TODAY. */
 const GAP_YDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+/* Today in the same UTC day the ghost credit counts in, for seeding a credit
+ * that has to read as "banked today" rather than "banked at some point". */
+const GHOST_TODAY = new Date().toISOString().slice(0, 10);
 let pass = 0, fail = 0;
 const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
@@ -1021,12 +1024,12 @@ return true;
       "the next-level panel draws no reading-coverage bar",
       JSON.stringify((prog || "").slice(0, 200)));
 
-    /* The actionable half: how many words to the threshold. 741 would mean the
-     * whole remaining list; the frequency-weighted answer is a few hundred at
-     * most, and that difference is the point of the feature. */
-    const toGo = /(\d+) more words?, commonest first/.exec(prog || "");
-    check(!!toGo && Number(toGo[1]) > 0 && Number(toGo[1]) < 500,
-      "and names a reachable number of words to the threshold, not the whole list",
+    /* The words-to-threshold row lives on the goal chart now and is checked
+     * there. The next level is one to finish, not one to cover 98% of, so a row
+     * offering an early stopping point is the wrong question about it. */
+    check(!/more words?, commonest first/.test(prog || "") &&
+          !/to 98%/.test(prog || ""),
+      "the next-level panel no longer offers a 98% stopping point",
       JSON.stringify((prog || "").slice(0, 200)));
     check(/used by you/.test(prog || ""),
       "production is reported separately from exposure",
@@ -1054,17 +1057,25 @@ return true;
 
     /* The bug this replaced: the headline was weighted for production and
      * clamped while the words-to-threshold row was not, so the panel showed
-     * "100%" and "57 more words to 95%" together. The headline is gone, but the
-     * same wiring mistake is still available -- Move up reads readiness() and
-     * the row reads the word count -- so the two are checked against each other
-     * here, which the node suite cannot do. */
-    const stillToGo = toGo ? Number(toGo[1]) : -1;
+     * "100%" and "57 more words to 95%" together. The headline is gone and the
+     * row has moved to the goal chart, but the same wiring mistake is still
+     * available -- Move up gates on a coverage fraction and readiness().toGo
+     * counts the words to that same threshold, so the two must agree that the
+     * next level is or is not ready. Read off the page, which the node suite
+     * cannot do. */
+    const stillToGo = await exec(`return readiness().toGo;`);
     const upShown = await exec(`
       var b = document.querySelector('#moveUp');
       return !(b.style.display === "none" || b.offsetParent === null);`);
     check(upShown === (stillToGo === 0),
-      "Move up and the words-to-threshold row agree with each other",
+      "Move up and the words-to-threshold count agree with each other",
       `Move up ${upShown ? "shown" : "hidden"}, ${stillToGo} words to go`);
+    /* And it is still a reachable number, not the whole remaining list: 741
+     * would mean every word left, and the frequency-weighted answer is a few
+     * hundred at most. That difference is the point of the arithmetic. */
+    check(stillToGo > 0 && stillToGo < 500,
+      "and the count is frequency-weighted, not the whole list",
+      String(stillToGo));
     /* The one bar left. Reading coverage starts near 88% for HSK 1 -> 2 and
      * every word that matters sits in the top twelve points of it, so it looked
      * full on arrival; new words learned runs 0 to 100 across the same effort,
@@ -1106,6 +1117,18 @@ return true;
     check(!!goalUse && Number(goalUse[1]) < Number(goalPct[1]),
       "and production trails reading on the goal bar too",
       JSON.stringify((goalProg || "").slice(0, 160)));
+    /* The words-to-threshold row, moved here from the next-level panel: the
+     * goal list is one you will never finish, so "how many words until it reads
+     * comfortably" is the only tractable way to ask how far away it is. */
+    const goalToGo = /(\d+) more words?, commonest first/.exec(goalProg || "");
+    check(!!goalToGo && Number(goalToGo[1]) > 0,
+      "the goal chart says how many words to the 98% mark",
+      JSON.stringify((goalProg || "").slice(0, 200)));
+    /* Against the GOAL list, not the next level's. HSK 7-9 is far further off
+     * than HSK 2, so the two numbers must not be the same one rendered twice. */
+    check(!!goalToGo && Number(goalToGo[1]) > stillToGo,
+      "and counts against the goal level, not the next one",
+      `goal ${goalToGo ? goalToGo[1] : "?"}, next ${stillToGo}`);
     check(/HSK 7-9 — goal/.test(goalProg || ""),
       "the goal bar names its level as the long-term target",
       JSON.stringify((goalProg || "").slice(0, 160)));
@@ -1955,6 +1978,109 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(gone === true,
       "three credits on three days retires the word from the ghost list");
 
+    /* ------------- the banner must not lose a word the moment it succeeds.
+     *
+     * v104: the learner saw "把 0/3", wrote a sentence with 把, and watched it
+     * disappear off the banner instead of ticking over to 1/3. The list is cut
+     * to six, and it used to be re-sorted first so anything credited today went
+     * to the back -- so earning a credit could push the word out of the six. It
+     * went off gradeTurn()'s target list with it, so the NEXT message with that
+     * word got no per-word verdict and fell back to the whole-sentence gate:
+     * one mistake anywhere in the sentence and the credit was lost too, which
+     * is the "it did not give me credit" half of the same report.
+     *
+     * Eight words, because the bug cannot show with six or fewer. Commonest
+     * first, so the order is the frequency order and not an accident. */
+    const eight = ["\u81ea\u5df1", "\u5df2\u7ecf", "\u8fd9\u6837", "\u56e0\u4e3a",
+                   "\u4f46\u662f", "\u53ef\u80fd", "\u5f00\u59cb", "\u6240\u4ee5"];
+    await exec(
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify(" +
+      JSON.stringify(eight.map(w => ({ w: w, p: "x", d: "x", seen: 9, from: 2 }))) + "));" +
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.ghosttest;" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the eight-word seed");
+
+    const sixBefore = await exec(
+      "return window.reuseFor('focused').map(function (e) { return e.w; });");
+    check(sixBefore.length === 6 && sixBefore[0] === eight[0],
+      "eight taught words give six ghost targets, commonest first",
+      JSON.stringify(sixBefore));
+
+    /* One clean use of the head word, dated today. */
+    const head = sixBefore[0];
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.ghostkeep = [{role:'user', id:'gk0', text:" + JSON.stringify(head) +
+      ", created_at:" + JSON.stringify(GHOST_TODAY + "T10:00:00Z") +
+      ", grade:{ok:true, errors:[]}}];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the credit");
+
+    const sixAfter = await exec("return window.reuseFor('focused');");
+    check(sixAfter.length === 6 && sixAfter[0].w === head,
+      "a ghost word keeps its place in the list the moment it earns a credit",
+      JSON.stringify(sixAfter.map(e => e.w)));
+    check(sixAfter[0].ghostN === 1 && sixAfter[0].ghostToday === true,
+      "and carries the credit it just earned, rather than vanishing with it",
+      JSON.stringify(sixAfter[0]));
+
+    /* The banner is what the learner actually reads, so the tick has to be
+     * there and not merely in the plumbing above. */
+    await exec("window.newChat('focused'); return true;");
+    const tick = await exec("return document.querySelector('#log').innerHTML;");
+    check(new RegExp(head + "[\\s\\S]{0,120}?1\\s*/\\s*3\\s*\u2713").test(tick),
+      "the banner shows the word with its new count and today's tick",
+      tick.slice(0, 500));
+
+    /* What the old sort was actually for, kept where it costs nothing: the
+     * partner is steered at a word that can still move today, even though the
+     * banked one keeps its place on screen. */
+    check(await exec("return window.ghostRequired(window.reuseFor('focused'));")
+            === sixBefore[1],
+      "and the partner is pointed at the first word not yet banked today");
+    check(await exec("return window.ghostRequired([{w:'a',ghostToday:true}]);") === "a",
+      "falling back to the head of the list when every target is banked");
+
+    /* ------------- and a finished word stays until the next conversation.
+     *
+     * At S.ghostUses credits the word leaves the targeting for good, which is
+     * right, and used to remove it from the banner in the same render -- so the
+     * last thing the learner saw was the word disappearing, which reads as
+     * failure rather than as success. It stays, greyed and ticked, for the rest
+     * of the conversation it finished in. */
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.ghostkeep = [0, 1, 2].map(function (i) {" +
+      "  return {role:'user', id:'gk' + i, text:" + JSON.stringify(head) +
+      ", created_at:'2026-09-0' + (i + 1) + 'T10:00:00Z'," +
+      " grade:{ok:true, errors:[]}}; });" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));" +
+      "var cs = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "cs.unshift({id:'ghostkeep', title:'ghost', activity:'focused', level:1," +
+      " created_at:'2026-09-01T10:00:00Z', updated_at:'2026-09-03T10:00:00Z'," +
+      " deleted:false});" +
+      "localStorage.setItem('hsk1chat.chats', JSON.stringify(cs));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the third credit");
+
+    check((await exec("return window.reuseFor('focused').map(function (e) { return e.w; });"))
+            .indexOf(head) === -1,
+      "a finished word is no longer a target");
+    await exec("window.openChat('ghostkeep'); return true;");
+    const doneBanner = await exec("return document.querySelector('#log').innerHTML;");
+    check(new RegExp(head + "[\\s\\S]{0,120}?3\\s*/\\s*3\\s*\u2713").test(doneBanner),
+      "but the conversation it finished in still shows it, complete and ticked",
+      doneBanner.slice(0, 600));
+
+    await exec("window.newChat('focused'); return true;");
+    const nextBanner = await exec("return document.querySelector('#log').innerHTML;");
+    check(nextBanner.indexOf(head) === -1,
+      "and the next conversation gives the slot to a word still to do",
+      nextBanner.slice(0, 400));
+
     /* localStorage alone is not enough: the live S.chatMsgs the page is
      * running against still holds ghosttest (S itself is unreachable from
      * here, the same reason seedGhost() above goes through localStorage at
@@ -1964,8 +2090,16 @@ check(usedGroups && usedGroups.first === "\u7684",
      * the now-clean storage. */
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
-      "delete m.ghosttest;" +
-      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+      "delete m.ghosttest; delete m.ghostkeep;" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));" +
+      /* And the two-word learning seed the per-word verdict test below needs:
+       * the eight-word block above replaced it. */
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify([" +
+      "{w:'\\u82f9\\u679c',p:'ping guo',d:'apple',seen:9,from:2}," +
+      "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));" +
+      "localStorage.setItem('hsk1chat.chats', JSON.stringify(" +
+      "  (JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]'))" +
+      "    .filter(function (c) { return c.id !== 'ghostkeep'; })));");
     await go(base);
 
     /* S.grader is on the same unreachable const as S.history above -- through

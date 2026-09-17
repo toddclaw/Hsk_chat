@@ -605,7 +605,12 @@ footer{
       <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
       word at the goal level allows you. <b style="color:var(--ok)">Green</b> is what you can
       <em>use</em>. The 98% mark is comfortable independent reading — texts at that level
-      become readable without help.</div>
+      become readable without help.
+      <br>The <b>to 98%</b> row is that mark counted in words rather than read off the bar:
+      how many more you need before the goal level reads comfortably. It is a far smaller
+      number than the words left on the list, because the commonest words carry most of the
+      running text and you already have them — published research puts adequate comprehension
+      at 95% lexical coverage and comfortable independent reading at 98%.</div>
 
     <label style="margin-top:14px">Progress to the next level</label>
       <div class="stats" id="nextProgress"></div>
@@ -622,14 +627,14 @@ footer{
            are 60% of the HSK 2 list but around 88% of HSK 2 running text, and
            the coverage bar that used to head this panel therefore arrived
            nearly full and barely moved. Removed; the word count it implies is
-           the actionable half and is all that is left. -->
+           the actionable half, and it now sits on the goal chart, where a list
+           you will never finish makes "enough to read it" the useful question.
+           On the next level it was the wrong question -- that is the list you
+           intend to know all of. It still gates Move up. -->
       <div class="note">The bar is how many of the level's <em>new</em> words you have, and it
-      runs the whole way from 0 to 100 as you work. The <b>to 98%</b> row above is a different
-      question: how many more words until you can read the level comfortably. It is a much
-      smaller number than the bar's, because the commonest words carry most of the running text
-      and you already have them — published research puts adequate comprehension at 95% lexical
-      coverage and comfortable independent reading at 98%, and moving up makes the next level
-      the one you read, so 98% is the mark <b>Move up</b> waits for.</div>
+      runs the whole way from 0 to 100 as you work — the next level is one to finish, not one to
+      cover 98% of. <b>Move up</b> appears once you can read it comfortably; the <b>to 98%</b>
+      row on the goal chart above is that same threshold, counted against your goal level.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
       <div class="note" style="margin-top:8px">Words you have not yet used enough times to own (the <b>not yet yours</b> row below) are exactly
       what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
@@ -1081,7 +1086,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v104 — 2026-09-15";
+const VERSION   = "v105 — 2026-09-16";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1850,17 +1855,43 @@ function windowed(excludeKind) {
 function reuseFor(activity) {
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
-    /* Words already credited today go last. At most one credit a day counts, so
-     * without this a learner who practised well yesterday opens the activity to
-     * six words that cannot move until tomorrow, and the activity quietly has
-     * nothing to offer. Still shown when there are not six others -- practising
-     * them is harmless and an empty banner would be worse. A stable sort, so
-     * commonest-first survives inside each group. */
-    return ((r && r.unused) || []).slice()
-      .sort((a, b) => (a.ghostToday ? 1 : 0) - (b.ghostToday ? 1 : 0))
-      .slice(0, 6);
+    /* Commonest-first, and NOT reordered by what has been credited today.
+     *
+     * This used to sort today's credited words to the back before taking six,
+     * on the argument that a word which cannot move again until tomorrow has
+     * nothing to offer. The cost was invisible in the code and obvious in use:
+     * the reorder fires at the exact moment a word earns its credit, so writing
+     * a ghost word correctly made it drop out of the six and vanish from the
+     * banner -- the learner saw "把 0/3", used 把, and watched it disappear
+     * without ever seeing the 1/3 tick it had just earned.
+     *
+     * Worse, this same list is gradeTurn()'s ghostTargets, so the word that
+     * fell out stopped getting its own per-word verdict on the NEXT message
+     * too, and fell back to the whole-sentence gate -- one mistake anywhere in
+     * the sentence and the credit was silently lost. That is the "it did not
+     * give me credit for 把" half of the same bug.
+     *
+     * The concern the sort addressed is real but belongs to the partner, not to
+     * the list: turn() picks `required` from the first word not yet credited
+     * today, so the partner still steers at something that can move. */
+    return ((r && r.unused) || []).slice(0, 6);
   }
   return S.learning.filter(HSKPace.isNew).slice(-6);
+}
+
+/* Which ghost word the partner is told it must use.
+ *
+ * The first that can still earn a credit today: at most one a day counts, so
+ * steering the conversation at a word already banked spends a turn on something
+ * the counter will refuse to move. This is the whole of what reuseFor()'s old
+ * credited-today-last sort was for, put where it costs nothing -- there it also
+ * reordered the list the banner and the grader read, and dropped the word off
+ * both at the moment it succeeded.
+ *
+ * Falls back to the head of the list when every target is banked: practising
+ * them again is harmless, and asking for nothing would be worse. */
+function ghostRequired(reuse) {
+  return ((reuse || []).find(e => !e.ghostToday) || (reuse || [])[0] || {}).w || "";
 }
 
 async function turn(ctx) {
@@ -1887,7 +1918,7 @@ async function turn(ctx) {
   const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
   // In Ghost Words, "required" is the first unused word to push production.
-  const required = isFocused ? (reuse[0] && reuse[0].w) :
+  const required = isFocused ? ghostRequired(reuse) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
   /* A story turn names its own model in ctx (storyStep(), and the discussing
    * phase send() sets up). Every other twenty turn -- opening, and every
@@ -2301,25 +2332,30 @@ function renderAll() {
   /* Ghost Words banner persists for the whole conversation. */
   function ghostBanner() {
     if (currentActivity() !== "focused") return "";
-    const targets = reuseFor("focused");
-    if (targets && targets.length) {
+    /* The six live targets, plus anything finished during this conversation --
+     * a word that reaches the mark leaves the targeting for good, and dropping
+     * it off the banner at the moment of success reads as "it did not count".
+     * It stays, greyed and ticked, until the next conversation. */
+    const targets = reuseFor("focused").concat(ghostFinishedHere());
+    if (targets.length) {
       /* Each word with its own count, and a tick on the ones already credited
        * today. Both are load-bearing rather than decoration: at most one use a
        * day counts, so a word that has had its credit will not move however
        * much more you write it, and a counter that silently refuses to move is
        * the exact failure drillWhyNot() was written to fix. */
-      const chips = targets.slice(0, 6).map(e =>
+      const chips = targets.map(e =>
         '<span style="display:inline-block;margin:0 10px 4px 0' +
-          (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
+          (e.ghostToday || e.done ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
         '<span style="font-size:14px;color:var(--dim)"> ' +
           (e.ghostN || 0) + "/" + S.ghostUses +
-          (e.ghostToday ? " \u2713" : "") + "</span></span>").join("");
+          (e.ghostToday || e.done ? " \u2713" : "") + "</span></span>").join("");
       return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
         '<b style="color:var(--accent);font-size:22px">' + chips + '</b><br>' +
         '<span style="color:var(--dim)">The partner will ask questions that need them. ' +
         'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
         'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
-        'already banked.</span></div>';
+        'already banked; a word that reaches ' + S.ghostUses + "/" + S.ghostUses +
+        ' is yours, and stays here until your next conversation.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
@@ -5884,6 +5920,35 @@ function producedWords() {
   return out;
 }
 
+/* Ghost words that reached the mark during the open conversation.
+ *
+ * A word with S.ghostUses credits has left readiness().unused for good, which
+ * is right for the targeting and wrong for the display: disappearing at the
+ * moment of success is what a learner reads as "it did not count". These stay
+ * in the banner, greyed and ticked, until the next conversation starts.
+ *
+ * Derived rather than remembered, like every other count here, so a reload does
+ * not lose the tick: a finished word that appears in a graded message of the
+ * open conversation finished here.
+ *
+ * ponytail: substring match on the transcript, not segmentation, so a finished
+ * word that only ever appears inside a longer one is captioned a conversation
+ * early. It is a caption on a word the learner has already completed, so the
+ * failure is harmless; segment the history if it ever reads wrong. */
+function ghostFinishedHere() {
+  const wrote = S.history
+    .filter(t => t && t.role === "user" && t.grade)
+    .map(t => t.text || "").join("\u0000");
+  if (!wrote) return [];
+  const prog = ghostProgressMap(), today = ghostDayKey();
+  return S.learning.filter(e => (e.from || 0) > S.level &&
+      wrote.indexOf(e.w) !== -1 &&
+      ((prog[e.w] && prog[e.w].n) || 0) >= S.ghostUses)
+    .map(e => Object.assign({}, e, {
+      ghostN: prog[e.w].n, ghostToday: prog[e.w].last === today, done: true
+    }));
+}
+
 /* Today, as the same UTC dayKey the credit rule counts in. Local dates would
  * let a flight change a learner's numbers -- mistakes.js says why. */
 function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
@@ -6013,6 +6078,10 @@ function readiness() {
      * receptive/productive one and is the informative part. */
     read: HSKPace.coverage(S.nextList, usable),
     produce: HSKPace.coverage(S.nextList, mine),
+    /* No longer drawn -- the row moved to the goal chart, against the goal
+     * list. Kept because it is the Move up gate said the other way round
+     * (toGo === 0 exactly when read >= READY_AT), which is what browser.test.js
+     * checks the button against. */
     toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
     total: S.nextList.length,
     newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
@@ -6069,13 +6138,25 @@ function renderGoalProgress() {
   const pct = Math.round(read * 100);
   const use = Math.round(produce * 100);
   const mark = Math.round(HSKPace.READY_AT * 100);
+  /* The words-to-threshold row belongs to THIS chart and not to the next-level
+   * one it used to sit under. The next level is the one you are working through
+   * word by word -- all of it, not 98% of it -- so a row saying you could stop
+   * early was answering a question nobody asks about the level in front of
+   * them. The goal is where 98% is the real target: it is a list you will never
+   * finish, and "how many words until I can read it comfortably" is the only
+   * tractable way to ask how far away it is. Same arithmetic, moved to the
+   * chart where it means something. */
+  const toGo = HSKPace.toTarget(S.goalList, usable, HSKPace.READY_AT);
   box.innerHTML =
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
     '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(goalLv.label) + " — goal</span>" +
-      "<i>" + pct + "% you can read</i></div>";
+      "<i>" + pct + "% you can read</i></div>" +
+    "<table><tr><td>to " + mark + "%</td><td>" +
+      (toGo ? toGo + " more word" + (toGo === 1 ? "" : "s") + ", commonest first"
+            : "there already") + "</td></tr></table>";
 }
 
 function renderNextProgress() {
@@ -6088,24 +6169,24 @@ function renderNextProgress() {
     return;
   }
   const ready = r.read >= HSKPace.READY_AT;
-  const mark = Math.round(HSKPace.READY_AT * 100);
   /* One bar, and it is the new words. A reading-coverage bar was drawn above
    * this one and was removed: it starts at 88% for HSK 1 -> 2 and every word
    * still worth learning lives in the top 12 points of it, so it looked nearly
    * full on arrival and barely moved while you worked -- correct arithmetic,
-   * useless as a progress display. The same number survives where it is worth
-   * reading: the "to 98%" row below says it in words you can act on, and it is
-   * still what Move up waits for. New words learned runs 0 to 100 across the
-   * same effort. */
+   * useless as a progress display. New words learned runs 0 to 100 across the
+   * same effort.
+   *
+   * The "to 98%" row that used to sit under it has moved to the goal chart
+   * above. It still gates Move up, and readiness().toGo is still that number --
+   * but the next level is the one you work through word by word, and a row
+   * offering to let you stop at 98% of it was answering a question about a
+   * list you intend to finish. */
   box.innerHTML =
     '<div class="bar words"><i style="width:' +
       (r.newWords ? Math.round(100 * r.newHave / r.newWords) : 0) + '%"></i></div>' +
     '<div class="barnote"><em>' + r.newHave + " of " + r.newWords +
       " new words</em><span>learned at " + escapeHtml(r.next.label) + "</span></div>" +
-    "<table><tr><td>to " + mark + "%</td><td>" +
-      (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
-        ", commonest first" : "there already") + "</td></tr>" +
-    "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
+    "<table><tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
     (r.unused.length
       ? "<tr><td>not yet yours</td><td>" + r.unused.length + " of the " + r.met +
         " the app taught you — used correctly fewer than " + S.ghostUses +
