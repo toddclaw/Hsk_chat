@@ -1108,7 +1108,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v105 — 2026-09-17";
+const VERSION   = "v106 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2077,9 +2077,14 @@ async function turn(ctx) {
        * fault on the final attempt falls out of the loop instead, to the best
        * earlier reply -- itself gated clean -- or the fallback stub. */
       if (S.gate && GATED[activity] !== false) {
+        /* Set once and left alone until the reply lands. Cleared after the
+         * check, the bubble drops back to "…" for the whole of the next
+         * attempt's generation -- so the learner watches the label appear,
+         * vanish, and then nothing for ten seconds, which reads as the app
+         * having finished and lost the answer. The wait is one wait; it says
+         * so once. */
         status("检查中…");
         const fault = await gateFault(ex.text);
-        status("");
         if (fault) {
           scratch.push({ role: "assistant", content: raw });
           scratch.push({ role: "user", content: gateRepairPrompt(fault) });
