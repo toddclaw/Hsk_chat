@@ -64,6 +64,7 @@ const MODEL = arg("model", "qwen/qwen3-235b-a22b-2507");   // TEACH_MODEL
 const CONCURRENCY = Number(arg("concurrency", 6));
 const MAX_LEVEL = Number(arg("level", 4));
 const ARM = arg("arm", "shipped");
+const NO_ERROR = "\u6ca1\u6709\u9519\u8bef";   // MuCGEC's "this annotator found no error"
 
 const lex = {};
 for (const n of [2, 3, 4, 5, 6, 7]) {
@@ -192,6 +193,14 @@ async function build() {
   const items = [];
   for (const r of rows) {
     if (!r.src || !cleanAt(r.src, MAX_LEVEL)) continue;
+    /* MuCGEC writes the literal string 没有错误 -- "no error" -- where an
+     * annotator found nothing to correct. It is a marker, not a sentence.
+     * Taken as one it poisons the pair in both directions: the marker becomes a
+     * `right` item the grader passes for free, and the source becomes a `wrong`
+     * item a human had just declared error-free. Any disagreement among the
+     * annotators about whether there is an error at all makes the pair useless
+     * as ground truth, so the whole row goes. */
+    if (r.refs.some(x => x === NO_ERROR)) continue;
     const ref = r.refs.find(x => x !== r.src && cleanAt(x, MAX_LEVEL));
     if (!ref) continue;
     /* Both halves at the SAME level, the higher of the two. Grading the wrong
@@ -321,9 +330,115 @@ const CORRECTION_FIRST =
  * the candidate text somewhere harmless. */
 const JSON_ANCHOR = "Reply with only a JSON object, no prose and no code fence:";
 
+/* Reasoning models spend their completion budget thinking before they emit a
+ * character of content, and OpenRouter returns the thinking in `reasoning` with
+ * `content` empty when the cap bites. At 600 this silently dropped 73 of 204
+ * turns on glm-5.3-flash and 43 of 54 on glm-5.3 -- read as API flakiness until
+ * the raw body was printed. The cap is not a cost control: you pay for tokens
+ * generated, and a non-reasoning model still stops at ~60. Only truncation
+ * changes. */
+const MAX_TOKENS = 4000;
+/* Every call in this file goes through MAX_TOKENS, including the cascade's. The
+ * cascade originally hardcoded 300 and 200 -- its prompts are short and its
+ * answers are one line, so a small cap looked like tidiness. On a reasoning
+ * model it is not a cap on the answer, it is a cap on the thinking that precedes
+ * it: glm-5.3-flash scored 14% through the cascade at 300 and returns a correct,
+ * well-grounded finding on the same sentence at 4000. This is round thirteen's
+ * defect a second time, in the one code path that was not fixed then. */
+
+/* ------------------------------------------------ the frame, round eleven
+ *
+ * Every arm before this one varied what the grader is ASKED. These two vary who
+ * it is told WROTE the sentence, which is the only thing round ten left that
+ * could explain 90% recall on learner text and 24% on the partner's.
+ *
+ * grade() opens "a student of Chinese at HSK 2 wrote this, so it may well be
+ * wrong" -- a frame built for the learner's half and measured to be necessary
+ * there, because without it the model assumes correctness and passes
+ * everything. Handed fluent, on-level, native-shaped text, that same frame may
+ * be answering a different question than the one intended: not *is this
+ * correct* but *is this the Chinese of someone at HSK 2*, for which the answer
+ * is yes and a stray 了 never comes up.
+ *
+ * Two arms, because "the frame" is two claims:
+ *   nativeFrame  the writer is the partner, held to native standard, no level.
+ *   noLevel      still a student, but the level anchor removed. Isolates the
+ *                anchor from the identity -- if noLevel alone recovers the
+ *                recall, the fault was never the student framing.
+ *
+ * Everything else is held constant: same tags, same categories, same JSON, same
+ * naturalness note. Each replacement asserts its target still exists, so a
+ * reworded grade() fails loudly instead of quietly testing the shipped prompt. */
+function reframe(base, pairs, arm) {
+  let out = base;
+  for (const [from, to] of pairs) {
+    if (out.indexOf(from) === -1) {
+      throw new Error("arm " + arm + ": grade() no longer contains " +
+                      JSON.stringify(from.slice(0, 48)) + " -- this harness has drifted");
+    }
+    out = out.split(from).join(to);
+  }
+  return out;
+}
+
 function promptFor(arm, text, label) {
   const base = HSKPrompt.grade({ text: text, label: label });
   if (arm === "shipped") return base;
+
+  /* `softBar` is `nativeFrame` with ONE clause changed, and nothing else.
+   *
+   * Round twelve's finding was that Sonnet over-fires: 29 of its 35 false alarms
+   * were plainly correct sentences. The suspect is nativeFrame's own ok line --
+   * "true only if a native speaker would write this exactly as it stands." A weak
+   * model ignores a bar that strict. A strong one obeys it, and *exactly as it
+   * stands* condemns every sentence the grader would merely have phrased
+   * differently.
+   *
+   * The replacement moves the question from "is this what I would write" to "is
+   * there a fault here a learner must not copy", and says outright that plainer
+   * is not a fault. That is the whole edit. DEVELOPING.md's worked example is a
+   * prompt "fix" that made its failure eight times likelier, so the frame, the
+   * tags, the categories and the JSON are held exactly as nativeFrame has them --
+   * if this moves the numbers, one clause moved them. */
+  if (arm === "softBar") {
+    return reframe(promptFor("nativeFrame", text, label), [
+      ["ok        — true only if a native speaker would write this exactly as it " +
+       "stands.\n",
+       "ok        — false only when there is a real fault here: something wrong, " +
+       "or something no native speaker would say. A sentence that is plainer, " +
+       "shorter or less graceful than the one you would have written is not a " +
+       "fault -- pass it. Ask whether a learner copying this sentence would be " +
+       "copying a mistake, not whether you would have written it this way.\n"]
+    ], arm);
+  }
+
+  if (arm === "nativeFrame") {
+    return reframe(base, [
+      ["You are grading one sentence written by a student of Chinese at " + label + ".",
+       "You are checking one sentence of Chinese written by a language-learning " +
+       "app's conversation partner. The learner reads it and copies it, so it has " +
+       "to be Chinese a native speaker would actually write."],
+      ["The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
+       "correct.",
+       "It was written by a model, so it reads fluently and may still be wrong. " +
+       "Fluent is not the same as correct -- do not assume it is correct."],
+      ["staying inside " + label + " vocabulary where possible",
+       "keeping as close to the original as the fix allows"],
+      ["The student wrote: ", "The sentence: "],
+      [SHIPPED_OK_LINE,
+       "ok        — true only if a native speaker would write this exactly as it " +
+       "stands.\n"]
+    ], arm);
+  }
+
+  if (arm === "noLevel") {
+    return reframe(base, [
+      ["a student of Chinese at " + label + ".", "a student of Chinese."],
+      ["staying inside " + label + " vocabulary where possible",
+       "keeping as close to the original as the fix allows"]
+    ], arm);
+  }
+
   const extra = arm === "checklist" ? CHECKS
               : arm === "correctionFirst" ? CORRECTION_FIRST
               : arm === "naturalFraming" ? NATURAL_FRAMING : null;
@@ -496,7 +611,7 @@ async function judgeSplit(text, label, KEY) {
   const d = jsonIn(raw);
   if (!d || !d.found) return { ok: true, second: false };
   // Detection owns the verdict; the second call only characterises it.
-  await callModel(categorisePrompt(text, label, String(d.note || "a fault")), 600, KEY);
+  await callModel(categorisePrompt(text, label, String(d.note || "a fault")), MAX_TOKENS, KEY);
   return { ok: false, second: true };
 }
 
@@ -504,7 +619,7 @@ async function judgeDecomposed(text, label, KEY) {
   const keys = Object.keys(SPECIALISTS);
   const reports = await Promise.all(keys.map(async k => {
     try {
-      const raw = await callModel(specialistPrompt(k, text, label), 200, KEY);
+      const raw = await callModel(specialistPrompt(k, text, label), MAX_TOKENS, KEY);
       const j = jsonIn(raw);
       return { k: k, found: !!(j && j.found), note: (j && String(j.note || "")) || "" };
     } catch (e) { return { k: k, found: false, note: "", error: true }; }
@@ -516,18 +631,25 @@ async function judgeDecomposed(text, label, KEY) {
   const findings = reports.map(r =>
     "- " + r.k + ": " + (r.found ? (r.note || "a fault, unspecified") : "nothing found")
   ).join("\n");
-  const raw = await callModel(integratorPrompt(text, label, findings), 600, KEY);
+  const raw = await callModel(integratorPrompt(text, label, findings), MAX_TOKENS, KEY);
   return { ok: verdictOk(raw, text), reports: reports };
 }
 
 let spend = 0;
-async function callModel(content, maxTokens, KEY) {
+async function callModel(content, maxTokens, KEY, temperature) {
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "Authorization": "Bearer " + KEY, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: MODEL, messages: [{ role: "user", content: content }],
-      max_tokens: maxTokens, temperature: 0.7, usage: { include: true }
+      max_tokens: maxTokens,
+      /* 0.7 is the default every arm before the cascade was measured at, and it
+       * stays that way so those numbers keep meaning what they meant. Detection
+       * is not a task that wants sampling: the diagnostic pass caught P126, P163
+       * and P137 that the scoring run had missed, same prompt, same model, purely
+       * because the dice fell differently. */
+      temperature: temperature === undefined ? 0.7 : temperature,
+      usage: { include: true }
     })
   });
   const body = await r.json().catch(() => ({}));
@@ -596,7 +718,7 @@ async function scoreClean() {
         const d = await judgeSplit(it.text, "HSK " + it.level, KEY);
         return Object.assign({}, it, { ok: d.ok, second: d.second });
       }
-      const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
+      const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), MAX_TOKENS, KEY);
       return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
     } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
   }), CONCURRENCY);
@@ -685,7 +807,7 @@ async function scoreVote() {
     for (let v = 0; v < VOTES; v++) {
       jobs.push(async () => {
         try {
-          const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
+          const raw = await callModel(promptFor(ARM, it.text, "HSK " + it.level), MAX_TOKENS, KEY);
           return { i: i, ok: verdictOk(raw, it.text) };
         } catch (e) { return { i: i, ok: null }; }
       });
@@ -755,7 +877,7 @@ async function score() {
   const rows = await pool(items.map(it => async () => {
     try {
       const raw = await callModel(
-        promptFor(ARM, it.text, "HSK " + it.level), 600, KEY);
+        promptFor(ARM, it.text, "HSK " + it.level), MAX_TOKENS, KEY);
       return Object.assign({}, it, { ok: verdictOk(raw, it.text) });
     } catch (e) { return Object.assign({}, it, { ok: null, error: String(e.message || e) }); }
   }), CONCURRENCY);
@@ -793,12 +915,167 @@ async function score() {
   console.log("written: " + path.relative(ROOT, out));
 }
 
-const MODE = args.indexOf("--vote") !== -1 ? scoreVote
-           : args.indexOf("--build-clean") !== -1 ? buildClean
-           : args.indexOf("--build") !== -1 ? build
-           : args.indexOf("--clean") !== -1 ? scoreClean
-           : score;
-MODE().catch(e => {
-  console.error(String((e && e.message) || e));
-  process.exit(1);
-});
+/* The two judges, exported so partner-corpus.js scores the SAME code rather
+ * than a copy of it. A second implementation of the four-lens design that
+ * drifted by one word would answer the transfer question about a grader that
+ * does not exist. */
+/* The lens cascade. See tools/partner-lens.js for why these lenses and not the
+ * app's four; this is only the plumbing.
+ *
+ *   split -> regex -> 7 narrow calls per sentence -> drop ungrounded findings
+ *         -> one adjudication per sentence that still has any
+ *
+ * A turn is faulty if any sentence is. The cost is paid per sentence and the
+ * adjudicator is only woken when a lens has already found something, so a clean
+ * turn costs 7 x sentences and nothing more. */
+/* `bar` is "strict" (outright faults only) or "loose" (+ stilted). The two
+ * share every proposal and every free filter and differ only in which confirm
+ * channels a finding is put through, so running both costs one extra call per
+ * rewrite finding rather than a second pipeline. */
+/* Retry, then give up LOUDLY.
+ *
+ * Every call inside judgeLens used to swallow its own failure and carry on with
+ * one fewer opinion. That is the wrong default for a detector: a turn whose
+ * every call failed came back "clean", indistinguishable from a turn that was
+ * clean, and the run printed no error marks at all. Raising the worker count
+ * from 14 to 20 was enough to do it -- the cascade scored 24% instead of 76% on
+ * an unchanged corpus with an unchanged prompt, and 5 of its 21 catches were the
+ * regex, which is to say the model half was dead and nothing said so.
+ *
+ * Now a call that will not come back throws, judgeLens propagates, and the
+ * runner's own retry sees it. A missing verdict is honest; a fabricated clean
+ * one is not. */
+async function lensCall(prompt, KEY, temp) {
+  for (let t = 0; t < 3; t++) {
+    try { return jsonIn(await callModel(prompt, MAX_TOKENS, KEY, temp)); }
+    catch (e) {
+      if (t === 2) throw e;
+      await new Promise(r => setTimeout(r, 400 * (t + 1)));
+    }
+  }
+}
+
+async function judgeLens(text, label, KEY, trace, bar) {
+  const P = require("./partner-lens.js");
+  if (P.scriptFault(text)) {                         // free, and no model can beat it
+    if (trace) trace.push({ lens: "script", span: "", kept: true });
+    return false;
+  }
+  const keys = Object.keys(P.LENSES);
+
+  /* PROPOSE WIDELY, CONFIRM NARROWLY.
+   *
+   * The two halves want opposite settings and the first cascade ran them on one.
+   * At temperature 0 the lenses went silent -- 米饭很饱, 你比昨天忙吗 and
+   * 你今天晚上吃什么了 drew nothing from any of the seven, where at 0.7 they had.
+   * Turned back up they propose freely and wrongly, which no longer matters,
+   * because a separate confirm at temperature 0 decides each claim on its own.
+   *
+   * Two draws per lens, OR-ed. Not round four's self-consistency: that took a
+   * majority of five votes on one broad call and suppressed the minority that
+   * was right. Two draws can only ADD candidates, and nothing here votes. */
+  const DRAWS = 2, T_FIND = 0.8, T_JUDGE = 0;
+
+  const verdicts = await Promise.all(P.sentences(text).map(async sentence => {
+    const raw = await Promise.all(keys.map(async k => {
+      const tries = await Promise.all(Array.from({ length: DRAWS }, () =>
+        lensCall(P.lensPrompt(k, sentence), KEY, T_FIND)));
+      return tries.find(j => j && j.found && j.span) || tries[0];
+    }));
+
+    /* The eighth proposer, and the only one that sees what judging cannot.
+     * See rewritePrompt() in partner-lens.js. Needs neither filter below: its
+     * span is a substring of the sentence by construction and its fix differs
+     * by construction, because both come from a diff. */
+    const rewrites = [];
+    for (let d = 0; d < DRAWS; d++) {
+      const j = await lensCall(P.rewritePrompt(sentence), KEY, d ? T_FIND : 0);
+      const f = j && j.rewrite ? P.diff(sentence, String(j.rewrite).trim()) : null;
+      if (f) rewrites.push(f);
+    }
+
+    /* Two free filters, before any confirm call is bought.
+     *
+     * GROUNDED: a lens that cannot quote the characters it objects to has
+     * invented the fault or is describing a different sentence.
+     *
+     * CHANGED: a lens that reports a fault and writes the same characters back
+     * as the fix has found nothing -- it answered yes because it was asked a
+     * yes/no question about its own speciality, which is the failure mode that
+     * asking seven narrow questions invites. Six lenses fired on 我会做简单的饭
+     * and five survived the old adjudicator; this catches that class for free. */
+    const found = raw.map(function (j, i) {
+      if (!j || !j.found || !j.span) return null;
+      return { lens: keys[i], span: String(j.span), fix: String(j.fix || ""),
+               why: String(j.why || "") };
+    }).filter(function (f) {
+      return f && sentence.indexOf(f.span) !== -1 && f.fix && f.fix !== f.span;
+    }).concat(rewrites).filter(function (f, i, all) {
+      return all.findIndex(function (x) { return x.span === f.span; }) === i;
+    });
+
+    if (trace) {
+      raw.forEach(function (j, i) {
+        if (j && j.found && j.span) trace.push({ lens: keys[i], span: String(j.span),
+          fix: String(j.fix || ""), why: String(j.why || ""),
+          grounded: sentence.indexOf(String(j.span)) !== -1,
+          changed: !!j.fix && String(j.fix) !== String(j.span), kept: false });
+      });
+      rewrites.forEach(function (f) {
+        trace.push({ lens: "rewrite", span: f.span, fix: f.fix, why: f.why,
+                     grounded: true, changed: true, kept: false });
+      });
+    }
+    if (!found.length) return true;
+
+    /* Confirmation, one finding at a time, none of them seeing the others.
+     *
+     * The first cascade asked about every finding on a sentence in a single
+     * call -- the broad question this document exists to argue against -- and it
+     * failed in both directions on the two turns anyone inspected: all three
+     * true findings vetoed on P187, five false ones confirmed on P118.
+     * Factored verification is also what Dhuliawala et al. (arXiv 2309.11495)
+     * find necessary to stop a model copying its own earlier mistakes. */
+    const ruled = await Promise.all(found.map(async function (f) {
+      const j = await lensCall(P.confirmPrompt(sentence, f), KEY, T_JUDGE);
+      if (j && j.wrong === true) return true;
+      /* Only rewrite findings reach the stiltedness channel. A lens finding is a
+       * claim about a rule, and a rule is either broken or it is not; the
+       * question "does this sound like a person" is only meaningful against a
+       * whole alternative sentence, which is what a rewrite is. */
+      if (bar !== "loose" || f.lens !== "rewrite") return false;
+      const n = await lensCall(
+        P.naturalPrompt(sentence, sentence.replace(f.span, f.fix)), KEY, T_JUDGE);
+      return !!(n && n.natural === false);
+    }));
+    if (trace) ruled.forEach(function (r, i) {
+      const t = trace.filter(function (x) { return x.span === found[i].span; }).pop();
+      if (t) t.kept = r;
+    });
+    return !ruled.some(Boolean);
+  }));
+  return verdicts.every(function (v) { return v; });
+}
+
+module.exports = {
+  judgeLens: judgeLens,
+  judgeArm: async (arm, text, label, KEY) =>
+    verdictOk(await callModel(promptFor(arm, text, label), MAX_TOKENS, KEY), text),
+  judgeDecomposed: async (text, label, KEY) =>
+    (await judgeDecomposed(text, label, KEY)).ok,
+  callModel: callModel, KEY_FILE: KEY_FILE, MODEL: MODEL, promptFor: promptFor,
+  spend: function () { return spend; }
+};
+
+/* Required by partner-corpus.js, so the CLI must not fire on import. */
+if (require.main === module) {
+  const MODE = args.indexOf("--vote") !== -1 ? scoreVote
+             : args.indexOf("--build-clean") !== -1 ? buildClean
+             : args.indexOf("--build") !== -1 ? build
+             : args.indexOf("--clean") !== -1 ? scoreClean
+             : score;
+  MODE().catch(e => {
+    console.error(String((e && e.message) || e));
+    process.exit(1);
+  });
+}

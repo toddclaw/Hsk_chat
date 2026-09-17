@@ -77,27 +77,65 @@ opposite of the obvious one. Run an A/B against the real model with counted
 outcomes before shipping a prompt edit — the worked examples in DEVELOPING.md
 show the shape, including a "fix" that made the failure eight times more likely.
 
-The grader has a benchmark now — `tools/grader-bench.js`, scored against human
-corrections from MuCGEC. It sits at **79%** (78% recall, 80% specificity), so
-roughly one verdict in five is wrong, in both directions. Score any change to
-`grade()` against it rather than arguing about the wording, and read
-`tools/grader-bench-results.md` first for what the number does and does not
-cover — no error tags, and not the partner's Chinese.
+The grader has two benchmarks now, and they disagree about it completely.
 
-Three rules learned the hard way:
+- `tools/grader-bench.js` — learner error, human ground truth from MuCGEC.
+  **90% recall, 66% specificity.** It leans harsh: roughly one correct sentence
+  in three is called faulty.
+- `tools/partner-corpus.js` — the partner's own Chinese, 204 turns generated
+  through the real prompt and labelled by Claude. **24% recall**, 38% for the
+  four-lens design and 38% for the one-call `nativeFrame` arm. This is the
+  correctness gate's actual job and the grader cannot currently do it.
 
-- **An output-shape instruction belongs to the turn it shapes.** Put it in the
-  system role and it governs every later turn — a follow-up question gets
-  answered with the original verdict again.
-- **Names contaminate a vocabulary measurement.** 王, 李 and 明 are all above
-  HSK 1. Run name-free when measuring anything about out-of-level words.
-- **A constraint may be doing work other than constraining.** `LEVEL_STYLE`'s
-  grammar ban reads as a pure prohibition and is also the only thing telling the
-  partner a structure is hard. Lifting it for words the learner had been taught —
-  the obvious repair for a prompt that forbids 被 and demands it four rules apart
-  — measured half as good (8/50 against 21/50) and reproduced the defect it was
-  meant to cure. Before resolving a contradiction, ask what the redundant half is
-  signalling. DEVELOPING.md has the worked example.
+`nativeFrame` is the best prompt measured: it tells the grader the *partner*
+wrote the text and names no level. Free — identical on learner error — and it
+beats the four-lens design on specificity, precision and cost.
+
+**But the model is the variable, not the prompt.** Eleven rounds of prompt work
+moved partner recall 24% → 38%. Changing the model moved it to 70%. This is the
+third time in this repo that a run of failing prompt strategies turned out to be
+a signal about the model. **Try the model by round three.**
+
+**Use the real corpus, not the synthetic one.** `tools/pull-partner.js` takes
+the partner's own turns out of the app's `messages` table (`role=assistant`
+only, output kept outside the repo). 285 real turns, labelled: the partner is
+**wrong 15.1% of the time, not the 8.8% the synthetic corpus said**, turns are
+twice as long, and **30% of all its errors are one defect** — a missing 得 after
+a verb (他跑很快, 小明踢球踢很好). The reflexive 被 this whole study opens with
+is in there twice, in production. Real traffic also has **zero** Latin script
+and **zero** `[[NEED:]]` markup, so two things earlier rounds scored and worried
+about do not occur.
+
+7% of assistant rows are the stub 我不会说 or 我不知道 — a generation failure no
+grader addresses.
+
+**The recall numbers in `grader-bench-results.md` rounds 12-16 are not
+measurable.** The partner corpus has 21 strict positives; one catch is five
+points, and no paired test between the lens cascade, `glm-5.3-flash` and Sonnet
+reaches significance. Enlarge the positive class before trusting any of them, or
+before running another arm — `tools/partner-corpus.js` generates 204 turns for
+$0.014, and a stratified label pass is the cheap route to ~100 positives.
+
+**Specificity is well powered (183 negatives) and says the opposite of what the
+recall race suggested:** shipped qwen 96%, `glm-5.3-flash` 89%, the cascade 81%,
+Sonnet 66%. At the partner's 8.8% error rate over-firing is the expensive
+direction, and the strong model is much the worst offender.
+
+Two things about weak models that hold independently of the corpus, both
+measured on their own probes and worth reaching for elsewhere:
+
+- **Ask it to rewrite, not to judge.** Every lens and the shipped grader call
+  你比昨天忙吗？ fine. Asked to *rewrite* it natively the same model returns
+  你今天比昨天忙吗？ Diff the rewrite for a grounded fault proposal that needed
+  no judgement.
+- **Give it two sentences, not one.** Confirming a finding in the abstract
+  caught 2 of 7; showing original and repair side by side caught 5 of 7. The
+  abstract phrasing has now scored zero or near-zero on three separate probes.
+
+**Silent failure has produced a wrong number three times here** — `没有错误`
+parsed as a sentence, `content` empty while `reasoning` filled the budget, and a
+swallowed exception that made a dead grader look clean. Every one looked
+plausible. Print the raw thing and count what did not come back.
 
 ## Secrets
 
