@@ -1765,6 +1765,68 @@ are the columns that can carry an argument, and on those the pairs genuinely
 beat the singles. Six arms have now been compared on this corpus and a seventh
 would want a held-out split.
 
+## Round twenty-four: the same numbers, on a corpus nobody had tuned against
+
+Six arms and thirty-six pairs had now been compared on one corpus of 222 turns.
+The winner was picked off that corpus and could be a winner of it. So: a fresh
+one, generated the way round twenty-two says the old synthetic corpus should
+have been.
+
+### Replaying the learner, not simulating one
+
+The old synthetic corpus failed because its *learner* was a model. Round
+twenty-two's finding was that partner errors are the residue of real
+conversation: answering a simulated learner the partner writes smooth Chinese
+with fine cracks in it, answering Todd's actual sentences it comes apart.
+
+`tools/replay-partner.js` keeps the real half and regenerates the rest. Todd's
+own turns, in their real order and real context, through the app's own system
+prompt, two draws each. 22 threads, 141 real learner turns, **282 fresh partner
+turns for $0.016.** Chat and focused only — twenty needs a `secret` and drill a
+tag the export does not carry, and 19 of the 21 outright errors in the real
+corpus are chat or focused anyway.
+
+It comes out the right shape: 37.4 characters a turn against the real corpus's
+40.1 and the old synthetic corpus's 31.7.
+
+### Stratified labelling, and what a random sample of passes is for
+
+Both finalist arms judged all 282. The 71 turns either objected to were labelled
+in full — a census, no sampling error — and **50 of the 205 neither objected to
+were drawn at random** and labelled, weighted up by 4.1.
+
+That second stratum is the whole point, and it must stay random even when it is
+boring: labelling only what the graders flagged would measure them against
+themselves and return 100% recall by construction.
+
+**The random sample of 50 turns the union passed contained zero outright
+errors** and four merely-unnatural ones.
+
+### It replicates
+
+| | strict recall | loose recall | spec | fires |
+|---|---|---|---|---|
+| `nativeFrame` — real / fresh | 86% / **87%** | 61% / **60%** | 87% / **90%** | 29% / 20% |
+| `softBar`/glm — real / fresh | 100% / **93%** | 60% / **60%** | 86% / **91%** | 28% / 19% |
+| **union — real / fresh** | 100% / **100%** | 73% / **71%** | 80% / **86%** | 37% / 26% |
+
+Independent corpus, independent labelling pass, and every number lands within a
+few points of round twenty-three's. The union still beats both singles by the
+same margin it beat them by before. **Nothing here was overfit to the 222.**
+
+Specificity comes out better on the fresh corpus and firing lower, on both arms
+— consistent with a freshly generated turn carrying less accumulated oddity than
+one pulled out of a real session.
+
+### What 100% is worth
+
+Zero errors in 50 sampled passes is the best possible observation and still a
+weak one: at 95% confidence the missed-error rate among the 205 unflagged turns
+could be as high as 7%, which is fourteen errors and a true recall near 50%. The
+honest sentence is **"no missed outright error in fifty turns it passed"**, not
+"catches everything". Widening that interval means labelling more passes, and
+nothing else.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

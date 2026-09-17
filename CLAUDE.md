@@ -88,15 +88,19 @@ The grader has three benchmarks, and the one that counts is real traffic.
 - `tools/grader-bench.js` — MuCGEC learner error, human ground truth. 90%
   recall, 66% specificity. Leans harsh, and that harshness does not reproduce on
   real sentences.
-- `tools/partner-corpus.js` — 204 synthetic partner turns. **Superseded.** It
-  matched real traffic on error rate and not on error kind, and eleven arms were
-  raced on the difference.
+- `tools/replay-partner.js` — fresh partner turns of the RIGHT kind, made by
+  replaying Todd's own learner turns in context through the app's prompt. 282
+  turns for $0.016, and it confirms the real-corpus numbers within a few points.
+- `tools/partner-corpus.js` — 204 synthetic partner turns. **Superseded.** Its
+  learner was a model, so it matched real traffic on error rate and not on error
+  kind, and eleven arms were raced on the difference. **If you need more partner
+  data, replay the real learner; do not simulate one.**
 
 `nativeFrame` is the best prompt measured on both halves: it tells the grader the
 *partner* wrote the text and names no level. But on the partner, **pairing two
 arms beats improving either one** — `nativeFrame` OR `softBar`/glm-5.3-flash
 catches every outright error and 73% of the merely-stilted at 80% specificity
-for $0.0004 a turn, and `tools/partner-pairs.js` scores all 36 pairs from stored
+for $0.0004 a turn, confirmed on a second corpus at 100% / 71% / 86%, and `tools/partner-pairs.js` scores all 36 pairs from stored
 verdicts for free. A union needs two graders that disagree productively: two
 prompts on the same model do not.
 

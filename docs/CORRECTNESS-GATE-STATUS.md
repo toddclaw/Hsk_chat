@@ -1,8 +1,8 @@
 # Correctness gate — where this stands, and what to do next
 
-Written 2026-09-16, updated 2026-09-17 with rounds twenty-two and -three, for a reader
+Written 2026-09-16, updated 2026-09-17 with rounds twenty-two to -four, for a reader
 starting cold.
-`tools/grader-bench-results.md` is the full study, twenty-three rounds. This is the
+`tools/grader-bench-results.md` is the full study, twenty-four rounds. This is the
 short version and the next three moves.
 
 ## The goal
@@ -25,7 +25,8 @@ the Chinese on screen is worth imitating.
 | benchmark | what it is | result |
 |---|---|---|
 | **production verdicts** | 208 stored `messages.grade` on Todd's real sentences, blind-labelled | **83% recall, 86% specificity, 85% overall** |
-| **real partner turns** | 222 turns from the database, qwen activities only | **`nativeFrame` 86% strict recall, 87% specificity** |
+| **real partner turns** | 222 turns from the database, qwen activities only | **union: 100% strict recall, 73% loose, 80% specificity** |
+| **replayed turns** (confirmation) | 282 fresh turns, Todd's real learner turns replayed | **union: 100% / 71% / 86% — replicates** |
 | MuCGEC, repaired | advanced learner essays, human labels | 90% recall, 66% specificity |
 | partner corpus, synthetic | 204 generated turns, Claude labels | superseded — wrong KIND of error, see round 22 |
 
@@ -62,6 +63,13 @@ one (`tools/partner-pairs.js`):
 Both catch every outright error in the corpus. The choice between them is how
 many retries are tolerable, which is the bar question below.
 
+**Confirmed on a corpus nothing was tuned against** (round twenty-four).
+`tools/replay-partner.js` replays Todd's own learner turns through the app's
+prompt for fresh partner Chinese of the right kind — 282 turns for $0.016 — and
+a stratified label pass reproduces every number within a few points: the union
+at 100% strict, 71% loose, 86% specificity. The chosen bar is not an artefact of
+the 222.
+
 A union needs two graders that disagree productively, and two prompts on one
 model do not: `decomposed OR nativeFrame` is no better than `decomposed` alone.
 The cheap qwen arm and the reasoning model are what make it work.
@@ -92,6 +100,8 @@ against synthetic, real and pooled. The answer is above.
 The only thing left, and the bar is Todd's — he copies the partner's Chinese as
 his main learning channel, so a miss costs him a wrong sentence in his own
 writing and a false alarm costs him a retry. Those are not symmetric for him:
+
+**Todd chose the balanced union** (2026-09-17). What remains is wiring it.
 
 | bar | arm | catches | retries |
 |---|---|---|---|
@@ -147,6 +157,7 @@ correction (`better` leaks out-of-level vocabulary), it regenerates.
 | `tools/partner-lens.js` | the lens cascade's prompts, pure and testable |
 | `tools/partner-corpus-table.js` | every arm and model, synthetic / real / pooled |
 | `tools/partner-pairs.js` | every PAIR of arms, unioned and intersected — free, no API calls |
+| `tools/replay-partner.js` | fresh partner turns of the right kind, from real learner turns |
 | `tools/real-qwen.js` | builds the real qwen corpus — joins labels to the activity column |
 | `tools/label-calibrate.js` | what a Claude label is worth (93%, blind) |
 | `~/Documents/chat-export.json` | real history — **outside the repo, no .gitignore here** |

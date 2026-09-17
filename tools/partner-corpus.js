@@ -213,6 +213,13 @@ async function grade() {
   }));
   rows.sort((a, b) => a.id < b.id ? -1 : 1);
 
+  /* The model is in the filename because it is a variable of the experiment, not
+   * a setting -- round twelve runs the same arm on a different one, and a result
+   * file that silently overwrote its own baseline would lose the comparison. */
+  const slug = MODEL === "qwen/qwen3-235b-a22b-2507" ? "" : "-" + MODEL.split("/").pop();
+  const tag = arg("corpus", null) ? "-" + path.basename(arg("corpus"), ".json").replace("partner-corpus", "c") : "";
+  const out = path.join(__dirname, "partner-corpus-graded-" + arm + slug + tag + ".json");
+
   const pct = (a, b) => b ? (100 * a / b).toFixed(0) + "%" : "n/a";
   console.log("\n");
   if (!labelled) {
@@ -237,12 +244,6 @@ async function grade() {
     console.log("  the gate fires on " + fires + "/" + rows.length + " turns, " +
                 pct(caught, fires) + " of them justified\n");
   }
-  /* The model is in the filename because it is a variable of the experiment, not
-   * a setting -- round twelve runs the same arm on a different one, and a result
-   * file that silently overwrote its own baseline would lose the comparison. */
-  const slug = MODEL === "qwen/qwen3-235b-a22b-2507" ? "" : "-" + MODEL.split("/").pop();
-  const tag = arg("corpus", null) ? "-" + path.basename(arg("corpus"), ".json").replace("partner-corpus", "c") : "";
-  const out = path.join(__dirname, "partner-corpus-graded-" + arm + slug + tag + ".json");
   fs.writeFileSync(out, JSON.stringify({ model: MODEL, arm: arm,
     when: new Date().toISOString(), rows: rows }, null, 1));
   // spend lives in grader-bench.js's module scope here, not this one's.
