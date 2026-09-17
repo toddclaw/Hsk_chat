@@ -2709,6 +2709,38 @@ check(usedGroups && usedGroups.first === "\u7684",
       "and gives up on the first failure instead of trying the slow one too",
       JSON.stringify(await exec("return window.__graded;")));
 
+    /* The wait says which try it is on. Six tries, each costing a generation
+     * and up to two grader calls, is minutes of an unchanging "..." otherwise --
+     * which reads as a hang rather than as work. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__resolve = null;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {      // hold the gate open
+          return new Promise(function (r) { window.__resolve = r; });
+        }
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("window.__resolve", "the gate to be in flight");
+    const waiting = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(/1\/\d/.test(waiting),
+      "the waiting bubble says which try it is on while the gate runs", waiting);
+    check(waiting.indexOf("\u68c0\u67e5\u4e2d") === 0,
+      "and still says it is checking", waiting);
+    // Let it finish so the next test starts from a quiet app.
+    await exec(`window.__resolve(JSON.stringify(
+      { ok: true, meant: "", better: "", cats: {}, errors: [] })); return true;`);
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the turn to land");
+
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.
     await exec(`
