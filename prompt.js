@@ -1180,6 +1180,63 @@
       "words that appear in the story. Reply with the title and nothing else.";
   }
 
+  /* The three verdicts the grammar check opens with, as the literal words to
+   * emit. Described rather than quoted ("say which of three it is: natural at
+   * their level..."), the model echoed the description back including its third
+   * person -- the learner was told "natural Chinese at their level", which reads
+   * as a note written about them to someone else. */
+  var VERDICTS = {
+    ok:    "Natural.",
+    idiom: "Understandable, but not how a native speaker would say it.",
+    wrong: "Not correct."
+  };
+
+  /* The grader's verdict, in the grammar check's own three words.
+   *
+   * The two run on the same sentence and answer the same question in different
+   * shapes -- the grader in four booleans and a tag list, the check in prose --
+   * and when each derives its own answer they disagree often enough that the
+   * learner sees a red cross on the message and "Natural." at the top of the
+   * sheet the cross opens. Mapping one onto the other is what stops that.
+   *
+   * The middle verdict is exactly "only naturalness was faulted": breaks no
+   * rule, is not what a native speaker would choose. Any other fault is the
+   * third. */
+  function verdictFor(grade) {
+    if (!grade || grade.unreadable) return "";
+    if (grade.ok) return VERDICTS.ok;
+    var cats = grade.cats || {};
+    var onlyIdiom = cats.natural === false && cats.word !== false &&
+                    cats.grammar !== false && cats.order !== false;
+    return onlyIdiom ? VERDICTS.idiom : VERDICTS.wrong;
+  }
+
+  /* The verdict as the explainer is shown it: what was faulted, which rules
+   * were named, and the correction already offered. Handed over rather than
+   * re-derived so the sheet elaborates the badge instead of relitigating it. */
+  function gradeBlock(grade) {
+    if (!grade || grade.unreadable) return "";
+    var lines = ["A grader has already judged this sentence. Its verdict is on the screen " +
+      "beside the sentence as a tick or a cross, and this explanation was opened from it."];
+    lines.push("", "Its verdict: " + verdictFor(grade));
+    var bad = GRADE_CATS.filter(function (c) { return (grade.cats || {})[c.key] === false; })
+      .map(function (c) { return c.label; });
+    if (bad.length) lines.push("What it faulted: " + bad.join(", ") + ".");
+    /* Tag code first, its learner-facing label after. The labels alone are
+     * ambiguous here -- aspect-le's is the bare character 了, which in a prompt
+     * reads as a quotation rather than the name of a rule. TAG_EG is
+     * deliberately absent: every example in that column contains a wrong form,
+     * and RESEARCH.md measured that putting one in a prompt primes the model to
+     * reproduce it. */
+    (grade.errors || []).forEach(function (e) {
+      var label = TAG_LABEL[e.tag];
+      lines.push("- " + e.tag + (label && label !== e.tag ? " (" + label + ")" : "") +
+                 (e.note ? ": " + e.note : ""));
+    });
+    if (grade.better) lines.push("Its correction: " + grade.better);
+    return lines.join("\n") + "\n\n";
+  }
+
   function explain(opts) {
     // Recently introduced words go in so the explanation can point out which
     // ones are still new, not just recite the sentence.
@@ -1228,6 +1285,7 @@
      * 了?", the model could only repeat "Natural." It was obeying. */
     if (opts.followUp) {
       return head +
+        gradeBlock(opts.grade) +
         "The student wrote the sentence below THEMSELVES and has already been given a " +
         "verdict on it. They are now asking a follow-up question about it.\n\n" +
         "Answer their question directly, in a few sentences. Quote Chinese where it helps. " +
@@ -1238,31 +1296,66 @@
         "is often a homophone of the right one rather than a misunderstanding.\n\n" +
         tail + contextBlock(opts.context) + "The sentence under discussion: " + opts.text;
     }
+    /* Two answers to one question, and the learner reads both. The grader has
+     * almost always run by the time this sheet opens -- it runs on every
+     * sentence sent, and its badge is what opens the sheet -- so its verdict is
+     * handed over rather than derived a second time. Left independent, the two
+     * disagree often enough to be the thing the learner notices and the thing
+     * they cannot resolve: a cross on the message, "Natural." at the top of the
+     * sheet the cross opened, and no way to tell which to believe.
+     *
+     * Agreement is not obedience. An explainer that genuinely disagrees has to
+     * say so in as many words -- the same bargain the follow-up branch already
+     * strikes -- because a silently overridden verdict is the confusing case,
+     * not an argued one. */
+    var given = verdictFor(opts.grade);
     return head +
       "The student wrote the sentence below THEMSELVES, so it may well be wrong. Do not assume " +
       "it is correct, and do not silently answer as if it were.\n\n" +
+      gradeBlock(opts.grade) +
       "Answer in this shape and nothing else:\n" +
-      /* The three verdicts are given as the literal words to emit. Described
-       * rather than quoted ("say which of three it is: natural at their
-       * level..."), the model echoed the description back including its
-       * third person -- the learner was told "natural Chinese at their
-       * level", which reads as a note written about them to someone else. */
-      "Start with exactly one of these three lines, on its own:\n" +
-      "Natural.\n" +
-      "Understandable, but not how a native speaker would say it.\n" +
-      "Not correct.\n" +
-      "The middle one is for Chinese that breaks no rule but no native speaker would choose: " +
-      "a calque from English, a stiff or abrupt phrasing, or a word that is technically right " +
-      "and not the one used here. Judge idiom, not only grammar -- most sentences a learner " +
-      "worries about are in this middle case rather than outright broken.\n" +
-      "After \"Natural.\" stop immediately. Do not add a translation, do not restate the " +
-      "sentence, do not offer an alternative, and do not manufacture a problem to have " +
-      "something to teach.\n" +
-      "Otherwise, give the corrected sentence on its own line, with no commentary attached, " +
-      "staying inside the student's level where that is possible.\n" +
-      "Then at most two sentences on what led them astray -- word order, a missing or wrong " +
-      "particle, a measure word, aspect, or a word used in a sense it does not carry. Name the " +
-      "rule rather than describing the edit, so it transfers to the next sentence.\n\n" +
+      (given
+        ? "Start with exactly this line, on its own:\n" + given + "\n" +
+          "That is the verdict already on the screen and your answer opens with it. Explain " +
+          "the faults listed above rather than hunting for different ones, and do not add a " +
+          "fault the grader did not name. If you genuinely think the verdict is wrong, still " +
+          "open with that line, then say plainly at the end that you disagree and why -- " +
+          "never open with a different one.\n"
+        : "Start with exactly one of these three lines, on its own:\n" +
+          VERDICTS.ok + "\n" + VERDICTS.idiom + "\n" + VERDICTS.wrong + "\n" +
+          "The middle one is for Chinese that breaks no rule but no native speaker would " +
+          "choose: a calque from English, a stiff or abrupt phrasing, or a word that is " +
+          "technically right and not the one used here. Judge idiom, not only grammar -- most " +
+          "sentences a learner worries about are in this middle case rather than outright " +
+          "broken.\n") +
+      /* Only the branch that applies. Left in full with a verdict already handed
+       * over, the instructions for the other two are dead text and the model
+       * reads them anyway: told the sentence was unidiomatic, it wrote the
+       * correction and the explanation and then appended the word "Natural." on
+       * its own line, having been told elsewhere to emit it. One reply in
+       * thirty, and it puts a contradicting verdict at the bottom of a sheet
+       * that exists to stop verdicts contradicting -- the exact confusion this
+       * whole change is for. Caught by reading the replies; the opening-line
+       * count scored it correct. */
+      (given === VERDICTS.ok
+        ? "Stop immediately after that line. Do not add a translation, do not restate the " +
+          "sentence, do not offer an alternative, and do not manufacture a problem to have " +
+          "something to teach.\n"
+        : given
+        ? "Then give the corrected sentence on its own line, with no commentary attached, " +
+          "staying inside the student's level where that is possible.\n" +
+          "Then at most two sentences on what led them astray. Name the rule rather than " +
+          "describing the edit, so it transfers to the next sentence. Write nothing after " +
+          "that -- in particular, never end with one of the other verdict lines.\n"
+        : "After \"Natural.\" stop immediately. Do not add a translation, do not restate the " +
+          "sentence, do not offer an alternative, and do not manufacture a problem to have " +
+          "something to teach.\n" +
+          "Otherwise, give the corrected sentence on its own line, with no commentary " +
+          "attached, staying inside the student's level where that is possible.\n" +
+          "Then at most two sentences on what led them astray -- word order, a missing or " +
+          "wrong particle, a measure word, aspect, or a word used in a sense it does not " +
+          "carry. Name the rule rather than describing the edit, so it transfers to the " +
+          "next sentence.\n") + "\n" +
       "Two failure modes are easy to misread. The student types pinyin and picks a character " +
       "from a list, so a wrong character is often a homophone of the right one rather than a " +
       "misunderstanding. And a sentence can be entirely grammatical yet blunt or unidiomatic; " +
@@ -1282,6 +1375,7 @@
               GUESS_POOL: GUESS_POOL, pickSecret: pickSecret,
               AUTO_LIST_MAX_LEVEL: AUTO_LIST_MAX_LEVEL, modeFor: modeFor,
               styleFor: styleFor, startersFor: startersFor,
+              VERDICTS: VERDICTS, verdictFor: verdictFor, gradeBlock: gradeBlock,
               storyIdeasFor: storyIdeasFor, questionTypesFor: questionTypesFor,
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
