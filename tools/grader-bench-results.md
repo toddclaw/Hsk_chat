@@ -10,6 +10,13 @@ answering the question the one before it raised.
 **The grader is right about 80% of the time, and the only thing that has moved
 that is asking several narrow questions instead of one broad one.**
 
+**Round nineteen corrects round eighteen.** The real corpus mixes two models:
+`STORY_MODEL` is `claude-sonnet-4.5` and everything else is qwen. Pooled, that
+produced a partner "wrong 15.1% of the time" and a dominant 得 defect. Split, the
+chat partner is wrong **3.2 times per 100 sentences** against the synthetic
+corpus's **3.3** — the synthetic distribution was right all along — and 12 of the
+13 得 errors belong to Sonnet, not qwen.
+
 **Round seventeen retracts the recall half of rounds twelve through sixteen.**
 The partner corpus has **21 strict positives**. One catch is five points of
 recall, 95% intervals run ±19 points, and no paired test between the cascade,
@@ -78,7 +85,8 @@ never had the defect, so **the four-lens finding stands unchanged.**
 | 15 | **can structure buy back the model?** | **yes, on the strict bar. A cascade of ~45 small qwen calls beats Sonnet on recall (76% vs 70%) and specificity (87% vs 74%) at a third of the cost. It does not close the gap on "worth imitating"** |
 | 16 | can a stiltedness channel and a cheap panel close the rest? | the channel works; the panel arithmetic is sound. **But see round seventeen — the recall half of this answer was never measurable** |
 | 17 | **are any of these recall numbers real?** | **no. 21 strict positives; one catch is 5 points. Every recall comparison in rounds 12–16 is inside the noise. Specificity is well powered and says something different** |
-| 18 | **is the synthetic corpus even the right distribution?** | **no. Real partner turns from the app's own database are wrong 15.1% of the time, not 8.8% — and 30% of those errors are one defect the synthetic corpus barely showed** |
+| 18 | **is the synthetic corpus even the right distribution?** | real turns are wrong 15.1% of the time against the synthetic 8.8% — **but see round nineteen, which is a correction, not a confirmation** |
+| 19 | **was that comparing like with like?** | **no. The real corpus pools two models. Story time runs on Sonnet; chat runs on qwen. Split, the synthetic corpus is an excellent match for the chat partner — and Sonnet is the better writer, not the worse one** |
 
 What survives all seven: **diversity of lens.** Repetition doesn't help, wording
 doesn't help, unloading the call doesn't help. Several passes each hunting a
@@ -1393,6 +1401,63 @@ corpus's remaining use is as a cheap place to develop, not to decide.
 The 1,002 additional synthetic turns generated for stratification remain
 unlabelled and are now the lower priority: more of the wrong distribution is
 worth less than 285 of the right one.
+
+## Round nineteen: two models in one corpus
+
+Round eighteen treated 285 real turns as one population. They are not.
+`index.html:1064` — `STORY_MODEL = "anthropic/claude-sonnet-4.5"`. Story time
+runs on Sonnet; chat, focused and the rest run on qwen. The corpus was pooling a
+long-form activity on one model with short-form chat on another.
+
+Split on the story cast (小明, 小红, 小白 — `STORY_NAMES`, a proxy, since the
+pull did not take a conversation id):
+
+| | turns | sentences | wrong/turn | **wrong per 100 sentences** | unnatural per 100 sentences |
+|---|---|---|---|---|---|
+| story — **Sonnet** | 67 | 830 | 31.3% | **2.5** | **0.6** |
+| chat — **qwen** | 218 | 693 | 10.1% | **3.2** | 7.2 |
+| synthetic — qwen | 204 | 543 | 8.8% | **3.3** | — |
+
+Story turns are 161 characters to chat's 38. **A per-turn rate compares a
+paragraph against a sentence**, and that is the whole of round eighteen's
+headline: 31.3% against 10.1% is four times the text, not three times the error.
+
+### Three things round eighteen got backwards
+
+1. **The synthetic corpus was right.** 3.3 errors per 100 sentences against the
+   real chat partner's 3.2; 8.8% per turn against 10.1%; 32 characters against
+   38. It is an excellent model of the chat partner, and the claim that it was
+   "the wrong distribution" was an artefact of the Sonnet admixture.
+2. **The 得 defect is Sonnet's, not qwen's.** 12 of the 13 instances are story
+   turns. For the chat partner it is 1 error in 22. A 得 lens would be aimed at
+   the wrong model.
+3. **Sonnet writes better, not worse.** Slightly fewer errors per sentence
+   (2.5 against 3.2) and **twelve times fewer unnatural ones** (0.6 against
+   7.2). The capable model chosen for story time after six prompt strategies
+   failed is doing exactly what it was chosen for.
+
+### What survives round eighteen
+
+- **The reflexive 被 is in production, and it is qwen's.** Both instances —
+  我的手机被我不小心放错了地方 and 我的书被我放在桌子上了 — are chat turns. The
+  sentence this entire document opens with is the chat partner's, in Todd's own
+  logs.
+- **7% of assistant rows are the stub 我不会说 or 我不知道.** Unchanged, and still
+  a generation failure no grader addresses.
+- **Zero Latin script, zero `[[NEED:]]`.** So the regex still earns nothing real,
+  and the `[[NEED:]]` false alarm still does not matter.
+- **43 labelled positives**, which is still twice the synthetic corpus's 21 — but
+  only 22 of them belong to the model the chat gate would judge.
+
+### The methodological point, for the third time
+
+Round ten sampled at the natural rate and made the positive class unusable.
+Round seventeen found that out. Round eighteen then replaced one unexamined
+population with another, and the new one was two populations wearing a coat.
+
+**Ask what generated each row before pooling it.** The app's own settings page
+has a dropdown labelled "Model for story time"; nothing about the data itself
+made the split visible, and the number it produced looked entirely plausible.
 
 ## What to measure next
 

@@ -96,18 +96,26 @@ moved partner recall 24% → 38%. Changing the model moved it to 70%. This is th
 third time in this repo that a run of failing prompt strategies turned out to be
 a signal about the model. **Try the model by round three.**
 
-**Use the real corpus, not the synthetic one.** `tools/pull-partner.js` takes
-the partner's own turns out of the app's `messages` table (`role=assistant`
-only, output kept outside the repo). 285 real turns, labelled: the partner is
-**wrong 15.1% of the time, not the 8.8% the synthetic corpus said**, turns are
-twice as long, and **30% of all its errors are one defect** — a missing 得 after
-a verb (他跑很快, 小明踢球踢很好). The reflexive 被 this whole study opens with
-is in there twice, in production. Real traffic also has **zero** Latin script
-and **zero** `[[NEED:]]` markup, so two things earlier rounds scored and worried
-about do not occur.
+**The real corpus mixes two models — split it before using it.** `STORY_MODEL`
+is `claude-sonnet-4.5` (`index.html:1064`); everything else is qwen. Pooled, the
+285 real turns pulled by `tools/pull-partner.js` look like a partner wrong 15.1%
+of the time with a dominant 得 defect. Split, per 100 sentences:
 
-7% of assistant rows are the stub 我不会说 or 我不知道 — a generation failure no
-grader addresses.
+| | wrong | unnatural |
+|---|---|---|
+| story (Sonnet) | 2.5 | 0.6 |
+| chat (qwen) | 3.2 | 7.2 |
+| synthetic (qwen) | 3.3 | — |
+
+So **the synthetic corpus is a good model of the chat partner**, the 得 defect is
+Sonnet's (12 of 13 instances), and Sonnet writes *better* than qwen, not worse —
+story turns are simply four times longer, and a per-turn rate compares a
+paragraph against a sentence.
+
+What holds: the **reflexive 被 is in production and it is qwen's** (我的手机被我
+不小心放错了地方), real traffic has **zero** Latin script and **zero**
+`[[NEED:]]`, and **7% of assistant rows are the stub 我不会说 / 我不知道** — a
+generation failure no grader addresses.
 
 **The recall numbers in `grader-bench-results.md` rounds 12-16 are not
 measurable.** The partner corpus has 21 strict positives; one catch is five
