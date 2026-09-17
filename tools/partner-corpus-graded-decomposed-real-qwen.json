@@ -1,0 +1,1339 @@
+{
+ "model": "qwen/qwen3-235b-a22b-2507",
+ "arm": "decomposed",
+ "when": "2026-09-17T11:59:43.634Z",
+ "rows": [
+  {
+   "id": "R0001",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0005",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0006",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0007",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0008",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0009",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0010",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0011",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0012",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0013",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0014",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0015",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0016",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0017",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0018",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0019",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0021",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0025",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0026",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0027",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0028",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0029",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0030",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0032",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0033",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0034",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0038",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0039",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0040",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0041",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0042",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0043",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0044",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0045",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0057",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0082",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0086",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0095",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0096",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0097",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0098",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0099",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0100",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0101",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0102",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0103",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0104",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0105",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0106",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0107",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0108",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0109",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0127",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0129",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0130",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0131",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0132",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0133",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0134",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0135",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0136",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0137",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0138",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0139",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0140",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0141",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0142",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0143",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0145",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0146",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0147",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0148",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0151",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0152",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0153",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0155",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0156",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0157",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0158",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0159",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0160",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0161",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0162",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0163",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0164",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0165",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0166",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0167",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0168",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0169",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0170",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0171",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0172",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0173",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0174",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0175",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0176",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0177",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0178",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0179",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0180",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0181",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0182",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0183",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0184",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0185",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0186",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0187",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0188",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0189",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0190",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0191",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0192",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0193",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0194",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0195",
+   "activity": "twenty",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0196",
+   "activity": "twenty",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0197",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0198",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0199",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0200",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0201",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0202",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0203",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0204",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0205",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0206",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0207",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0208",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0209",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0210",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0211",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0213",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0214",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0215",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0216",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0217",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0218",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0219",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0220",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0221",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0222",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0223",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0224",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0225",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0226",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0227",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0228",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0229",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0230",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0232",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0233",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0234",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0235",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0236",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0237",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0238",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0239",
+   "activity": "drill",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0240",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0241",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0242",
+   "activity": "drill",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0243",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0244",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0245",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0246",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0247",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0248",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0249",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0250",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0251",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0252",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0253",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0254",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0255",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0256",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0257",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0258",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0260",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0261",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0262",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0263",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0264",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0265",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0266",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0267",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0268",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0269",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0270",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0271",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0272",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0274",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0276",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0277",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0278",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0279",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0280",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0281",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0282",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0284",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0285",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0286",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0287",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0288",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0289",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0290",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0291",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0292",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0293",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0294",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0295",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0297",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0298",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0299",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0300",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0301",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0302",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0303",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0304",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0305",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0306",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "R0307",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "R0308",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  }
+ ]
+}

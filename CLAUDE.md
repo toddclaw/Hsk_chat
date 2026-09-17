@@ -77,68 +77,41 @@ opposite of the obvious one. Run an A/B against the real model with counted
 outcomes before shipping a prompt edit — the worked examples in DEVELOPING.md
 show the shape, including a "fix" that made the failure eight times more likely.
 
-The grader has two benchmarks now, and they disagree about it completely.
+The grader has three benchmarks, and the one that counts is real traffic.
 
-- `tools/grader-bench.js` — learner error, human ground truth from MuCGEC.
-  **90% recall, 66% specificity.** It leans harsh: roughly one correct sentence
-  in three is called faulty.
-- `tools/partner-corpus.js` — the partner's own Chinese, 204 turns generated
-  through the real prompt and labelled by Claude. **24% recall**, 38% for the
-  four-lens design and 38% for the one-call `nativeFrame` arm. This is the
-  correctness gate's actual job and the grader cannot currently do it.
+- `tools/grade-audit.js` — the grader's own 208 stored verdicts on Todd's real
+  sentences, blind-labelled. **85% overall** (83% recall, 86% specificity). Free
+  to re-run and it grows by itself. **The best benchmark here.**
+- `tools/real-qwen.js` + `tools/partner-corpus.js --grade` — 222 real partner
+  turns from the database, qwen activities only. `nativeFrame` scores **86%
+  strict recall at 87% specificity for $0.0001 a turn**, and is the arm to use.
+- `tools/grader-bench.js` — MuCGEC learner error, human ground truth. 90%
+  recall, 66% specificity. Leans harsh, and that harshness does not reproduce on
+  real sentences.
+- `tools/partner-corpus.js` — 204 synthetic partner turns. **Superseded.** It
+  matched real traffic on error rate and not on error kind, and eleven arms were
+  raced on the difference.
 
-`nativeFrame` is the best prompt measured: it tells the grader the *partner*
-wrote the text and names no level. Free — identical on learner error — and it
-beats the four-lens design on specificity, precision and cost.
+`nativeFrame` is the best prompt measured on both halves: it tells the grader the
+*partner* wrote the text and names no level.
 
-**But the model is the variable, not the prompt.** Eleven rounds of prompt work
-moved partner recall 24% → 38%. Changing the model moved it to 70%. This is the
-third time in this repo that a run of failing prompt strategies turned out to be
-a signal about the model. **Try the model by round three.**
+**Read the benchmark before you read the number.** Three times now a confident
+result came from a population nobody had asked about. Story turns are Sonnet's
+and the rest are qwen's — pool them and the headline inverts. Two label passes
+carrying the same rubric drew the wrong/unnatural line in different places, and
+strict recall moved three-fold across corpora because of it. The loose bar
+(wrong ∪ unnatural) survives both and is what to quote across corpora.
 
-**The real corpus mixes two models — split it before using it.** `STORY_MODEL`
-is `claude-sonnet-4.5` (`index.html:1064`); everything else is qwen. Pooled, the
-285 real turns pulled by `tools/pull-partner.js` look like a partner wrong 15.1%
-of the time with a dominant 得 defect. Split, per 100 sentences:
+**The model is a variable, not a setting. Try it by round three.** Eleven rounds
+of prompt work moved synthetic partner recall 24% → 38%; changing the model moved
+it to 70%. But on real traffic the strong model is the *worst* over-firer, and
+cheap qwen wins outright — so try the model early and then check it on real data.
 
-| | wrong | unnatural |
-|---|---|---|
-| story (Sonnet) | 2.5 | 0.6 |
-| chat (qwen) | 3.2 | 7.2 |
-| synthetic (qwen) | 3.3 | — |
-
-So **the synthetic corpus is a good model of the chat partner**, the 得 defect is
-Sonnet's (12 of 13 instances), and Sonnet writes *better* than qwen, not worse —
-story turns are simply four times longer, and a per-turn rate compares a
-paragraph against a sentence.
-
-What holds: the **reflexive 被 is in production and it is qwen's** (我的手机被我
-不小心放错了地方), real traffic has **zero** Latin script and **zero**
-`[[NEED:]]`, and **7% of assistant rows are the stub 我不会说 / 我不知道** — a
-generation failure no grader addresses.
-
-**The recall numbers in `grader-bench-results.md` rounds 12-16 are not
-measurable.** The partner corpus has 21 strict positives; one catch is five
-points, and no paired test between the lens cascade, `glm-5.3-flash` and Sonnet
-reaches significance. Enlarge the positive class before trusting any of them, or
-before running another arm — `tools/partner-corpus.js` generates 204 turns for
-$0.014, and a stratified label pass is the cheap route to ~100 positives.
-
-**Specificity is well powered (183 negatives) and says the opposite of what the
-recall race suggested:** shipped qwen 96%, `glm-5.3-flash` 89%, the cascade 81%,
-Sonnet 66%. At the partner's 8.8% error rate over-firing is the expensive
-direction, and the strong model is much the worst offender.
-
-Two things about weak models that hold independently of the corpus, both
-measured on their own probes and worth reaching for elsewhere:
-
-- **Ask it to rewrite, not to judge.** Every lens and the shipped grader call
-  你比昨天忙吗？ fine. Asked to *rewrite* it natively the same model returns
-  你今天比昨天忙吗？ Diff the rewrite for a grounded fault proposal that needed
-  no judgement.
-- **Give it two sentences, not one.** Confirming a finding in the abstract
-  caught 2 of 7; showing original and repair side by side caught 5 of 7. The
-  abstract phrasing has now scored zero or near-zero on three separate probes.
+What holds about the partner: the **reflexive 被 is in production and it is
+qwen's** (我的手机被我不小心放错了地方), real traffic has **zero** Latin script and
+**zero** `[[NEED:]]`, and **7% of assistant rows are the stub 我不会说 / 我不知道**
+— a generation failure no grader addresses. Per 100 sentences the chat partner
+(qwen) is wrong 3.2 times and unnatural 7.2; story (Sonnet) 2.5 and 0.6.
 
 **Silent failure has produced a wrong number three times here** — `没有错误`
 parsed as a sentence, `content` empty while `reasoning` filled the budget, and a

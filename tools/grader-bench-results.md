@@ -1594,6 +1594,87 @@ human-authored on the side being judged, and free to re-run. It also grows by
 itself: every sentence Todd writes adds a row. **Re-running it after any change
 to `grade()` costs one hand-labelling pass over the new rows and nothing else.**
 
+## Round twenty-two: the arms, on the partner turns the gate would actually judge
+
+Rounds 12-16 raced eleven arms against 204 generated turns with 21 strict
+positives, and round seventeen found that nothing in that race was measurable.
+This is the re-run on the real thing: **222 partner turns from the app's own
+database**, qwen activities only.
+
+Getting them took a join nobody had done. `real-partner.json` holds the turns
+that were labelled and has no idea which model wrote any of them; `chat-export.json`
+holds `conversations.activity` and therefore the model, under ids the labels have
+never heard of. `tools/real-qwen.js` joins them on the text: 285 of 308 match a
+single activity, **0 match nothing**, and the 23 that match several are every one
+of them the stub 我不会说 / 我不知道, which the labelling had already dropped. 63
+Sonnet turns come out, 222 qwen turns go in.
+
+| | strict recall | loose recall | spec | fires | $/turn |
+|---|---|---|---|---|---|
+| `nativeFrame` (qwen) | 86% 18/21 | 61% 44/72 | **87%** | 29% | **$0.00011** |
+| `softBar` glm-5.3-flash | 100% 20/20 | 60% 42/70 | **86%** | 28% | $0.00030 |
+| `shipped` (qwen) | 86% 18/21 | 58% 42/72 | 80% | 32% | $0.00011 |
+| `decomposed` four-lens | 95% 20/21 | 85% 61/72 | 67% | 50% | $0.00035 |
+| `nativeFrame` glm-5.3-flash | 100% 21/21 | 85% 61/72 | 63% | 53% | $0.00030 |
+| lens cascade | 95% 20/21 | 88% 63/72 | 50% | 62% | $0.00141 |
+
+Zero turns dropped on every arm but `softBar`, which lost four.
+
+### Every arm scores two to four times higher here than on the synthetic corpus
+
+`shipped` goes 24% → 86% strict and 13% → 58% loose. `nativeFrame` goes 38% → 86%
+and 25% → 61%. Same model wrote both corpora, same grader judged them, and the
+answer moves by a factor of three.
+
+Part of that is a labelling threshold, and only part. The two label passes carry
+the same rubric in their notes and applied it differently: the synthetic pass put
+你比昨天忙吗？ and 米饭很饱 in `wrong`, while the real pass reserved `wrong` for
+我家在城市下面 and 你有它的样子吗 and filed the subtle ones under `unnatural`. A
+second blind pass over 50 real turns drawn from those the first pass did **not**
+call wrong confirms it (`real-qwen-relabel.json`): **31 of 34 stored-clean turns
+read clean to a fresh pass**, so nothing was being missed — but **4 of its
+`unnatural` turns read as outright `wrong`**. The disagreement is about severity,
+not about where the faults are.
+
+So the strict bar is **not comparable across the two corpora** and the pooled
+strict column should not be quoted. The loose bar is comparable, because it
+unions both buckets and cannot care where the line between them falls — and on
+the loose bar the gap is still there and still large. It is a real difference in
+the text.
+
+The likely reason is in the positives themselves. The synthetic corpus's are
+particle and aspect slips — 我不每天散步, 你最喜欢看什么节目了？, 听懂了一首中文歌.
+The real corpus's are breakdowns — 我家在城市下面, 换他开心, 张医生很有关系,
+你有它的样子吗. Generated in a clean loop the partner writes smooth Chinese with
+fine cracks in it; reacting to a real learner's real sentences it comes apart in
+ways nobody has to squint at.
+
+**The synthetic corpus matched the real one on error RATE (round nineteen) and
+does not match it on error KIND.** A rate match is not a distribution match, and
+eleven arms were raced on the difference.
+
+### What this settles, and what it does not
+
+**It settles the arm.** Specificity has 198-201 negatives behind it here and
+separates cleanly: `nativeFrame` 87% and `softBar`/glm 86% are a tie, and the
+four-lens design at 67% and the cascade at 50% are out — a gate that fires on
+half to two-thirds of the partner's turns is not a gate, it is a retry loop with
+a random number generator in it. The cascade also costs thirteen times what the
+winner does.
+
+`nativeFrame` is the pick: free, already the best prompt on the learner side, no
+reasoning tokens, and nothing measurably ahead of it.
+
+**It does not settle recall.** 21 strict positives means 100% and 86% are three
+turns apart, and round seventeen's warning has not expired just because the
+corpus changed. What can be said is that the floor moved: the shipped grader
+catches 18 of the 21 outright errors in real traffic, including both reflexive
+被 sentences, and the question is no longer whether it can see partner error.
+
+**The remaining cost is over-firing.** Even the winner fires on 29% of turns and
+only 69% of those firings are justified by the loose bar. One partner turn in
+three is retried, and one retry in three is spent on Chinese that was fine.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge
