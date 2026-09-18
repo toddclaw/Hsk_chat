@@ -1236,8 +1236,14 @@ Expected on screen: a banner reading **Flashcard Chat**, the words with `0/N`
 counts, and a strip `Day 1 · 0/5  Day 2  Day 3` with days 2 and 3 dimmed.
 
 Now change the setting: Settings → Learning → **Correct uses to retire a ghost
-word** → 5. Expected: the strip redraws with five days, not three. This is the
-check that nothing hardcoded 3.
+word** → 5, then send a message. Expected: the strip shows five days, not three.
+
+**The "then send a message" is not optional.** `commitSettings()` only calls
+`renderAll()` inside its `script !== S.script` branch, so changing `ghostUses`
+alone leaves the open conversation stale until something else forces a render.
+Ghost Words' banner has had the same gap for as long as it has existed. Do not
+read a stale strip as a hardcoded 3 — grep the added code for a literal 3
+instead, which is the direct check.
 
 - [ ] **Step 7: Commit**
 

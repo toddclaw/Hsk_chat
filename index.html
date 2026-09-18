@@ -1146,7 +1146,7 @@ const GATE_MAX_TOKENS = 4000;
  * and nothing in twenty-four rounds measured a grader against it. A story
  * segment is also four times longer than a chat turn, so it would pay the
  * reasoning model's wait several times over to police the better writer. */
-const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false };
+const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false, flashcard: true };
 
 /* Planning applies to the two free-form activities and no others.
  *
@@ -1156,7 +1156,9 @@ const GATED = { chat: true, focused: true, twenty: true, drill: true, story: fal
  * so a planner would be planning something the prompt has already decided, and
  * drill turns produce no errors in production anyway. Story is a narrative on a
  * stronger model, not a reply to a learner, and this prompt assumes a reply. */
-const PLANNED = { chat: true, focused: true };
+// Flashcard Chat is free-form and partner-chosen at the sentence level, steered
+// at a reuse list, exactly the shape "focused" (Ghost Words) already plans for.
+const PLANNED = { chat: true, focused: true, flashcard: true };
 
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
@@ -1176,7 +1178,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v119 — 2026-09-18";
+const VERSION   = "v120 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2825,7 +2827,7 @@ function renderConversation() {
     if (currentActivity() !== "flashcard") return "";
     const targets = flashcardTargets();
     if (!targets.length) return "";
-    const rounds = flashcardRounds(), goal = S.ghostUses;
+    const rounds = flashcardRounds(targets), goal = S.ghostUses;
     const strip = [];
     for (let i = 1; i <= goal; i++) {
       if (i <= rounds) {
@@ -2847,7 +2849,7 @@ function renderConversation() {
     const theme = flashcardTheme();
     return '<div class="hint"><b>Flashcard Chat</b>' +
       (theme ? " — " + escapeHtml(theme) : "") + "<br>" +
-      (flashcardDone()
+      (flashcardDone(targets)
         ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
           '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
           'correctly on ' + goal + ' separate days. Start a new Flashcard Chat ' +
@@ -5044,7 +5046,7 @@ function fillActivities() {
   if (cur === "flashcard") {
     const targets = flashcardTargets();
     if (targets.length) {
-      note = (flashcardDone() ? "Complete — " : "Day " + (flashcardRounds() + 1) + " — ") +
+      note = (flashcardDone(targets) ? "Complete — " : "Day " + (flashcardRounds(targets) + 1) + " — ") +
         targets.map(e => e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、");
     }
   }
@@ -6251,6 +6253,12 @@ function renderDrillControl(box) {
 function renderFlashcardControl(box) {
   if (S.busy) return;
   if (flashcardWords().length) return renderFlashcardSetControl(box);
+  if (!S.grader) {
+    box.innerHTML = '<div class="note">The word list is built from messages the grader ' +
+      'has checked, so there is nothing to choose from with checking off. Turn the ' +
+      'grader on in Settings.</div>';
+    return;
+  }
 
   const candidates = flashcardCandidates();
   const note = document.createElement("div");
@@ -6602,8 +6610,14 @@ function ghostProgressMap() {
  * conversation without a column of its own. */
 function flashcardWords() { return HSKPace.flashcardsOf(S.history); }
 function flashcardTheme() { return HSKPace.flashcardThemeOf(S.history); }
-function flashcardRounds() { return HSKPace.setRounds(flashcardWords(), ghostProgressMap()); }
-function flashcardDone() { return flashcardRounds() >= S.ghostUses; }
+function flashcardRounds(targets) {
+  const list = targets || flashcardTargets();
+  return list.length ? Math.min.apply(null, list.map(e => e.ghostN || 0)) : 0;
+}
+function flashcardDone(targets) {
+  const list = targets || flashcardTargets();
+  return list.length > 0 && flashcardRounds(list) >= S.ghostUses;
+}
 
 /* The last UTC day each word appeared anywhere in the history, in either
  * direction. Read counts as well as written: the first of the two populations
@@ -6611,10 +6625,12 @@ function flashcardDone() { return flashcardRounds() >= S.ghostUses; }
  * it back", which cannot be seen from the learner's messages alone.
  *
  * ponytail: segments every message in every conversation on each call, which is
- * strictly more work than ghostProgressMap()'s user-only scan. Called once when
- * the chooser button is pressed, never in a render loop. Cache it behind the
- * same guard as mistakeCounts() if a long history ever makes the button feel
- * slow. */
+ * strictly more work than ghostProgressMap()'s user-only scan. It runs on every
+ * renderStarters() while phase 1 (the chooser) is on screen, not once per press
+ * -- measured at ~47ms for 1200 messages, which is acceptable, and the grader
+ * guard at the top of renderFlashcardControl() short-circuits it in the common
+ * case of an empty pool. Cache it behind the same guard as mistakeCounts() if a
+ * long history ever makes the button feel slow. */
 function lastSeenMap() {
   const out = {};
   Object.keys(S.chatMsgs || {}).forEach(function (cid) {
@@ -6667,7 +6683,7 @@ function flashcardTargets() {
   const today = HSKMistakes.dayKey(new Date().toISOString());
   const byWord = new Map(S.base.map(e => [e.w, e]));
   return flashcardWords().map(function (w) {
-    const e = byWord.get(w) || { w: w };
+    const e = byWord.get(w) || S.dict.get(w) || { w: w };
     return { w: w, p: e.p, d: e.d,
              ghostN: (prog[w] && prog[w].n) || 0,
              ghostToday: !!(prog[w] && prog[w].last === today) };

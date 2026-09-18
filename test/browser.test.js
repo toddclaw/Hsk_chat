@@ -4727,6 +4727,106 @@ check(usedGroups && usedGroups.first === "\u7684",
     // Restore the default so nothing later in the file inherits trad.
     await exec(`localStorage.setItem("hsk1chat.script", JSON.stringify("simp")); return true;`);
 
+    /* --------------------------------------------------- flashcard chat */
+    /* Phase 1's chooser reads the whole history: an old chat where the
+     * assistant used six words the learner never wrote back, and the
+     * learner's own message uses two common words correctly. Those six
+     * are candidates ("read, never written"); the two the learner already
+     * produced are not. Grader on, since the chooser refuses to build a
+     * list without it (finding 1). */
+    await exec(`
+      var cid = "99999999-5555-4555-8555-999999999999";
+      localStorage.setItem("hsk1chat.level", "2");
+      localStorage.setItem("hsk1chat.key", "sk-test");
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "old", activity: "chat", level: 2,
+          created_at: "2026-09-17T00:00:00.000Z",
+          updated_at: "2026-09-17T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ [cid]: [
+        { id: "44444444-5555-4555-8555-444444444441", role: "assistant",
+          text: "医生说你要去机场。" +
+                "颜色很好看，苹果、" +
+                "鸡蛋和面包都在这里。",
+          attempts: 1, created_at: "2026-09-17T00:00:00.000Z" },
+        { id: "44444444-5555-4555-8555-444444444442", role: "user",
+          text: "我今天很好，谢谢你。",
+          attempts: 1, created_at: "2026-09-17T00:01:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true,
+                                      natural: true }, errors: [] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await exec(`
+      window.callModel = function () { return Promise.resolve("你好！"); };
+      window.startActivity("flashcard");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the flashcard chooser to appear");
+    check(await exec(`return document.querySelector('#input').disabled;`) === true,
+      "the composer is closed until a set is chosen");
+    const fcCandidates = await exec(
+      `return window.flashcardCandidates().map(function (e) { return e.w; });`);
+    check(["医生", "机场", "颜色", "苹果",
+           "鸡蛋", "面包"].every(w => fcCandidates.indexOf(w) !== -1),
+      "candidates are words the partner used and the learner never wrote back",
+      JSON.stringify(fcCandidates));
+    check(fcCandidates.indexOf("今天") === -1 &&
+          fcCandidates.indexOf("谢谢") === -1,
+      "and not a word the learner already produced correctly",
+      JSON.stringify(fcCandidates));
+
+    /* Pressing the button writes the marker and opens the composer. Same
+     * withholding as every other activity: nothing is stored, and nothing
+     * generated, until this click. */
+    await exec(`document.querySelectorAll('#starters button')[0].click(); return true;`);
+    await waitFor(`window.flashcardWords().length > 0`, "the flashcards marker to be written");
+    const fcSet = await exec(`return window.flashcardWords();`);
+    check(fcSet.length === (await exec(`return window.HSKPace.SET_SIZE;`)),
+      "the stored set has SET_SIZE words", JSON.stringify(fcSet));
+    check(fcSet.every(w => fcCandidates.indexOf(w) !== -1),
+      "every stored word came from the candidate list", JSON.stringify(fcSet));
+    await waitFor(`document.querySelector('#input').disabled === false`,
+      "choosing a set to open the composer");
+
+    /* The marker is a pseudo-message in the transcript, not a chat turn --
+     * mistakes.js's drill markers work the same way, and the drill test
+     * above asserts the same thing about theirs. */
+    const fcRoles = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), out = [];
+      Object.keys(m).forEach(function (k) {
+        m[k].forEach(function (t) { out.push(t.role); }); });
+      return out;`);
+    check(fcRoles.indexOf("flashcards") !== -1,
+      "the flashcards marker is persisted", JSON.stringify(fcRoles));
+    const fcBubbles = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#log .bubble'),
+        function (b) { return b.textContent; });`);
+    check(!fcBubbles.some(t => t === fcSet.join(",")),
+      "the marker itself is never rendered as a chat bubble", JSON.stringify(fcBubbles));
+
+    /* reuseFor() is what the partner-steering and per-word grading read --
+     * it has to hand back exactly the stored set, in the shape carrying
+     * ghostN, or Flashcard Chat is not actually wired to the ghost counter. */
+    const fcReuse = await exec(`return window.reuseFor("flashcard").map(function (e) { return e.w; });`);
+    check(JSON.stringify(fcReuse) === JSON.stringify(fcSet),
+      "reuseFor('flashcard') returns the chosen set", JSON.stringify(fcReuse));
+
+    /* A second Flashcard Chat, started while the first is unfinished, must
+     * not be handed back a word the first still holds (the reservation
+     * rule). startActivity() opens a new conversation, so this is a fresh
+     * chooser over the same history plus the first set's own chat. */
+    await exec(`window.startActivity("flashcard"); return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the second flashcard chooser to appear");
+    const fcCandidates2 = await exec(
+      `return window.flashcardCandidates().map(function (e) { return e.w; });`);
+    check(fcSet.every(w => fcCandidates2.indexOf(w) === -1),
+      "a second Flashcard Chat does not re-offer a word the first still holds",
+      JSON.stringify(fcSet) + " vs " + JSON.stringify(fcCandidates2));
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {
