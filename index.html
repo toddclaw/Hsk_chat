@@ -1176,7 +1176,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v117 — 2026-09-18";
+const VERSION   = "v118 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4074,21 +4074,22 @@ function cardBack(e) {
 }
 
 // Words the app introduced are exactly the ones worth drilling, so they go on
-// cards alongside the ones you added yourself.
+// cards alongside the ones you added yourself. Flashcard Chat passes its own
+// chosen set instead -- same file formats, a different five words.
 function cardWords() {
   return S.extra.concat(S.learning);
 }
 
-function ankiCsv() {
+function ankiCsv(words) {
   const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
-  return "#separator:comma\n#html:true\n" + cardWords().map(e =>
+  return "#separator:comma\n#html:true\n" + (words || cardWords()).map(e =>
     q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
 }
 
 // Pleco's flashcard import format: headword, pinyin, definition, tab separated.
-function plecoTsv() {
+function plecoTsv(words) {
   const clean = t => String(t || "").replace(/[\t\r\n]+/g, " ");
-  return cardWords().map(e =>
+  return (words || cardWords()).map(e =>
     [clean(e.w), clean(e.p), clean([e.d, e.s].filter(Boolean).join(" // "))].join("\t")).join("\n") + "\n";
 }
 
@@ -6172,6 +6173,65 @@ function renderDrillControl(box) {
   box.appendChild(stop);
 }
 
+/* Phase 1. No set yet, so no chat: a button, and what pressing it will do.
+ *
+ * A button rather than firing on open, which the learner chose: the whole point
+ * of the activity is that the list is one you asked for. Hulstijn & Laufer's
+ * learner-imposed need, and RESEARCH.md's Self-Determination note, both in
+ * "Choosing a set of words to study away from the app".
+ *
+ * Nothing here can show an out-of-level word: every candidate came out of
+ * S.base, which is the level's own allowlist. */
+function renderFlashcardControl(box) {
+  if (S.busy) return;
+  if (flashcardWords().length) return renderFlashcardSetControl(box);
+
+  const candidates = flashcardCandidates();
+  const note = document.createElement("div");
+  note.className = "note";
+  if (!candidates.length) {
+    note.textContent = "No words to study yet. Chat for a while — this list is " +
+      "built from words the partner has used with you, and words you have not " +
+      "met in a month.";
+    box.appendChild(note);
+    return;
+  }
+  note.textContent = "Get " + HSKPace.SET_SIZE + " words from your own history, " +
+    "study them in Pleco or Anki, then come back and use them here.";
+  box.appendChild(note);
+
+  const go = document.createElement("button");
+  go.className = "story";
+  go.textContent = "Choose " + HSKPace.SET_SIZE + " words";
+  go.onclick = () => startFlashcardsWith(
+    candidates.slice(0, HSKPace.SET_SIZE).map(e => e.w), "");
+  box.appendChild(go);
+}
+
+/* Phase 1's other half: the set is chosen, so offer it for export. Stays on the
+ * strip for the whole conversation -- "what were my five words again" is a
+ * question the learner will have on day two and day three, by which time the
+ * chooser's message has scrolled away. */
+function renderFlashcardSetControl(box) {
+  const targets = flashcardTargets();
+  const note = document.createElement("div");
+  note.className = "note";
+  const theme = flashcardTheme();
+  note.textContent = (theme ? theme + " — " : "") +
+    targets.map(e => e.w).join("、");
+  box.appendChild(note);
+
+  const anki = document.createElement("button");
+  anki.textContent = "Export for Anki";
+  anki.onclick = () => exportCards("anki", targets);
+  box.appendChild(anki);
+
+  const pleco = document.createElement("button");
+  pleco.textContent = "Export for Pleco";
+  pleco.onclick = () => exportCards("pleco", targets);
+  box.appendChild(pleco);
+}
+
 /* The chooser. Curated ideas, topics already read, a box, and make-something-up
  * -- four entry points onto one mechanism, because a topic is only ever a
  * string. Make-something-up passes "", which emits no topic rule at all and is
@@ -6301,6 +6361,7 @@ function renderStarters() {
   if (currentActivity() === "story") return renderStoryControl(box);
   if (currentActivity() === "twenty") return renderTwentyControl(box);
   if (currentActivity() === "drill") return renderDrillControl(box);
+  if (currentActivity() === "flashcard") return renderFlashcardControl(box);
   if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
@@ -7051,11 +7112,11 @@ function addByHand() {
   glossWords(missing);
 }
 $("#addWordBtn").onclick = addByHand;
-function exportCards(kind) {
-  if (!cardWords().length) { $("#expNote").textContent = "No words to export yet."; return; }
+function exportCards(kind, words) {
+  if (!(words || cardWords()).length) { $("#expNote").textContent = "No words to export yet."; return; }
   const stamp = new Date().toISOString().slice(0, 10);
-  if (kind === "anki") deliver(ankiCsv(), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
-  else deliver(plecoTsv(), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
+  if (kind === "anki") deliver(ankiCsv(words), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
+  else deliver(plecoTsv(words), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
 }
 $("#expAnki").onclick = () => exportCards("anki");
 $("#expPleco").onclick = () => exportCards("pleco");
