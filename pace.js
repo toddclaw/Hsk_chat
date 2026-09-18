@@ -92,11 +92,12 @@
   /* ------------------------------------------------------ level readiness
    *
    * "How far am I from the next level" has two answers and they are very far
-   * apart. HSK 1 is 520 words and HSK 2 is 1261, so a learner at HSK 1 has met
-   * 41% of the HSK 2 *list* -- but because the lists are frequency-ordered and
-   * language is Zipfian, those 520 words already account for about 85% of the
-   * *text* at HSK 2. Counting words answers a question nobody is asking;
-   * counting reading is what tells you whether to move up.
+   * apart. HSK 1 is 300 words and HSK 2 is 497, so a learner at HSK 1 has met
+   * 60% of the HSK 2 *list* -- but because the lists are frequency-ordered and
+   * language is Zipfian, those 300 words already account for 88% of the *text*
+   * at HSK 2. The gap widens further up: at HSK 6 it is 49% of the HSK 7 list
+   * against 94% of its text. Counting words answers a question nobody is
+   * asking; counting reading is what tells you whether to move up.
    *
    * A word's share of running text goes as 1/rank, so weight is 1/f rather
    * than 1. The published thresholds this is measured against: 95% coverage
@@ -143,8 +144,8 @@
   }
 
   /* How many more words, commonest first, to reach `target` coverage. This is
-   * the actionable number: at HSK 1 it is 147 of the 741 new HSK 2 words to
-   * reach 95%, not 741. Returns 0 when already there. */
+   * the actionable number: at HSK 1 it is 23 of the 197 new HSK 2 words to
+   * reach 95%, not 197. Returns 0 when already there. */
   function toTarget(entries, known, target) {
     var have = asSet(known);
     var total = 0, got = 0, missing = [];
@@ -178,8 +179,8 @@
      * band starts high and climbs: HSK 5 already covers 95.3% of HSK 6 text
      * before a single new word is learned, and the button would appear
      * immediately having recommended nothing. At 98% every transition asks for
-     * between a quarter and a third of the new words, which is consistent
-     * across all six of them. */
+     * between a quarter and a half of the new words -- 27% to 44% -- which is
+     * consistent across all six of them in a way 95% is not. */
     READY_AT: 0.98,
     coverage: coverage, toTarget: toTarget
   };

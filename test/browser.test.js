@@ -1070,9 +1070,9 @@ return true;
     check(upShown === (stillToGo === 0),
       "Move up and the words-to-threshold count agree with each other",
       `Move up ${upShown ? "shown" : "hidden"}, ${stillToGo} words to go`);
-    /* And it is still a reachable number, not the whole remaining list: 741
-     * would mean every word left, and the frequency-weighted answer is a few
-     * hundred at most. That difference is the point of the arithmetic. */
+    /* And it is still a reachable number, not the whole remaining list: 197
+     * would mean every word left at HSK 1 -> 2, and the frequency-weighted
+     * answer is 58. That difference is the point of the arithmetic. */
     check(stillToGo > 0 && stillToGo < 500,
       "and the count is frequency-weighted, not the whole list",
       String(stillToGo));

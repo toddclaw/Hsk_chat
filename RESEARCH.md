@@ -261,7 +261,7 @@ UI never says *"you are ready"*, and the button it reveals is a suggestion.
 against the real syllabus. The bands are cumulative and each adds mostly rarer words, so
 coverage of the next band starts high: HSK 5 already covers **95.3%** of HSK 6 text before a
 single new word is learned. At 95% the recommendation would fire on arrival, having
-recommended nothing. At 98% every transition asks for between a quarter and a third of the new
+recommended nothing. At 98% every transition asks for between a quarter and a half of the new
 words — 29 / 36 / 43 / 44 / 27 / 34 percent — which is consistent in a way 95% is not.
 
 98% is also the better fit on its own terms: moving up makes the next level the one you
@@ -453,19 +453,14 @@ Nation's guidance for deliberate word-card study is 5–7 words per set, so `SET
 easy.
 
 The arithmetic disagrees. The lists here are 300 / 497 / 988 / 1978 words cumulative
-for HSK 1–4, so HSK 2 to HSK 3 is 491 new words, and `HSKPace.toTarget()` already
-establishes that only the commonest third buys the coverage that matters — 147 of 741
-at the HSK 1 transition. Five words three times a week is 15/week, which covers the
-useful part of a level transition in about ten weeks.
+for HSK 1–4, so HSK 2 to HSK 3 is 491 new words — and `HSKPace.toTarget()` already
+establishes that only the commonest fraction of them buys the coverage that matters:
+**178 of the 491** reach `READY_AT`. Five words three times a week is 15/week, which
+covers the part of the transition that counts in about twelve weeks.
 
 The difficulty also does not live in the flashcards. Five words at `S.ghostUses = 3` is
 fifteen correct productions across at least three separate days, judged by the grader.
 That is the exercise; the cards are preparation for it.
-
-*(A discrepancy worth someone's attention: `pace.js`'s own comment says HSK 1 is 520
-words and HSK 2 is 1261, which are the published HSK 3.0 syllabus figures. The generated
-files hold 300 and 497. Every number above uses the files, since that is what the app
-runs on, but the two should be reconciled.)*
 
 ### Why a list you ask for is a different task from a queue you owe
 

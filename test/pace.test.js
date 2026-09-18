@@ -185,8 +185,8 @@ check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
 
 /* ------------------------------------------------ documented figures ------
  *
- * README.md and RESEARCH.md both reason in concrete numbers -- 520 words at
- * HSK 1, 741 new at HSK 2, ~85% coverage, ~147 words to the threshold -- and
+ * README.md and RESEARCH.md both reason in concrete numbers -- 300 words at
+ * HSK 1, 197 new at HSK 2, 88% coverage, 58 words to the threshold -- and
  * RESEARCH.md is published for people to check the argument against. Prose
  * drifts from data silently: the README's counts were already stale by a dozen
  * words before anyone noticed. Pin them.
@@ -206,6 +206,12 @@ check(Math.round(P.coverage(h2, h1w) * 100) === 88,
 check(P.toTarget(h2, h1w, P.READY_AT) === 58,
   "and 58 words reach the mark, the number the panel shows a beginner",
   `actually ${P.toTarget(h2, h1w, P.READY_AT)}`);
+/* The lower reference, which pace.js's own toTarget() comment quotes. Pinned
+   for the same reason as the line above: that comment is the argument for
+   weighting by 1/rank at all, and a stale number in it reads as a refutation. */
+check(P.toTarget(h2, h1w, 0.95) === 23,
+  "and 23 words reach the 95% reference, as toTarget()'s comment says",
+  `actually ${P.toTarget(h2, h1w, 0.95)}`);
 
 /* Story segments exist so the per-turn pacing constants keep meaning what
  * RESEARCH.md says: a segment must earn at least one credit, and a story must

@@ -94,10 +94,10 @@ measures.
 **Set size.** Nation's guidance for deliberate word-card study is 5–7 words per
 set. The learner's own worry was that five is too easy; the arithmetic says
 otherwise. The lists here are 300 / 497 / 988 / 1978 words cumulative for HSK
-1–4, so HSK 2 to HSK 3 is 491 new words, and `HSKPace.toTarget()` exists to say
-that only the commonest third of them buys the coverage that matters — 147 of 741
-at the HSK 1 transition. Five words three times a week is 15/week, which covers
-the useful part of a level transition in about ten weeks. Difficulty lives in the
+1–4, so HSK 2 to HSK 3 is 491 new words — and `HSKPace.toTarget()` exists to say
+that only the commonest fraction of them buys the coverage that matters: **178 of
+the 491** reach `READY_AT`. Five words three times a week is 15/week, which covers
+the part of the transition that counts in about twelve weeks. Difficulty lives in the
 second step regardless: five words at `S.ghostUses = 3` is fifteen correct
 productions across at least three days.
 
