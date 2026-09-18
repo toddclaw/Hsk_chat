@@ -213,22 +213,10 @@ async function plan(ctx, lex) {
  * The cost is that the model does its thinking about what it can afford in the
  * language it is constrained in, which is the harder job. Which of those wins
  * is exactly the kind of question this repository answers by running it. */
-function planZhPrompt(ctx, banned) {
-  const convo = ctx.slice(-4).map(m =>
-    (m.role === "user" ? "学生：" : "伙伴：") + m.content).join("\n");
-  return "学生在学中文，水平是 HSK " + LEVEL + "。下面是他们的对话：\n\n" + convo +
-    "\n\n请先想一想伙伴下一句要说什么意思。不要写完整的回答，" +
-    "只用最简单的话写出你要说的意思，一两句就行。\n\n" +
-    /* Same correction as the English planner, same reason. */
-    "一定要回答学生刚才说的话。先想清楚学生说了什么，再想你要怎么回答他。" +
-    "不要换一个别的、比较好说的话题。\n\n" +
-    "只可以用 HSK " + LEVEL + " 的词。这个词表很小，没有「沙漠」，没有「练」，" +
-    "没有「封」。请想一个用这些简单的词就能说清楚的意思，" +
-    "不要想一个说不出来、要绕着说的意思。\n\n" +
-    (banned.length ? "这些词太难，不可以用：" + banned.join("、") + "。" +
-      "请换一个不用这些词的意思。\n\n" : "") +
-    "只写中文，不要解释。";
-}
+/* The prompt now lives in prompt.js, so what this measures is what ships. */
+const planZhPrompt = (ctx, banned) => HSKPrompt.planPrompt({
+  turns: ctx.map(m => ({ role: m.role, text: m.content })),
+  label: "HSK " + LEVEL, banned: banned });
 
 async function planZh(ctx, lex) {
   let banned = [];

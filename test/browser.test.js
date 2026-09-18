@@ -2605,6 +2605,9 @@ check(usedGroups && usedGroups.first === "\u7684",
       window.__graded = [];
       window.callModel = function (msgs, maxTok, model) {
         var c = msgs[msgs.length - 1].content;
+        // The planner asks first and must not eat the queued replies.
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
         if (c.indexOf("conversation partner") !== -1) {     // a gate call
           window.__gateTokens = maxTok;
           var faulty = c.indexOf("\u6211\u5728\u5bb6\u3002") !== -1;
@@ -2664,6 +2667,8 @@ check(usedGroups && usedGroups.first === "\u7684",
             better: "\u6211\u5728\u5b66\u6821\u3002", cats: {},
             errors: [{ tag: "wrong-word", note: "x" }] }));
         }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
         return Promise.resolve("\u6211\u5728\u5bb6\u3002");
       };
       window.newChat("chat");
@@ -2707,6 +2712,8 @@ check(usedGroups && usedGroups.first === "\u7684",
           window.__graded.push(model || "teach");
           return Promise.reject(new Error("grader is down"));
         }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
         return Promise.resolve("\u6211\u5728\u5bb6\u3002");
       };
       window.newChat("chat");
@@ -2840,6 +2847,8 @@ check(usedGroups && usedGroups.first === "\u7684",
           return Promise.resolve(JSON.stringify(
             { ok: true, meant: "", better: "", cats: {}, errors: [] }));
         }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)   // the planner, not a try
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
         window.__gens++;
         return Promise.resolve("\u4f60\u4eca\u5929\u597d\u5417\uff1f");  // echoes it back
       };
@@ -2880,6 +2889,8 @@ check(usedGroups && usedGroups.first === "\u7684",
           return Promise.resolve(JSON.stringify(
             { ok: true, meant: "", better: "", cats: {}, errors: [] }));
         }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)   // the planner, not a try
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
         window.__gens++;
         return Promise.resolve("\u4eca\u5929\u5f88\u597d\u3002");  // never the ghost word
       };
@@ -2895,6 +2906,73 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(ghost.badge === ghost.gens + " tries",
       "and the badge reports every try spent, not the one that survived",
       JSON.stringify(ghost));
+
+    /* ------------------------------------------------ the planner
+     *
+     * A plan has to REACH the generation, and an unaffordable plan has to be
+     * re-planned rather than followed -- the check is the whole reason the plan
+     * is written in Chinese rather than English. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      return true;`);
+    await go(base);
+    await exec(`
+      window.__plans = 0; window.__sawPlan = false;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1) {   // the plan prompt
+          window.__plans++;
+          // First plan uses an out-of-level word; the re-plan must not.
+          return Promise.resolve(window.__plans === 1
+            ? "\u6211\u559c\u6b22\u6c99\u6f20\u3002"     // 沙漠, above HSK 2
+            : "\u6211\u5728\u5bb6\u3002");
+        }
+        if (c.indexOf("conversation partner") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        // The generation: did the approved plan reach it?
+        if (msgs.some(function (m) { return (m.content || "").indexOf("\u6211\u5728\u5bb6\u3002") !== -1
+              && (m.content || "").indexOf("\u8bf7\u6309\u8fd9\u4e2a\u610f\u601d") !== -1; }))
+          window.__sawPlan = true;
+        return Promise.resolve("\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a planned turn");
+    check(await exec("return window.__plans;") >= 2,
+      "an unaffordable plan is re-planned rather than followed",
+      JSON.stringify(await exec("return window.__plans;")));
+    check(await exec("return window.__sawPlan;") === true,
+      "and the approved plan reaches the generation");
+
+    // Off means no planning calls at all.
+    await exec(`
+      localStorage.setItem("hsk1chat.plan", "false");
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(`
+      window.__plans = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1) { window.__plans++; }
+        if (c.indexOf("conversation partner") !== -1)
+          return Promise.resolve(JSON.stringify({ ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        return Promise.resolve("\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "an unplanned turn");
+    check(await exec("return window.__plans;") === 0,
+      "with the setting off it never plans");
+    await exec('localStorage.setItem("hsk1chat.plan", "true"); return true;');
+    await go(base);
 
     // Off, it costs nothing and blocks nothing. S is not on window, so the
     // setting is set where it lives and the page reloaded onto it.

@@ -304,7 +304,7 @@
   var PREFS_KEYS = [
     "level", "goalLevel", "model", "teachModel", "storyModel", "twentyModel", "mode", "pinyin", "autoAdd", "replyLength", "prompt",
     "attempts", "drillTurns", "ghostUses", "report", "reportAt", "anki", "font", "starters", "script", "speechRate",
-    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "gate", "debugLog",
+    "freeOnly", "modelSort", "favModels", "favOnly", "grader", "gate", "debugLog", "plan",
     "pace", "budget", "teachPrompts"
   ];
 

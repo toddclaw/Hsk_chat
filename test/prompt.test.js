@@ -1256,5 +1256,38 @@ check(P.grade({ text: GT, label: GL }).indexOf("student of Chinese at " + GL) !=
   check(t.text.indexOf("[[NEED:") !== -1, "and shows the exact markup to use", t.text);
 }
 
+/* ------------------------------------------------------------ the planner */
+{
+  const turns = [{ role: "assistant", text: "你今天做什么？" },
+                 { role: "user", text: "我喜欢热天。" }];
+  const t = P.planPrompt({ turns: turns, label: "HSK 2", banned: [] });
+  check(t.indexOf("我喜欢热天。") !== -1, "the plan prompt shows what the student said", t);
+  check(t.indexOf("学生：") !== -1 && t.indexOf("伙伴：") !== -1,
+    "and who said which", t.slice(0, 120));
+  check(t.indexOf("HSK 2") !== -1, "and names the level");
+
+  /* The anchor is load-bearing, not decoration: without it the planner answered
+   * a message about coffee with a remark about breakfast, and invented an apple
+   * and a cup of tea. Round 27. */
+  check(t.indexOf("一定要回答学生刚才说的话") !== -1,
+    "and tells it to answer what the student actually said");
+
+  /* Re-planning has to name the words that were too hard, or the second plan is
+   * a coin flip rather than a correction. */
+  const again = P.planPrompt({ turns: turns, label: "HSK 2", banned: ["沙漠", "练"] });
+  check(again.indexOf("沙漠") !== -1 && again.indexOf("练") !== -1,
+    "a re-plan names the words that were too hard", again.slice(-160));
+
+  // Only the last few turns: a plan built from an entire conversation is a
+  // summarisation job, which is not what this asks for.
+  const many = Array.from({ length: 20 }, (_, i) => ({ role: "user", text: "句子" + i }));
+  const long = P.planPrompt({ turns: many, label: "HSK 2" });
+  check(long.indexOf("句子19") !== -1 && long.indexOf("句子0") === -1,
+    "only the last few turns go in", long.slice(0, 200));
+
+  check(P.planInstruction("我也喜欢热天。").indexOf("我也喜欢热天。") !== -1,
+    "the instruction carries the plan it is following");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

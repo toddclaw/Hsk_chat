@@ -1184,6 +1184,58 @@
       (partner ? "The sentence: " : "The student wrote: ") + opts.text;
   }
 
+  /* --------------------------------------------------- planning the reply
+   *
+   * Decide WHAT to say before deciding how, and check it can be said at this
+   * level before spending a generation and two graders on it.
+   *
+   * WHY IT EXISTS. The failures were never phrasing failures. The partner tried
+   * to describe a desert, tried to say "practise martial arts", tried to say "I
+   * received a letter" -- it chose something HSK 2 cannot afford and then spent
+   * six tries failing to afford it. Repair argues about wording long after the
+   * decision that doomed the turn. Round twenty-seven: on the turns a plan is
+   * made, 57 of 69 turns survive against 46 of 69, paired 14-3, p = 0.01, and
+   * mean tries falls from 4.1 to 3.3 -- so the quality arrives with LESS
+   * latency, which had not happened before in this study.
+   *
+   * WHY IN CHINESE, when planning in English was the obvious first try: not
+   * fluency, CHECKABILITY. An English plan has to declare which Chinese words it
+   * intends to use, and a declaration is self-reported -- it can name five and
+   * write twenty. A Chinese plan goes through the validator whole. Measured, the
+   * two are the same on outcome and the Chinese one finds unaffordable plans
+   * sooner: 24 re-plans against 38 over the same 69 turns.
+   *
+   * THE ANCHOR IS LOAD-BEARING. Told only to plan something sayable, the planner
+   * drifts: a message about coffee and a 5:30 alarm came back with a remark
+   * about breakfast, and an apple and a cup of tea appeared from nowhere. It is
+   * cheap to say "answer what they actually said" and it cost nothing to fix.
+   *
+   * tools/repair-ab.js calls THIS function, so the measurement is of the string
+   * that ships. */
+  function planPrompt(opts) {
+    var convo = (opts.turns || []).slice(-4).map(function (m) {
+      return (m.role === "user" ? "学生：" : "伙伴：") + m.text;
+    }).join("\n");
+    var banned = opts.banned || [];
+    return "学生在学中文，水平是" + opts.label + "。下面是他们的对话：\n\n" + convo +
+      "\n\n请先想一想伙伴下一句要说什么意思。不要写完整的回答，" +
+      "只用最简单的话写出你要说的意思，一两句就行。\n\n" +
+      "一定要回答学生刚才说的话。先想清楚学生说了什么，再想你要怎么回答他。" +
+      "不要换一个别的、比较好说的话题。\n\n" +
+      "只可以用" + opts.label + "的词。这个词表很小，没有「沙漠」，没有「练」，" +
+      "没有「封」。请想一个用这些简单的词就能说清楚的意思，" +
+      "不要想一个说不出来、要绕着说的意思。\n\n" +
+      (banned.length ? "这些词太难，不可以用：" + banned.join("、") + "。" +
+        "请换一个不用这些词的意思。\n\n" : "") +
+      "只写中文，不要解释。";
+  }
+
+  /* What to hand the partner once a plan has survived the validator. */
+  function planInstruction(plan) {
+    return "请按这个意思回答学生，可以说得自然一点：\n" + plan +
+      "\n\n只用学生认识的词。只说中文，不要解释。";
+  }
+
   /* ------------------------------------------- repair strategies
    *
    * What to tell the partner when the correctness gate has faulted the same
@@ -1428,6 +1480,7 @@
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
                         repairStrategy: repairStrategy,
+                        planPrompt: planPrompt, planInstruction: planInstruction,
                         STRATEGY_IDS: Object.keys(STRATEGIES),
               drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
               report: report,
