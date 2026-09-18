@@ -30,6 +30,7 @@
 const fs = require("fs"), os = require("os"), path = require("path");
 const HSK = require("../validator.js");
 const HSKPrompt = require("../prompt.js");
+const HSKSenses = require("../senses.js");
 const bench = require("./grader-bench.js");
 
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -79,6 +80,33 @@ function extractNeeds(text) {
     last = m.index + m[0].length;
   }
   return { text: out + text.slice(last), needs: needs };
+}
+
+/* The other half of the validator, and leaving it out made every arm look
+ * better than it is.
+ *
+ * An allowed CHARACTER is not an allowed GRAMMAR: 得 as a complement marker
+ * (你说得对, 听得懂) and 过 as a verb are above HSK 2 even though both
+ * characters are in the list. Reading the first run's output by eye found them
+ * in 15% of the base arm's "clean" replies and 12% of the Chinese planner's --
+ * sentences the real app would have rejected and retried.
+ *
+ * It costs a model call per surviving attempt, which is what it costs in the
+ * app too. Shared by every arm. */
+async function senseViolations(text, lex) {
+  const tokens = HSK.segment(text, lex);
+  const words = HSKSenses.wordsPresent(tokens);
+  const out = [];
+  for (const w of words) {
+    const count = HSKSenses.standaloneHits(tokens, w).length;
+    try {
+      const raw = await call([{ role: "user",
+        content: HSKSenses.classifyPrompt(w, text, count) }], 200);
+      const classified = HSKSenses.parseClassification(raw, count);
+      if (classified) out.push.apply(out, HSKSenses.checkSenses(w, classified, LEVEL));
+    } catch (e) { /* as the app does: a failed classify lets the word through */ }
+  }
+  return out;
 }
 
 // Shared by both arms, so it cannot move the comparison.
@@ -136,6 +164,14 @@ function planPrompt(ctx, banned) {
   return "A student is learning Chinese at HSK " + LEVEL + ". Here is the end of " +
     "their conversation with a language partner:\n\n" + convo + "\n\n" +
     "Plan the partner's next reply. Do NOT write it.\n\n" +
+    /* Read off the first run: planning bought its rescue rate partly with
+     * genericness. Told only to plan something sayable, the partner answered a
+     * message about coffee and getting up at 5:30 with a remark about
+     * breakfast, and invented an apple and a cup of tea from nowhere. The plan
+     * has to be a reply to THIS student, not a safe thing to say in general. */
+    "The reply must answer what the student just said. Start by naming the " +
+    "thing they told you and responding to THAT. Do not change the subject to " +
+    "something easier unless nothing about their message can be said at all.\n\n" +
     "The reply may only use words a student at HSK " + LEVEL + " knows. That is a " +
     "small vocabulary: no 沙漠, no 练, no 封. Plan something that can be SAID " +
     "with those words, rather than something that would have to be worked " +
@@ -183,6 +219,9 @@ function planZhPrompt(ctx, banned) {
   return "学生在学中文，水平是 HSK " + LEVEL + "。下面是他们的对话：\n\n" + convo +
     "\n\n请先想一想伙伴下一句要说什么意思。不要写完整的回答，" +
     "只用最简单的话写出你要说的意思，一两句就行。\n\n" +
+    /* Same correction as the English planner, same reason. */
+    "一定要回答学生刚才说的话。先想清楚学生说了什么，再想你要怎么回答他。" +
+    "不要换一个别的、比较好说的话题。\n\n" +
     "只可以用 HSK " + LEVEL + " 的词。这个词表很小，没有「沙漠」，没有「练」，" +
     "没有「封」。请想一个用这些简单的词就能说清楚的意思，" +
     "不要想一个说不出来、要绕着说的意思。\n\n" +
@@ -236,9 +275,13 @@ async function runTurn(ctx, mode) {
     const ex = extractNeeds(HSK.stripScaffold(raw));
     const lex = lexWith(ex.needs.map(n => n.w));
     const bad = HSK.validate(ex.text, lex).filter(v => v.kind === "bad" && !v.name);
-    if (bad.length) {
+    /* Spent only once vocabulary passes, exactly as the app spends it. */
+    const senses = bad.length ? [] : await senseViolations(ex.text, lex);
+    if (bad.length || senses.length) {
       scratch.push({ role: "assistant", content: raw });
-      scratch.push({ role: "user", content: vocabRepair(bad.map(v => v.text)) });
+      scratch.push({ role: "user", content: bad.length
+        ? vocabRepair(bad.map(v => v.text))
+        : HSKSenses.repairPrompt(senses) + "请用别的说法，再说一次。只说中文，不要解释。" });
       prevText = ex.text;
       continue;
     }
@@ -293,18 +336,19 @@ async function runTurn(ctx, mode) {
     while (queue.length) {
       const job = queue.shift();
       const base = await runTurn(job.c, "base");
-      const lad = await runTurn(job.c, "ladder");
+      /* The ladder is dropped: round twenty-five measured it at 5-8 against
+       * base, p = 0.58, and it would cost a quarter of this run to re-confirm
+       * a null. */
       const pln = await runTurn(job.c, "plan");
       const pzh = await runTurn(job.c, "planZh");
-      rows.push({ i: job.i, base: base, lad: lad, pln: pln, pzh: pzh });
-      [base, lad, pln, pzh].forEach(r => process.stdout.write(r.end === "clean" ? "." : "x"));
+      rows.push({ i: job.i, base: base, pln: pln, pzh: pzh });
+      [base, pln, pzh].forEach(r => process.stdout.write(r.end === "clean" ? "." : "x"));
     }
   }));
   console.log("\n");
 
   const pct = (a, b) => b ? (100 * a / b).toFixed(0) + "%" : "n/a";
   for (const [name, key] of [["BASE   (repair as shipped)", "base"],
-                            ["LADDER (strategies)", "lad"],
                             ["PLAN   (decide first, English)", "pln"],
                             ["PLAN-ZH(decide first, Chinese)", "pzh"]]) {
     const r = rows.map(x => x[key]);
@@ -320,7 +364,7 @@ async function runTurn(ctx, mode) {
    * and was p = 0.77. */
   const fact = n => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
   const choose = (n, k) => fact(n) / (fact(k) * fact(n - k));
-  for (const [a, b] of [["lad", "base"], ["pln", "base"], ["pzh", "base"], ["pzh", "pln"]]) {
+  for (const [a, b] of [["pln", "base"], ["pzh", "base"], ["pzh", "pln"]]) {
     const won = rows.filter(x => x[a].end === "clean" && x[b].end !== "clean").length;
     const lost = rows.filter(x => x[b].end === "clean" && x[a].end !== "clean").length;
     const n = won + lost;
@@ -336,9 +380,7 @@ async function runTurn(ctx, mode) {
     if (rp.length) console.log(k + ": plan made on " + made + "/" + rows.length +
       " turns, re-planned for cost on " + rp.filter(r => r > 0).length + "/" + rp.length);
   }
-  const used = {};
-  rows.forEach(x => (x.lad.strategies || []).forEach(s => { used[s] = (used[s] || 0) + 1; }));
-  console.log("strategies used: " + JSON.stringify(used));
+
   console.log("spend $" + spend.toFixed(4));
   fs.writeFileSync(path.join(__dirname, "repair-ab-results.json"),
     JSON.stringify({ when: new Date().toISOString(), tries: TRIES, rows: rows }, null, 1));

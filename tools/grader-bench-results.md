@@ -1946,6 +1946,91 @@ partner that plans may stop reaching, and reaching is where some of the interest
 was. And **English-shaped Chinese** from the English planner, which would show up
 as `unnatural` rather than as a failed turn. Both need reading, not counting.
 
+## Round twenty-seven: the planner confirmed, once the harness told the truth
+
+Round twenty-six had two holes, both found by reading the output rather than
+counting it. The harness had no sense check, so 得-complements (你说得对,
+听得懂) passed there and would have been rejected by the app -- 15% of the base
+arm's "clean" replies. And the plan was told to be sayable and nothing else, so
+it drifted: a message about coffee and getting up at 5:30 was answered with a
+remark about breakfast, and an apple and a cup of tea were invented from nowhere.
+
+Both fixed -- `senses.js` runs in the harness exactly where the app spends it,
+and both planners are now told to answer what the student actually said. 95 real
+learner turns, every chat turn in the export:
+
+| | rescued | stub | mean tries |
+|---|---|---|---|
+| base | 61% | 39% | 4.1 |
+| plan, in English | 66% | 34% | 3.4 |
+| **plan, in Chinese** | **71%** | **29%** | **3.3** |
+
+| paired | | |
+|---|---|---|
+| plan(zh) vs base | 16 rescued, 7 lost | p = 0.09 |
+| plan(en) vs base | 14 rescued, 9 lost | p = 0.40 |
+
+**Adding the sense check pulled every arm down and shrank every gap**, which is
+what an honest harness does to an optimistic result. The English planner's
+round-twenty-six advantage (7-1, p = 0.07) largely evaporated at 14-9, p = 0.40.
+The Chinese planner held: 6-1 at n=40, 16-7 at n=95, the same direction and
+roughly the same size twice.
+
+### The dilution, and the number that is not diluted
+
+**A plan was produced on 69 of 95 turns.** On the other 26 the planner gave up
+after three rounds of re-planning and the arm fell through to ordinary
+generation -- so on those turns the two arms ran identical code and could only
+differ by temperature. It is round twenty-five's mistake again, milder: a
+treatment measured over turns it never touched.
+
+Restricted to the turns where it acted -- which is where the arm can differ at
+all, and the conditioning proposed BEFORE this run rather than after it:
+
+| on the 69 turns a plan was made | rescued | paired vs base | |
+|---|---|---|---|
+| base | 46/69 (67%) | | |
+| **plan, in Chinese** | **57/69 (83%)** | **14 rescued, 3 lost** | **p = 0.01** |
+| plan, in English | 54/69 (78%) | 12 rescued, 5 lost | p = 0.14 |
+
+**That is the first p below 0.05 in twenty-seven rounds.** The honest headline is
+still the pre-specified p = 0.09; the conditioned 0.01 is the same effect with
+the turns removed where the treatment was never applied.
+
+### English or Chinese, second time of asking
+
+Chinese wins on every axis that moved, and none of them alone would be worth
+quoting:
+
+| | plan(en) | plan(zh) |
+|---|---|---|
+| rescued | 66% | **71%** |
+| paired vs base, conditioned | p = 0.14 | **p = 0.01** |
+| plans needing a re-plan | 38/69 (55%) | **24/69 (35%)** |
+
+The re-plan gap is the one with a mechanism behind it rather than a p-value: the
+English planner declares which words it will use and a declaration is
+self-reported, while a Chinese plan goes through the validator whole. It finds
+unaffordable plans sooner because it can actually see them.
+
+### Anchoring worked, and the replies are still shorter
+
+The drift correction did what it was meant to. Mean reply length recovered from
+23.7 characters to 25.1 against base's 29.8, and the Chinese planner's closing
+question came back from 91% to 94% of replies (base 97%).
+
+**Planned replies remain about 15% shorter than unplanned ones.** That is the
+cost, it is smaller than it was, and whether it reads as concise or as bland is
+a judgement nobody should make from a character count.
+
+### What is still wrong
+
+**27% of turns get no plan at all**, and those are the hardest ones -- three
+rounds of re-planning failed to find anything affordable. They are exactly where
+round twenty-five's metalinguistic and escape-hatch strategies were aimed, and
+where a partner that says 这个太难说 in Chinese would beat one that says
+我不会说. The two ideas are complementary and were measured as rivals.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge
