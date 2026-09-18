@@ -1875,6 +1875,77 @@ unused: it fires unprompted on 9% of real assistant messages. A model that
 reaches for it on its own and refuses it when instructed would be worth knowing
 about, and it is the opposite of what the design assumed.
 
+## Round twenty-six: deciding what to say, before saying it
+
+Todd, on the repair ladder: *"this feels like we are too late to the party."*
+
+He is right, and the logs say so plainly. The partner tried to describe a
+DESERT, tried to say *practise martial arts*, tried to say *I received a
+letter*. **None of those are phrasing failures.** The model chose something to
+say that HSK 2 cannot afford and then spent six tries failing to afford it. The
+repair loop argues about wording long after the decision that doomed the turn.
+
+So the constraint moves from the last step to the first: decide what to say,
+check whether it can be said at this level, and only then write it. A plan that
+cannot be afforded is re-planned at planning cost -- not at generation-plus-two-
+graders cost.
+
+Four arms, 40 real learner turns replayed in their real context, same prompt,
+same validator, same gate:
+
+| | rescued | stub | mean tries |
+|---|---|---|---|
+| base — repair as shipped | 68% | 33% | 4.0 |
+| ladder (round 25) | 60% | 40% | 4.3 |
+| **plan, in English** | **83%** | **18%** | **2.5** |
+| **plan, in Chinese** | **80%** | **20%** | **2.7** |
+
+Paired, exact McNemar:
+
+| | | |
+|---|---|---|
+| plan(en) vs base | 7 rescued, 1 lost | **p = 0.07** |
+| plan(zh) vs base | 6 rescued, 1 lost | p = 0.13 |
+| ladder vs base | 5 rescued, 8 lost | p = 0.58 |
+| plan(zh) vs plan(en) | 1 vs 2 | p = 1.00 |
+
+**This is the strongest result in twenty-six rounds**, and it does not rest on
+the p-value alone. Mean tries falls from 4.0 to 2.5 — a separate and far better
+powered measurement, since every turn contributes to it rather than only the
+discordant pairs. Fewer tries means fewer generations AND fewer calls to the
+reasoning-model gate, so the quality gain arrives with a latency gain rather
+than instead of one. That has not happened before in this study.
+
+### Planning in English or in Chinese does not matter, and the reason it might have
+
+Todd: *"why use English as an intermediary? All of the vocab is in Chinese."*
+
+The argument for Chinese is not fluency, it is checkability. The English planner
+asks the model to DECLARE which Chinese words it will use, and a declaration is
+self-reported -- it can name five words and write twenty. A plan written in
+Chinese goes through the validator whole.
+
+Measured, they are indistinguishable: 1 discordant pair against 2, p = 1.00. The
+one asymmetry is upstream of the verdict -- **the Chinese planner needed
+re-planning on 10 of 31 plans against the English planner's 15 of 31**, so the
+complete check does find unaffordable plans sooner. Not a difference in outcome,
+a difference in cost, and the direction the argument predicted.
+
+Both planners produced a usable plan on **31 of 40 turns**; on the other nine the
+arm falls through to ordinary generation, which is the conservative failure.
+
+### What this does not say
+
+40 turns and p = 0.07 is a signal, not a settled result, and this document has
+been wrong about smaller things with better numbers. The confirmation is cheap
+in a way the ladder's never was: a plan step fires on EVERY turn, so sample size
+buys power directly instead of hoping for a hard tail.
+
+The two risks named before the run are not yet measured. **Blandness** -- a
+partner that plans may stop reaching, and reaching is where some of the interest
+was. And **English-shaped Chinese** from the English planner, which would show up
+as `unnatural` rather than as a failed turn. Both need reading, not counting.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

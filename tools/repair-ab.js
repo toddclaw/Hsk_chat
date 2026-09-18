@@ -113,14 +113,126 @@ async function gate(text, lex) {
   return null;
 }
 
+/* ---------------------------------------------------------------- planning
+ *
+ * The third arm, and the one that argues the other two are solving the wrong
+ * problem. Read the failures: the partner tried to describe a DESERT, tried to
+ * say "practise martial arts", tried to say "I received a letter". None of
+ * those are phrasing failures. The model chose something to say that HSK 2
+ * cannot afford and then spent six tries failing to afford it.
+ *
+ * So the constraint moves from the last step to the first. Decide WHAT to say
+ * before deciding how, name the words it will take, and check those against the
+ * allowlist BEFORE spending a generation and two graders on it. A plan that
+ * cannot be afforded is re-planned at planning cost.
+ *
+ * It asks for the content in English on purpose: the model's Chinese is fine,
+ * what it lacks is judgement about what is expressible. The risk that buys is
+ * English-shaped Chinese, which is the `unnatural` category the gate already
+ * punishes -- so the gate fault rate is the number that catches it. */
+function planPrompt(ctx, banned) {
+  const convo = ctx.slice(-4).map(m =>
+    (m.role === "user" ? "Student: " : "Partner: ") + m.content).join("\n");
+  return "A student is learning Chinese at HSK " + LEVEL + ". Here is the end of " +
+    "their conversation with a language partner:\n\n" + convo + "\n\n" +
+    "Plan the partner's next reply. Do NOT write it.\n\n" +
+    "The reply may only use words a student at HSK " + LEVEL + " knows. That is a " +
+    "small vocabulary: no 沙漠, no 练, no 封. Plan something that can be SAID " +
+    "with those words, rather than something that would have to be worked " +
+    "around.\n\n" +
+    (banned.length ? "These words are above the level and must not be in the " +
+      "plan: " + banned.join("、") + ". Plan something you can say without them.\n\n" : "") +
+    'Reply with only a JSON object: {"say":"","words":[]}\n' +
+    "say   — in English, what the reply will say: a response to the student, one " +
+    "small thing about yourself, and a question back.\n" +
+    "words — every content word in Chinese you intend to use. Not function words.";
+}
+
+async function plan(ctx, lex) {
+  let banned = [];
+  for (let round = 0; round < 3; round++) {
+    let j;
+    try {
+      const raw = await call([{ role: "user", content: planPrompt(ctx, banned) }], 600);
+      j = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]);
+    } catch (e) { return null; }
+    if (!j || !j.say) return null;
+    const words = (j.words || []).map(String);
+    const bad = words.filter(w =>
+      HSK.validate(w, lex).some(v => v.kind === "bad" && !v.name));
+    if (!bad.length) return { say: j.say, words: words, replans: round };
+    banned = banned.concat(bad);
+  }
+  return null;                      // unaffordable after three goes; generate anyway
+}
+
+/* The same idea without the detour through English.
+ *
+ * The English planner asks the model to DECLARE which Chinese words it will
+ * use, and that declaration is the weak link: it can name five words and then
+ * write twenty. A plan written in Chinese goes through the validator whole, so
+ * the check is complete rather than self-reported -- and nothing has to survive
+ * a translation step, which is where English-shaped Chinese would come from.
+ *
+ * The cost is that the model does its thinking about what it can afford in the
+ * language it is constrained in, which is the harder job. Which of those wins
+ * is exactly the kind of question this repository answers by running it. */
+function planZhPrompt(ctx, banned) {
+  const convo = ctx.slice(-4).map(m =>
+    (m.role === "user" ? "学生：" : "伙伴：") + m.content).join("\n");
+  return "学生在学中文，水平是 HSK " + LEVEL + "。下面是他们的对话：\n\n" + convo +
+    "\n\n请先想一想伙伴下一句要说什么意思。不要写完整的回答，" +
+    "只用最简单的话写出你要说的意思，一两句就行。\n\n" +
+    "只可以用 HSK " + LEVEL + " 的词。这个词表很小，没有「沙漠」，没有「练」，" +
+    "没有「封」。请想一个用这些简单的词就能说清楚的意思，" +
+    "不要想一个说不出来、要绕着说的意思。\n\n" +
+    (banned.length ? "这些词太难，不可以用：" + banned.join("、") + "。" +
+      "请换一个不用这些词的意思。\n\n" : "") +
+    "只写中文，不要解释。";
+}
+
+async function planZh(ctx, lex) {
+  let banned = [];
+  for (let round = 0; round < 3; round++) {
+    let text;
+    try { text = HSK.stripScaffold(await call([{ role: "user",
+      content: planZhPrompt(ctx, banned) }], 200)); }
+    catch (e) { return null; }
+    if (!text) return null;
+    // The whole plan, not a word list it told us about.
+    const bad = HSK.validate(text, lex).filter(v => v.kind === "bad" && !v.name);
+    if (!bad.length) return { say: text, words: [], replans: round };
+    banned = banned.concat(bad.map(v => v.text));
+  }
+  return null;
+}
+
 /* One turn, one arm. Returns how it ended and what it cost. */
-async function runTurn(ctx, ladder) {
+async function runTurn(ctx, mode) {
+  const ladder = mode === "ladder";
   const scratch = [{ role: "system", content: systemFor() }].concat(ctx);
+  let planned = null;
+  if (mode === "plan") {
+    planned = await plan(ctx, baseLex);
+    if (planned) {
+      scratch.push({ role: "user", content:
+        "Write your next reply in Chinese following this plan:\n" + planned.say +
+        "\n\nUse only words the student knows. 只说中文，不要解释。" });
+    }
+  } else if (mode === "planZh") {
+    planned = await planZh(ctx, baseLex);
+    if (planned) {
+      scratch.push({ role: "user", content:
+        "请按这个意思回答学生，可以说得自然一点：\n" + planned.say +
+        "\n\n只用学生认识的词。只说中文，不要解释。" });
+    }
+  }
   let gateFails = 0, prevText = null, introduced = false;
   const tried = [], strategies = [];
   for (let attempt = 1; attempt <= TRIES; attempt++) {
     let raw;
-    try { raw = await call(scratch, 400); } catch (e) { return { end: "error", attempt, strategies }; }
+    try { raw = await call(scratch, 400); }
+    catch (e) { return { end: "error", attempt: attempt, strategies: strategies, planned: !!planned }; }
     const ex = extractNeeds(HSK.stripScaffold(raw));
     const lex = lexWith(ex.needs.map(n => n.w));
     const bad = HSK.validate(ex.text, lex).filter(v => v.kind === "bad" && !v.name);
@@ -131,7 +243,9 @@ async function runTurn(ctx, ladder) {
       continue;
     }
     const fault = await gate(ex.text, lex);
-    if (!fault) return { end: "clean", attempt, strategies, text: ex.text };
+    if (!fault) return { end: "clean", attempt: attempt, strategies: strategies,
+                         planned: !!planned, replans: planned ? planned.replans : null,
+                         text: ex.text };
     gateFails++;
     let strategy = null;
     if (ladder) {
@@ -153,7 +267,8 @@ async function runTurn(ctx, ladder) {
       : base + "请用这个意思重新说一次，其他的规则不变。" });
     prevText = ex.text;
   }
-  return { end: "stub", attempt: TRIES, strategies };
+  return { end: "stub", attempt: TRIES, strategies: strategies, planned: !!planned,
+           replans: planned ? planned.replans : null };
 }
 
 (async () => {
@@ -177,30 +292,50 @@ async function runTurn(ctx, ladder) {
   await Promise.all(Array.from({ length: 4 }, async () => {
     while (queue.length) {
       const job = queue.shift();
-      const base = await runTurn(job.c, false);
-      const lad = await runTurn(job.c, true);
-      rows.push({ i: job.i, base, lad });
-      process.stdout.write(base.end === "clean" ? "." : "x");
-      process.stdout.write(lad.end === "clean" ? "." : "x");
+      const base = await runTurn(job.c, "base");
+      const lad = await runTurn(job.c, "ladder");
+      const pln = await runTurn(job.c, "plan");
+      const pzh = await runTurn(job.c, "planZh");
+      rows.push({ i: job.i, base: base, lad: lad, pln: pln, pzh: pzh });
+      [base, lad, pln, pzh].forEach(r => process.stdout.write(r.end === "clean" ? "." : "x"));
     }
   }));
   console.log("\n");
 
   const pct = (a, b) => b ? (100 * a / b).toFixed(0) + "%" : "n/a";
-  for (const [name, key] of [["BASE  (repair as shipped)", "base"], ["LADDER(strategies)", "lad"]]) {
+  for (const [name, key] of [["BASE   (repair as shipped)", "base"],
+                            ["LADDER (strategies)", "lad"],
+                            ["PLAN   (decide first, English)", "pln"],
+                            ["PLAN-ZH(decide first, Chinese)", "pzh"]]) {
     const r = rows.map(x => x[key]);
     const clean = r.filter(x => x.end === "clean");
-    console.log(name.padEnd(26) +
+    console.log(name.padEnd(32) +
       "rescued " + pct(clean.length, r.length).padEnd(5) +
       " (" + clean.length + "/" + r.length + ")   stub " + pct(r.filter(x => x.end === "stub").length, r.length) +
       "   mean tries " + (r.reduce((s, x) => s + x.attempt, 0) / r.length).toFixed(1));
   }
   /* Paired, because the arms saw the same turns: what matters is the turns one
-   * rescued and the other did not, not the two rates side by side. */
-  const won = rows.filter(x => x.lad.end === "clean" && x.base.end !== "clean");
-  const lost = rows.filter(x => x.base.end === "clean" && x.lad.end !== "clean");
-  console.log("\npaired: ladder rescued " + won.length + " the base lost, " +
-              "lost " + lost.length + " the base rescued");
+   * rescued and the other did not, not the rates side by side. An exact McNemar
+   * on the discordant pairs, because round twenty-five's 7-5 looked like a win
+   * and was p = 0.77. */
+  const fact = n => { let r = 1; for (let i = 2; i <= n; i++) r *= i; return r; };
+  const choose = (n, k) => fact(n) / (fact(k) * fact(n - k));
+  for (const [a, b] of [["lad", "base"], ["pln", "base"], ["pzh", "base"], ["pzh", "pln"]]) {
+    const won = rows.filter(x => x[a].end === "clean" && x[b].end !== "clean").length;
+    const lost = rows.filter(x => x[b].end === "clean" && x[a].end !== "clean").length;
+    const n = won + lost;
+    let p = 1;
+    if (n) { let t = 0; for (let k = 0; k <= Math.min(won, lost); k++) t += choose(n, k);
+             p = Math.min(1, 2 * t / Math.pow(2, n)); }
+    console.log("\n" + a + " vs " + b + ": rescued " + won + " the other lost, lost " +
+                lost + "   exact McNemar p = " + p.toFixed(2));
+  }
+  for (const k of ["pln", "pzh"]) {
+    const rp = rows.map(x => x[k].replans).filter(r => r !== null && r !== undefined);
+    const made = rows.filter(x => x[k].planned).length;
+    if (rp.length) console.log(k + ": plan made on " + made + "/" + rows.length +
+      " turns, re-planned for cost on " + rp.filter(r => r > 0).length + "/" + rp.length);
+  }
   const used = {};
   rows.forEach(x => (x.lad.strategies || []).forEach(s => { used[s] = (used[s] || 0) + 1; }));
   console.log("strategies used: " + JSON.stringify(used));
