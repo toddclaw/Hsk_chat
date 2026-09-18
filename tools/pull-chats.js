@@ -73,8 +73,13 @@ async function all(table, select) {
 }
 
 (async () => {
+  /* `needs` and `introduced` matter more than they look. extractNeeds() strips
+   * the [[NEED:]] markup BEFORE the text is stored, so the saved text can never
+   * contain it and every count made from this export said the channel was never
+   * used. It is used on 9% of assistant messages; the evidence is in `needs`,
+   * which this did not ask for. Do not drop them again. */
   let cols = "id,conversation_id,role,text,kind,grade,explain_chat,translation," +
-             "attempts,failed,created_at,user_id";
+             "needs,introduced,attempts,failed,created_at,user_id";
   let msgs;
   try { msgs = await all("messages", cols); }
   catch (e) {
@@ -103,6 +108,9 @@ async function all(table, select) {
       grade: m.grade || null,
       explain: m.explain_chat || null,
       translation: m.translation || null,
+      // The only surviving trace of a [[NEED:]] -- the markup is gone from `text`.
+      needs: m.needs || null,
+      introduced: m.introduced || null,
       attempts: m.attempts == null ? null : m.attempts,
       failed: !!m.failed,
       day: String(m.created_at || "").slice(0, 10)

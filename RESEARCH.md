@@ -1336,6 +1336,136 @@ n=2.
 the thing the partner has and the tutor does not — would catch this. It is the obvious
 next move if the failure is seen again, and it was not measured here.
 
+## When the level cannot say it
+
+The correctness gate (v112) made a collision visible that had always been there:
+**some things cannot be said correctly inside HSK 2.** The gate is right, the
+validator is right, and the turn cannot satisfy both.
+
+### The production evidence
+
+One session, 14 partner turns, 70 attempts, read off `debug_log`:
+
+| | |
+|---|---|
+| turns that used all six tries | **10 of 14** |
+| gate faults | 17 |
+| attempts byte-identical to the one before | 4 |
+| pacing forcing a required word | 6 |
+
+Three unwinnable fights, each one a loop until the budget ran out:
+
+| the gate says | the level forbids | what happened |
+|---|---|---|
+| 练武术 is the correct verb | 练 → "use 练习" | 练习武术 → "练武术 is more natural" → loop |
+| 一封信 needs the measure word | 封 | 一个信 → faulted → loop |
+| 真遗憾 is the natural phrasing | 遗憾 | 真难 → faulted → loop |
+
+And the partner was **already** circumlocuting, silently, because nothing told
+it it could: 沙漠 became 很干很干的地方, and sand became 像蛋黄酱一样的东西 — "something
+like mayonnaise". The app forces a communication strategy and then faults the
+result of it.
+
+### The literature calls these strategies, and names them
+
+This is not a modelling problem, it is the ordinary condition of speaking with
+limited resources, and it has been studied since the seventies. **Tarone's (1977)
+taxonomy** is still the reference map: approximation, word coinage,
+circumlocution, literal translation, language switch, mime, appeal for
+assistance, **topic avoidance**, and **message abandonment**. Dörnyei and Scott
+(1997) expand it into direct, indirect and interactional strategies.
+
+The division that matters for design is **reduction** against **achievement**.
+Reduction strategies dodge the gap — avoid the topic, abandon the sentence.
+Achievement strategies solve it — circumlocute, approximate, appeal for help.
+**Learners shift from reduction to achievement as proficiency rises.** A partner
+that changes the subject models what a weaker speaker does; a partner that names
+the problem and carries on models what a stronger one does.
+
+The second is also the better-supported one. A partner that says "I was told to
+use 受到, but 收到 is right here" is doing **negotiation of meaning** — the
+clarification-request / comprehension-check machinery at the centre of Long's
+Interaction Hypothesis. Interaction with negotiation shows large positive effects
+against no interaction, and they hold up on delayed post-tests rather than fading
+with the session.
+
+**Ours:** the literature is about humans negotiating with humans. Nothing here
+measures a model performing these strategies deliberately, and a model told it
+may circumlocute may do nothing else. Every option below is a prompt change, and
+prompt changes in this repository have moved the number the wrong way four times.
+
+### What the NLP field can and cannot do
+
+Controlled-readability generation is an active area and has not solved this.
+LLMs struggle **most at the easy proficiency levels**, and the gap is **larger in
+non-English languages** — which is this app exactly. CEFR-guided prompting with
+explicit lexical constraints is the best prompting result (0.91 conformity), and
+the stronger results come from constrained decoding and RL fine-tuning, neither
+of which is available to a static page calling someone else's API.
+
+So the validator-plus-retry loop is a reasonable state of the art that has hit
+the field's known wall. What is missing is not better constraint enforcement. It
+is **what to do when the constraint cannot be satisfied.**
+
+### The correction: `[[NEED:]]` is not unused, we were counting it wrong
+
+This document said `[[NEED:]]` fired in **0 of 512** replies, and `CLAUDE.md`
+said real traffic contained **zero**. The second is false and the first is
+narrower than it reads.
+
+**In production the channel fires on 9% of assistant messages** — 30 of 335,
+introducing 科幻, 机会, 比赛, 介绍, 为了 and a dozen more.
+
+It looked like zero because of how it was counted. `extractNeeds()` **strips the
+markup before the text is stored**: the saved message holds the bare word, and
+the evidence moves to the `needs` column. `tools/pull-chats.js` never selected
+that column, so every count made from the export was counting text the app had
+already cleaned. Generated corpora, which are counted BEFORE stripping, show the
+channel firing at 2-3% — never zero either.
+
+**The lesson is the one this document keeps relearning: ask what the number was
+measured on.** Three previous corrections in this study came from pooling two
+models, from a positive class too small to separate anything, and from a
+grader's stored verdict being read after three later calls had overwritten the
+global it lived in. This is the fourth, and it had been sitting in two documents
+as a fact for weeks.
+
+It also changes the design space. The channel the partner needs when the level
+cannot say something **already exists, already validates, already glosses, and
+already carries forward** — and it already works.
+
+### The option space
+
+Cheapest first, and they compose:
+
+1. **Say that circumlocution is allowed.** One prompt clause legitimising what
+   the partner already does furtively. May absorb much of the problem alone.
+2. **A metalinguistic escape hatch.** 这个词太难，我不会说 / 我要说「受到」，可是这里不对.
+   An achievement strategy, a negotiation-of-meaning move, and at HSK 2 the
+   vocabulary for it is just about reachable.
+3. **Let the repair loop ask for a `[[NEED:]]`** when the only correct phrasing
+   is out of level. Converts an unwinnable fight into the moment the word is
+   taught. **Collides with `DEFAULT_RATE`** — see below.
+4. **Escalating hints.** The repair prompt currently says the same thing every
+   time; four attempts in one logged turn were byte-identical. Later attempts
+   could suggest circumlocution, then the `[[NEED:]]` channel, then the escape
+   hatch.
+5. **A metacognition call.** Ask the model, out of character, what is going wrong
+   and what to try instead. Most expensive, and the most likely to work on a
+   turn that is genuinely stuck.
+6. **Topic avoidance**, held in reserve: it is the one strategy that takes the
+   conversation away from what the learner wanted, and it is what less proficient
+   speakers fall back on.
+
+### The constant this collides with
+
+`DEFAULT_RATE` is 45 characters per new word, from graded-reader practice of one
+unknown per 40–50 running words. **A repair-triggered `[[NEED:]]` spends that
+budget without going through the pacing system**, so done carelessly it pushes
+unknown-word density past the band the whole design rests on. It needs a cap, and
+there is no measurement of what happens when the channel fires often — the 9%
+production figure is the channel behaving spontaneously, not under instruction.
+
 ## Things that did not work
 
 Kept because a rejected idea that looks reasonable will be proposed again.
@@ -1423,6 +1553,40 @@ Stated plainly so nobody cites this file for more than it holds.
   pedagogy is drawn from published research; the app has not run a study of its own.
 
 ## Bibliography
+
+
+**Communication strategies, and what to do when the words run out**
+
+- Tarone, E. (1977). Conscious communication strategies in interlanguage. The
+  nine-category taxonomy — approximation, word coinage, circumlocution, literal
+  translation, language switch, mime, appeal for assistance, topic avoidance,
+  message abandonment — and still the reference map. Summarised with the later
+  taxonomies (Færch & Kasper, Bialystok, the Nijmegen group, Dörnyei & Scott) at
+  [Communication strategies in second-language
+  acquisition](https://en.wikipedia.org/wiki/Communication_strategies_in_second-language_acquisition).
+- [Second Language Communication Strategies: Definitions, Taxonomies, Data
+  Elicitation Methodology and Teachability Issues](https://eric.ed.gov/?id=ED472698)
+  (ERIC, 2002). Review article. The teachability debate is the part that bears on
+  a partner *modelling* these strategies rather than a learner using them.
+- Long, M. (1981, rev. 1996), the Interaction Hypothesis. Negotiation of meaning
+  — clarification requests, confirmation and comprehension checks — as the driver
+  of acquisition, with effects that persist on delayed post-tests. [Literature
+  review](https://files.eric.ed.gov/fulltext/ED507194.pdf); [Interaction and
+  instructed second language
+  acquisition](https://www.cambridge.org/core/journals/language-teaching/article/interaction-and-instructed-second-language-acquisition/78A156EE200F744F5978F99BFB073DBE)
+  (*Language Teaching*, Cambridge).
+
+**Generating to a proficiency level**
+
+- [Can LLMs Control Readability? A Multi-Dimensional Evaluation Framework for
+  CEFR-Controlled Generation](https://aclanthology.org/2026.readi-1.6/). LLMs are
+  worst at the EASY levels, and worse again outside English — this app's exact
+  case.
+- [Towards controlled CEFR level simplification with lexical
+  constraints](https://aclanthology.org/2025.tsar-1.10.pdf). Explicit lexical
+  constraints in the prompt are the best prompting-only result (0.91 conformity);
+  the stronger results need constrained decoding or fine-tuning, neither
+  available to a static page calling an API.
 
 **Lexical coverage and comprehension**
 

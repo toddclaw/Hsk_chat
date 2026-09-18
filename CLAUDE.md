@@ -129,10 +129,19 @@ it to 70%. But on real traffic the strong model is the *worst* over-firer, and
 cheap qwen wins outright — so try the model early and then check it on real data.
 
 What holds about the partner: the **reflexive 被 is in production and it is
-qwen's** (我的手机被我不小心放错了地方), real traffic has **zero** Latin script and
-**zero** `[[NEED:]]`, and **7% of assistant rows are the stub 我不会说 / 我不知道**
+qwen's** (我的手机被我不小心放错了地方), real traffic has **zero** Latin script, and
+**7% of assistant rows are the stub 我不会说 / 我不知道**
 — a generation failure no grader addresses. Per 100 sentences the chat partner
 (qwen) is wrong 3.2 times and unnatural 7.2; story (Sonnet) 2.5 and 0.6.
+
+**`[[NEED:]]` fires on 9% of real assistant messages** — not the zero this file
+used to claim. `extractNeeds()` strips the markup before storage and the evidence
+moves to the `needs` column, which `pull-chats.js` did not select, so every count
+made from the export was counting text the app had already cleaned. Before
+concluding a channel is unused, check that the thing you are grepping still
+contains it. `RESEARCH.md`, "When the level cannot say it", has the numbers and
+the SLA literature on what a partner should do when the level cannot say
+something.
 
 **Silent failure has produced a wrong number three times here** — `没有错误`
 parsed as a sentence, `content` empty while `reasoning` filled the budget, and a
