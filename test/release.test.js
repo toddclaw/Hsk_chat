@@ -86,5 +86,23 @@ if (fs.existsSync(listPath)) {
   check(false, ".github/publish-files exists", "the deploy workflow reads it");
 }
 
+/* 6. A branch delete must not be able to cancel a publish.
+ *
+ *    GitHub keeps only ONE run pending per concurrency group, so whatever
+ *    queues last displaces what was already waiting. Merging a PR fires `push`
+ *    and `delete` seconds apart; while both jobs shared one workflow-level
+ *    group, the delete cancelled main's pending publish and the deploy was
+ *    skipped with the run marked "cancelled", not failed. Nine versions sat on
+ *    main unpublished before anyone noticed. Nothing else in this suite can see
+ *    that, so it is checked here: separate groups, and none at file scope. */
+const wf = read(".github/workflows/pages.yml");
+check(!/^concurrency:/m.test(wf), "pages.yml sets no workflow-level concurrency group",
+  "a shared group lets a branch delete cancel the pending publish of main");
+const groups = [...wf.matchAll(/^ {4,}group:\s*(\S+)/gm)].map(m => m[1]);
+check(groups.length === 2, `pages.yml gives each job a concurrency group (found ${groups.length})`,
+  "publish and cleanup both write gh-pages and each needs its own");
+check(new Set(groups).size === groups.length, "publish and cleanup use different groups",
+  `both are in ${groups[0]}, so a delete can displace a queued publish`);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

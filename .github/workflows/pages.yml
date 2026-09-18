@@ -22,14 +22,25 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: pages-publish          # one writer at a time; gh-pages is a shared branch
-  cancel-in-progress: false
-
+# Deliberately NOT one workflow-level group. GitHub keeps only ONE run pending
+# per group, so a newly queued run cancels the one already waiting -- and a
+# merge fires `push` and `delete` within about two seconds of each other. With
+# both events in one group, deleting the merged branch cancelled the pending
+# publish of main and the deploy was silently skipped; PR #44 sat on main for
+# nine versions while the live site served v105, the run showing as "cancelled"
+# rather than failed. The two jobs write gh-pages with different strategies --
+# publish pushes once, cleanup retries -- so they get a group each.
 jobs:
   publish:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # One publish at a time; gh-pages is a shared branch and the push below is
+    # a single attempt with no retry. A displaced pending push costs at worst a
+    # stale branch preview: main republishes its whole state every time, so a
+    # lost run on main is repaired by the next push to it.
+    concurrency:
+      group: pages-publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
 
@@ -153,14 +164,18 @@ jobs:
   cleanup:
     # Deleting a branch takes its preview with it.
     #
-    # Best-effort by design. The concurrency group above keeps only ONE run
-    # pending, so deleting several branches at once cancels all but the last --
-    # which is survivable only because the reconcile is idempotent and derives
-    # everything from the live branch list, so whichever run does survive
-    # removes every orphan, not just its own. A dropped run costs a delay, not
-    # a preview that outlives its branch for ever.
+    # Best-effort by design. This group too keeps only ONE run pending, so
+    # deleting several branches at once cancels all but the last -- which is
+    # survivable only because the reconcile is idempotent and derives everything
+    # from the live branch list, so whichever run does survive removes every
+    # orphan, not just its own. A dropped run costs a delay, not a preview that
+    # outlives its branch for ever. What it must never cancel is a publish,
+    # hence the separate group.
     if: github.event_name == 'delete' && github.event.ref_type == 'branch' && github.event.ref != 'main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages-cleanup
+      cancel-in-progress: false
     steps:
       # main, not gh-pages: this job needs the script, which lives in the
       # source tree. Checking out gh-pages here is what broke the old version
