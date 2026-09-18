@@ -1594,6 +1594,443 @@ human-authored on the side being judged, and free to re-run. It also grows by
 itself: every sentence Todd writes adds a row. **Re-running it after any change
 to `grade()` costs one hand-labelling pass over the new rows and nothing else.**
 
+## Round twenty-two: the arms, on the partner turns the gate would actually judge
+
+Rounds 12-16 raced eleven arms against 204 generated turns with 21 strict
+positives, and round seventeen found that nothing in that race was measurable.
+This is the re-run on the real thing: **222 partner turns from the app's own
+database**, qwen activities only.
+
+Getting them took a join nobody had done. `real-partner.json` holds the turns
+that were labelled and has no idea which model wrote any of them; `chat-export.json`
+holds `conversations.activity` and therefore the model, under ids the labels have
+never heard of. `tools/real-qwen.js` joins them on the text: 285 of 308 match a
+single activity, **0 match nothing**, and the 23 that match several are every one
+of them the stub 我不会说 / 我不知道, which the labelling had already dropped. 63
+Sonnet turns come out, 222 qwen turns go in.
+
+| | strict recall | loose recall | spec | fires | $/turn |
+|---|---|---|---|---|---|
+| `nativeFrame` (qwen) | 86% 18/21 | 61% 44/72 | **87%** | 29% | **$0.00011** |
+| `softBar` glm-5.3-flash | 100% 20/20 | 60% 42/70 | **86%** | 28% | $0.00030 |
+| `shipped` (qwen) | 86% 18/21 | 58% 42/72 | 80% | 32% | $0.00011 |
+| `decomposed` four-lens | 95% 20/21 | 85% 61/72 | 67% | 50% | $0.00035 |
+| `nativeFrame` glm-5.3-flash | 100% 21/21 | 85% 61/72 | 63% | 53% | $0.00030 |
+| lens cascade | 95% 20/21 | 88% 63/72 | 50% | 62% | $0.00141 |
+
+Zero turns dropped on every arm but `softBar`, which lost four.
+
+### Every arm scores two to four times higher here than on the synthetic corpus
+
+`shipped` goes 24% → 86% strict and 13% → 58% loose. `nativeFrame` goes 38% → 86%
+and 25% → 61%. Same model wrote both corpora, same grader judged them, and the
+answer moves by a factor of three.
+
+Part of that is a labelling threshold, and only part. The two label passes carry
+the same rubric in their notes and applied it differently: the synthetic pass put
+你比昨天忙吗？ and 米饭很饱 in `wrong`, while the real pass reserved `wrong` for
+我家在城市下面 and 你有它的样子吗 and filed the subtle ones under `unnatural`. A
+second blind pass over 50 real turns drawn from those the first pass did **not**
+call wrong confirms it (`real-qwen-relabel.json`): **31 of 34 stored-clean turns
+read clean to a fresh pass**, so nothing was being missed — but **4 of its
+`unnatural` turns read as outright `wrong`**. The disagreement is about severity,
+not about where the faults are.
+
+So the strict bar is **not comparable across the two corpora** and the pooled
+strict column should not be quoted. The loose bar is comparable, because it
+unions both buckets and cannot care where the line between them falls — and on
+the loose bar the gap is still there and still large. It is a real difference in
+the text.
+
+The likely reason is in the positives themselves. The synthetic corpus's are
+particle and aspect slips — 我不每天散步, 你最喜欢看什么节目了？, 听懂了一首中文歌.
+The real corpus's are breakdowns — 我家在城市下面, 换他开心, 张医生很有关系,
+你有它的样子吗. Generated in a clean loop the partner writes smooth Chinese with
+fine cracks in it; reacting to a real learner's real sentences it comes apart in
+ways nobody has to squint at.
+
+**The synthetic corpus matched the real one on error RATE (round nineteen) and
+does not match it on error KIND.** A rate match is not a distribution match, and
+eleven arms were raced on the difference.
+
+### What this settles, and what it does not
+
+**It settles the arm.** Specificity has 198-201 negatives behind it here and
+separates cleanly: `nativeFrame` 87% and `softBar`/glm 86% are a tie, and the
+four-lens design at 67% and the cascade at 50% are out — a gate that fires on
+half to two-thirds of the partner's turns is not a gate, it is a retry loop with
+a random number generator in it. The cascade also costs thirteen times what the
+winner does.
+
+`nativeFrame` is the pick: free, already the best prompt on the learner side, no
+reasoning tokens, and nothing measurably ahead of it.
+
+**It does not settle recall.** 21 strict positives means 100% and 86% are three
+turns apart, and round seventeen's warning has not expired just because the
+corpus changed. What can be said is that the floor moved: the shipped grader
+catches 18 of the 21 outright errors in real traffic, including both reflexive
+被 sentences, and the question is no longer whether it can see partner error.
+
+**The remaining cost is over-firing.** Even the winner fires on 29% of turns and
+only 69% of those firings are justified by the loose bar. One partner turn in
+three is retried, and one retry in three is spent on Chinese that was fine.
+
+## Round twenty-three: two prompt ideas that failed, and a pair that did not
+
+Round twenty-two left two arms Todd liked and a hole between them. `softBar` on
+glm-5.3-flash catches every outright error and only 60% of the stiltedness;
+`decomposed` catches 85% of the stiltedness and fires on half the corpus. He
+copies the partner's Chinese as his main way of learning, so for him a miss costs
+a wrong sentence in his own writing and a false alarm costs a retry. He wants
+both numbers up.
+
+### The four lenses never got the frame, and do not want it
+
+Round eleven measured the frame on a single-call grader and it was worth fourteen
+points: say the partner wrote the text, name no level. The decomposed design
+predates that and still opens all five of its prompts with "written by a learner
+at HSK 2" — four separate chances to mark the partner's Chinese down as
+homework. Reframing all five looked free.
+
+| on 222 real turns | strict | loose | spec | fires |
+|---|---|---|---|---|
+| `decomposed` | 95% | 85% | 67% | 50% |
+| `decomposedNative` | 81% | 75% | 66% | 47% |
+
+**Ten points of recall for nothing.** The frame that is worth fourteen points to
+one broad call is worth minus ten to four narrow ones — and in hindsight the
+mechanism is not mysterious: a specialist asked about aspect is already narrow
+enough not to be nitpicking level, and telling it the writer is a native removes
+the only reason it had to report anything at all. This is the fourth time in this
+document a prompt fix has moved the number the wrong way.
+
+### The rewrite proposer is the cascade's over-firing, not its six judges
+
+The cascade fires on 62% of real turns. The obvious suspect was the six lenses
+that ask a judgement question, since this study has twice measured that this
+model judges badly and rewrites well. Deleting them leaves the rewrite proposer,
+its grounding filters and its confirm step — eight calls a turn instead of
+forty-five.
+
+| | strict | loose | spec | fires | $/turn |
+|---|---|---|---|---|---|
+| lens cascade | 95% | 88% | 50% | 62% | $0.00141 |
+| `rewriteLoose` | 67% | 76% | 40% | **65%** | $0.00030 |
+| `rewrite` | 48% | 56% | 75% | 35% | $0.00025 |
+
+Firing went **up**. So the six judges were not the false alarms — the rewrite
+proposer is, and it is structural: a model asked to rewrite a sentence rewrites
+it, every time, and the confirm step is what has to throw the difference away.
+"Ask it to rewrite, not to judge" still holds as a way to SEE a fault the model
+will not admit to. It does not hold as a gate, because it also sees faults that
+are not there, and at the same rate.
+
+### Pairing two arms beats improving either one
+
+Neither prompt idea moved anything, so the arms measured in round twenty-two are
+the arms there are. But there are 36 pairs of them, every pair costs nothing to
+evaluate because every arm has already judged all 222 turns, and two pairs beat
+every single arm (`tools/partner-pairs.js`):
+
+| | strict | loose | spec | fires | prec | $/turn |
+|---|---|---|---|---|---|---|
+| `softBar`/glm alone | 100% | 60% | 86% | 28% | 68% | $0.00030 |
+| **`nativeFrame` OR `softBar`/glm** | **100%** | **73%** | **80%** | 37% | 63% | $0.00041 |
+| `decomposed` AND `nativeFrame-glm` | 95% | 75% | 81% | 37% | 65% | $0.00065 |
+| `decomposed` alone | 95% | 85% | 67% | 50% | 55% | $0.00035 |
+| **`decomposed` OR `softBar`/glm** | **100%** | **90%** | 62% | 55% | 53% | $0.00065 |
+
+`nativeFrame` OR `softBar`/glm dominates `softBar` alone: thirteen points of
+stiltedness for six of specificity, at $0.0004. And `decomposed` OR `softBar`/glm
+is the ceiling — 90% of everything not worth imitating, and every outright error
+— bought at 55% firing.
+
+The two cheap qwen arms disagree productively with the reasoning model, which is
+what a union needs and what two prompts on the same model do not give you
+(`decomposed OR nativeFrame` is 85% loose at 65% specificity, no better than
+`decomposed` on its own).
+
+### Where the false alarms are not
+
+Not in one activity. For the recommended pair they run chat 17%, drill 19%,
+focused 31%, twenty 15% of clean turns — so there is no cheap win from exempting
+the formulaic activities, and the twenty-questions circumlocution that looked
+like the problem in round twenty-two is not it.
+
+### The honest caveat
+
+21 strict positives. 100%, 95% and 86% are one to three turns apart and nothing
+here separates them. The loose bar (72 positives) and specificity (150 negatives)
+are the columns that can carry an argument, and on those the pairs genuinely
+beat the singles. Six arms have now been compared on this corpus and a seventh
+would want a held-out split.
+
+## Round twenty-four: the same numbers, on a corpus nobody had tuned against
+
+Six arms and thirty-six pairs had now been compared on one corpus of 222 turns.
+The winner was picked off that corpus and could be a winner of it. So: a fresh
+one, generated the way round twenty-two says the old synthetic corpus should
+have been.
+
+### Replaying the learner, not simulating one
+
+The old synthetic corpus failed because its *learner* was a model. Round
+twenty-two's finding was that partner errors are the residue of real
+conversation: answering a simulated learner the partner writes smooth Chinese
+with fine cracks in it, answering Todd's actual sentences it comes apart.
+
+`tools/replay-partner.js` keeps the real half and regenerates the rest. Todd's
+own turns, in their real order and real context, through the app's own system
+prompt, two draws each. 22 threads, 141 real learner turns, **282 fresh partner
+turns for $0.016.** Chat and focused only — twenty needs a `secret` and drill a
+tag the export does not carry, and 19 of the 21 outright errors in the real
+corpus are chat or focused anyway.
+
+It comes out the right shape: 37.4 characters a turn against the real corpus's
+40.1 and the old synthetic corpus's 31.7.
+
+### Stratified labelling, and what a random sample of passes is for
+
+Both finalist arms judged all 282. The 71 turns either objected to were labelled
+in full — a census, no sampling error — and **50 of the 205 neither objected to
+were drawn at random** and labelled, weighted up by 4.1.
+
+That second stratum is the whole point, and it must stay random even when it is
+boring: labelling only what the graders flagged would measure them against
+themselves and return 100% recall by construction.
+
+**The random sample of 50 turns the union passed contained zero outright
+errors** and four merely-unnatural ones.
+
+### It replicates
+
+| | strict recall | loose recall | spec | fires |
+|---|---|---|---|---|
+| `nativeFrame` — real / fresh | 86% / **87%** | 61% / **60%** | 87% / **90%** | 29% / 20% |
+| `softBar`/glm — real / fresh | 100% / **93%** | 60% / **60%** | 86% / **91%** | 28% / 19% |
+| **union — real / fresh** | 100% / **100%** | 73% / **71%** | 80% / **86%** | 37% / 26% |
+
+Independent corpus, independent labelling pass, and every number lands within a
+few points of round twenty-three's. The union still beats both singles by the
+same margin it beat them by before. **Nothing here was overfit to the 222.**
+
+Specificity comes out better on the fresh corpus and firing lower, on both arms
+— consistent with a freshly generated turn carrying less accumulated oddity than
+one pulled out of a real session.
+
+### What 100% is worth
+
+Zero errors in 50 sampled passes is the best possible observation and still a
+weak one: at 95% confidence the missed-error rate among the 205 unflagged turns
+could be as high as 7%, which is fourteen errors and a true recall near 50%. The
+honest sentence is **"no missed outright error in fifty turns it passed"**, not
+"catches everything". Widening that interval means labelling more passes, and
+nothing else.
+
+## Round twenty-five: the repair ladder, and a comparison that cannot see it
+
+The retry loop said the same thing on every attempt. A production session showed
+what that costs: ten of fourteen turns spent all six tries, four attempts inside
+one turn came back byte-identical, and three of the fights were unwinnable --
+the gate asks for 练武术 while the validator forbids 练.
+
+`HSKPrompt.repairStrategy()` picks a different strategy each time, by rule from
+evidence the app already holds: whether the gate's own correction needs a word
+above the level (run `better` through the same validator the reply faces),
+whether the model has stopped changing its answer, whether the same word keeps
+being rejected. Tarone's taxonomy, achievement strategies first and the topic
+pivot last. `tools/repair-ab.js` replays real learner turns through the real
+prompt, validator and gate, and runs both arms over the same turns.
+
+| 40 real learner turns, 6 tries | rescued | stub | mean tries |
+|---|---|---|---|
+| base — repair as shipped | 58% (23/40) | 43% | 4.3 |
+| ladder | 63% (25/40) | 38% | 4.2 |
+
+**Paired: the ladder rescued 7 the base lost and lost 5 the base rescued.
+Exact McNemar p = 0.77. There is no effect here to report.**
+
+### Why the comparison could not have worked
+
+**The ladder engaged on 6 of 40 turns.** On the other 34 both arms ran
+identical code, so five sixths of the sample was measuring temperature against
+itself. The four-turn smoke run had already shown the noise floor: one turn
+differed between arms with *zero* strategies applied.
+
+The strategy only fires from the second gate failure, and most turns never have
+a second gate failure. Sampling turns at random and hoping enough of them are
+hard is the same mistake round ten made at the sentence level and round
+seventeen found: **the population that can answer the question is a small tail
+of the one being sampled.** The fix is the same -- condition on it. Run the base
+arm, keep the turns it loses, and test the ladder against those.
+
+### One thing worth looking at, on six turns and therefore worth nothing yet
+
+`introduce` -- offer the `[[NEED:]]` channel for the word the fix needs -- fired
+four times and **every one of the four still ended in the stub.** The pairing
+that did rescue a turn was `circumlocute → reduce`.
+
+If that survives a proper sample it is interesting, because the channel is not
+unused: it fires unprompted on 9% of real assistant messages. A model that
+reaches for it on its own and refuses it when instructed would be worth knowing
+about, and it is the opposite of what the design assumed.
+
+## Round twenty-six: deciding what to say, before saying it
+
+Todd, on the repair ladder: *"this feels like we are too late to the party."*
+
+He is right, and the logs say so plainly. The partner tried to describe a
+DESERT, tried to say *practise martial arts*, tried to say *I received a
+letter*. **None of those are phrasing failures.** The model chose something to
+say that HSK 2 cannot afford and then spent six tries failing to afford it. The
+repair loop argues about wording long after the decision that doomed the turn.
+
+So the constraint moves from the last step to the first: decide what to say,
+check whether it can be said at this level, and only then write it. A plan that
+cannot be afforded is re-planned at planning cost -- not at generation-plus-two-
+graders cost.
+
+Four arms, 40 real learner turns replayed in their real context, same prompt,
+same validator, same gate:
+
+| | rescued | stub | mean tries |
+|---|---|---|---|
+| base — repair as shipped | 68% | 33% | 4.0 |
+| ladder (round 25) | 60% | 40% | 4.3 |
+| **plan, in English** | **83%** | **18%** | **2.5** |
+| **plan, in Chinese** | **80%** | **20%** | **2.7** |
+
+Paired, exact McNemar:
+
+| | | |
+|---|---|---|
+| plan(en) vs base | 7 rescued, 1 lost | **p = 0.07** |
+| plan(zh) vs base | 6 rescued, 1 lost | p = 0.13 |
+| ladder vs base | 5 rescued, 8 lost | p = 0.58 |
+| plan(zh) vs plan(en) | 1 vs 2 | p = 1.00 |
+
+**This is the strongest result in twenty-six rounds**, and it does not rest on
+the p-value alone. Mean tries falls from 4.0 to 2.5 — a separate and far better
+powered measurement, since every turn contributes to it rather than only the
+discordant pairs. Fewer tries means fewer generations AND fewer calls to the
+reasoning-model gate, so the quality gain arrives with a latency gain rather
+than instead of one. That has not happened before in this study.
+
+### Planning in English or in Chinese does not matter, and the reason it might have
+
+Todd: *"why use English as an intermediary? All of the vocab is in Chinese."*
+
+The argument for Chinese is not fluency, it is checkability. The English planner
+asks the model to DECLARE which Chinese words it will use, and a declaration is
+self-reported -- it can name five words and write twenty. A plan written in
+Chinese goes through the validator whole.
+
+Measured, they are indistinguishable: 1 discordant pair against 2, p = 1.00. The
+one asymmetry is upstream of the verdict -- **the Chinese planner needed
+re-planning on 10 of 31 plans against the English planner's 15 of 31**, so the
+complete check does find unaffordable plans sooner. Not a difference in outcome,
+a difference in cost, and the direction the argument predicted.
+
+Both planners produced a usable plan on **31 of 40 turns**; on the other nine the
+arm falls through to ordinary generation, which is the conservative failure.
+
+### What this does not say
+
+40 turns and p = 0.07 is a signal, not a settled result, and this document has
+been wrong about smaller things with better numbers. The confirmation is cheap
+in a way the ladder's never was: a plan step fires on EVERY turn, so sample size
+buys power directly instead of hoping for a hard tail.
+
+The two risks named before the run are not yet measured. **Blandness** -- a
+partner that plans may stop reaching, and reaching is where some of the interest
+was. And **English-shaped Chinese** from the English planner, which would show up
+as `unnatural` rather than as a failed turn. Both need reading, not counting.
+
+## Round twenty-seven: the planner confirmed, once the harness told the truth
+
+Round twenty-six had two holes, both found by reading the output rather than
+counting it. The harness had no sense check, so 得-complements (你说得对,
+听得懂) passed there and would have been rejected by the app -- 15% of the base
+arm's "clean" replies. And the plan was told to be sayable and nothing else, so
+it drifted: a message about coffee and getting up at 5:30 was answered with a
+remark about breakfast, and an apple and a cup of tea were invented from nowhere.
+
+Both fixed -- `senses.js` runs in the harness exactly where the app spends it,
+and both planners are now told to answer what the student actually said. 95 real
+learner turns, every chat turn in the export:
+
+| | rescued | stub | mean tries |
+|---|---|---|---|
+| base | 61% | 39% | 4.1 |
+| plan, in English | 66% | 34% | 3.4 |
+| **plan, in Chinese** | **71%** | **29%** | **3.3** |
+
+| paired | | |
+|---|---|---|
+| plan(zh) vs base | 16 rescued, 7 lost | p = 0.09 |
+| plan(en) vs base | 14 rescued, 9 lost | p = 0.40 |
+
+**Adding the sense check pulled every arm down and shrank every gap**, which is
+what an honest harness does to an optimistic result. The English planner's
+round-twenty-six advantage (7-1, p = 0.07) largely evaporated at 14-9, p = 0.40.
+The Chinese planner held: 6-1 at n=40, 16-7 at n=95, the same direction and
+roughly the same size twice.
+
+### The dilution, and the number that is not diluted
+
+**A plan was produced on 69 of 95 turns.** On the other 26 the planner gave up
+after three rounds of re-planning and the arm fell through to ordinary
+generation -- so on those turns the two arms ran identical code and could only
+differ by temperature. It is round twenty-five's mistake again, milder: a
+treatment measured over turns it never touched.
+
+Restricted to the turns where it acted -- which is where the arm can differ at
+all, and the conditioning proposed BEFORE this run rather than after it:
+
+| on the 69 turns a plan was made | rescued | paired vs base | |
+|---|---|---|---|
+| base | 46/69 (67%) | | |
+| **plan, in Chinese** | **57/69 (83%)** | **14 rescued, 3 lost** | **p = 0.01** |
+| plan, in English | 54/69 (78%) | 12 rescued, 5 lost | p = 0.14 |
+
+**That is the first p below 0.05 in twenty-seven rounds.** The honest headline is
+still the pre-specified p = 0.09; the conditioned 0.01 is the same effect with
+the turns removed where the treatment was never applied.
+
+### English or Chinese, second time of asking
+
+Chinese wins on every axis that moved, and none of them alone would be worth
+quoting:
+
+| | plan(en) | plan(zh) |
+|---|---|---|
+| rescued | 66% | **71%** |
+| paired vs base, conditioned | p = 0.14 | **p = 0.01** |
+| plans needing a re-plan | 38/69 (55%) | **24/69 (35%)** |
+
+The re-plan gap is the one with a mechanism behind it rather than a p-value: the
+English planner declares which words it will use and a declaration is
+self-reported, while a Chinese plan goes through the validator whole. It finds
+unaffordable plans sooner because it can actually see them.
+
+### Anchoring worked, and the replies are still shorter
+
+The drift correction did what it was meant to. Mean reply length recovered from
+23.7 characters to 25.1 against base's 29.8, and the Chinese planner's closing
+question came back from 91% to 94% of replies (base 97%).
+
+**Planned replies remain about 15% shorter than unplanned ones.** That is the
+cost, it is smaller than it was, and whether it reads as concise or as bland is
+a judgement nobody should make from a character count.
+
+### What is still wrong
+
+**27% of turns get no plan at all**, and those are the hardest ones -- three
+rounds of re-planning failed to find anything affordable. They are exactly where
+round twenty-five's metalinguistic and escape-hatch strategies were aimed, and
+where a partner that says 这个太难说 in Chinese would beat one that says
+我不会说. The two ideas are complementary and were measured as rivals.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

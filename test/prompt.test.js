@@ -1140,5 +1140,221 @@ check(possessiveHits.length === 0,
 check(P.STARTERS[1].indexOf("你家在哪儿？") !== -1,
   "the HSK 1 home question survives the fix, without the 的");
 
+/* ---------------------------------------------------- the partner gate prompt
+ *
+ * The correctness gate judges the partner with grade({partner:true}) and
+ * grade({partner:true, bar:"soft"}). Those two strings were measured -- 222 real
+ * partner turns, rounds 22 to 24 -- as built by tools/grader-bench.js, which
+ * derives them from grade()'s default output by substitution.
+ *
+ * Two prompts claiming to be the same prompt is exactly the drift this suite
+ * exists to catch, and a measurement is worth nothing if what ships is a
+ * paraphrase of what was measured. So: character for character, both routes, or
+ * the number in the study stops describing the app.
+ *
+ * This is also the guard on grade() ITSELF. The harness substitutes on clauses
+ * of the default prompt; reword one and these comparisons fail rather than the
+ * benchmark silently grading something else. */
+const BENCH = require("../tools/grader-bench.js");
+const GT = "我家在城市下面，离银行很近。", GL = "HSK 2";
+[["shipped", {}], ["nativeFrame", { partner: true }],
+ ["softBar", { partner: true, bar: "soft" }]].forEach(([arm, opts]) => {
+  const mine = P.grade(Object.assign({ text: GT, label: GL }, opts));
+  check(mine === BENCH.promptFor(arm, GT, GL),
+    `grade(${JSON.stringify(opts)}) is character-for-character the benchmarked "${arm}"`,
+    "the shipped prompt has drifted from the measured one");
+});
+
+// The frame is the whole of round eleven's fourteen points: the partner arms
+// must not name a level, and must not call the writer a student.
+["nativeFrame", "softBar"].forEach(arm => {
+  const opts = arm === "softBar" ? { partner: true, bar: "soft" } : { partner: true };
+  const t = P.grade(Object.assign({ text: GT, label: GL }, opts));
+  check(t.indexOf(GL) === -1, `${arm} names no level`, t.slice(0, 120));
+  check(t.indexOf("written by a student") === -1,
+    `${arm} does not say a student wrote it`, t.slice(0, 120));
+  check(t.indexOf("conversation partner") !== -1, `${arm} says who wrote it`);
+  /* Inherited and deliberate: the homophone paragraph still explains that the
+   * writer "types pinyin and picks a character from a list", which is true of
+   * the learner and not of a model. It is in the string rounds 22-24 measured,
+   * so it stays until something re-measures without it. */
+  check(t.indexOf("types pinyin") !== -1,
+    `${arm} keeps the inherited homophone clause the measurement included`);
+});
+
+// And the learner prompt is untouched by their existence.
+check(P.grade({ text: GT, label: GL }).indexOf("student of Chinese at " + GL) !== -1,
+  "the learner prompt still names the level and the student");
+
+/* ------------------------------------------------- the repair strategies
+ *
+ * The property that matters most is the cheapest one: never the same strategy
+ * twice in a turn. A production session had four byte-identical attempts inside
+ * one turn because the repair said the same thing every time. */
+{
+  const walk = (o, n) => {
+    const tried = [], ids = [];
+    for (let f = 2; f <= n; f++) {
+      const r = P.repairStrategy(Object.assign({ gateFails: f, tried: tried }, o));
+      if (!r) break;
+      tried.push(r.id); ids.push(r.id);
+    }
+    return ids;
+  };
+  const uniq = a => a.length === new Set(a).size;
+
+  check(P.repairStrategy({ gateFails: 1, tried: [] }) === null,
+    "the first gate failure gets the plain correction, no strategy");
+  check(P.repairStrategy({ gateFails: 2, tried: [] }) !== null,
+    "the second one gets a strategy");
+
+  [["unsayable", { blocked: "练", allowIntroduce: true }],
+   ["stuck", { repeated: true }],
+   ["sameWord", { sameWord: true }],
+   ["plain", {}]].forEach(([name, o]) => {
+    const ids = walk(o, 12);
+    check(ids.length >= 4, `${name} offers several strategies`, JSON.stringify(ids));
+    check(uniq(ids), `${name} never repeats one in a turn`, JSON.stringify(ids));
+    check(P.repairStrategy(Object.assign({ gateFails: 9, tried: ids }, o)) === null,
+      `${name} runs out rather than looping`, JSON.stringify(ids));
+  });
+
+  /* The fix being above the level is the case the whole thing exists for: when
+   * the gate wants 练 and the validator forbids it, rephrasing cannot get
+   * there. Only teaching the word or naming the problem can. */
+  const unsayable = walk({ blocked: "练", allowIntroduce: true }, 12);
+  check(unsayable[0] === "introduce",
+    "an unsayable fix offers the [[NEED:]] channel first", JSON.stringify(unsayable));
+  check(unsayable.indexOf("circumlocute") === -1,
+    "and never suggests rephrasing, which cannot reach it", JSON.stringify(unsayable));
+
+  /* DEFAULT_RATE is spent by pacing. The repair loop may only introduce a word
+   * when the caller says the budget allows it. */
+  const noIntro = walk({ blocked: "练", allowIntroduce: false }, 12);
+  check(noIntro.indexOf("introduce") === -1,
+    "without permission it never reaches for a new word", JSON.stringify(noIntro));
+  check(noIntro[0] === "metalinguistic",
+    "and names the problem instead", JSON.stringify(noIntro));
+
+  // A stuck turn needs a smaller target, not another way to say the same thing.
+  check(walk({ repeated: true }, 12)[0] === "reduce",
+    "a turn that stopped changing is asked for less, first");
+
+  // Reduction strategies go last: they are what a weaker speaker falls back on.
+  ["unsayable", "stuck", "sameWord", "plain"].forEach(name => {
+    const o = { unsayable: { blocked: "练", allowIntroduce: true }, stuck: { repeated: true },
+                sameWord: { sameWord: true }, plain: {} }[name];
+    const ids = walk(o, 12);
+    check(ids[ids.length - 1] === "pivot",
+      `${name} keeps changing the subject for last`, JSON.stringify(ids));
+  });
+
+  // The instruction reaches the model in Chinese, like every other repair.
+  const t = P.repairStrategy({ gateFails: 2, tried: [], blocked: "练", allowIntroduce: true });
+  check(/[\u4e00-\u9fff]/.test(t.text), "the instruction is in Chinese", t.text);
+  check(t.text.indexOf("练") !== -1, "and names the word it is about", t.text);
+  check(t.text.indexOf("[[NEED:") !== -1, "and shows the exact markup to use", t.text);
+}
+
+/* ------------------------------------------------------------ the planner */
+{
+  const turns = [{ role: "assistant", text: "你今天做什么？" },
+                 { role: "user", text: "我喜欢热天。" }];
+  const t = P.planPrompt({ turns: turns, label: "HSK 2", banned: [] });
+  check(t.indexOf("我喜欢热天。") !== -1, "the plan prompt shows what the student said", t);
+  check(t.indexOf("学生：") !== -1 && t.indexOf("伙伴：") !== -1,
+    "and who said which", t.slice(0, 120));
+  check(t.indexOf("HSK 2") !== -1, "and names the level");
+
+  /* The anchor is load-bearing, not decoration: without it the planner answered
+   * a message about coffee with a remark about breakfast, and invented an apple
+   * and a cup of tea. Round 27. */
+  check(t.indexOf("一定要回答学生刚才说的话") !== -1,
+    "and tells it to answer what the student actually said");
+
+  /* Re-planning has to name the words that were too hard, or the second plan is
+   * a coin flip rather than a correction. */
+  const again = P.planPrompt({ turns: turns, label: "HSK 2", banned: ["沙漠", "练"] });
+  check(again.indexOf("沙漠") !== -1 && again.indexOf("练") !== -1,
+    "a re-plan names the words that were too hard", again.slice(-160));
+
+  // Only the last few turns: a plan built from an entire conversation is a
+  // summarisation job, which is not what this asks for.
+  const many = Array.from({ length: 20 }, (_, i) => ({ role: "user", text: "句子" + i }));
+  const long = P.planPrompt({ turns: many, label: "HSK 2" });
+  check(long.indexOf("句子19") !== -1 && long.indexOf("句子0") === -1,
+    "only the last few turns go in", long.slice(0, 200));
+
+  check(P.planInstruction("我也喜欢热天。").indexOf("我也喜欢热天。") !== -1,
+    "the instruction carries the plan it is following");
+}
+/* ---------------------------------------------------------------------------
+ * The grammar check reads the grader's verdict instead of deriving its own.
+ *
+ * Both run on the same sentence and answer the same question in different
+ * shapes, and when each decided for itself the learner got a red cross on the
+ * message and "Natural." at the top of the sheet that cross opened. */
+const gOk = { ok: true, cats: { word: true, grammar: true, order: true, natural: true },
+  errors: [], better: "" };
+const gIdiom = { ok: false, cats: { word: true, grammar: true, order: true, natural: false },
+  errors: [{ tag: "unnatural", note: "太生硬。" }], better: "请给我一杯水。" };
+const gWrong = { ok: false, cats: { word: true, grammar: false, order: false, natural: true },
+  errors: [{ tag: "aspect-le", note: "完成用了。" }], better: "我昨天去了公园。" };
+
+check(P.verdictFor(gOk) === P.VERDICTS.ok, "a passing grade maps to Natural.");
+check(P.verdictFor(gIdiom) === P.VERDICTS.idiom,
+  "only naturalness faulted maps to the middle verdict", P.verdictFor(gIdiom));
+check(P.verdictFor(gWrong) === P.VERDICTS.wrong,
+  "any other fault maps to Not correct.", P.verdictFor(gWrong));
+check(P.verdictFor(null) === "", "no grade yields no verdict");
+check(P.verdictFor({ unreadable: true, ok: true }) === "",
+  "an unreadable grade yields no verdict rather than a false pass");
+
+const exGraded = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2", grade: gWrong });
+check(exGraded.includes("Start with exactly this line"),
+  "with a grade, the verdict is given rather than chosen");
+check(!exGraded.includes(P.VERDICTS.idiom),
+  "and the other two verdicts are not offered as alternatives");
+check(exGraded.includes("aspect-le (了)"),
+  "the tag is named by its code, since its label alone is the bare character");
+check(exGraded.includes("完成用了。") && exGraded.includes("我昨天去了公园。"),
+  "the grader's note and correction are handed over, not re-derived");
+check(!exGraded.includes("很高兴了"),
+  "but never the tag's worked example -- a wrong form in a prompt gets reproduced");
+check(/disagree/.test(exGraded),
+  "disagreement stays possible, but has to be stated rather than silently substituted");
+
+/* Only the branch that applies. With the verdict handed over, the shape rules
+ * for the other two are dead text -- and measured, the model read them anyway
+ * and appended "Natural." under an unidiomatic verdict, putting a contradicting
+ * verdict at the bottom of the sheet built to stop verdicts contradicting. */
+check(!/After "Natural\." stop immediately/.test(exGraded),
+  "a handed non-pass verdict is not also told what to do after Natural.");
+check(/never end with one of the other verdict lines/.test(exGraded),
+  "and is told not to close with one");
+const exPass = P.explain({ text: "我昨天去公园了。", own: true, label: "HSK 2", grade: gOk });
+check(/Stop immediately after that line/.test(exPass),
+  "a handed pass is told to stop and nothing else");
+check(!/corrected sentence/.test(exPass),
+  "and is not told how to present a correction it will not be making");
+
+const exUngraded = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2" });
+check(exUngraded.includes("Start with exactly one of these three lines"),
+  "with no grade, the verdict is chosen exactly as before");
+check(exUngraded.includes(P.VERDICTS.ok) && exUngraded.includes(P.VERDICTS.idiom) &&
+      exUngraded.includes(P.VERDICTS.wrong), "and all three are offered");
+check(!/A grader has already judged/.test(exUngraded), "and no verdict is claimed");
+
+const exFollow = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2",
+  grade: gWrong, followUp: true });
+check(exFollow.includes("Its verdict: " + P.VERDICTS.wrong),
+  "a follow-up is told which verdict it is following up on");
+check(!exFollow.includes("Start with exactly"),
+  "and is still not made to answer in the verdict shape");
+
+const exReply = P.explain({ text: "我昨天去了公园。", own: false, label: "HSK 2", grade: gWrong });
+check(!/A grader has already judged/.test(exReply),
+  "the partner's reply is never graded, so its explanation is never handed a verdict");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

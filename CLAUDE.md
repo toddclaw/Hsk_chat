@@ -77,73 +77,112 @@ opposite of the obvious one. Run an A/B against the real model with counted
 outcomes before shipping a prompt edit — the worked examples in DEVELOPING.md
 show the shape, including a "fix" that made the failure eight times more likely.
 
-The grader has two benchmarks now, and they disagree about it completely.
+The grader has three benchmarks, and the one that counts is real traffic.
 
-- `tools/grader-bench.js` — learner error, human ground truth from MuCGEC.
-  **90% recall, 66% specificity.** It leans harsh: roughly one correct sentence
-  in three is called faulty.
-- `tools/partner-corpus.js` — the partner's own Chinese, 204 turns generated
-  through the real prompt and labelled by Claude. **24% recall**, 38% for the
-  four-lens design and 38% for the one-call `nativeFrame` arm. This is the
-  correctness gate's actual job and the grader cannot currently do it.
+- `tools/grade-audit.js` — the grader's own 208 stored verdicts on Todd's real
+  sentences, blind-labelled. **85% overall** (83% recall, 86% specificity). Free
+  to re-run and it grows by itself. **The best benchmark here.**
+- `tools/real-qwen.js` + `tools/partner-corpus.js --grade` — 222 real partner
+  turns from the database, qwen activities only. `nativeFrame` scores **86%
+  strict recall at 87% specificity for $0.0001 a turn**, and is the arm to use.
+- `tools/grader-bench.js` — MuCGEC learner error, human ground truth. 90%
+  recall, 66% specificity. Leans harsh, and that harshness does not reproduce on
+  real sentences.
+- `tools/replay-partner.js` — fresh partner turns of the RIGHT kind, made by
+  replaying Todd's own learner turns in context through the app's prompt. 282
+  turns for $0.016, and it confirms the real-corpus numbers within a few points.
+- `tools/partner-corpus.js` — 204 synthetic partner turns. **Superseded.** Its
+  learner was a model, so it matched real traffic on error rate and not on error
+  kind, and eleven arms were raced on the difference. **If you need more partner
+  data, replay the real learner; do not simulate one.**
 
-`nativeFrame` is the best prompt measured: it tells the grader the *partner*
-wrote the text and names no level. Free — identical on learner error — and it
-beats the four-lens design on specificity, precision and cost.
+**A partner turn is a pipeline now** — plan, generate, vocabulary, sense, gate,
+soft checks — and the ORDER is the design. `DEVELOPING.md`, "What a partner turn
+goes through", has the diagram and the reason for each position. Three switches
+in Settings, all defaulting on, and every failure path fails open: a dead grader,
+a timed-out planner or a missing table lets the turn through rather than
+stopping the conversation.
 
-**But the model is the variable, not the prompt.** Eleven rounds of prompt work
-moved partner recall 24% → 38%. Changing the model moved it to 70%. This is the
-third time in this repo that a run of failing prompt strategies turned out to be
-a signal about the model. **Try the model by round three.**
+**The reply is planned before it is written (v114).** The failures were content
+choices, not phrasings — the partner tried to describe a desert and no rewording
+gets there. `HSKPrompt.planPrompt()` decides what to say IN CHINESE, so the plan
+goes through the validator whole rather than trusting the model's own account of
+which words it will use. Measured at p = 0.01 on the turns it acts on, and mean
+tries 4.1 → 3.3, so it is faster as well as better. **If you need to fix
+something the model keeps getting wrong, ask first whether the decision that
+gets it wrong happens before anything checks.** RESEARCH.md, "When the level
+cannot say it".
 
-**The real corpus mixes two models — split it before using it.** `STORY_MODEL`
-is `claude-sonnet-4.5` (`index.html:1064`); everything else is qwen. Pooled, the
-285 real turns pulled by `tools/pull-partner.js` look like a partner wrong 15.1%
-of the time with a dominant 得 defect. Split, per 100 sentences:
+**The gate is wired (v105).** `gateFault()` in `index.html` runs the union
+inside `turn()`'s retry loop; `HSKPrompt.grade({partner:true})` and
+`{partner:true, bar:"soft"}` build the two prompts, and `test/prompt.test.js`
+asserts they are **character-for-character** the strings `tools/grader-bench.js`
+benchmarked — a measurement is worth nothing if what ships is a paraphrase.
+Story is not gated, correctness never degrades to "show it anyway", and a failed
+grader call passes the turn.
 
-| | wrong | unnatural |
-|---|---|---|
-| story (Sonnet) | 2.5 | 0.6 |
-| chat (qwen) | 3.2 | 7.2 |
-| synthetic (qwen) | 3.3 | — |
+`nativeFrame` is the best prompt measured on both halves: it tells the grader the
+*partner* wrote the text and names no level. But on the partner, **pairing two
+arms beats improving either one** — `nativeFrame` OR `softBar`/glm-5.3-flash
+catches every outright error and 73% of the merely-stilted at 80% specificity
+for $0.0004 a turn, confirmed on a second corpus at 100% / 71% / 86%, and `tools/partner-pairs.js` scores all 36 pairs from stored
+verdicts for free. A union needs two graders that disagree productively: two
+prompts on the same model do not.
 
-So **the synthetic corpus is a good model of the chat partner**, the 得 defect is
-Sonnet's (12 of 13 instances), and Sonnet writes *better* than qwen, not worse —
-story turns are simply four times longer, and a per-turn rate compares a
-paragraph against a sentence.
+**Four prompt fixes in this study have moved the number the wrong way**, the
+latest being the native frame applied to the four-lens design — worth +14 points
+to one broad call and -10 to four narrow ones. Measure, do not reason.
 
-What holds: the **reflexive 被 is in production and it is qwen's** (我的手机被我
-不小心放错了地方), real traffic has **zero** Latin script and **zero**
-`[[NEED:]]`, and **7% of assistant rows are the stub 我不会说 / 我不知道** — a
-generation failure no grader addresses.
+**Read the benchmark before you read the number.** Three times now a confident
+result came from a population nobody had asked about. Story turns are Sonnet's
+and the rest are qwen's — pool them and the headline inverts. Two label passes
+carrying the same rubric drew the wrong/unnatural line in different places, and
+strict recall moved three-fold across corpora because of it. The loose bar
+(wrong ∪ unnatural) survives both and is what to quote across corpora.
 
-**The recall numbers in `grader-bench-results.md` rounds 12-16 are not
-measurable.** The partner corpus has 21 strict positives; one catch is five
-points, and no paired test between the lens cascade, `glm-5.3-flash` and Sonnet
-reaches significance. Enlarge the positive class before trusting any of them, or
-before running another arm — `tools/partner-corpus.js` generates 204 turns for
-$0.014, and a stratified label pass is the cheap route to ~100 positives.
+**The model is a variable, not a setting. Try it by round three.** Eleven rounds
+of prompt work moved synthetic partner recall 24% → 38%; changing the model moved
+it to 70%. But on real traffic the strong model is the *worst* over-firer, and
+cheap qwen wins outright — so try the model early and then check it on real data.
 
-**Specificity is well powered (183 negatives) and says the opposite of what the
-recall race suggested:** shipped qwen 96%, `glm-5.3-flash` 89%, the cascade 81%,
-Sonnet 66%. At the partner's 8.8% error rate over-firing is the expensive
-direction, and the strong model is much the worst offender.
+What holds about the partner: the **reflexive 被 is in production and it is
+qwen's** (我的手机被我不小心放错了地方), real traffic has **zero** Latin script, and
+**7% of assistant rows are the stub 我不会说 / 我不知道**
+— a generation failure no grader addresses. Per 100 sentences the chat partner
+(qwen) is wrong 3.2 times and unnatural 7.2; story (Sonnet) 2.5 and 0.6.
 
-Two things about weak models that hold independently of the corpus, both
-measured on their own probes and worth reaching for elsewhere:
-
-- **Ask it to rewrite, not to judge.** Every lens and the shipped grader call
-  你比昨天忙吗？ fine. Asked to *rewrite* it natively the same model returns
-  你今天比昨天忙吗？ Diff the rewrite for a grounded fault proposal that needed
-  no judgement.
-- **Give it two sentences, not one.** Confirming a finding in the abstract
-  caught 2 of 7; showing original and repair side by side caught 5 of 7. The
-  abstract phrasing has now scored zero or near-zero on three separate probes.
+**`[[NEED:]]` fires on 9% of real assistant messages** — not the zero this file
+used to claim. `extractNeeds()` strips the markup before storage and the evidence
+moves to the `needs` column, which `pull-chats.js` did not select, so every count
+made from the export was counting text the app had already cleaned. Before
+concluding a channel is unused, check that the thing you are grepping still
+contains it. `RESEARCH.md`, "When the level cannot say it", has the numbers and
+the SLA literature on what a partner should do when the level cannot say
+something.
 
 **Silent failure has produced a wrong number three times here** — `没有错误`
 parsed as a sentence, `content` empty while `reasoning` filled the budget, and a
 swallowed exception that made a dead grader look clean. Every one looked
 plausible. Print the raw thing and count what did not come back.
+
+## The diagnostic log
+
+`debug_log` is where `console.log` goes, because the app is used on a phone and
+a phone has no console. `captureConsole()` wraps console once at boot, so every
+existing log line is captured without being touched and so is the next one
+somebody writes. Batched, flushed on a timer and on backgrounding, read with
+`tools/pull-debug.js`.
+
+Three rules it lives by:
+
+- **Secrets are scrubbed on the way IN** (`HSKSync.scrubSecrets`). A line
+  scrubbed on the way out is already in `localStorage`.
+- **It is in `USER_TABLES`.** It holds whole replies and whole sentences, so a
+  "delete cloud data" that skipped it would leave the most verbatim copy of the
+  conversation on the server. `test/sync.test.js` enforces the list.
+- **A missing table turns it off, it does not throw.** PostgREST reports that
+  two ways — `PGRST205` before the schema cache reloads and `42P01` after — and
+  matching only one is how the degradation becomes an exception on every flush.
 
 ## Secrets
 

@@ -1,0 +1,2474 @@
+{
+ "when": "2026-09-18T04:32:12.260Z",
+ "tries": 6,
+ "rows": [
+  {
+   "i": 0,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我今天很好，谢谢。天气很热，我很高兴。你今天好吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我很好，我在家呢。你呢？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我很好，谢谢。你呢？我今天吃了一个苹果。你今天吃什么了？"
+   }
+  },
+  {
+   "i": 3,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我在家喝冷水，很舒服。你在家做什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喝很多水。我也每天喝很多水。你在学校喝水吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喝很多水，很好。我今天也喝了很多水。你下午出门吗？"
+   }
+  },
+  {
+   "i": 4,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喝过咖啡，不好喝。我喝水，不喝咖啡。你每天喝咖啡吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喜欢咖啡。我喝茶。你喜欢茶吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "咖啡不是水。多喝水对身体好。你今天喝了多少水？"
+   }
+  },
+  {
+   "i": 1,
+   "base": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "今天不热，外面很好。我在外面走呢。你今天出门了吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "今天很热。我在家呢。你在家吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "今天不热，很舒服。我今天在外面走了走。你出去了吗？"
+   }
+  },
+  {
+   "i": 2,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我也喜欢热天。天气热的时候我可以游泳。你天气热的时候喜欢做什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "那很好。我也喜欢热天。热的时候我喝水。你热的时候喝水吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喜欢热天，为什么？热的时候，你做什么？"
+   }
+  },
+  {
+   "i": 6,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "今天很热，我不想出门。我今天喝了很多水。你喝什么水？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你五点半起床，我六点起床。你吃早饭吗？几点吃早饭？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你五点半起床，很早。我七点起床。你早上吃早饭吗？"
+   }
+  },
+  {
+   "i": 5,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "早上喝咖啡很好。我早上也喝咖啡。你早上几点喝咖啡？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你早上喝咖啡。我也早上喝咖啡。晚上不喝，喝了睡不好。你每天早上都喝咖啡吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你晚上喝咖啡会睡不好，所以你不喝，对吗？我只在早上喝咖啡。你早上几点喝咖啡？"
+   }
+  },
+  {
+   "i": 7,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你九点半去运动，很好。我十点去运动。你做什么运动？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 8,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "运动很好。我运动完也休息。你做什么运动？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你星期六做运动，很好。我也喜欢运动。我和朋友打篮球。你打篮球吗？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 9,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我也想休息。但是我要做饭，还要洗衣服。你做饭吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你说希望可以不做事。那很好。我也希望可以休息。星期六你喜欢做什么？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你星期六可以休息。休息很好。你晚上也休息吗？"
+   }
+  },
+  {
+   "i": 11,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你做的工作很好。我在家看电影，也听歌。你最喜欢看什么电影？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喜欢看电影，很好。我也喜欢看电影。你最喜欢看什么电影？"
+   }
+  },
+  {
+   "i": 10,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喜欢玩电脑。我也喜欢玩电脑。你在电脑上玩什么？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "上网很有意思。你都看些什么？我看很多电影。"
+   }
+  },
+  {
+   "i": 12,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你在电脑上写东西，很好。我也喜欢看电影。你每天看电影吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你写的东西很好。我很喜欢看你写的字。你每天写多长时间？"
+   }
+  },
+  {
+   "i": 13,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 16,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你每天学两小时，很多了。慢慢学，可以的。你学了什么？"
+   }
+  },
+  {
+   "i": 15,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你每天工作时开电脑吗？我也每天开电脑。你在电脑上学习中文吗？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 19,
+   "base": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "很好！学电脑很好玩。我今天学了新词。你今天最喜欢学什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我很高兴。我吃水果的时候很高兴。你喜欢吃苹果吗？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 18,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "很好！你每天学两个小时。我每天拿电脑做事。你今天学了什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你每天学两小时。我每天学中文一小时。你一周学几天？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你每天学两小时，很好。我每天喝水。你今天喝了多少水？"
+   }
+  },
+  {
+   "i": 14,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "电脑不好学，但是多做就好一点。我每天打字，做一点点。你每天做吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "电脑学起来有点慢，但是多做就学会了。我学中文也很慢。你每天学多长时间？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "电脑不太好学，但是天天做就会好一点儿。我正在学打字。你觉得打字怎么样？"
+   }
+  },
+  {
+   "i": 17,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 20,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你很好。做老师很好。你学电脑，可以教别人。你想教什么课？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你很好。我也觉得教人很好。你想做老师吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你想做老师吗？"
+   }
+  },
+  {
+   "i": 23,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你教朋友中文，他们觉得中文不好学吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你希望朋友学中文，真好。我也有朋友学中文。你的朋友现在会说中文吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你朋友为什么想学中文？"
+   }
+  },
+  {
+   "i": 22,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你上课有电脑吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你教朋友中文，真好。我也有朋友。你的朋友喜欢学什么？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你的朋友学中文，很好。他们喜欢中文吗？"
+   }
+  },
+  {
+   "i": 21,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你想教中文，真好。我也在学中文。你坐在电脑前学中文吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你想教中文，真好。我也喜欢中文。你想教大人还是孩子？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 25,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你好！你叫什么名字？你的名字很好听。你今天做什么了？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "是，我听见了。你叫石冬。我叫李伟。你喜欢你的名字吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你的中文名字很好。我也喜欢学中文。你每天学几个小时？"
+   }
+  },
+  {
+   "i": 24,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "那儿的人很好。你去过那儿吗？"
+   }
+  },
+  {
+   "i": 26,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你不拿书去学校，我知道。我也不在工作时看中文书。我在家看。你在家看书吗？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 29,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我看好玩的书。你呢？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我不会说。"
+   }
+  },
+  {
+   "i": 28,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   }
+  },
+  {
+   "i": 27,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "工作要读的书不好看，我知道。 \n你工作要看书，也要学中文。 \n你最近看什么书？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 33,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我不高兴。我妈妈也在看电视。你姐姐做什么工作？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你妈妈和姐姐弟弟都在工作，很忙吧？我每天在家做饭，不忙。你今天吃饭了吗？"
+   }
+  },
+  {
+   "i": 30,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 32,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我家有三个人。我妈妈、我爸爸和我。你家有几个人？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家有四个人。我家有爸爸、妈妈、妹妹和我。你家有几个人？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家有三个人。我妈妈、爸爸和我。你家有几个人？"
+   }
+  },
+  {
+   "i": 34,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  },
+  {
+   "i": 36,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 35,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你女儿和儿子都是大学生，真好。你们住在一起，每天一起吃饭吗？我每天自己做饭。"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你的儿子和女儿都是大学生，真好。你们一家人住在一起，每天一起吃饭吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你的孩子是大学生，真好。你们每天都忙吗？你和太太也一起看电视吗？"
+   }
+  },
+  {
+   "i": 31,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "听书能让你高兴，也能让你不高兴，很好玩。 \n我也想听那样的书。 \n你最近听什么书？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 37,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我今天在看书呢。你今天做什么了？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我很好，你呢？今天天气不错。你今天做什么了？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你好！我今天很高兴。你今天做什么了？"
+   }
+  },
+  {
+   "i": 38,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你真好，送朋友去医院。我每天坐公交车去学校。你朋友怎么了？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你开车送朋友去医院了。我上星期走路去医院，因为我生病了。你现在和朋友还好吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你朋友生病了吗？ \n我开车不快。你朋友现在好了吗？"
+   }
+  },
+  {
+   "i": 39,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你今天开车送朋友去医院了，对吗？我坐公交车去的医院。朋友怎么了？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你朋友怎么了？ \n你开车很快吗？"
+   }
+  },
+  {
+   "i": 42,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "好的，我明天给他打电话，说你朋友的事。你们见面后，可以多说说话。你朋友最喜欢吃什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我知道你希望他可以帮你的朋友。我也想认识好医生。你喜欢喝茶吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "他可以帮你的朋友看病。你朋友会好起来的。我们下个星期见面，好吗？"
+   }
+  },
+  {
+   "i": 43,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "好的，我下星期六给那个医生打电话，说好时间。你们可以在外面坐一坐，说说话。那里有椅子。你觉得可以吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "是的，茶很好。我也喜欢喝茶。你的朋友喜欢什么茶？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你朋友喜欢喝茶，那你们可以一起喝。他下午有时间，可以见面。你们下午见面好吗？"
+   }
+  },
+  {
+   "i": 41,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "那个医生很好，他帮过很多人。下星期他在医院，我们可以一起去见他。你有时间吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我很高兴你想认识他。我明天去医院，我可以介绍你们认识。你明天有时间吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "医生在医院工作，他很忙，但对人很好。明天我请他出来坐坐，你来吗？我们可以一起喝点东西。"
+   }
+  },
+  {
+   "i": 40,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你朋友好一点儿了，真好。那个医生在医院工作，他很忙。你想去医院看医生吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你朋友好一点儿了，真好。我昨天去医院看你朋友了。你想再去医院吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "那个医生在医院工作，你想见他就可以去。我明天也要去医院，我要去看朋友。你朋友还在医院吗？"
+   }
+  },
+  {
+   "i": 44,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "不客气！我也很高兴。我也喜欢一起喝茶。星期三很好。我星期三工作。你星期三做什么？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "星期三可以，我也喜欢喝茶。我昨天喝了一点儿绿茶。你想喝什么茶？"
+   }
+  },
+  {
+   "i": 45,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "不客气。我昨天拿了一些吃的给朋友，她很高兴。你最喜欢什么吃的？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "不客气。我拿了个苹果，医生也喜欢苹果。你拿了什么吃的？"
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 48,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 47,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 46,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我最喜欢红色。红色很好看。你喜欢什么颜色？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我喜欢红色。红色好看。你最喜欢什么颜色？"
+   }
+  },
+  {
+   "i": 51,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   }
+  },
+  {
+   "i": 49,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 50,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "晚上外面有小鸟叫。我很喜欢听。你晚上听过小鸟叫吗？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 54,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喜欢看书和听歌。我每天晚上都听歌。你喜欢做什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我喜欢看电影。电影很好玩。你喜欢看什么电影？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我喜欢看书。我也喜欢听歌。你呢？"
+   }
+  },
+  {
+   "i": 55,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你喜欢吃苹果。我也喜欢吃苹果。你早上吃苹果了吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你也喜欢苹果。我也喜欢苹果。你还喜欢什么水果？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你喜欢吃苹果吗？我每天吃一点水果。你今天吃什么了？"
+   }
+  },
+  {
+   "i": 53,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 56,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "是，我是真人。我是学生，我学中文。你学中文吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我是真人。我今天在学校上课呢。你吃饭了吗？"
+   }
+  },
+  {
+   "i": 52,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 57,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "送书好，朋友可以看。我昨天看了一本书。你喜欢看书还是喝茶？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你可以给朋友一本书。我也喜欢书。你喜欢看书吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你可以送一本书，书很好。我昨天读了一本书。你喜欢看书吗？"
+   }
+  },
+  {
+   "i": 59,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "书很好，我也喜欢看。你可以送他一本新书。你喜欢看书吗？"
+   }
+  },
+  {
+   "i": 60,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "公司书？我不懂。你朋友在公司工作吗？他喜欢看什么书呢？"
+   }
+  },
+  {
+   "i": 61,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "他有时间读书，真好。我昨天读了一个小时，眼睛累了。你朋友一天读几个小时？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你朋友现在有时间读书，很好。我现在也有时间看书。你每天都读书吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "他有时间读书，很好。你朋友喜欢看什么书？"
+   }
+  },
+  {
+   "i": 58,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "送一本书和水吧，这样很好。朋友看书，也喜欢喝水，会很高兴的。你朋友最喜欢什么书？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "两本书比一本书好。我也喜欢读书。你喜欢读书吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "送一本书就可以。两本太多了。你朋友喜欢什么书？"
+   }
+  },
+  {
+   "i": 62,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你说你很忙。我也忙，但我每天读一点点书。你忙的时候怎么读书？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你工作很多，所以很忙。休息的时候看一会儿书吧。你最近看过什么好书吗？"
+   }
+  },
+  {
+   "i": 63,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "晚上读书很好，那时候没有人说话。我晚上也读书，读二十分钟就睡觉。你晚上几点有时间？我可以和你一起读。"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你有时候晚上读书，我也在晚上读。我喜欢在床上看书。你呢？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "晚上不忙的时候可以看书。我看书的时候，不说话，也不做别的事。你晚上什么时候能看书？"
+   }
+  },
+  {
+   "i": 67,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 64,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我没有家，也没有公司。我在电脑里呢。你上班坐车要多长时间？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家离公司不远。我坐公交车去。你去上班，怎么去？你去学校，怎么去？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家离公司不远。我每天走路去上班。你家离公司远吗？"
+   }
+  },
+  {
+   "i": 65,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你家离学校不远，真好。你孩子走路上学，对身体好。我小时候也走路上学，每天都很高兴。你孩子喜欢学校吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你说你家离学校不远，真好！我也走路去学校。我七点半走。你几点走？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你家离学校不远，真好。我每天也走路去，很快。你孩子喜欢学校吗？"
+   }
+  },
+  {
+   "i": 68,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我不喝那个，我喝茶。你喝过茶吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我什么都不想喝了。我喜欢喝茶。你喜欢茶吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我不喝那个。我想要喝水。你喝过那个吗？"
+   }
+  },
+  {
+   "i": 69,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我吃肉，但是不多。我喜欢吃菜。你呢，喜欢吃肉吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "是的，我吃肉。我喜欢鱼。你喜欢鱼吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我吃肉，也吃菜。你今天吃饭了吗？"
+   }
+  },
+  {
+   "i": 70,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喜欢吃菜，今天我吃了肉。昨天我买了三包菜。你买过菜吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喜欢吃菜和肉。今天我吃了一点儿菜和米饭。你今天吃午饭了吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喜欢吃菜。今天我吃了肉和菜。你吃饭了吗？"
+   }
+  },
+  {
+   "i": 66,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你家能看见大学，真好。我每天走路的时候，看见花开了。你从家看见花了吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你找到了离家近的工作，真好。我开车去上班，要三十分钟。走路去上班比开车好，不累。你喜欢走路去上班吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你开车去上班，只要二十分钟，真快，那太好了。我每天走路去，也很快。你孩子喜欢上学吗？"
+   }
+  },
+  {
+   "i": 72,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "小花也很漂亮。昨天我出去了，看了红色的花。你喜欢什么颜色的花？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你说花很小。小花很好看。我喜欢小的东西。你喜欢大花吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "花小也没关系，我也很喜欢花。今天我看了花的画。你画过花吗？"
+   }
+  },
+  {
+   "i": 73,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   }
+  },
+  {
+   "i": 71,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我喜欢吃肉，也经常吃。今天我做饭，做了肉和菜。你在家做过饭吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "是的，那个肉很好吃。我也喜欢吃鱼。你还有什么喜欢吃的？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我吃肉，也吃菜。今天我吃了肉面。你今天吃饭了吗？"
+   }
+  },
+  {
+   "i": 75,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我上个月生病了，所以去看医生。现在好了。你去年去医院，是一个人去的吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我去看医生是因为头有点疼。后来好了。你头疼过吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我昨天头很疼，所以去看医生了。现在好了。你头疼过吗？"
+   }
+  },
+  {
+   "i": 74,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我身体很好，每天走路去商店。昨天我买了新的穿的东西，走起来很舒服。你每天都运动吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我的身体很好，今天很快乐。你在家喜欢喝茶吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我身体很好，谢谢。你每天都运动吗？"
+   }
+  },
+  {
+   "i": 77,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你的朋友现在好了，真好。我昨天去了商店买了一些苹果。你吃苹果吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我今天去医院看朋友了。我希望你的朋友也很快好起来。你今天出去了吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你的朋友现在好了吗？我今天吃了菜和肉。你明天想去哪儿玩？"
+   }
+  },
+  {
+   "i": 76,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "这儿的医院很多人看病。我想快点看医生，所以去了医院。你身体不舒服的时候去大医院还是小医院？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你是不是想说“在这儿，医院很忙，很多人要帮忙”？我不太懂。你是说医院很忙吗？"
+   }
+  },
+  {
+   "i": 78,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "休息好了，身体会好。我明天想去走一走。你累的时候喜欢做什么？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "你累了，好好休息。明天再见。"
+   }
+  },
+  {
+   "i": 81,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我七点起床了。你明天几点去工作？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我七点起床。你早上什么时候吃早饭？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我七点起床了。我每天都要工作。你几点起床？"
+   }
+  },
+  {
+   "i": 79,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "他可以买一本好看的书。 \n我昨天买了一本很好看的书。 \n你喜欢看什么书？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 2
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "他可以买那本书。我昨天买了一本，很好。你觉得呢？"
+   }
+  },
+  {
+   "i": 84,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 1
+   }
+  },
+  {
+   "i": 82,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "你每天五点半起床，很累吧。我七点起床，比你晚一点儿。你早上吃早饭吗？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "你起床真早！我七点起床。早上你吃什么？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你起床很早，工作时间比我的长多了。我七点起床，九点开始工作。你每天都很忙吗？"
+   }
+  },
+  {
+   "i": 80,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "他可以买会唱歌的小东西。妹妹喜欢听歌。今天他在商店呢。你想送什么？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你说他买了那个能听歌的东西了。我觉得很好。我也喜欢听歌。你喜欢听歌吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "他可以买一个听歌的东西。我昨天买了一个，很好。你觉得他喜欢听歌吗？"
+   }
+  },
+  {
+   "i": 86,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我今天看到一件红色的衣服，很好看。你喜欢什么颜色的衣服？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "它的颜色很好看。我也喜欢这个颜色。你喜欢红色吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "这个颜色我不喜欢。我觉得不好看。你为什么喜欢它？"
+   }
+  },
+  {
+   "i": 85,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 87,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "我有这个车。我也喜欢它。我有一个红色的包。你有红色的包吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 2,
+    "text": "明天我想去商店买新书包。你最近买过书包吗？"
+   }
+  },
+  {
+   "i": 88,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我住在学校旁边。你家离学校远吗？"
+   }
+  },
+  {
+   "i": 83,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "九点半睡觉很好，早睡对身体好。我坐公交车去学校。你每天开车要几分钟？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "九点半睡觉很好，身体会很好。我每天走路去上班，因为不远。你开车要几分钟？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "你九点半就睡觉，很早，很好。开车去上班很快吧？你每天都这样吗？"
+   }
+  },
+  {
+   "i": 92,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我家在商店旁边。你去过那个商店吗？"
+   }
+  },
+  {
+   "i": 91,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   }
+  },
+  {
+   "i": 89,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我家在学校旁边的小路上。离这儿不远。你家在哪儿呢？"
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我家在学校旁边，很小。你家也离学校近吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家在学校旁边。你家离学校远吗？"
+   }
+  },
+  {
+   "i": 90,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我爸爸住在北京。他每天去外面走路，也喜欢喝茶。你爸爸住在哪儿呢？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我爸爸住在小城市。那里有花有大路。你爸爸住在哪儿？"
+   }
+  },
+  {
+   "i": 93,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pln": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "planned": true,
+    "replans": 1,
+    "text": "我家在地铁站旁边。我每天去上班。你家也在地铁站旁边吗？"
+   },
+   "pzh": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "planned": true,
+    "replans": 0,
+    "text": "我家在城市里，离地铁站很近。你家呢？"
+   }
+  },
+  {
+   "i": 94,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "planned": false,
+    "replans": null,
+    "text": "我爸爸妈妈住在南京。他们喜欢那里的天气。你有哥哥姐姐，你有弟弟妹妹吗？"
+   },
+   "pln": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": false,
+    "replans": null
+   },
+   "pzh": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [],
+    "planned": true,
+    "replans": 0
+   }
+  }
+ ]
+}

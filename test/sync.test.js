@@ -750,5 +750,50 @@ function freshSync() {
   })();
 
   console.log(`\n${pass} passed, ${fail} failed`);
-  if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
+  if (fail) { /* ------------------------------------------------------ the console log
+ *
+ * This is the one feature in the app whose whole job is to write everything it
+ * sees into a table. The scrub is therefore a trust boundary, not a nicety, and
+ * it runs on the way INTO the buffer -- a line scrubbed on the way out to the
+ * network would already be sitting in localStorage. */
+[["key sk-or-v1-abcDEF_123 here", "sk-or-v1-abcDEF_123"],
+ ["Authorization: Bearer tok_abc123", "tok_abc123"],
+ ["bearer tok_abc123", "tok_abc123"],
+ ['{"apikey":"sb_secret_xyz"}', "sb_secret_xyz"],
+ ["sb_secret_xyz alone", "sb_secret_xyz"]].forEach(([line, secret]) => {
+  const out = Sync.scrubSecrets(line);
+  check(out.indexOf(secret) === -1, "scrubbed out of: " + line, out);
+});
+check(Sync.scrubSecrets("nothing secret here") === "nothing secret here",
+  "and an ordinary line is left alone");
+
+// Objects are the point: every grader verdict this captures is one, and a log
+// full of [object Object] answers nothing.
+const line = Sync.logLine("warn", ["[gate]", { ok: false, better: "我在学校。" }]);
+check(line.m.indexOf('"ok":false') !== -1, "a logged object keeps its fields", line.m);
+check(line.m.indexOf("我在学校。") !== -1, "including Chinese", line.m);
+check(line.l === "warn" && /^\d{4}-/.test(line.t), "with its level and a timestamp",
+  JSON.stringify(line));
+
+// One runaway reply must not become the whole batch.
+const huge = Sync.logLine("log", ["x".repeat(9000)]);
+check(huge.m.length < 5000 && /\[\+\d+\]$/.test(huge.m),
+  "a runaway line is clipped and says how much it dropped", huge.m.slice(-30));
+
+/* Oldest out, not newest: a bug is diagnosed from what led up to it, and what
+ * led up to it is the END of the buffer. */
+let buf = [];
+for (let i = 0; i < Sync.LOG_KEEP + 50; i++) buf = Sync.pushLine(buf, { m: "line" + i });
+check(buf.length === Sync.LOG_KEEP, "the buffer holds its cap", String(buf.length));
+check(buf[buf.length - 1].m === "line" + (Sync.LOG_KEEP + 49), "keeping the newest line");
+check(buf[0].m === "line50", "and dropping the oldest", buf[0].m);
+
+// The rule this file exists to enforce, restated for the new key.
+check(Sync.PREFS_KEYS.indexOf("debugLog") !== -1,
+  "the log toggle syncs like every other preference");
+check(Sync.PREFS_KEYS.indexOf("key") === -1 &&
+      Sync.PREFS_KEYS.indexOf("history") === -1,
+  "and the key and the history still do not");
+
+console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
 })();

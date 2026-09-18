@@ -20,6 +20,7 @@ file is deliberately not on it).
 - [Releasing and previews](#releasing-and-previews)
 - [OpenRouter](#openrouter)
 - [Supabase](#supabase)
+- [What a partner turn goes through](#what-a-partner-turn-goes-through)
 - [The validator](#the-validator)
 - [Git and GitHub](#git-and-github)
 
@@ -760,6 +761,76 @@ Project setup lives in README.md. What is easy to get wrong:
   visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
   real row every 3 days; it needs the `SUPABASE_URL` and
   `SUPABASE_SERVICE_ROLE_KEY` repository secrets.
+
+## What a partner turn goes through
+
+By v114 a single reply from the partner can cost a dozen model calls, and the
+order they happen in is the design. `turn()` in `index.html` is the whole of it.
+
+```
+  PLAN          decide what to say, in Chinese, and check it against the level
+                -- up to 3 re-plans          chat and Ghost Words only
+    |
+    v
+  GENERATE      the reply, given the plan if there is one
+    |
+    v
+  VOCABULARY    HSK.validate() -- is every word in the allowlist?     free
+    |                                    fails -> repair, retry
+    v
+  SENSE         is every word used in a SENSE this level allows?   1 call/word
+    |           (得 as a complement, 过 as a verb)
+    |                                    fails -> repair, retry
+    v
+  GATE          is it correct, and worth copying?             1-2 calls
+    |           nativeFrame on the teaching model, then softBar on
+    |           glm-5.3-flash only if the first passed
+    |                                    fails -> repair + a STRATEGY, retry
+    v
+  SOFT CHECKS   echo? required word missing?  keep the best answer, ask again
+    |
+    v
+  the learner reads it -- or 我不会说 if the tries ran out
+```
+
+Four things about that order, each of which was arrived at the hard way:
+
+- **Planning is first because repair is too late.** The failures were content
+  choices, not phrasings: the partner tried to describe a desert, and no
+  rewording gets there. `RESEARCH.md`, "When the level cannot say it".
+- **The gate is spent only on replies that already passed vocabulary**, like the
+  sense check, because grading a reply that is about to be repaired anyway is a
+  wasted call.
+- **The gate is above the soft checks**, because those keep their best answer and
+  show it when the tries run out. Below them, that kept answer reaches the
+  screen ungraded.
+- **Correctness never degrades to "show it anyway".** A turn that cannot be
+  repaired becomes the stub. That is a deliberate trade: the learner copies the
+  partner, so a bad sentence shown is a bad sentence practised.
+
+### Which activities get what
+
+| | plan | gate | why |
+|---|---|---|---|
+| chat, focused | yes | yes | free-form; the partner chooses what to say |
+| twenty, drill | no | yes | content already dictated by the prompt |
+| story | no | no | Sonnet, narrative not reply, and it writes better Chinese |
+
+### Everything here is a switch
+
+`Think before answering`, `Check the partner's Chinese too` and `Keep a
+diagnostic log` are all in Settings and all default on. The first two change
+latency enough to want an off switch that does not need a deploy; the third
+writes your conversations to a table.
+
+### The failure paths all fail open
+
+A grader that errors, times out (25s) or returns nothing passes the turn. A
+planner that cannot find an affordable plan generates unplanned. A missing
+`debug_log` table logs locally. **None of these block the conversation**, because
+a language partner that stops talking is worse than one that occasionally says
+something imperfect -- and every one of them is logged, so "it quietly stopped
+working" is visible rather than inferred.
 
 ## The validator
 

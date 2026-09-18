@@ -513,7 +513,21 @@ const SPECIALISTS = {
     "ungrammatical -- that belongs to another check."
 };
 
-function specialistPrompt(key, text, label) {
+/* The frame the four lenses never got.
+ *
+ * Round eleven measured the frame on a SINGLE-call grader and it was worth
+ * fourteen points: telling the judge the partner wrote the text, and naming no
+ * level, beat telling it a learner at HSK N did. The decomposed design was built
+ * before that and still opens every specialist with "a learner at HSK 2" -- so
+ * four lenses are each grading the partner's Chinese as if it were homework, and
+ * four chances to mark it down for being above the learner's level.
+ *
+ * Applied to all five prompts, because the integrator repeats the frame and can
+ * reintroduce on its own what the lenses stopped doing. */
+const NATIVE_FRAME = "a Chinese conversation partner writing to a learner";
+
+function specialistPrompt(key, text, label, native) {
+  if (native) return nativeSpecialistPrompt(key, text);
   return "You are one of four checks on a single Chinese sentence written by a " +
     "learner at " + label + ". The other three cover the areas you are not " +
     "looking at, so report nothing outside your own -- a fault you can see but " +
@@ -606,6 +620,44 @@ function categorisePrompt(text, label, note) {
     "The sentence: " + text;
 }
 
+function nativeSpecialistPrompt(key, text) {
+  return "You are one of four checks on a single Chinese sentence written by " +
+    NATIVE_FRAME + ". The other three cover the areas you are not looking at, so " +
+    "report nothing outside your own -- a fault you can see but that belongs to " +
+    "another check is not yours to raise.\n\n" +
+    SPECIALISTS[key] + "\n\n" +
+    "It is meant to be Chinese worth copying, so the standard is what a native " +
+    "speaker would actually write. Simple vocabulary is not a fault: the text is " +
+    "deliberately plain and plain is not wrong.\n\n" +
+    "Most sentences have nothing wrong in any one area. Finding nothing is the " +
+    "normal answer and the right one when it is true. Do not reach.\n\n" +
+    'Reply with only a JSON object: {"found":false,"note":""}\n' +
+    "found  — true only if there is a fault in YOUR area.\n" +
+    "note   — one short sentence naming it, in English. Empty when found is false.\n\n" +
+    "The sentence: " + text;
+}
+
+function nativeIntegratorPrompt(text, findings) {
+  const tags = HSKPrompt.ERROR_TAGS.join(", ");
+  return "Four separate checks have looked at one Chinese sentence written by " +
+    NATIVE_FRAME + ". Their reports:\n\n" + findings + "\n\n" +
+    "Your job is to settle it, not to grade the sentence again from scratch. " +
+    "Take the reports as evidence: a check that found nothing is evidence the " +
+    "sentence is fine in that area. Discard a report only when it is plainly " +
+    "wrong about the sentence in front of you, and do not add a fault none of " +
+    "them raised. Plain vocabulary is deliberate and is not a fault.\n\n" +
+    "Reply with only a JSON object, no prose and no code fence:\n" +
+    '{"ok":true,"meant":"","better":"",' +
+    '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
+    "ok      — true only if the sentence should stand as written.\n" +
+    "meant   — in English, what it says.\n" +
+    "better  — the sentence as a native speaker would write it. Empty when ok.\n" +
+    "cats    — false for each area a check faulted, true otherwise.\n" +
+    "errors  — one {\"tag\":\"\",\"note\":\"\"} per distinct fault, [] when ok is " +
+    "true. tag is copied EXACTLY from: " + tags + "\n\n" +
+    "The sentence: " + text;
+}
+
 async function judgeSplit(text, label, KEY) {
   const raw = await callModel(detectPrompt(text, label), 200, KEY);
   const d = jsonIn(raw);
@@ -615,11 +667,11 @@ async function judgeSplit(text, label, KEY) {
   return { ok: false, second: true };
 }
 
-async function judgeDecomposed(text, label, KEY) {
+async function judgeDecomposed(text, label, KEY, native) {
   const keys = Object.keys(SPECIALISTS);
   const reports = await Promise.all(keys.map(async k => {
     try {
-      const raw = await callModel(specialistPrompt(k, text, label), MAX_TOKENS, KEY);
+      const raw = await callModel(specialistPrompt(k, text, label, native), MAX_TOKENS, KEY);
       const j = jsonIn(raw);
       return { k: k, found: !!(j && j.found), note: (j && String(j.note || "")) || "" };
     } catch (e) { return { k: k, found: false, note: "", error: true }; }
@@ -631,7 +683,8 @@ async function judgeDecomposed(text, label, KEY) {
   const findings = reports.map(r =>
     "- " + r.k + ": " + (r.found ? (r.note || "a fault, unspecified") : "nothing found")
   ).join("\n");
-  const raw = await callModel(integratorPrompt(text, label, findings), MAX_TOKENS, KEY);
+  const raw = await callModel(native ? nativeIntegratorPrompt(text, findings)
+                                    : integratorPrompt(text, label, findings), MAX_TOKENS, KEY);
   return { ok: verdictOk(raw, text), reports: reports };
 }
 
@@ -1057,12 +1110,56 @@ async function judgeLens(text, label, KEY, trace, bar) {
   return verdicts.every(function (v) { return v; });
 }
 
+/* The cascade with six of its seven proposers deleted.
+ *
+ * The cascade catches the most of anything measured and fires on 62% of real
+ * partner turns, which is not a gate. Its cost and most of its firing come from
+ * six lenses that ASK A JUDGEMENT QUESTION -- "is the aspect wrong here" -- and
+ * the one thing this study has measured twice is that this model answers that
+ * question badly and answers "write this natively" well (round eight; the
+ * rewritePrompt comment in partner-lens.js).
+ *
+ * So: keep the rewrite proposer, delete the six judges. A fault has to survive
+ * being proposed by a rewrite that did not know it was looking for one, and then
+ * being confirmed side by side with its repair -- the two-sentence framing that
+ * scored 5 of 7 where the abstract question scored 2.
+ *
+ * Eight calls a turn against the cascade's forty-five, and the same two filters
+ * are free: a rewrite's span is a substring by construction and its fix differs
+ * by construction, so nothing ungrounded can get through.
+ */
+async function judgeRewrite(text, KEY, bar) {
+  const P = require("./partner-lens.js");
+  if (P.scriptFault(text)) return false;
+  const DRAWS = 2;
+  const verdicts = await Promise.all(P.sentences(text).map(async sentence => {
+    const found = [];
+    for (let d = 0; d < DRAWS; d++) {
+      const j = await lensCall(P.rewritePrompt(sentence), KEY, d ? 0.8 : 0);
+      const f = j && j.rewrite ? P.diff(sentence, String(j.rewrite).trim()) : null;
+      if (f && !found.some(x => x.span === f.span)) found.push(f);
+    }
+    if (!found.length) return true;
+    const ruled = await Promise.all(found.map(async f => {
+      const j = await lensCall(P.confirmPrompt(sentence, f), KEY, 0);
+      if (j && j.wrong === true) return true;
+      if (bar !== "loose") return false;
+      const n = await lensCall(
+        P.naturalPrompt(sentence, sentence.replace(f.span, f.fix)), KEY, 0);
+      return !!(n && n.natural === false);
+    }));
+    return !ruled.some(Boolean);
+  }));
+  return verdicts.every(v => v);
+}
+
 module.exports = {
+  judgeRewrite: judgeRewrite,
   judgeLens: judgeLens,
   judgeArm: async (arm, text, label, KEY) =>
     verdictOk(await callModel(promptFor(arm, text, label), MAX_TOKENS, KEY), text),
-  judgeDecomposed: async (text, label, KEY) =>
-    (await judgeDecomposed(text, label, KEY)).ok,
+  judgeDecomposed: async (text, label, KEY, native) =>
+    (await judgeDecomposed(text, label, KEY, native)).ok,
   callModel: callModel, KEY_FILE: KEY_FILE, MODEL: MODEL, promptFor: promptFor,
   spend: function () { return spend; }
 };
