@@ -226,6 +226,35 @@
     return out;
   }
 
+  /* The set lives in the transcript as pseudo-messages, the way a drill's
+   * category and example do (mistakes.js drillTagOf/drillExampleOf). That is
+   * what makes it need no column: messages.role and messages.text already
+   * sync, so there is no db/schema.sql change and no optional-column probe.
+   *
+   * Two markers rather than two fields on one, for the reason mistakes.js
+   * gives: messages.text is the only string column that syncs, and packing two
+   * values into it would need a delimiter to decode -- which is exactly the
+   * problem SET_SEP solves for the word list and should not be solved twice.
+   *
+   * SET_SEP is the ASCII comma, which no Chinese word contains: the Chinese
+   * comma is a different character (U+FF0C). */
+  var SET_SEP = ",";
+
+  function markerText(msgs, role) {
+    for (var i = 0; i < (msgs || []).length; i++) {
+      if (msgs[i] && msgs[i].role === role) return msgs[i].text || "";
+    }
+    return "";
+  }
+
+  function flashcardsOf(msgs) {
+    return markerText(msgs, "flashcards").split(SET_SEP)
+      .map(function (w) { return w.trim(); })
+      .filter(function (w) { return w.length > 0; });
+  }
+
+  function flashcardThemeOf(msgs) { return markerText(msgs, "flashcardTheme"); }
+
   /* Share of a level's running text a given set of words covers, 0..1.
    *
    * One scale, no bonuses. An earlier version doubled the weight of words the
@@ -279,6 +308,8 @@
     RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
     daysBetween: daysBetween, flashcardPool: flashcardPool,
     setRounds: setRounds, reservedWords: reservedWords,
+    SET_SEP: SET_SEP, flashcardsOf: flashcardsOf,
+    flashcardThemeOf: flashcardThemeOf,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,
     /* The move-up recommendation fires here. 98%, the published "comfortable

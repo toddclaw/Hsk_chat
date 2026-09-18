@@ -371,8 +371,43 @@
        * rather than branched on in turn() so the next activity that wants it
        * says so on its own row. */
       newWords: false,
+      /* The partner does not merely prefer these words, it is required to work
+       * at one. Declared here rather than branched on in turn() and
+       * gradeTurn(), which is why Ghost Words now says it too. */
+      steer: true,
       note: "Ghost Words: practice words you've learned but never used. " +
         "The partner asks questions that need these words in the answer."
+    },
+    flashcard: {
+      label: "Flashcard Chat",
+      /* Two steps. The learner presses a button, gets five to seven words out
+       * of their own history, and studies them in Pleco or Anki; then they
+       * come back and this rule makes the partner build a conversation those
+       * words are the natural answer to.
+       *
+       * The instruction is Ghost Words' -- the same job, a different pool --
+       * and deliberately the same words, because that string is what the
+       * ghost-grammar A/B was run against. A paraphrase here would be an
+       * unmeasured prompt change for no reason. */
+      rules: [
+        "学生刚刚用卡片学了下面这些词，现在要练习自己说出来。" +
+        "请你带着话题往这些词的方向走，问一些必须用到这些词才好回答的问题，" +
+        "让学生自己说出来。如果学生没有用这些词，继续问，直到他们用到。"
+      ],
+      names: null,
+      reuse: "chosen",
+      gen: "turn",
+      converse: true,
+      /* Practice of what the learner has just studied. A word they have never
+       * seen is a second thing to get wrong in a sentence that is already
+       * hard -- the same reasoning as Ghost Words above. */
+      newWords: false,
+      /* The partner does not merely prefer these words, it is required to work
+       * at one. Declared here rather than branched on in turn() and
+       * gradeTurn(), which is why Ghost Words now says it too. */
+      steer: true,
+      note: "Flashcard Chat: get five words from your own history, study them " +
+        "in Pleco or Anki, then come back and use them in conversation."
     },
     drill: {
       label: "Drills",
