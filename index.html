@@ -1176,7 +1176,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v118 — 2026-09-18";
+const VERSION   = "v119 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2807,6 +2807,58 @@ function renderConversation() {
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
       'chat for a while, then switch back here.</div>';
   }
+  /* Flashcard Chat's banner, like the two beside it: what you are working on
+   * stays on screen for the whole conversation.
+   *
+   * Rounds are derived -- min(ghostN) across the set, HSKPace.setRounds() --
+   * rather than counted anywhere, so a reload cannot lose one and two devices
+   * cannot disagree. A round is "every word used correctly once", and the ghost
+   * counter takes at most one credit per word per day, so a round cannot close
+   * in under a day.
+   *
+   * Which is why the label says Day and can lag the calendar: credit three
+   * words on Monday and two on Tuesday and "Day 1" ticks on Tuesday. It
+   * measures the SET, not the diary. Stated in the spec as a limitation rather
+   * than fixed, because counting practice days instead would be a third notion
+   * of progress on screen beside n/N and the round. */
+  function flashcardBanner() {
+    if (currentActivity() !== "flashcard") return "";
+    const targets = flashcardTargets();
+    if (!targets.length) return "";
+    const rounds = flashcardRounds(), goal = S.ghostUses;
+    const strip = [];
+    for (let i = 1; i <= goal; i++) {
+      if (i <= rounds) {
+        strip.push('<span style="margin-right:12px">Day ' + i + ' \u2713</span>');
+      } else if (i === rounds + 1) {
+        const got = targets.filter(e => (e.ghostN || 0) >= i).length;
+        strip.push('<span style="margin-right:12px;color:var(--accent)">Day ' + i +
+          " \u00b7 " + got + "/" + targets.length + "</span>");
+      } else {
+        strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
+      }
+    }
+    const chips = targets.map(e =>
+      '<span style="display:inline-block;margin:0 10px 4px 0' +
+        (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
+      '<span style="font-size:14px;color:var(--dim)"> ' +
+        (e.ghostN || 0) + "/" + goal + (e.ghostToday ? " \u2713" : "") +
+      "</span></span>").join("");
+    const theme = flashcardTheme();
+    return '<div class="hint"><b>Flashcard Chat</b>' +
+      (theme ? " \u2014 " + escapeHtml(theme) : "") + "<br>" +
+      (flashcardDone()
+        ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
+          '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
+          'correctly on ' + goal + ' separate days. Start a new Flashcard Chat ' +
+          'for the next set.</span><br>'
+        : "Use these words in your replies:<br>") +
+      '<b style="color:var(--accent);font-size:22px">' + chips + "</b><br>" +
+      '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
+      '<span style="color:var(--dim)">One use counts per day, and only the word ' +
+      'itself is judged \u2014 a mistake elsewhere in the sentence does not cost ' +
+      'you the credit.</span></div>';
+  }
   /* Drills banner, like Ghost Words': what you are drilling stays on screen for
    * the whole conversation, because "which mistake was this again" is the
    * question the activity exists to answer. Everything here is shown and never
@@ -2877,6 +2929,10 @@ function renderConversation() {
     } else if (currentActivity() === "drill") {
       if (drillTag()) { log.innerHTML = drillBanner(); bindTip(); return; }
       hintText = 'Pick a mistake to drill, below.';
+    } else if (currentActivity() === "flashcard") {
+      if (flashcardWords().length) { log.innerHTML = flashcardBanner(); return; }
+      hintText = 'Pick your words below.<br>Five words from your own history, ' +
+        'to study as flashcards — then come back and use them here.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2888,7 +2944,7 @@ function renderConversation() {
     log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
-  log.innerHTML = ghostBanner() + drillBanner();
+  log.innerHTML = ghostBanner() + drillBanner() + flashcardBanner();
   bindTip();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
@@ -4980,6 +5036,16 @@ function fillActivities() {
         " — tap words in chat for pinyin/meaning";
     } else {
       note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
+    }
+  }
+  /* Same reasoning as Ghost Words' strip above: this line is visible while the
+   * banner has scrolled away, and "which five words was this" is the question
+   * it would otherwise leave unanswered. */
+  if (cur === "flashcard") {
+    const targets = flashcardTargets();
+    if (targets.length) {
+      note = (flashcardDone() ? "Complete — " : "Day " + (flashcardRounds() + 1) + " — ") +
+        targets.map(e => e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、");
     }
   }
   const el = $("#activityNote");
