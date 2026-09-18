@@ -17,6 +17,7 @@ support it is worse than one labelled a guess, because nobody re-examines it.
 - [How many encounters a word needs](#how-many-encounters-a-word-needs)
 - [Knowing when to change level](#knowing-when-to-change-level)
 - [Production](#production)
+- [Choosing a set of words to study away from the app](#choosing-a-set-of-words-to-study-away-from-the-app)
 - [Choosing a story, and being asked about it](#choosing-a-story-and-being-asked-about-it)
 - [Measurements we ran](#measurements-we-ran)
 - [Things that did not work](#things-that-did-not-work)
@@ -403,6 +404,93 @@ still do. The list is the instrument this section recommends *instead* of a
 gauge, and "have you used this word enough times to own it" is a question about
 one word rather than a ratio over all of them. The threshold lives on the list
 and nowhere else — see "Retiring a ghost word".
+
+## Choosing a set of words to study away from the app
+
+**Follows from the literature, and the shape of the question is not the one that was
+asked.** The learner asked whether immersion beats focused study, wanting a short list
+of words to drill in Pleco or Anki and then bring back into chat. Designed 2026-09-18;
+`docs/superpowers/specs/2026-09-18-flashcard-chat-design.md` is the feature.
+
+**Neither wins, and the ratio is the finding.** Nation's Four Strands gives roughly
+equal time to meaning-focused input, meaning-focused output, language-focused learning
+— deliberate study — and fluency development. Deliberate study has a ceiling of about a
+quarter of study time and a floor that is not zero. The floor is arithmetic: this file
+already records ~10 encounters with no guarantee for incidental acquisition, and nobody
+has shown immersion alone reaching the 6,000–8,000 word families Nation (2006) puts on
+comfortable independent reading within a working adult's time frame.
+
+**The objection to flashcards has been tested and mostly lost.** The worry was that
+deliberately-learned words are decontextualised labels rather than integrated
+knowledge. Elgort (2011) trained words by paired-associate flashcards and then found
+*masked priming* for them, which is the signature of a word in the mental lexicon
+rather than a memorised pair.
+
+**What deliberate study does not build is the thing the learner reported.** Flashcards
+train form-to-meaning and, at best, meaning-to-form recall. Neither is retrieval under
+conversational load, which is the receptive/productive gap the Production section above
+is built around. This is the load-bearing reason the flashcard step is one half of an
+activity and not a feature on its own: the app's contribution is the chat that follows.
+
+### Semantic clustering is the trap, and a model walks into it unprompted
+
+**Tinkham (1997) and Waring (1997)**: semantically related sets — five colours, five
+items of clothing — are learned *more slowly* than unrelated sets. Similar words
+cross-associate and interfere. Tinkham also tested **thematic** clusters, words linked
+by situation rather than category (frog, pond, jump, green), and those were learned
+*faster* than unrelated sets.
+
+A model asked for "five words to study" returns the semantic arrangement by default.
+That is the entire justification for spending a model call here rather than taking the
+top five by arithmetic, and it is therefore the thing the A/B has to demonstrate. If
+the thematic instruction does not change what comes back, the arithmetic version ships
+and the call is deleted.
+
+### Why the set is small, and why the learner's worry that it is too small is wrong
+
+Nation's guidance for deliberate word-card study is 5–7 words per set, so `SET_SIZE` is
+5 and `SET_MAX` is 7. The learner's objection was that five words of flashcards is too
+easy.
+
+The arithmetic disagrees. The lists here are 300 / 497 / 988 / 1978 words cumulative
+for HSK 1–4, so HSK 2 to HSK 3 is 491 new words, and `HSKPace.toTarget()` already
+establishes that only the commonest third buys the coverage that matters — 147 of 741
+at the HSK 1 transition. Five words three times a week is 15/week, which covers the
+useful part of a level transition in about ten weeks.
+
+The difficulty also does not live in the flashcards. Five words at `S.ghostUses = 3` is
+fifteen correct productions across at least three separate days, judged by the grader.
+That is the exercise; the cards are preparation for it.
+
+*(A discrepancy worth someone's attention: `pace.js`'s own comment says HSK 1 is 520
+words and HSK 2 is 1261, which are the published HSK 3.0 syllabus figures. The generated
+files hold 300 and 497. Every number above uses the files, since that is what the app
+runs on, but the two should be reconciled.)*
+
+### Why a list you ask for is a different task from a queue you owe
+
+The learner's stated reason for bouncing off Anki is overwhelm at a large daily review
+queue, not doubt about whether it works. That is a property of an unbounded queue rather
+than a failure of discipline, and the literature has a handle on it: **Hulstijn &
+Laufer's involvement load** decomposes a vocabulary task into Need, Search and
+Evaluation, and distinguishes learner-imposed need from externally-imposed need, scoring
+the former higher. The Self-Determination note below reaches the same place from
+motivation rather than retention.
+
+So phase 1 is a button the learner presses, not a set that appears. The design was
+offered both ways and the button was chosen.
+
+**Spacing stays outside the app.** Pleco and Anki schedule well; BACKLOG.md has already
+parked an in-app SRS as not-wanted, and rebuilding Anki is still not a feature. What
+neither tool can do is choose what goes in, because neither has seen the conversations.
+That is the whole division of labour.
+
+### What is not evidenced
+
+`STALE_DAYS = 30` — the cutoff past which a word counts as lapsed — is a guess. Nothing
+here supports 30 over 14 or 60. `RESERVE_DAYS = 30`, which decides when an abandoned set
+stops reserving its words, is the same guess reused and is not independently motivated.
+Both are starting values.
 
 ## Choosing a story, and being asked about it
 
@@ -1666,6 +1754,25 @@ Stated plainly so nobody cites this file for more than it holds.
 - Hulme, R. et al. (2019). [Incidental learning and long-term retention of new word meanings
   from stories: the effect of number of
   exposures](https://onlinelibrary.wiley.com/doi/10.1111/lang.12313). *Language Learning*.
+
+**Deliberate study, set composition and the four strands**
+
+- Nation, P. [The four strands](https://www.lextutor.ca/cover/papers/nation_2007.pdf).
+  *Innovation in Language Learning and Teaching* 1(1) — roughly equal time to
+  meaning-focused input, meaning-focused output, language-focused learning and fluency
+  development.
+- Elgort, I. (2011). [Deliberate learning and vocabulary acquisition in a second
+  language](https://onlinelibrary.wiley.com/doi/10.1111/j.1467-9922.2010.00613.x).
+  *Language Learning* 61(2) — masked priming for flashcard-trained words.
+- Tinkham, T. (1997). [The effects of semantic and thematic clustering on the learning of
+  second language vocabulary](https://journals.sagepub.com/doi/10.1177/136216889700100202).
+  *Second Language Research* 13(2) — semantic clustering hinders, thematic clustering helps.
+- Waring, R. (1997). [The negative effects of learning words in semantic
+  sets](https://www.sciencedirect.com/science/article/abs/pii/S0346251X97000135).
+  *System* 25(2).
+- Hulstijn, J. & Laufer, B. (2001). [Some empirical evidence for the involvement load
+  hypothesis in vocabulary acquisition](https://onlinelibrary.wiley.com/doi/10.1111/0023-8333.00164).
+  *Language Learning* 51(3) — Need, Search, Evaluation; learner-imposed need scores higher.
 
 **Receptive vs productive knowledge**
 

@@ -92,7 +92,13 @@ covered by workarounds that hold. The app's own chrome in Chinese is the largest
 project in this file and the least certain to help.
 
 **Considered and not wanted.** An in-app spaced-repetition flashcard system — the
-Anki export already exists and rebuilding Anki is not a feature. Handwriting or
+Anki export already exists and rebuilding Anki is not a feature. This survives
+Flashcard Chat (designed 2026-09-18,
+`docs/superpowers/specs/2026-09-18-flashcard-chat-design.md`), which deliberately
+does *not* schedule anything: it chooses five to seven words out of the learner's
+own history, exports them, and lets Pleco or Anki do the spacing. The app's
+contribution is the choosing, which neither tool can do because neither has seen
+the conversations, and the chat that follows the study. Handwriting or
 stroke input — large, and the comparison research says IME typing trains the
 sound-to-character mapping that actually matters for reading here. Speech recognition
 scoring — not dependable enough in a browser for Chinese, and the tone drill is the
