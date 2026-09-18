@@ -1457,6 +1457,59 @@ Cheapest first, and they compose:
    conversation away from what the learner wanted, and it is what less proficient
    speakers fall back on.
 
+### What was measured, and what shipped
+
+Three rounds of it, all on real learner turns replayed in their real context
+(`tools/repair-ab.js`; the full numbers are in `tools/grader-bench-results.md`
+rounds 25-27).
+
+**Repairing better does not work.** A ladder of strategies chosen by rule --
+circumlocute, introduce the word, name the problem, reduce, appeal, pivot, never
+the same one twice -- scored 60% of turns rescued against the plain repair's
+68%, paired 5-8, p = 0.58. It is shipped anyway for one property that needs no
+statistics: it cannot repeat itself, and repeating four times identically was
+the observed defect.
+
+**Planning first does work.** Deciding what to say, and checking it can be said,
+before writing anything:
+
+| 95 turns, real learner input | rescued | stub | mean tries |
+|---|---|---|---|
+| repair as shipped | 61% | 39% | 4.1 |
+| **plan first** | **71%** | **29%** | **3.3** |
+
+Paired 16-7, p = 0.09 over all turns; **14-3, p = 0.01** over the 69 turns where
+a plan was actually produced, which is where the treatment can differ at all.
+The first p below 0.05 in twenty-seven rounds. Mean tries falling 4.1 to 3.3
+means fewer generations AND fewer reasoning-model gate calls, so **the quality
+arrives with less latency, not more** -- which had not happened before in this
+study.
+
+**Plan in Chinese, not English.** Not for fluency: for checkability. An English
+plan has to declare which Chinese words it intends to use, and a declaration is
+self-reported -- it can name five and write twenty. A Chinese plan goes through
+the validator whole. The two tie on outcome (p = 1.00) and the Chinese one needs
+**24 re-plans against 38** over the same turns, because it can actually see the
+unaffordable ones.
+
+**The anchor is load-bearing.** Told only to plan something sayable, the planner
+drifted: a message about coffee and a 5:30 alarm came back with a remark about
+breakfast, and an apple and a cup of tea appeared from nowhere. "Answer what the
+student actually said" costs one clause and has its own test.
+
+**The cost is brevity.** Planned replies run about 15% shorter -- 25.1
+characters against 29.8. Whether that reads as concise or as bland is not
+something a character count can decide, which is why it is a setting.
+
+### What is still unsolved
+
+**27% of turns get no affordable plan at all.** Three rounds of re-planning find
+nothing, and the turn falls through to ordinary generation and usually to the
+stub. Those are the hardest turns and they are exactly what the strategies above
+were aimed at -- a partner that says 这个太难说 beats one that says 我不会说.
+The two ideas were measured as rivals and are complementary: **planning picks
+affordable content, strategies handle content that is not affordable at all.**
+
 ### The constant this collides with
 
 `DEFAULT_RATE` is 45 characters per new word, from graded-reader practice of one

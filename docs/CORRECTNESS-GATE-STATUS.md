@@ -1,9 +1,9 @@
 # Correctness gate — where this stands, and what to do next
 
-Written 2026-09-16, updated 2026-09-17 with rounds twenty-two to -four, for a reader
-starting cold.
-`tools/grader-bench-results.md` is the full study, twenty-four rounds. This is the
-short version and the next three moves.
+Written 2026-09-16, current to 2026-09-18 and v114, for a reader starting cold.
+`tools/grader-bench-results.md` is the full study, twenty-seven rounds;
+`RESEARCH.md` has the pedagogy and `DEVELOPING.md` the pipeline. This is the
+short version.
 
 ## The goal
 
@@ -20,111 +20,63 @@ the Chinese on screen is worth imitating.
 - **Retry rather than fall back**, past ten attempts if needed.
 - **Gate every chat session**, not only Ghost Words.
 
+## What shipped, and what it is worth
+
+All of this is on `chore/grader-benchmark`, v114.
+
+| | what it does | measured |
+|---|---|---|
+| **the gate** (v105) | two graders judge every partner reply; a fault is repaired, never shown | 100% of outright errors, 71% of the merely-stilted, 86% specificity |
+| **the planner** (v114) | decides what to say and checks it fits the level, before writing | rescues 57/69 turns against 46/69, p = 0.01; mean tries 4.1 → 3.3 |
+| **the repair ladder** (v113) | a different strategy on each gate failure, never the same twice | no effect (p = 0.58); shipped for the one property that needs no statistics |
+| **the diagnostic log** (v110) | console.log to `debug_log`, read with `tools/pull-debug.js` | found two live bugs within a day |
+
+`DEVELOPING.md`, "What a partner turn goes through", is the pipeline and the
+reason for its order.
+
 ## What is measured
 
 | benchmark | what it is | result |
 |---|---|---|
-| **production verdicts** | 208 stored `messages.grade` on Todd's real sentences, blind-labelled | **83% recall, 86% specificity, 85% overall** |
-| **real partner turns** | 222 turns from the database, qwen activities only | **union: 100% strict recall, 73% loose, 80% specificity** |
-| **replayed turns** (confirmation) | 282 fresh turns, Todd's real learner turns replayed | **union: 100% / 71% / 86% — replicates** |
-| MuCGEC, repaired | advanced learner essays, human labels | 90% recall, 66% specificity |
-| partner corpus, synthetic | 204 generated turns, Claude labels | superseded — wrong KIND of error, see round 22 |
+| **production verdicts** | 208 stored `messages.grade` on Todd's real sentences | **85% overall** (83% recall, 86% specificity) |
+| **real partner turns** | 222 turns from the database, qwen activities only | union: **100% strict recall, 73% loose, 80% specificity** |
+| **replayed turns** | 282 fresh turns from Todd's real learner input | union replicates: 100% / 71% / 86% |
+| **repair A/B** | 95 real learner turns, full pipeline, three arms | planner **p = 0.01** conditioned, **0.09** overall |
+| MuCGEC | advanced learner essays, human labels | 90% recall, 66% specificity — leans harsh, does not reproduce on real sentences |
+| synthetic partner corpus | 204 generated turns | **superseded** — matched real traffic on error RATE, not KIND |
 
-**The student half is in decent shape.** 85% in production, and the
-over-harshness MuCGEC suggested does not appear on real sentences.
-
-**The partner half now has an answer too** (round twenty-two). Re-scored on 222
-real qwen turns instead of the synthetic corpus, every arm scores two to four
-times higher than rounds 12-16 reported, and the axis that separates them flips
-from recall to over-firing:
-
-| | strict recall | loose recall | spec | fires | $/turn |
-|---|---|---|---|---|---|
-| **`nativeFrame` (qwen)** | 86% 18/21 | 61% | **87%** | 29% | **$0.00011** |
-| `softBar` glm-5.3-flash | 100% 20/20 | 60% | 86% | 28% | $0.00030 |
-| `shipped` (qwen) | 86% 18/21 | 58% | 80% | 32% | $0.00011 |
-| `decomposed` four-lens | 95% 20/21 | 85% | 67% | 50% | $0.00035 |
-| lens cascade | 95% 20/21 | 88% | 50% | 62% | $0.00141 |
-
-**Pair two arms rather than improve one** (round twenty-three). Two prompt
-ideas both failed — giving the four lenses the native frame cost 10 points of
-recall for nothing, and deleting the cascade's six judgement lenses made
-over-firing worse, so the rewrite proposer is where that comes from. But the
-arms already measured combine for free, and two combinations beat every single
-one (`tools/partner-pairs.js`):
-
-| | strict | loose | spec | fires | $/turn |
-|---|---|---|---|---|---|
-| `softBar`/glm alone | 100% | 60% | 86% | 28% | $0.00030 |
-| **`nativeFrame` OR `softBar`/glm** | **100%** | **73%** | **80%** | 37% | $0.00041 |
-| `decomposed` alone | 95% | 85% | 67% | 50% | $0.00035 |
-| **`decomposed` OR `softBar`/glm** | **100%** | **90%** | 62% | 55% | $0.00065 |
-
-Both catch every outright error in the corpus. The choice between them is how
-many retries are tolerable, which is the bar question below.
-
-**Confirmed on a corpus nothing was tuned against** (round twenty-four).
-`tools/replay-partner.js` replays Todd's own learner turns through the app's
-prompt for fresh partner Chinese of the right kind — 282 turns for $0.016 — and
-a stratified label pass reproduces every number within a few points: the union
-at 100% strict, 71% loose, 86% specificity. The chosen bar is not an artefact of
-the 222.
-
-A union needs two graders that disagree productively, and two prompts on one
-model do not: `decomposed OR nativeFrame` is no better than `decomposed` alone.
-The cheap qwen arm and the reasoning model are what make it work.
-
-**Strict recall is not comparable between the two corpora.** The two label
-passes drew the wrong/unnatural line in different places. A second blind pass
-over 50 real turns (`real-qwen-relabel.json`) found 31 of 34 stored-clean turns
-clean — nothing was missed — but moved 4 turns from `unnatural` up to `wrong`.
-Quote the loose bar across corpora, or the real corpus on its own.
+**The arm is `nativeFrame` OR `softBar`/glm-5.3-flash.** Free prompt on the
+teaching model first, reasoning model only on what the first passed. Pairing two
+graders beat improving either one, and a union needs graders that disagree
+productively — two prompts on one model did not.
 
 ## The three things to do next, in order
 
-### 1. ~~Fix the no-edit verdict~~ — already shipped
+### 1. Read the production log
 
-`parseGrade()` has treated a fault with an identical `better` as a pass since
-`8daea99` (2026-09-09), and it is in `main`. The two bad rows the audit found
-are historical: one predates the fix, and one came from a browser still running
-a cached old client.
+Everything now writes to `debug_log` and **nothing has counted it yet**: how
+often the gate fires, how often the planner re-plans, how often a turn still
+ends in the stub, and whether the 15% brevity cost shows up in real
+conversation. `node tools/pull-debug.js --hours 24`. Free, and it is the only
+measurement here taken on the shipped system rather than a replay of it.
 
-### 2. ~~Re-score the partner arms on real chat turns~~ — done, round twenty-two
+### 2. The turns with no affordable plan
 
-`tools/real-qwen.js` builds the corpus (it joins the labelled turns to the
-activity column on their text); `tools/partner-corpus-table.js` prints every arm
-against synthetic, real and pooled. The answer is above.
+**27% of turns get no plan at all** — three re-plans find nothing and the turn
+falls through, usually to 我不会说. These are the hardest turns and they are
+exactly what the repair strategies were built for. The two ideas were measured
+as rivals and are complementary: planning picks affordable content, strategies
+handle content that is not affordable at all. Wiring the metalinguistic
+strategies into the *planner's* failure path is the obvious next move and has
+never been tried.
 
-### 3. ~~Pick a bar and wire the gate~~ — shipped in v105
+### 3. Message tombstones
 
-Todd chose the balanced union and it is wired. `gateFault()` in `index.html`
-runs `nativeFrame` on the teaching model first (~2s) and `softBar` on
-`GATE_MODEL` (`z-ai/glm-5.3-flash`, 7-18s) only on what the first passed, inside
-the retry loop `turn()` already had.
+`deleted_at` is on `conversations` and not on `messages`, so "Try again" and
+"Dismiss" remove a message locally that the next sync pulls straight back. Todd
+hit this in real use. Needs a small SQL block and a merge rule.
 
-Four things about the shape, each of which had a reason:
-
-- **It sits above the soft checks.** Echo and required-word keep their best
-  answer and show it when attempts run out; a gate below them would let that
-  kept answer through ungraded.
-- **It runs on every attempt, including the last.** The first version skipped
-  the final one, which showed ungated Chinese exactly when the partner had
-  proved hardest to correct.
-- **It reads the activity captured when the turn started**, not
-  `currentActivity()` — the learner can switch chats while a reply is in flight,
-  and the browser suite caught that as a hang.
-- **A failed grader call passes the turn.** A gate that blocked on API trouble
-  would take the conversation down with it.
-
-The correction is never displayed; it goes into the next attempt's prompt as
-guidance and nowhere else. Story time is not gated. `Check the partner's
-Chinese too` in Settings turns it off.
-
-**Expect the stub rate to rise** from 7% toward 9%: a turn the gate cannot get
-right inside the attempt budget becomes 我不会说 rather than Chinese worth
-copying. More tries lowers it; the setting is already there.
-
-## Two findings worth reusing anywhere
+## Four findings worth reusing anywhere
 
 1. **Ask a weak model to rewrite, not to judge.** Every lens and the shipped
    grader pass 你比昨天忙吗？ Asked to *rewrite* it natively, the same model at
@@ -133,8 +85,16 @@ copying. More tries lowers it; the setting is already there.
 2. **Give it two sentences, not one.** Confirming a finding in the abstract
    caught 2 of 7; showing original and repair side by side caught 5 of 7. The
    abstract phrasing scored zero or near-zero on three separate probes.
+3. **Pair two arms rather than improve one.** Two prompt ideas both failed, but
+   every pair of already-measured arms scores for free off stored verdicts and
+   two pairs beat every single arm. A union needs graders that disagree
+   productively — two prompts on one model do not.
+4. **Move the constraint to the front.** When a constraint keeps being violated,
+   ask whether the decision that violates it happens before anything checks. The
+   partner was choosing what to say and only then discovering it could not say
+   it; planning first beat six rounds of arguing about wording afterwards.
 
-## Five traps this study fell into. Do not repeat them.
+## Six traps this study fell into. Do not repeat them.
 
 - **Print the raw data and read it.** Three wrong numbers came from silent
   failures that all looked plausible: MuCGEC's 没有错误 marker parsed as a
@@ -151,6 +111,10 @@ copying. More tries lowers it; the setting is already there.
 - **A rate match is not a distribution match.** The synthetic corpus matched the
   real partner on errors per 100 sentences and not on what kind of error, and
   eleven arms were raced on the difference.
+- **Check the treatment was applied before quoting the effect.** The repair
+  ladder engaged on 6 of 40 turns and the planner on 69 of 95; on the rest both
+  arms ran identical code and the comparison was measuring temperature against
+  itself. Condition on the turns the treatment could touch.
 - **`max_tokens` is not a cost control.** You pay for tokens generated. Set it
   low and a reasoning model returns empty `content` with everything in
   `reasoning`, which reads exactly like API flakiness.
@@ -166,6 +130,8 @@ copying. More tries lowers it; the setting is already there.
 | `tools/partner-corpus-table.js` | every arm and model, synthetic / real / pooled |
 | `tools/partner-pairs.js` | every PAIR of arms, unioned and intersected — free, no API calls |
 | `tools/replay-partner.js` | fresh partner turns of the right kind, from real learner turns |
+| `tools/repair-ab.js` | the whole pipeline offline: plan, validate, sense, gate, repair |
+| `tools/pull-debug.js` | read `debug_log` off the phone — `--hours`, `--grep`, `--prune` |
 | `tools/real-qwen.js` | builds the real qwen corpus — joins labels to the activity column |
 | `tools/label-calibrate.js` | what a Claude label is worth (93%, blind) |
 | `~/Documents/chat-export.json` | real history — **outside the repo, no .gitignore here** |
@@ -176,11 +142,11 @@ turns. More of a distribution that is already well represented.
 
 ## Not done
 
-The gate is shipped and unmeasured in production. The thing to do next is the
-cheapest measurement in this document: `tools/grade-audit.js` reads stored
-verdicts, the app now stores gate outcomes in the console rather than the
-database, and **nothing yet counts how often the gate fires, how often it
-retries, and how often a turn ends in the stub.** A week of real use answers all
-three. 42 explanation threads in the export are
-unexamined. The `[[NEED:]]` and Latin-script issues found in the synthetic corpus
-do not occur in real traffic and need no fixing.
+Nothing has been measured **on the shipped system**. Every number here comes
+from a replay or a stored verdict; the pipeline as it actually runs — planner,
+gate, ladder, six tries — has never been counted end to end, and `debug_log` has
+been recording it since v110. That is step 1 above and it is free.
+
+42 explanation threads in the export are still unexamined. The `[[NEED:]]` and
+Latin-script issues found in the synthetic corpus do not occur in real traffic
+and need no fixing.

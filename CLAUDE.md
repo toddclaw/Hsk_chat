@@ -96,6 +96,23 @@ The grader has three benchmarks, and the one that counts is real traffic.
   kind, and eleven arms were raced on the difference. **If you need more partner
   data, replay the real learner; do not simulate one.**
 
+**A partner turn is a pipeline now** — plan, generate, vocabulary, sense, gate,
+soft checks — and the ORDER is the design. `DEVELOPING.md`, "What a partner turn
+goes through", has the diagram and the reason for each position. Three switches
+in Settings, all defaulting on, and every failure path fails open: a dead grader,
+a timed-out planner or a missing table lets the turn through rather than
+stopping the conversation.
+
+**The reply is planned before it is written (v114).** The failures were content
+choices, not phrasings — the partner tried to describe a desert and no rewording
+gets there. `HSKPrompt.planPrompt()` decides what to say IN CHINESE, so the plan
+goes through the validator whole rather than trusting the model's own account of
+which words it will use. Measured at p = 0.01 on the turns it acts on, and mean
+tries 4.1 → 3.3, so it is faster as well as better. **If you need to fix
+something the model keeps getting wrong, ask first whether the decision that
+gets it wrong happens before anything checks.** RESEARCH.md, "When the level
+cannot say it".
+
 **The gate is wired (v105).** `gateFault()` in `index.html` runs the union
 inside `turn()`'s retry loop; `HSKPrompt.grade({partner:true})` and
 `{partner:true, bar:"soft"}` build the two prompts, and `test/prompt.test.js`
