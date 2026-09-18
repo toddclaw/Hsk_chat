@@ -188,6 +188,44 @@
     return fresh.concat(lapsed).slice(0, o.n || CANDIDATES_SHOWN);
   }
 
+  /* How many complete rounds a set has banked: the minimum ghostN across its
+   * words. A round is "every word in the set used correctly once", so the
+   * weakest word is the set's progress -- and because the ghost counter takes
+   * at most one credit per word per day, a round cannot close in under a day.
+   *
+   * Also the finished test, which is why this is one function and not two. */
+  function setRounds(words, ghost) {
+    var list = words || [], g = ghost || {};
+    if (!list.length) return 0;
+    var min = Infinity;
+    list.forEach(function (w) {
+      var n = (g[w] && g[w].n) || 0;
+      if (n < min) min = n;
+    });
+    return min === Infinity ? 0 : min;
+  }
+
+  /* Words locked by a set that is still in flight, and therefore off limits to
+   * the next set.
+   *
+   * Finished sets need no rule: their words sit at ghostN >= ghostUses, which
+   * flashcardPool() already excludes as owned.
+   *
+   * The quiet period is the escape hatch, and without it the first set the
+   * learner starts and never returns to would lock five words away for good.
+   * A date comparison rather than an "abandon this set" button: nothing to
+   * build, nothing to explain, and it heals itself. */
+  function reservedWords(opts) {
+    var o = opts || {}, out = new Set();
+    (o.sets || []).forEach(function (s) {
+      if (!s || !(s.words || []).length) return;
+      if (setRounds(s.words, o.ghost) >= (o.ghostUses || 3)) return;   // finished
+      if (daysBetween(String(s.updated || "").slice(0, 10), o.today) >= RESERVE_DAYS) return;
+      s.words.forEach(function (w) { if (w) out.add(w); });
+    });
+    return out;
+  }
+
   /* Share of a level's running text a given set of words covers, 0..1.
    *
    * One scale, no bonuses. An earlier version doubled the weight of words the
@@ -240,6 +278,7 @@
     SET_SIZE: SET_SIZE, SET_MAX: SET_MAX, STALE_DAYS: STALE_DAYS,
     RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
     daysBetween: daysBetween, flashcardPool: flashcardPool,
+    setRounds: setRounds, reservedWords: reservedWords,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,
     /* The move-up recommendation fires here. 98%, the published "comfortable

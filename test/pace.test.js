@@ -349,5 +349,45 @@ check(unrankedPool.map(e => e.w).join() === "从来,叉子",
   "an unranked word sorts after every ranked one",
   unrankedPool.map(e => e.w).join());
 
+// --- reservation ------------------------------------------------------------
+check(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 }, "医生": { n: 1 } }) === 1,
+  "a set has banked as many rounds as its WEAKEST word",
+  String(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 }, "医生": { n: 1 } })));
+check(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 } }) === 0,
+  "a word with no credits at all pins the set at zero");
+check(P.setRounds([], {}) === 0, "an empty set has banked nothing");
+check(P.setRounds(null, null) === 0, "and a missing set does not throw");
+
+const res = o => P.reservedWords(Object.assign(
+  { sets: [], ghost: {}, ghostUses: 3, today: TODAY }, o));
+
+check(res({ sets: [{ words: ["苹果", "医生"], updated: TODAY }] }).has("苹果"),
+  "an unfinished set started today reserves its words");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY }],
+            ghost: { "苹果": { n: 3 } } }).size === 0,
+  "a finished set reserves nothing");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY }],
+            ghost: { "苹果": { n: 3 } }, ghostUses: 6 }).has("苹果"),
+  "and finished is judged against ghostUses, not a hardcoded 3");
+check(res({ sets: [{ words: ["苹果"], updated: "2026-01-01" }] }).size === 0,
+  "a set abandoned past RESERVE_DAYS releases its words");
+check(res({ sets: [{ words: ["苹果"], updated: "2026-09-18T11:00:00.000Z" }] }).has("苹果"),
+  "an ISO timestamp works as well as a day key");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY },
+                    { words: ["医生"], updated: TODAY }] }).size === 2,
+  "several in-flight sets all reserve");
+check(P.reservedWords({}).size === 0,
+  "no sets at all reserves nothing and does not throw");
+
+/* The two halves together: a word locked by an in-flight set must not come
+ * back as a candidate for the next one. This is the learner's stated
+ * requirement and it is the only place the two functions meet. */
+const locked = P.reservedWords({
+  sets: [{ words: ["回答"], updated: TODAY }], ghost: {}, ghostUses: 3, today: TODAY });
+check(P.flashcardPool({ entries: FC, seen: { "回答": TODAY, "颜色": TODAY },
+                        ghost: {}, ghostUses: 3, reserved: locked,
+                        today: TODAY, n: 10 }).map(e => e.w).join() === "颜色",
+  "a second set cannot repeat a word the first is still working on");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
