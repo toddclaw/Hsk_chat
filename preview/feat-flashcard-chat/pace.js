@@ -1,0 +1,332 @@
+/* Gradual introduction of next-level vocabulary.
+ *
+ * Modelled on graded readers: roughly one new word per R characters of text at
+ * the level you already know. The pacing is pure arithmetic over the reply
+ * text, so it lives here and is tested directly rather than through the UI.
+ *
+ * Loadable in the browser (window.HSKPace) and in node (module.exports).
+ */
+(function (root) {
+  "use strict";
+
+  var DEFAULT_RATE = 45;   // characters of known text per new word
+  var CREDIT_CAP = 3;      // so a long gap cannot dump six new words at once
+  var SLATE = 3;           // candidates offered per turn
+  /* Sightings before a word stops being new. Not only a label: isNew() also
+   * picks the `reuse` list that goes into the system prompt, so this is how
+   * long the partner keeps working a word back into the conversation.
+   *
+   * 6, not 3. Incidental acquisition needs roughly 8-10 encounters to be
+   * reliable, and most semantic gain lands between 3 and 7 -- at 3 the app was
+   * calling a word learned at the bottom of the range. Measured against a real
+   * model before shipping; the numbers are in DEVELOPING.md. */
+  var PROMOTE_AT = 6;
+  var FORCE_AFTER = 2;     // declined offers before the word is required
+
+  /* ------------------------------------------------------- flashcard sets
+   *
+   * A set of words to study away from the app and then produce in chat. The
+   * constants are argued in RESEARCH.md, "Choosing a set of words to study
+   * away from the app"; the two day counts are guesses and that section says
+   * so. */
+  var SET_SIZE = 5;            // Nation's word-card guidance is 5-7 per set
+  var SET_MAX = 7;             // ...and this is the top of that range
+  var STALE_DAYS = 30;         // unseen this long and a word counts as lapsed
+  var RESERVE_DAYS = 30;       // a set untouched this long stops reserving
+  var CANDIDATES_SHOWN = 15;   // how many the chooser picks from
+
+  /* Asking politely stops working with some models: they read "use one if it
+   * fits" as optional and never take it. After this many turns where an offer
+   * went unused, the top word stops being a suggestion and becomes a condition
+   * the reply has to satisfy -- enforced by the same repair loop that enforces
+   * vocabulary, not by stronger wording. */
+  function shouldForce(declines) {
+    return (declines || 0) >= FORCE_AFTER;
+  }
+
+  /* Words in the next level that the current one does not have, commonest
+   * first. Entries without a frequency rank sort last -- unranked means the
+   * corpus never saw them, which is exactly the order we want them in. */
+  function buildPool(currentEntries, nextEntries) {
+    var have = new Set((currentEntries || []).map(function (e) { return e.w; }));
+    return (nextEntries || [])
+      .filter(function (e) { return !have.has(e.w); })
+      .sort(function (a, b) {
+        var af = a.f || Infinity, bf = b.f || Infinity;
+        return af - bf || a.w.localeCompare(b.w);
+      });
+  }
+
+  // Han characters only: punctuation and digits are not reading effort.
+  function countHan(text) {
+    var m = String(text || "").match(/[一-鿿]/g);
+    return m ? m.length : 0;
+  }
+
+  /* Add a reply's characters to the budget and convert them into credits.
+   * Returns a new state; the remainder carries so nothing is lost to rounding. */
+  function earn(state, text, rate) {
+    var r = Math.max(1, rate || DEFAULT_RATE);
+    var chars = (state.chars || 0) + countHan(text);
+    var credits = state.credits || 0;
+    while (chars >= r && credits < CREDIT_CAP) {
+      chars -= r;
+      credits++;
+    }
+    if (credits >= CREDIT_CAP) chars = Math.min(chars, r - 1);   // stop hoarding
+    return { chars: chars, credits: credits };
+  }
+
+  // The next few words to offer, skipping anything already introduced.
+  function slate(pool, introduced, n) {
+    var seen = introduced instanceof Set ? introduced : new Set(introduced || []);
+    var out = [];
+    for (var i = 0; i < pool.length && out.length < (n || SLATE); i++) {
+      if (!seen.has(pool[i].w)) out.push(pool[i]);
+    }
+    return out;
+  }
+
+  /* Which offered words the model actually used, and which words already being
+   * learned it reused. Both need the segmenter's boundaries rather than a
+   * substring test: 自己 must not match inside a longer word. */
+  function spot(tokens, words) {
+    var want = words instanceof Set ? words : new Set(words || []);
+    var hit = [];
+    tokens.forEach(function (t) {
+      if (t.kind === "word" && want.has(t.text) && hit.indexOf(t.text) === -1) hit.push(t.text);
+    });
+    return hit;
+  }
+
+  function isNew(entry) { return (entry.seen || 0) < PROMOTE_AT; }
+
+  /* ------------------------------------------------------ level readiness
+   *
+   * "How far am I from the next level" has two answers and they are very far
+   * apart. HSK 1 is 300 words and HSK 2 is 497, so a learner at HSK 1 has met
+   * 60% of the HSK 2 *list* -- but because the lists are frequency-ordered and
+   * language is Zipfian, those 300 words already account for 88% of the *text*
+   * at HSK 2. The gap widens further up: at HSK 6 it is 49% of the HSK 7 list
+   * against 94% of its text. Counting words answers a question nobody is
+   * asking; counting reading is what tells you whether to move up.
+   *
+   * A word's share of running text goes as 1/rank, so weight is 1/f rather
+   * than 1. The published thresholds this is measured against: 95% coverage
+   * for adequate comprehension, 98% for comfortable independent reading.
+   */
+
+  /* The calibration knob, and it needs one: `f` is a rank, not a token count,
+   * so the curve is an assumption about the corpus rather than a measurement
+   * of it. 1 is plain Zipf. Raise it to weight the commonest words more
+   * heavily, lower it to flatten the curve toward counting words equally. */
+  var ZIPF_EXP = 1;
+  var UNRANKED = 999999;   // the wordlists' "corpus never saw this" sentinel
+
+  function weightOf(entry) {
+    var f = (entry && entry.f) || UNRANKED;
+    return f >= UNRANKED ? 0 : 1 / Math.pow(f, ZIPF_EXP);
+  }
+
+  var asSet = function (v) { return v instanceof Set ? v : new Set(v || []); };
+
+  /* Whole days between two "YYYY-MM-DD" keys.
+   *
+   * A missing or unparseable key is Infinity, never 0. The callers all ask
+   * "is this older than N", and answering 0 for a word with no recorded
+   * sighting would say the freshest possible thing about the least evidence.
+   *
+   * UTC, like every other day key in this app: two devices in two timezones
+   * have to agree, and mistakes.js records why a flight must not move a
+   * learner's numbers. */
+  function daysBetween(from, to) {
+    var a = Date.parse(String(from || "") + "T00:00:00Z");
+    var b = Date.parse(String(to || "") + "T00:00:00Z");
+    if (isNaN(a) || isNaN(b)) return Infinity;
+    return Math.round((b - a) / 86400000);
+  }
+
+  /* Candidate words for a flashcard set, best first.
+   *
+   * Two populations, in this order, and they do not interleave:
+   *
+   *   1. read but never written -- the partner has used it to you and you have
+   *      never produced it. The reported complaint, directly.
+   *   2. lapsed -- you produced it once and have not met it in STALE_DAYS.
+   *      Backfill, so a learner whose partner has taught them everything still
+   *      gets a full set.
+   *
+   * Both exclude words already owned (ghostN >= ghostUses, the one place a
+   * production threshold is allowed to live) and words reserved by a set still
+   * in flight. Each population is ordered commonest-first by the level list's
+   * own `f`, with unranked words last -- unranked means the corpus never saw
+   * them, which is exactly where they belong.
+   *
+   * Pure by construction, like retrieval.js: the history scan, the ghost map,
+   * the reservations and today's date all arrive as arguments. */
+  function flashcardPool(opts) {
+    var o = opts || {};
+    var seen = o.seen || {}, ghost = o.ghost || {};
+    var uses = o.ghostUses || 3;
+    var reserved = o.reserved instanceof Set ? o.reserved : new Set(o.reserved || []);
+    var fresh = [], lapsed = [];
+    (o.entries || []).forEach(function (e) {
+      if (!e || !e.w) return;
+      var day = seen[e.w];
+      if (!day) return;                                  // never met at all
+      if (reserved.has(e.w)) return;
+      var n = (ghost[e.w] && ghost[e.w].n) || 0;
+      if (n >= uses) return;                             // already yours
+      if (n === 0) fresh.push(e);
+      else if (daysBetween(day, o.today) >= STALE_DAYS) lapsed.push(e);
+    });
+    var byRank = function (a, b) {
+      return ((a.f || UNRANKED) - (b.f || UNRANKED)) || a.w.localeCompare(b.w);
+    };
+    fresh.sort(byRank);
+    lapsed.sort(byRank);
+    return fresh.concat(lapsed).slice(0, o.n || CANDIDATES_SHOWN);
+  }
+
+  /* How many complete rounds a set has banked: the minimum ghostN across its
+   * words. A round is "every word in the set used correctly once", so the
+   * weakest word is the set's progress -- and because the ghost counter takes
+   * at most one credit per word per day, a round cannot close in under a day.
+   *
+   * Also the finished test, which is why this is one function and not two. */
+  function setRounds(words, ghost) {
+    var list = words || [], g = ghost || {};
+    if (!list.length) return 0;
+    var min = Infinity;
+    list.forEach(function (w) {
+      var n = (g[w] && g[w].n) || 0;
+      if (n < min) min = n;
+    });
+    return min === Infinity ? 0 : min;
+  }
+
+  /* Words locked by a set that is still in flight, and therefore off limits to
+   * the next set.
+   *
+   * Finished sets need no rule: their words sit at ghostN >= ghostUses, which
+   * flashcardPool() already excludes as owned.
+   *
+   * The quiet period is the escape hatch, and without it the first set the
+   * learner starts and never returns to would lock five words away for good.
+   * A date comparison rather than an "abandon this set" button: nothing to
+   * build, nothing to explain, and it heals itself. */
+  function reservedWords(opts) {
+    var o = opts || {}, out = new Set();
+    (o.sets || []).forEach(function (s) {
+      if (!s || !(s.words || []).length) return;
+      if (setRounds(s.words, o.ghost) >= (o.ghostUses || 3)) return;   // finished
+      if (daysBetween(String(s.updated || "").slice(0, 10), o.today) >= RESERVE_DAYS) return;
+      s.words.forEach(function (w) { if (w) out.add(w); });
+    });
+    return out;
+  }
+
+  /* The set lives in the transcript as pseudo-messages, the way a drill's
+   * category and example do (mistakes.js drillTagOf/drillExampleOf). That is
+   * what makes it need no column: messages.role and messages.text already
+   * sync, so there is no db/schema.sql change and no optional-column probe.
+   *
+   * Two markers rather than two fields on one, for the reason mistakes.js
+   * gives: messages.text is the only string column that syncs, and packing two
+   * values into it would need a delimiter to decode -- which is exactly the
+   * problem SET_SEP solves for the word list and should not be solved twice.
+   *
+   * SET_SEP is the ASCII comma, which no Chinese word contains: the Chinese
+   * comma is a different character (U+FF0C). */
+  var SET_SEP = ",";
+
+  function markerText(msgs, role) {
+    for (var i = 0; i < (msgs || []).length; i++) {
+      if (msgs[i] && msgs[i].role === role) return msgs[i].text || "";
+    }
+    return "";
+  }
+
+  function flashcardsOf(msgs) {
+    return markerText(msgs, "flashcards").split(SET_SEP)
+      .map(function (w) { return w.trim(); })
+      .filter(function (w) { return w.length > 0; });
+  }
+
+  function flashcardThemeOf(msgs) { return markerText(msgs, "flashcardTheme"); }
+
+  /* Share of a level's running text a given set of words covers, 0..1.
+   *
+   * One scale, no bonuses. An earlier version doubled the weight of words the
+   * learner had written themselves, to make production count for more -- it
+   * cannot work, and the failure is instructive. Weight goes as 1/rank, so the
+   * commonest words carry enormous shares (的 is rank 1 and weighs 1.0); after
+   * doubling, having typed the ten commonest words was enough to push the sum
+   * past the total and pin the bar at 100%. It also put the headline on a
+   * different scale from toTarget() below, so the panel could report 100% and
+   * "57 more words to 95%" at the same time.
+   *
+   * Production is measured by passing the produced words as `known` instead --
+   * same function, same scale, a second honest number rather than a thumb on
+   * the first one. */
+  function coverage(entries, known) {
+    var have = asSet(known);
+    var total = 0, got = 0;
+    (entries || []).forEach(function (e) {
+      var w = weightOf(e);
+      total += w;
+      if (have.has(e.w)) got += w;
+    });
+    return total ? got / total : 0;
+  }
+
+  /* How many more words, commonest first, to reach `target` coverage. This is
+   * the actionable number: at HSK 1 it is 23 of the 197 new HSK 2 words to
+   * reach 95%, not 197. Returns 0 when already there. */
+  function toTarget(entries, known, target) {
+    var have = asSet(known);
+    var total = 0, got = 0, missing = [];
+    (entries || []).forEach(function (e) {
+      var w = weightOf(e);
+      total += w;
+      if (have.has(e.w)) got += w; else missing.push({ w: w, f: (e.f || UNRANKED) });
+    });
+    if (!total) return 0;
+    missing.sort(function (a, b) { return a.f - b.f; });
+    var need = (target || 0.95) * total, n = 0;
+    /* Unranked words weigh nothing, so once they are all that is left the sum
+     * cannot rise and this would spin to the end of the list handing back a
+     * count that buys no coverage at all. Stop when progress stops. */
+    while (got < need && n < missing.length && missing[n].w > 0) { got += missing[n].w; n++; }
+    return n;
+  }
+
+  var api = {
+    DEFAULT_RATE: DEFAULT_RATE, CREDIT_CAP: CREDIT_CAP, SLATE: SLATE, PROMOTE_AT: PROMOTE_AT,
+    FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
+    SET_SIZE: SET_SIZE, SET_MAX: SET_MAX, STALE_DAYS: STALE_DAYS,
+    RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
+    daysBetween: daysBetween, flashcardPool: flashcardPool,
+    setRounds: setRounds, reservedWords: reservedWords,
+    SET_SEP: SET_SEP, flashcardsOf: flashcardsOf,
+    flashcardThemeOf: flashcardThemeOf,
+    buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
+    ZIPF_EXP: ZIPF_EXP,
+    /* The move-up recommendation fires here. 98%, the published "comfortable
+     * independent reading" threshold, rather than 95%, the "adequate
+     * comprehension" one -- moving up makes the next level your reading level,
+     * so the bar that matters is the one for reading it unaided.
+     *
+     * 95% is also degenerate against the real syllabus. The bands are
+     * cumulative and each adds mostly rarer words, so coverage of the next
+     * band starts high and climbs: HSK 5 already covers 95.3% of HSK 6 text
+     * before a single new word is learned, and the button would appear
+     * immediately having recommended nothing. At 98% every transition asks for
+     * between a quarter and a half of the new words -- 27% to 44% -- which is
+     * consistent across all six of them in a way 95% is not. */
+    READY_AT: 0.98,
+    coverage: coverage, toTarget: toTarget
+  };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.HSKPace = api;
+})(typeof globalThis !== "undefined" ? globalThis : this);
