@@ -605,7 +605,12 @@ footer{
       <div class="note"><b style="color:var(--accent)">Blue</b> is what you can read — every
       word at the goal level allows you. <b style="color:var(--ok)">Green</b> is what you can
       <em>use</em>. The 98% mark is comfortable independent reading — texts at that level
-      become readable without help.</div>
+      become readable without help.
+      <br>The <b>to 98%</b> row is that mark counted in words rather than read off the bar:
+      how many more you need before the goal level reads comfortably. It is a far smaller
+      number than the words left on the list, because the commonest words carry most of the
+      running text and you already have them — published research puts adequate comprehension
+      at 95% lexical coverage and comfortable independent reading at 98%.</div>
 
     <label style="margin-top:14px">Progress to the next level</label>
       <div class="stats" id="nextProgress"></div>
@@ -622,14 +627,14 @@ footer{
            are 60% of the HSK 2 list but around 88% of HSK 2 running text, and
            the coverage bar that used to head this panel therefore arrived
            nearly full and barely moved. Removed; the word count it implies is
-           the actionable half and is all that is left. -->
+           the actionable half, and it now sits on the goal chart, where a list
+           you will never finish makes "enough to read it" the useful question.
+           On the next level it was the wrong question -- that is the list you
+           intend to know all of. It still gates Move up. -->
       <div class="note">The bar is how many of the level's <em>new</em> words you have, and it
-      runs the whole way from 0 to 100 as you work. The <b>to 98%</b> row above is a different
-      question: how many more words until you can read the level comfortably. It is a much
-      smaller number than the bar's, because the commonest words carry most of the running text
-      and you already have them — published research puts adequate comprehension at 95% lexical
-      coverage and comfortable independent reading at 98%, and moving up makes the next level
-      the one you read, so 98% is the mark <b>Move up</b> waits for.</div>
+      runs the whole way from 0 to 100 as you work — the next level is one to finish, not one to
+      cover 98% of. <b>Move up</b> appears once you can read it comfortably; the <b>to 98%</b>
+      row on the goal chart above is that same threshold, counted against your goal level.</div>
       <button id="btnLevels" type="button" style="margin-top:8px; width:100%">Browse the words at any level</button>
       <div class="note" style="margin-top:8px">Words you have not yet used enough times to own (the <b>not yet yours</b> row below) are exactly
       what <b>Ghost Words</b> activity is for — switch to it in the header and the partner will
@@ -646,6 +651,28 @@ footer{
       Tap a ✗ for the intended meaning, a better version, and which of word choice, grammar,
       word order or naturalness went wrong. Runs on the teaching model, about a hundredth of a
       cent a message. What it finds is counted under <b>Your top mistakes</b> below.</div>
+
+    <label class="toggle" for="gateOn">
+        <input type="checkbox" id="gateOn">
+        <span>Check the partner's Chinese too</span>
+      </label>
+      <div class="note">Holds every reply you are shown to the same standard as your own
+      sentences, and quietly asks for a rewrite when it misses. You copy what the partner
+      writes, so this is the difference between practising Chinese and practising a mistake.
+      Two checks per reply, about four hundredths of a cent — but one of them thinks before
+      it answers, so a reply can take <b>ten seconds longer</b>, and a sentence it cannot get
+      right in the allowed tries becomes 我不会说 instead. Not used for story time, which
+      runs on a stronger model that writes better Chinese than the checks do.</div>
+
+    <label class="toggle" for="planOn">
+        <input type="checkbox" id="planOn">
+        <span>Think before answering</span>
+      </label>
+      <div class="note">Works out what to say — and whether it can be said with the words you
+      know — before writing the reply, instead of writing something and repairing it. Measured
+      on your own conversations: it rescues turns that used to end in 我不会说, and gets there
+      in fewer tries, so replies arrive <b>sooner</b> rather than later. The cost is that they
+      run about 15% shorter. Chat and Ghost Words only.</div>
 
     <label class="toggle" for="paceOn">
         <input type="checkbox" id="paceOn">
@@ -752,6 +779,17 @@ footer{
 
   <details class="sec" id="secSync">
     <summary>Sync &amp; backup<span class="secnote" id="secSyncNote"></span></summary>
+    <label class="toggle" for="debugLogOn">
+        <input type="checkbox" id="debugLogOn">
+        <span>Keep a diagnostic log</span>
+      </label>
+      <div class="note">Records what the app and the models actually did — every reply,
+      every repair, every check — so a problem that happens once can be read afterwards
+      instead of reproduced. There is no console on a phone, which is why this exists.
+      It is stored in <b>your</b> Supabase project alongside your messages, holds your
+      Chinese and the partner's verbatim, and is removed by <b>Delete cloud data</b> like
+      everything else. Your API key is never written to it.</div>
+
     <label class="toggle" for="syncOn">
         <input type="checkbox" id="syncOn">
         <span>Cloud sync</span>
@@ -1065,6 +1103,61 @@ const TEACH_MODEL = "qwen/qwen3-235b-a22b-2507";
  * $0.25", and DEVELOPING.md. */
 const STORY_MODEL = "anthropic/claude-sonnet-4.5";
 
+/* The slow half of the correctness gate. A reasoning model, and the price of it
+ * is not money -- $0.0003 a turn -- but SECONDS: measured at 7-18s a call
+ * against the teaching model's 2s, because it spends ~2.3k thinking tokens
+ * before answering. That is why gateFault() asks the cheap fast grader first
+ * and only reaches for this one when the fast one found nothing. */
+const GATE_MODEL = "z-ai/glm-5.3-flash";
+
+/* How long the gate may hold a reply up before it gives up and lets it through.
+ *
+ * Every other call this app makes answers in about two seconds, so nothing here
+ * ever needed a timeout and callModel still has none. The gate broke that
+ * assumption: a model that thinks before it answers was measured at 7-18s and
+ * has no upper bound at all, and it sits on the critical path of every partner
+ * turn. One stalled route and the conversation stops with no way out but the
+ * stop button.
+ *
+ * 25s is roughly twice the slowest answer measured over 500 graded turns. Past
+ * that the check has already cost more than it is worth, and an ungraded turn is
+ * what the app did for its whole life before this existed. */
+const GATE_TIMEOUT_MS = 25000;
+
+/* The ceiling the gate's prompts were MEASURED at (tools/grader-bench.js's
+ * MAX_TOKENS), and it has to stay that number.
+ *
+ * Shipped at 400 -- a chat reply's ceiling, which looked generous for a one-line
+ * JSON verdict -- the slow half of the gate never worked once in production. A
+ * reasoning model spends its budget thinking BEFORE it writes anything, so 400
+ * bought a few hundred tokens of reasoning, `finish_reason: "length"`, and an
+ * empty `content`. That surfaces as callError("empty"), which gateFault treats
+ * as a failed call and passes the turn -- so the union quietly degraded to its
+ * fast half alone and nothing said so.
+ *
+ * Found by reading debug_log: five empty completions from glm-5.3-flash, zero
+ * answers. It is the fourth silent failure in this study and the one CLAUDE.md
+ * already warns about in as many words -- max_tokens is not a cost control. */
+const GATE_MAX_TOKENS = 4000;
+
+/* Story time is not gated. It runs on Sonnet, which writes measurably BETTER
+ * Chinese than the chat partner -- 2.5 errors per 100 sentences against qwen's
+ * 3.2, and twelve times fewer unnatural ones (RESEARCH notes, round nineteen) --
+ * and nothing in twenty-four rounds measured a grader against it. A story
+ * segment is also four times longer than a chat turn, so it would pay the
+ * reasoning model's wait several times over to police the better writer. */
+const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false };
+
+/* Planning applies to the two free-form activities and no others.
+ *
+ * It was measured on chat turns, and chat and focused are the two where the
+ * partner chooses what to say. Twenty questions and drills already have their
+ * content dictated -- one yes/no question, one sentence using one structure --
+ * so a planner would be planning something the prompt has already decided, and
+ * drill turns produce no errors in production anyway. Story is a narrative on a
+ * stronger model, not a reply to a learner, and this prompt assumes a reply. */
+const PLANNED = { chat: true, focused: true };
+
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
 const LEVELS = [
@@ -1083,7 +1176,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v105 — 2026-09-15";
+const VERSION   = "v116 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1147,6 +1240,7 @@ const K = {
   pinyin:"hsk1chat.pinyin", stats:"hsk1chat.stats", models:"hsk1chat.modelCache",
   goalLevel:"hsk1chat.goalLevel",
   chatTime:"hsk1chat.chatTime", deviceId:"hsk1chat.deviceId", cost:"hsk1chat.cost",
+  debugLog:"hsk1chat.debugLog", logBuf:"hsk1chat.logBuf", plan:"hsk1chat.plan",
   teachPrompts:"hsk1chat.teachPrompts",
   autoAdd:"hsk1chat.autoAddTyped", length:"hsk1chat.replyLength",
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
@@ -1158,6 +1252,7 @@ const K = {
   speechRate:"hsk1chat.speechRate",
   freeOnly:"hsk1chat.freeOnly", modelSort:"hsk1chat.modelSort",
   favModels:"hsk1chat.favModels", favOnly:"hsk1chat.favOnly", grader:"hsk1chat.grader",
+  gate:"hsk1chat.gate",
   chats:"hsk1chat.chats", chatMsgs:"hsk1chat.chatMsgs", chatId:"hsk1chat.chatId",
   prefsPushedAt:"hsk1chat.prefsPushedAt",
   pace:"hsk1chat.pace", paceState:"hsk1chat.paceState", learning:"hsk1chat.learning",
@@ -1273,7 +1368,21 @@ const S = {
   favOnly: store.get(K.favOnly, false),
   // Whether each message you send is graded. On by default: the badge is the
   // feature, and a grade costs about a hundredth of a cent.
-  grader: store.get(K.grader, true)
+  grader: store.get(K.grader, true),
+  /* The partner-side correctness gate. On by default -- it is the guarantee the
+   * app is for -- but a switch, because it is the only feature here that can add
+   * ten seconds to a reply and turn a turn into the fallback stub, and neither
+   * of those should need a code change to stop. */
+  gate: store.get(K.gate, true),
+  /* On by default, and that is the decision worth defending: a logger you have
+   * to remember to switch on before the bug is a logger that misses the bug.
+   * It is the user's own database and it already holds every message; what this
+   * adds is the model's side of it. The switch is how it stops. */
+  debugLog: store.get(K.debugLog, true),
+  /* Plan the reply before writing it. A switch because it is the one change
+   * measured to make replies about 15% SHORTER, and whether that reads as
+   * concise or as bland is a judgement a character count cannot make. */
+  plan: store.get(K.plan, true)
 };
 
 /* Cloud sync runtime state. Deliberately not in S / not persisted: syncUser
@@ -1627,6 +1736,199 @@ async function checkSenseViolations(text, lex, level) {
   return out;
 }
 
+/* ------------------------------------------------------------- console log
+ *
+ * The app is used on a phone, which has no console, so a bug that happens once
+ * and cannot be reproduced leaves nothing behind. Everything console.log sees
+ * goes into a buffer, and the buffer goes to `debug_log` where it can be read
+ * from another machine afterwards.
+ *
+ * Wrapping console rather than calling a logger from each site is the whole
+ * point: the eight `[gate]` / `[attempt]` / `[repair]` lines that already exist
+ * are captured without being touched, and so is the next one, written by
+ * someone who has never heard of this. The real console still gets everything.
+ *
+ * SECRETS ARE STRIPPED ON THE WAY IN, in HSKSync.logLine -- a line scrubbed on
+ * the way out would already be in localStorage. */
+let logBuf = store.get(K.logBuf, []);
+let logTimer = null;
+
+function captureConsole() {
+  ["log", "warn", "error"].forEach(level => {
+    const original = console[level].bind(console);
+    console[level] = function () {
+      original.apply(null, arguments);
+      /* Never let logging break the thing it is logging. A console call that
+       * threw would take down whatever was mid-turn, which is precisely when
+       * this is running. */
+      try {
+        if (!S.debugLog) return;
+        logBuf = HSKSync.pushLine(logBuf, HSKSync.logLine(level, arguments));
+        store.set(K.logBuf, logBuf);
+        queueLogFlush();
+      } catch (e) { /* ignore */ }
+    };
+  });
+}
+
+/* Batched, not per line: a row per console line is hundreds of round trips a
+ * session for text nobody reads unless something breaks. Also flushed when the
+ * app goes to the background, because closing the PWA is the most likely thing
+ * to happen straight after the bug worth reading about. */
+function queueLogFlush() {
+  if (logTimer) return;
+  logTimer = setTimeout(() => { logTimer = null; flushLog(); }, 20000);
+}
+
+async function flushLog() {
+  if (!S.debugLog || !logBuf.length || !syncUser || !HSKSync.debugLogSupported()) return;
+  const batch = logBuf;
+  logBuf = [];
+  store.set(K.logBuf, logBuf);
+  try {
+    const ok = await HSKSync.pushDebugLog({
+      id: crypto.randomUUID(), user_id: syncUser.id, device_id: deviceId(),
+      version: VERSION, created_at: new Date().toISOString(), lines: batch
+    });
+    // The table is not there yet. Keep the lines locally; the viewer still has
+    // them and a later deploy of the SQL picks the habit back up.
+    if (!ok) logBuf = HSKSync.pushLine(batch, { t: new Date().toISOString(), l: "warn",
+      m: "[log] debug_log table missing; logging locally only" });
+  } catch (e) {
+    // Put them back rather than lose them to a network blip.
+    logBuf = batch.concat(logBuf).slice(-HSKSync.LOG_KEEP);
+    store.set(K.logBuf, logBuf);
+  }
+}
+
+/* Decide what to say before writing it, and check it can be said at this level.
+ *
+ * See HSKPrompt.planPrompt() for why this exists and why the plan is in Chinese.
+ * The short version: the failures were content choices, not phrasings, and a
+ * plan written in Chinese can be run through the validator WHOLE rather than
+ * trusting the model's own account of which words it means to use.
+ *
+ * Three rounds, then give up and generate unplanned -- the conservative
+ * failure, and the behaviour the app had before this existed. In measurement a
+ * plan was reached on 69 of 95 turns; the other 26 are the hardest ones and are
+ * the next thing to work on, not a reason to block a turn. */
+async function planReply(turns, lex) {
+  let banned = [];
+  for (let round = 0; round < 3; round++) {
+    let text;
+    try {
+      text = HSK.stripScaffold(await withTimeout(callModel(
+        [{ role: "user", content: HSKPrompt.planPrompt(
+          { turns: turns, label: levelLabel(), banned: banned }) }], 200),
+        GATE_TIMEOUT_MS, "planner"));
+    } catch (e) {
+      console.warn("[plan] failed, generating unplanned:", e);
+      return null;
+    }
+    if (!text) return null;
+    const bad = HSK.validate(text, lex).filter(v => v.kind === "bad" && !v.name);
+    if (!bad.length) { console.log("[plan] " + text + (round ? " (after " + round + " re-plans)" : "")); return text; }
+    banned = banned.concat(bad.map(v => v.text));
+    console.log("[plan] too hard: " + bad.map(v => v.text).join("、"));
+  }
+  console.log("[plan] no affordable plan after 3 rounds; generating unplanned");
+  return null;
+}
+
+/* Reject if `p` has not settled in `ms`.
+ *
+ * ponytail: the losing call is abandoned, not aborted -- it keeps running and
+ * its tokens are still paid for. Aborting it would mean reaching for `inflight`,
+ * which by then belongs to whatever call started last, and cancelling a
+ * stranger's fetch is a worse bug than paying for one answer nobody reads.
+ * Per-call controllers would fix it properly if this ever costs real money. */
+function withTimeout(p, ms, what) {
+  let t;
+  return Promise.race([
+    p.finally(() => clearTimeout(t)),
+    new Promise((_, rej) => {
+      t = setTimeout(() => rej(callError("timeout", what + " took over " + ms + "ms")), ms);
+    })
+  ]);
+}
+
+/* Is this partner turn Chinese the learner can safely copy?
+ *
+ * WHY TWO GRADERS. Measured on 222 real partner turns from this app's own
+ * database and confirmed on 282 fresh ones (tools/grader-bench-results.md,
+ * rounds 22-24), neither grader alone is good enough and the union of the two
+ * is: the fast one catches 87% of outright errors, the slow one 93%, and a
+ * turn either objects to catches 100% of them and 71% of the merely-stilted at
+ * 86% specificity. They work because they DISAGREE -- two prompts on one model
+ * scored no better than one.
+ *
+ * WHY IN THIS ORDER. Cost is seconds, not cents. The fast grader rejects about
+ * a quarter of turns on its own at 2s, and only the rest pay the reasoning
+ * model's 7-18s. Reversing them would pay it every time for the same verdict.
+ *
+ * WHAT COMES BACK is repair GUIDANCE, never text for the screen. `better` is
+ * written by a model that never saw the vocabulary allowlist -- one correction
+ * in six leaked an out-of-level word when this was measured -- so it goes into
+ * the next attempt's prompt and nowhere else.
+ *
+ * A FAILED CALL PASSES THE TURN. A gate that blocked on API trouble would take
+ * the conversation down with it, and an ungraded turn is the behaviour the app
+ * had for its whole life until now. */
+async function gateFault(text, lex) {
+  for (const [model, opts] of [[null, { partner: true }],
+                               [GATE_MODEL, { partner: true, bar: "soft" }]]) {
+    let g;
+    const began = Date.now();
+    try {
+      const raw = await withTimeout(callModel(
+        [{ role: "user", content: HSKPrompt.grade(Object.assign({ text: text }, opts)) }],
+        GATE_MAX_TOKENS, model), GATE_TIMEOUT_MS, (model || "teach") + " grader");
+      g = parseGrade(raw, text);
+    } catch (e) {
+      console.warn("[gate] " + (model || "teach") + " failed after " +
+                   (Date.now() - began) + "ms, passing the turn:", e);
+      return null;
+    }
+    console.log("[gate] " + (model || "teach") + " answered in " + (Date.now() - began) + "ms");
+    /* Unparseable is not a fault. parseGrade() already returns null for a reply
+     * it cannot read, and treating that as an objection would fail turns for
+     * the model's punctuation rather than the partner's Chinese. */
+    if (!g || g.ok) continue;
+    const notes = (g.errors || []).map(e => e.note).filter(Boolean).join(" ");
+    /* THE EVIDENCE THE REPAIR LOOP NEEDS, and the gate is the only place that
+     * has it: run the correction through the SAME validator the reply faces. A
+     * fix the learner is not allowed to read is a fix the partner cannot use,
+     * and no amount of "say it differently" reaches it -- that is the
+     * 练武术 / 练习武术 loop, six tries and a stub. Naming the blocking word
+     * turns an unwinnable fight into a choice between teaching it and saying
+     * so. */
+    const blocked = lex
+      ? ((HSK.validate(g.better || "", lex).filter(v => v.kind === "bad" && !v.name)[0] || {}).text || "")
+      : "";
+    console.log("[gate] " + (model || "teach") + " faulted:", text, g.better, notes,
+                blocked ? "(fix needs out-of-level 「" + blocked + "」)" : "");
+    return { better: g.better || "", note: notes, blocked: blocked };
+  }
+  return null;
+}
+
+/* What to tell the partner, given a fault it cannot be shown.
+ *
+ * The correction goes in because round eight measured the shape: this model
+ * confirms a fault 5 times in 7 shown the original and the repair side by side,
+ * and 2 in 7 asked about the fault in the abstract. Telling it only "something
+ * was unnatural" is the phrasing that has scored near zero on three probes. */
+function gateRepairPrompt(fault, strategy) {
+  /* The correction goes in even when it is out of level. It never reaches the
+   * screen -- it is guidance for the model, and the model is the one being
+   * asked to work around it. Round eight measured the shape: this model acts on
+   * two concrete sentences where it ignores an abstract complaint. */
+  const base = "你刚才写的中文有问题：" + (fault.note || "不是中国人会说的话") + "。" +
+    (fault.better ? "更自然的说法是「" + fault.better + "」。" : "");
+  if (strategy) return base + strategy.text + "只说中文，不要解释。";
+  return base + "请用这个意思重新说一次，其他的规则不变。";
+}
+
 // Failures carry a kind, because the useful response differs: a missing key is
 // fixed in Settings, an empty completion by choosing another model.
 function callError(kind, message) {
@@ -1859,18 +2161,52 @@ function windowed(excludeKind) {
 function reuseFor(activity) {
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
-    /* Words already credited today go last. At most one credit a day counts, so
-     * without this a learner who practised well yesterday opens the activity to
-     * six words that cannot move until tomorrow, and the activity quietly has
-     * nothing to offer. Still shown when there are not six others -- practising
-     * them is harmless and an empty banner would be worse. A stable sort, so
-     * commonest-first survives inside each group. */
-    return ((r && r.unused) || []).slice()
-      .sort((a, b) => (a.ghostToday ? 1 : 0) - (b.ghostToday ? 1 : 0))
-      .slice(0, 6);
+    /* Commonest-first, and NOT reordered by what has been credited today.
+     *
+     * This used to sort today's credited words to the back before taking six,
+     * on the argument that a word which cannot move again until tomorrow has
+     * nothing to offer. The cost was invisible in the code and obvious in use:
+     * the reorder fires at the exact moment a word earns its credit, so writing
+     * a ghost word correctly made it drop out of the six and vanish from the
+     * banner -- the learner saw "把 0/3", used 把, and watched it disappear
+     * without ever seeing the 1/3 tick it had just earned.
+     *
+     * Worse, this same list is gradeTurn()'s ghostTargets, so the word that
+     * fell out stopped getting its own per-word verdict on the NEXT message
+     * too, and fell back to the whole-sentence gate -- one mistake anywhere in
+     * the sentence and the credit was silently lost. That is the "it did not
+     * give me credit for 把" half of the same bug.
+     *
+     * The concern the sort addressed is real but belongs to the partner, not to
+     * the list: turn() picks `required` from the first word not yet credited
+     * today, so the partner still steers at something that can move. */
+    return ((r && r.unused) || []).slice(0, 6);
   }
   return S.learning.filter(HSKPace.isNew).slice(-6);
 }
+
+/* Which ghost word the partner is told it must use.
+ *
+ * The first that can still earn a credit today: at most one a day counts, so
+ * steering the conversation at a word already banked spends a turn on something
+ * the counter will refuse to move. This is the whole of what reuseFor()'s old
+ * credited-today-last sort was for, put where it costs nothing -- there it also
+ * reordered the list the banner and the grader read, and dropped the word off
+ * both at the moment it succeeded.
+ *
+ * Falls back to the head of the list when every target is banked: practising
+ * them again is harmless, and asking for nothing would be worse. */
+function ghostRequired(reuse) {
+  return ((reuse || []).find(e => !e.ghostToday) || (reuse || [])[0] || {}).w || "";
+}
+
+/* What turn() is doing right now, for whoever is showing a spinner.
+ *
+ * A no-op by default: turn() is called from three places and only one of them
+ * has a bubble on screen to write into. The gate can add ten seconds to a turn
+ * -- reasoning model -- and ten silent seconds reads as a hang, so the wait has
+ * to say that it is a wait. */
+let status = () => {};
 
 async function turn(ctx) {
   /* Offer next-level words only when a credit has been earned — and not at all
@@ -1878,6 +2214,13 @@ async function turn(ctx) {
    * Drills both say so on their own row (`newWords: false`) rather than being
    * named here, so the next one that needs it needs no edit to this line. */
   const isFocused = currentActivity() === "focused";
+  /* Captured now, not read later. A turn takes seconds and a story segment most
+   * of a minute, and the learner can switch chats inside that window -- so by
+   * the time the gate runs, currentActivity() is whatever they navigated TO.
+   * Read there it would gate a story segment as a chat turn, which is both the
+   * wrong answer and, with a reply already in flight, a second model call the
+   * caller is not waiting for. Same bug storyStep() has a comment about. */
+  const activity = currentActivity();
   /* Story time's asking phase is the third case, and it is not a preference:
    * whatever turn() legalises here, settlePace() has to bank, or the word stays
    * above level in every later render -- validated clean, then painted red, with
@@ -1896,7 +2239,7 @@ async function turn(ctx) {
   const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
   // In Ghost Words, "required" is the first unused word to push production.
-  const required = isFocused ? (reuse[0] && reuse[0].w) :
+  const required = isFocused ? ghostRequired(reuse) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
   /* A story turn names its own model in ctx (storyStep(), and the discussing
    * phase send() sets up). Every other twenty turn -- opening, and every
@@ -1909,11 +2252,34 @@ async function turn(ctx) {
     .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
+  /* Before the first generation, not after the first failure. The whole point
+   * is that repair is too late: by then the model has already committed to
+   * something the level cannot say. */
+  if (S.plan && PLANNED[activity] && !(ctx && ctx.storySegment)) {
+    status("想一想…");
+    const plan = await planReply(S.history.slice(-4), S.lex);
+    if (plan) scratch.push({ role: "user", content: HSKPrompt.planInstruction(plan) });
+  }
+
   let attempt = 0, last = null, missed = null, echoed = null;
+  /* The turn's own memory, for the repair ladder. `gateFails` is counted apart
+   * from `attempt` because vocabulary repairs converge -- the validator names
+   * the word and the model swaps it -- while gate failures are the ones that
+   * loop, so the strategies are aimed at those. */
+  let gateFails = 0; const triedStrategies = [];
+  let prevText = null, prevBad = null, introduced = false;
   const tries = (ctx && ctx.attempts) || S.attempts;
 
   while (attempt < tries) {
     attempt++;
+    /* Which try this is, on screen, from the second one onward.
+     *
+     * A turn is allowed six tries and each one can cost two grader calls on top
+     * of a generation, so a partner reply that keeps coming back wrong can take
+     * minutes -- and an unchanging "..." through all of it reads as a hang
+     * rather than as work. The first try says nothing: the common case is fast
+     * and does not need a counter to explain itself. */
+    if (attempt > 1) status("再写… " + attempt + "/" + tries);
     /* An empty completion is about one call in eight on some routes and is not
      * a vocabulary problem, so it must not spend a repair attempt -- and it used
      * to end a story mid-narrative on an error card. Retried once, here rather
@@ -1929,6 +2295,11 @@ async function turn(ctx) {
     }
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
+    /* Read here, not at the return. `callModel.lastFinish` is one global that
+     * every call overwrites, and since the gate this turn makes up to three
+     * calls after this one -- so a reply cut off at the token ceiling was being
+     * reported as whole because the grader that judged it stopped cleanly. */
+    const genFinish = callModel.lastFinish;
     const ex = extractNeeds(HSK.stripScaffold(raw));
     /* Validate against a lexicon that includes this reply's own [[NEED:]]
      * words (`ex.needs`) plus every [[NEED:]] word the CONVERSATION has
@@ -1958,6 +2329,60 @@ async function turn(ctx) {
       violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
 
     if (!violations.length) {
+      /* THE CORRECTNESS GATE, and it sits here for two reasons.
+       *
+       * After the vocabulary check, because a reply already being repaired for
+       * an out-of-level word is not worth grading -- the same reason the sense
+       * check is spent only on replies that already passed.
+       *
+       * Before the echo and required-word checks, because those two are SOFT:
+       * they keep their best answer and show it when the attempts run out. Put
+       * the gate below them and that kept answer reaches the screen ungraded.
+       * Above them, one code path carries the whole invariant: nothing the
+       * learner can read was skipped by the gate.
+       *
+       * Correctness is never soft. A turn that cannot be repaired inside the
+       * attempt budget becomes the fallback stub rather than Chinese the
+       * learner would copy -- he copies the partner as his main way of
+       * learning, so a bad sentence shown is a bad sentence practised. */
+      /* No `attempt < tries` here, deliberately. Skipping the check on the last
+       * attempt would show ungated Chinese exactly when the partner has proved
+       * hardest to correct, which is the one case this feature exists for. A
+       * fault on the final attempt falls out of the loop instead, to the best
+       * earlier reply -- itself gated clean -- or the fallback stub. */
+      if (S.gate && GATED[activity] !== false) {
+        /* Set once and left alone until the reply lands. Cleared after the
+         * check, the bubble drops back to "…" for the whole of the next
+         * attempt's generation -- so the learner watches the label appear,
+         * vanish, and then nothing for ten seconds, which reads as the app
+         * having finished and lost the answer. The wait is one wait; it says
+         * so once. */
+        status("检查中… " + attempt + "/" + tries);
+        const fault = await gateFault(ex.text, lex);
+        if (fault) {
+          gateFails++;
+          /* At most one introduced word per turn, and none at all if pacing has
+           * already spent the budget on this one. DEFAULT_RATE is 45 characters
+           * per new word and the repair loop is not the pacing system. */
+          const strategy = HSKPrompt.repairStrategy({
+            gateFails: gateFails, tried: triedStrategies, blocked: fault.blocked,
+            repeated: ex.text === prevText,
+            sameWord: false,
+            allowIntroduce: !introduced && !ex.needs.length && !offer.length
+          });
+          if (strategy) {
+            triedStrategies.push(strategy.id);
+            if (strategy.id === "introduce") introduced = true;
+            console.log("[gate] strategy " + strategy.id +
+                        (fault.blocked ? " (blocked: " + fault.blocked + ")" : ""));
+          }
+          scratch.push({ role: "assistant", content: raw });
+          scratch.push({ role: "user", content: gateRepairPrompt(fault, strategy) });
+          console.log("[gate] retrying");
+          prevText = ex.text;
+          continue;
+        }
+      }
       /* A reply that is otherwise legal but omits the required word is not a
        * vocabulary failure, so it is kept as the best answer so far and asked
        * about again rather than thrown away. */
@@ -1986,18 +2411,33 @@ async function turn(ctx) {
         }
       } else {
         return { text: ex.text, needs: ex.needs, attempts: attempt,
-                 truncated: callModel.lastFinish === "length",
+                 truncated: genFinish === "length",
                  offer: offer, required: required, lex: lex };
       }
     }
     if (!violations.length) {
       // Attempts exhausted: show the best legal reply rather than nothing.
+      /* `attempts` LAST, and deliberately after the spread.
+       *
+       * `missed` and `echoed` carry the attempt they were captured on -- and
+       * `x = x || {...}` keeps the FIRST one -- so a reply kept on try 3 and
+       * then retried up to the ceiling came back saying "3 tries" while the
+       * progress counter had been watched climbing to 6. Spread over the top,
+       * that stale number also reached recordTurn(), which under-counted the
+       * retries metric by everything after the reply it ended up showing. The
+       * badge means work done, not which try happened to survive. */
       return Object.assign({}, missed || echoed,
         { offer: offer, required: required, softMiss: true,
-          truncated: callModel.lastFinish === "length" });
+          truncated: genFinish === "length", attempts: attempt });
     }
 
     last = ex.text;
+    /* Carried for the repair ladder: an attempt identical to the last one means
+     * the model has stopped moving, and the same rejected word twice means
+     * rephrasing is not working. Both pick a different strategy. */
+    const badNow = violations.filter(v => v.kind === "bad").map(v => v.text).sort().join(",");
+    prevText = ex.text;
+    prevBad = badNow;
     scratch.push({ role: "assistant", content: raw });
     const rp = repairPrompt(violations, attempt + 1);
     console.log("[repair]", rp);
@@ -2009,8 +2449,9 @@ async function turn(ctx) {
   // A reply that only ever lacked the required word, or only echoed, still
   // beats the fallback.
   if (missed || echoed) {
+    // Same as above: the count is the work, not the survivor.
     return Object.assign({}, missed || echoed,
-      { offer: offer, required: required, softMiss: true });
+      { offer: offer, required: required, softMiss: true, attempts: attempt });
   }
   return {
     text: FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)],
@@ -2298,7 +2739,27 @@ function renderMessage(turnObj, shownExtra) {
   return el;
 }
 
+/* The bubble a running turn is writing its progress into, or null.
+ *
+ * Module-level because the thing that destroys it is nowhere near the thing
+ * that made it: renderAll() empties #log, and the learner's own grade calls
+ * renderAll() from its finally. The two run concurrently on every message sent,
+ * so a grade landing mid-turn deleted the spinner out from under a turn that
+ * was still running -- the counter climbed to 4/6, vanished, and the reply
+ * arrived minutes later with nothing on screen in between.
+ *
+ * It was always broken. It only became visible when the correctness gate made
+ * turns long enough that the grade reliably lands in the middle of one. */
+let thinkingEl = null;
+
 function renderAll() {
+  renderConversation();
+  /* Put it back. renderAll() has several early returns and the restore has to
+   * happen after every one of them, so it wraps rather than joins. */
+  if (thinkingEl) { log.appendChild(thinkingEl); log.scrollTop = log.scrollHeight; }
+}
+
+function renderConversation() {
   /* Ahead of the early return below: both of these describe the conversation
    * rather than its contents, and an empty one still has an activity and a
    * level. */
@@ -2310,25 +2771,30 @@ function renderAll() {
   /* Ghost Words banner persists for the whole conversation. */
   function ghostBanner() {
     if (currentActivity() !== "focused") return "";
-    const targets = reuseFor("focused");
-    if (targets && targets.length) {
+    /* The six live targets, plus anything finished during this conversation --
+     * a word that reaches the mark leaves the targeting for good, and dropping
+     * it off the banner at the moment of success reads as "it did not count".
+     * It stays, greyed and ticked, until the next conversation. */
+    const targets = reuseFor("focused").concat(ghostFinishedHere());
+    if (targets.length) {
       /* Each word with its own count, and a tick on the ones already credited
        * today. Both are load-bearing rather than decoration: at most one use a
        * day counts, so a word that has had its credit will not move however
        * much more you write it, and a counter that silently refuses to move is
        * the exact failure drillWhyNot() was written to fix. */
-      const chips = targets.slice(0, 6).map(e =>
+      const chips = targets.map(e =>
         '<span style="display:inline-block;margin:0 10px 4px 0' +
-          (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
+          (e.ghostToday || e.done ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
         '<span style="font-size:14px;color:var(--dim)"> ' +
           (e.ghostN || 0) + "/" + S.ghostUses +
-          (e.ghostToday ? " \u2713" : "") + "</span></span>").join("");
+          (e.ghostToday || e.done ? " \u2713" : "") + "</span></span>").join("");
       return '<div class="hint"><b>Ghost Words</b><br>Try to use these words in your replies:<br>' +
         '<b style="color:var(--accent);font-size:22px">' + chips + '</b><br>' +
         '<span style="color:var(--dim)">The partner will ask questions that need them. ' +
         'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
         'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
-        'already banked.</span></div>';
+        'already banked; a word that reaches ' + S.ghostUses + "/" + S.ghostUses +
+        ' is yours, and stays here until your next conversation.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
@@ -3034,6 +3500,8 @@ async function pullAndMerge() {
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
+      store.set(K.grader, S.grader); store.set(K.gate, S.gate);
+      store.set(K.debugLog, S.debugLog); store.set(K.plan, S.plan);
       store.set(K.teachPrompts, S.teachPrompts || {});
       store.set(K.pace, S.pace); store.set(K.paceState, S.budget);
       store.set(K.goalLevel, S.goalLevel);
@@ -4344,6 +4812,16 @@ function thinkingBubble(label) {
   el.innerHTML = '<div class="bubble" style="font-size:' + (label ? "15px" : "18px") +
     ';color:var(--dim)">' + escapeHtml(label || "\u2026") + "</div>";
   log.appendChild(el); log.scrollTop = log.scrollHeight;
+  /* Registered for renderAll() to put back, and DE-registered by its own
+   * removal rather than by each of the three callers remembering to.
+   *
+   * Done by hand it was wrong the first time: runTurn() cleared the reference
+   * and story time's two bubbles did not, so a finished story left a stale
+   * "Thinking of a question…" that every later render faithfully restored. The
+   * lifetime belongs to the element, so it is the element that carries it. */
+  const drop = el.remove.bind(el);
+  el.remove = () => { if (thinkingEl === el) thinkingEl = null; drop(); };
+  thinkingEl = el;
   return el;
 }
 
@@ -4351,6 +4829,12 @@ async function runTurn(toGloss, text, ctx) {
 
   const thinking = thinkingBubble("");
   const hist = S.history;
+
+  const bubble = thinking.querySelector(".bubble");
+  status = label => {
+    bubble.textContent = label || "\u2026";
+    bubble.style.fontSize = label ? "15px" : "18px";
+  };
 
   try {
     const res = await turn(ctx || undefined);
@@ -4381,6 +4865,10 @@ async function runTurn(toGloss, text, ctx) {
       persist();
     }
   } finally {
+    // The bubble is about to be gone; a later turn() writing into it would
+    // throw into a detached node and lose the reason it was reporting, and
+    // renderAll() would keep putting it back.
+    status = () => {};
     thinking.remove();
     S.busy = false; renderBusy();
     renderAll();
@@ -5893,6 +6381,35 @@ function producedWords() {
   return out;
 }
 
+/* Ghost words that reached the mark during the open conversation.
+ *
+ * A word with S.ghostUses credits has left readiness().unused for good, which
+ * is right for the targeting and wrong for the display: disappearing at the
+ * moment of success is what a learner reads as "it did not count". These stay
+ * in the banner, greyed and ticked, until the next conversation starts.
+ *
+ * Derived rather than remembered, like every other count here, so a reload does
+ * not lose the tick: a finished word that appears in a graded message of the
+ * open conversation finished here.
+ *
+ * ponytail: substring match on the transcript, not segmentation, so a finished
+ * word that only ever appears inside a longer one is captioned a conversation
+ * early. It is a caption on a word the learner has already completed, so the
+ * failure is harmless; segment the history if it ever reads wrong. */
+function ghostFinishedHere() {
+  const wrote = S.history
+    .filter(t => t && t.role === "user" && t.grade)
+    .map(t => t.text || "").join("\u0000");
+  if (!wrote) return [];
+  const prog = ghostProgressMap(), today = ghostDayKey();
+  return S.learning.filter(e => (e.from || 0) > S.level &&
+      wrote.indexOf(e.w) !== -1 &&
+      ((prog[e.w] && prog[e.w].n) || 0) >= S.ghostUses)
+    .map(e => Object.assign({}, e, {
+      ghostN: prog[e.w].n, ghostToday: prog[e.w].last === today, done: true
+    }));
+}
+
 /* Today, as the same UTC dayKey the credit rule counts in. Local dates would
  * let a flight change a learner's numbers -- mistakes.js says why. */
 function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
@@ -6022,6 +6539,10 @@ function readiness() {
      * receptive/productive one and is the informative part. */
     read: HSKPace.coverage(S.nextList, usable),
     produce: HSKPace.coverage(S.nextList, mine),
+    /* No longer drawn -- the row moved to the goal chart, against the goal
+     * list. Kept because it is the Move up gate said the other way round
+     * (toGo === 0 exactly when read >= READY_AT), which is what browser.test.js
+     * checks the button against. */
     toGo: HSKPace.toTarget(S.nextList, usable, HSKPace.READY_AT),
     total: S.nextList.length,
     newWords: S.nextList.filter(e => !baseSet.has(e.w)).length,
@@ -6078,13 +6599,25 @@ function renderGoalProgress() {
   const pct = Math.round(read * 100);
   const use = Math.round(produce * 100);
   const mark = Math.round(HSKPace.READY_AT * 100);
+  /* The words-to-threshold row belongs to THIS chart and not to the next-level
+   * one it used to sit under. The next level is the one you are working through
+   * word by word -- all of it, not 98% of it -- so a row saying you could stop
+   * early was answering a question nobody asks about the level in front of
+   * them. The goal is where 98% is the real target: it is a list you will never
+   * finish, and "how many words until I can read it comfortably" is the only
+   * tractable way to ask how far away it is. Same arithmetic, moved to the
+   * chart where it means something. */
+  const toGo = HSKPace.toTarget(S.goalList, usable, HSKPace.READY_AT);
   box.innerHTML =
     '<div class="bar"><i style="width:' + pct + '%"></i>' +
     '<b style="width:' + use + '%"></b>' +
     '<u style="left:' + mark + '%"></u></div>' +
     '<div class="barnote"><b>' + use + "% you can use</b>" +
       "<span>" + escapeHtml(goalLv.label) + " — goal</span>" +
-      "<i>" + pct + "% you can read</i></div>";
+      "<i>" + pct + "% you can read</i></div>" +
+    "<table><tr><td>to " + mark + "%</td><td>" +
+      (toGo ? toGo + " more word" + (toGo === 1 ? "" : "s") + ", commonest first"
+            : "there already") + "</td></tr></table>";
 }
 
 function renderNextProgress() {
@@ -6097,24 +6630,24 @@ function renderNextProgress() {
     return;
   }
   const ready = r.read >= HSKPace.READY_AT;
-  const mark = Math.round(HSKPace.READY_AT * 100);
   /* One bar, and it is the new words. A reading-coverage bar was drawn above
    * this one and was removed: it starts at 88% for HSK 1 -> 2 and every word
    * still worth learning lives in the top 12 points of it, so it looked nearly
    * full on arrival and barely moved while you worked -- correct arithmetic,
-   * useless as a progress display. The same number survives where it is worth
-   * reading: the "to 98%" row below says it in words you can act on, and it is
-   * still what Move up waits for. New words learned runs 0 to 100 across the
-   * same effort. */
+   * useless as a progress display. New words learned runs 0 to 100 across the
+   * same effort.
+   *
+   * The "to 98%" row that used to sit under it has moved to the goal chart
+   * above. It still gates Move up, and readiness().toGo is still that number --
+   * but the next level is the one you work through word by word, and a row
+   * offering to let you stop at 98% of it was answering a question about a
+   * list you intend to finish. */
   box.innerHTML =
     '<div class="bar words"><i style="width:' +
       (r.newWords ? Math.round(100 * r.newHave / r.newWords) : 0) + '%"></i></div>' +
     '<div class="barnote"><em>' + r.newHave + " of " + r.newWords +
       " new words</em><span>learned at " + escapeHtml(r.next.label) + "</span></div>" +
-    "<table><tr><td>to " + mark + "%</td><td>" +
-      (r.toGo ? r.toGo + " more word" + (r.toGo === 1 ? "" : "s") +
-        ", commonest first" : "there already") + "</td></tr>" +
-    "<tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
+    "<table><tr><td>used by you</td><td>" + r.used + " written in your own messages</td></tr>" +
     (r.unused.length
       ? "<tr><td>not yet yours</td><td>" + r.unused.length + " of the " + r.met +
         " the app taught you — used correctly fewer than " + S.ghostUses +
@@ -6478,6 +7011,9 @@ $("#btnSet").onclick = () => {
   fillModels();
   $("#promptMode").value = S.mode;
   $("#graderOn").checked = S.grader;
+  $("#gateOn").checked = S.gate;
+  $("#debugLogOn").checked = S.debugLog;
+  $("#planOn").checked = S.plan;
   renderMistakes();
   $("#paceOn").checked = S.pace.on;
   $("#paceRate").innerHTML = [25, 35, 45, 60, 80].map(n =>
@@ -6795,6 +7331,25 @@ $("#fontSize").oninput = e => {
 $("#graderOn").onchange = e => {
   S.grader = e.target.checked;
   store.set(K.grader, S.grader);
+  queueSync("prefs");
+};
+$("#gateOn").onchange = e => {
+  S.gate = e.target.checked;
+  store.set(K.gate, S.gate);
+  queueSync("prefs");
+};
+$("#planOn").onchange = e => {
+  S.plan = e.target.checked;
+  store.set(K.plan, S.plan);
+  queueSync("prefs");
+};
+$("#debugLogOn").onchange = e => {
+  S.debugLog = e.target.checked;
+  store.set(K.debugLog, S.debugLog);
+  /* Turning it off drops what is already buffered. Leaving it to be pushed
+   * later would mean the switch does not mean what it says. */
+  if (!S.debugLog) { logBuf = []; store.set(K.logBuf, logBuf); }
+  else console.log("[log] diagnostic log on, " + VERSION);
   queueSync("prefs");
 };
 $("#paceOn").onchange = async e => {
@@ -7129,6 +7684,11 @@ $("#setSheet").addEventListener("click", e => {
 /* -------------------------------------------------------------------- boot */
 
 (async function boot() {
+  /* First thing, before anything else can log. Every console line the app emits
+   * from here on is captured -- including whatever goes wrong during boot
+   * itself, which is otherwise the least observable part of the session. */
+  captureConsole();
+  console.log("[boot] " + VERSION + " " + navigator.userAgent);
   applyFont(S.font);
   /* Before anything renders: S.history has to be the array inside S.chatMsgs,
    * not a separate copy, or every turn added this session lands in one and is
@@ -7182,6 +7742,11 @@ $("#setSheet").addEventListener("click", e => {
    * actually fires on mobile Safari (unload does not, reliably), and
    * visibilitychange covers the app being backgrounded and killed. */
   const flushNow = () => {
+    /* The log flushes first and on its own condition. Closing the app is the
+     * most likely thing to happen straight after the bug worth reading about,
+     * and a log that only survives a clean exit is no use for the crash. */
+    clearTimeout(logTimer); logTimer = null;
+    flushLog();
     if (!S.sync.on || !syncUser) return;
     clearTimeout(syncTimer);
     flushSync();
