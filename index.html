@@ -2829,11 +2829,11 @@ function renderConversation() {
     const strip = [];
     for (let i = 1; i <= goal; i++) {
       if (i <= rounds) {
-        strip.push('<span style="margin-right:12px">Day ' + i + ' \u2713</span>');
+        strip.push('<span style="margin-right:12px">Day ' + i + ' ✓</span>');
       } else if (i === rounds + 1) {
         const got = targets.filter(e => (e.ghostN || 0) >= i).length;
         strip.push('<span style="margin-right:12px;color:var(--accent)">Day ' + i +
-          " \u00b7 " + got + "/" + targets.length + "</span>");
+          " · " + got + "/" + targets.length + "</span>");
       } else {
         strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
       }
@@ -2842,11 +2842,11 @@ function renderConversation() {
       '<span style="display:inline-block;margin:0 10px 4px 0' +
         (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
       '<span style="font-size:14px;color:var(--dim)"> ' +
-        (e.ghostN || 0) + "/" + goal + (e.ghostToday ? " \u2713" : "") +
+        (e.ghostN || 0) + "/" + goal + (e.ghostToday ? " ✓" : "") +
       "</span></span>").join("");
     const theme = flashcardTheme();
     return '<div class="hint"><b>Flashcard Chat</b>' +
-      (theme ? " \u2014 " + escapeHtml(theme) : "") + "<br>" +
+      (theme ? " — " + escapeHtml(theme) : "") + "<br>" +
       (flashcardDone()
         ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
           '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
@@ -2856,7 +2856,7 @@ function renderConversation() {
       '<b style="color:var(--accent);font-size:22px">' + chips + "</b><br>" +
       '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
       '<span style="color:var(--dim)">One use counts per day, and only the word ' +
-      'itself is judged \u2014 a mistake elsewhere in the sentence does not cost ' +
+      'itself is judged — a mistake elsewhere in the sentence does not cost ' +
       'you the credit.</span></div>';
   }
   /* Drills banner, like Ghost Words': what you are drilling stays on screen for
