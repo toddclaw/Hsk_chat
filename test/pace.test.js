@@ -271,5 +271,83 @@ check(oneShot.credits < storyCredits(SEG),
   "which is strictly fewer new words than segmenting yields",
   oneShot.credits + " vs " + storyCredits(SEG));
 
+// --- the flashcard pool -----------------------------------------------------
+/* Fixtures rather than real data: the point of these functions is the
+ * partition and the ordering, and a hand-built lexicon says what the
+ * populations are supposed to be far more legibly than hsk2.json can. */
+const FC = [
+  { w: "\u82f9\u679c", p: "p\u00ednggu\u01d2", d: "apple", f: 100 },
+  { w: "\u533b\u751f", p: "y\u012bsh\u0113ng", d: "doctor", f: 200 },
+  { w: "\u56de\u7b54", p: "hu\u00edd\u00e1", d: "answer", f: 300 },
+  { w: "\u989c\u8272", p: "y\u00e1ns\u00e8", d: "colour", f: 400 },
+  { w: "\u673a\u573a", p: "j\u012bch\u01ceng", d: "airport", f: 500 },
+  { w: "\u4ece\u6765", p: "c\u00f3ngl\u00e1i", d: "never", f: 600 }
+];
+const TODAY = "2026-09-18";
+
+check(P.daysBetween("2026-09-01", TODAY) === 17,
+  "daysBetween counts whole days between two day keys",
+  String(P.daysBetween("2026-09-01", TODAY)));
+check(P.daysBetween("", TODAY) === Infinity,
+  "a missing day key is infinitely old, never zero days old");
+check(P.daysBetween(TODAY, TODAY) === 0, "the same day is zero days apart");
+
+const fcPool = o => P.flashcardPool(Object.assign(
+  { entries: FC, seen: {}, ghost: {}, ghostUses: 3,
+    reserved: new Set(), today: TODAY, n: 10 }, o));
+
+// Read but never written: seen in the history, never produced correctly.
+check(fcPool({ seen: { "\u82f9\u679c": TODAY } }).map(e => e.w).join() === "\u82f9\u679c",
+  "a word read today and never written is a candidate",
+  fcPool({ seen: { "\u82f9\u679c": TODAY } }).map(e => e.w).join());
+check(fcPool({ seen: {} }).length === 0,
+  "a word never seen at all is not a candidate");
+
+// Lapsed: produced before, but not recently.
+check(fcPool({ seen: { "\u82f9\u679c": "2026-09-17" }, ghost: { "\u82f9\u679c": { n: 1 } } }).length === 0,
+  "a word produced and seen yesterday is neither population");
+check(fcPool({ seen: { "\u82f9\u679c": "2026-01-01" }, ghost: { "\u82f9\u679c": { n: 1 } } })
+        .map(e => e.w).join() === "\u82f9\u679c",
+  "a word produced once and unseen for months is lapsed");
+check(fcPool({ seen: { "\u82f9\u679c": "2026-01-01" }, ghost: { "\u82f9\u679c": { n: 3 } } }).length === 0,
+  "a word already owned is excluded however stale it is");
+check(fcPool({ seen: { "\u82f9\u679c": "2026-01-01" }, ghost: { "\u82f9\u679c": { n: 3 } }, ghostUses: 6 })
+        .map(e => e.w).join() === "\u82f9\u679c",
+  "and ownership is judged against ghostUses, not a hardcoded 3");
+
+/* The ordering the learner asked for: read-but-never-written first, lapsed
+ * only as backfill. \u533b\u751f is commoner than \u56de\u7b54 and still comes second, which
+ * is the whole point -- the populations do not interleave by frequency. */
+const ordered = fcPool({
+  seen: { "\u56de\u7b54": TODAY, "\u989c\u8272": TODAY, "\u533b\u751f": "2026-01-01", "\u673a\u573a": "2026-01-01" },
+  ghost: { "\u533b\u751f": { n: 1 }, "\u673a\u573a": { n: 2 } }
+});
+check(ordered.map(e => e.w).join() === "\u56de\u7b54,\u989c\u8272,\u533b\u751f,\u673a\u573a",
+  "read-never-written comes first, lapsed backfills, each commonest-first",
+  ordered.map(e => e.w).join());
+
+check(fcPool({ seen: { "\u56de\u7b54": TODAY, "\u989c\u8272": TODAY }, n: 1 })
+        .map(e => e.w).join() === "\u56de\u7b54",
+  "n caps the list");
+check(fcPool({ seen: { "\u56de\u7b54": TODAY, "\u989c\u8272": TODAY },
+               reserved: new Set(["\u56de\u7b54"]) }).map(e => e.w).join() === "\u989c\u8272",
+  "a reserved word is never offered");
+check(P.flashcardPool({}).length === 0,
+  "an empty options object yields an empty pool rather than throwing");
+check(P.flashcardPool({ entries: FC, today: TODAY }).length === 0,
+  "and a learner with no history gets no candidates");
+
+/* Unranked words weigh nothing in the coverage arithmetic and sort last in
+ * buildPool(); the same must hold here or the commonest-first promise is
+ * broken by a word the corpus never saw. */
+const unrankedPool = P.flashcardPool({
+  entries: FC.concat([{ w: "\u53c9\u5b50", p: "ch\u0101zi", d: "fork" }]),
+  seen: { "\u53c9\u5b50": TODAY, "\u4ece\u6765": TODAY }, ghost: {}, ghostUses: 3,
+  reserved: new Set(), today: TODAY, n: 10
+});
+check(unrankedPool.map(e => e.w).join() === "\u4ece\u6765,\u53c9\u5b50",
+  "an unranked word sorts after every ranked one",
+  unrankedPool.map(e => e.w).join());
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

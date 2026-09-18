@@ -23,6 +23,18 @@
   var PROMOTE_AT = 6;
   var FORCE_AFTER = 2;     // declined offers before the word is required
 
+  /* ------------------------------------------------------- flashcard sets
+   *
+   * A set of words to study away from the app and then produce in chat. The
+   * constants are argued in RESEARCH.md, "Choosing a set of words to study
+   * away from the app"; the two day counts are guesses and that section says
+   * so. */
+  var SET_SIZE = 5;            // Nation's word-card guidance is 5-7 per set
+  var SET_MAX = 7;             // ...and this is the top of that range
+  var STALE_DAYS = 30;         // unseen this long and a word counts as lapsed
+  var RESERVE_DAYS = 30;       // a set untouched this long stops reserving
+  var CANDIDATES_SHOWN = 15;   // how many the chooser picks from
+
   /* Asking politely stops working with some models: they read "use one if it
    * fits" as optional and never take it. After this many turns where an offer
    * went unused, the top word stops being a suggestion and becomes a condition
@@ -118,6 +130,64 @@
 
   var asSet = function (v) { return v instanceof Set ? v : new Set(v || []); };
 
+  /* Whole days between two "YYYY-MM-DD" keys.
+   *
+   * A missing or unparseable key is Infinity, never 0. The callers all ask
+   * "is this older than N", and answering 0 for a word with no recorded
+   * sighting would say the freshest possible thing about the least evidence.
+   *
+   * UTC, like every other day key in this app: two devices in two timezones
+   * have to agree, and mistakes.js records why a flight must not move a
+   * learner's numbers. */
+  function daysBetween(from, to) {
+    var a = Date.parse(String(from || "") + "T00:00:00Z");
+    var b = Date.parse(String(to || "") + "T00:00:00Z");
+    if (isNaN(a) || isNaN(b)) return Infinity;
+    return Math.round((b - a) / 86400000);
+  }
+
+  /* Candidate words for a flashcard set, best first.
+   *
+   * Two populations, in this order, and they do not interleave:
+   *
+   *   1. read but never written -- the partner has used it to you and you have
+   *      never produced it. The reported complaint, directly.
+   *   2. lapsed -- you produced it once and have not met it in STALE_DAYS.
+   *      Backfill, so a learner whose partner has taught them everything still
+   *      gets a full set.
+   *
+   * Both exclude words already owned (ghostN >= ghostUses, the one place a
+   * production threshold is allowed to live) and words reserved by a set still
+   * in flight. Each population is ordered commonest-first by the level list's
+   * own `f`, with unranked words last -- unranked means the corpus never saw
+   * them, which is exactly where they belong.
+   *
+   * Pure by construction, like retrieval.js: the history scan, the ghost map,
+   * the reservations and today's date all arrive as arguments. */
+  function flashcardPool(opts) {
+    var o = opts || {};
+    var seen = o.seen || {}, ghost = o.ghost || {};
+    var uses = o.ghostUses || 3;
+    var reserved = o.reserved instanceof Set ? o.reserved : new Set(o.reserved || []);
+    var fresh = [], lapsed = [];
+    (o.entries || []).forEach(function (e) {
+      if (!e || !e.w) return;
+      var day = seen[e.w];
+      if (!day) return;                                  // never met at all
+      if (reserved.has(e.w)) return;
+      var n = (ghost[e.w] && ghost[e.w].n) || 0;
+      if (n >= uses) return;                             // already yours
+      if (n === 0) fresh.push(e);
+      else if (daysBetween(day, o.today) >= STALE_DAYS) lapsed.push(e);
+    });
+    var byRank = function (a, b) {
+      return ((a.f || UNRANKED) - (b.f || UNRANKED)) || a.w.localeCompare(b.w);
+    };
+    fresh.sort(byRank);
+    lapsed.sort(byRank);
+    return fresh.concat(lapsed).slice(0, o.n || CANDIDATES_SHOWN);
+  }
+
   /* Share of a level's running text a given set of words covers, 0..1.
    *
    * One scale, no bonuses. An earlier version doubled the weight of words the
@@ -167,6 +237,9 @@
   var api = {
     DEFAULT_RATE: DEFAULT_RATE, CREDIT_CAP: CREDIT_CAP, SLATE: SLATE, PROMOTE_AT: PROMOTE_AT,
     FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
+    SET_SIZE: SET_SIZE, SET_MAX: SET_MAX, STALE_DAYS: STALE_DAYS,
+    RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
+    daysBetween: daysBetween, flashcardPool: flashcardPool,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,
     /* The move-up recommendation fires here. 98%, the published "comfortable
