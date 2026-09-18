@@ -1184,6 +1184,113 @@
       (partner ? "The sentence: " : "The student wrote: ") + opts.text;
   }
 
+  /* ------------------------------------------- repair strategies
+   *
+   * What to tell the partner when the correctness gate has faulted the same
+   * turn more than once. Not a prompt tweak -- the thing the retry loop was
+   * missing: a way to try something DIFFERENT.
+   *
+   * WHY. Read off a production session: ten of fourteen turns spent all six
+   * tries, and four attempts inside one turn came back byte-identical -- same
+   * sentence, same complaint, four times, because the repair said the same
+   * thing every time. Three of the fights were unwinnable by construction: the
+   * gate asks for 练武术 and the validator forbids 练; it asks for 一封信 and
+   * the validator forbids 封. No amount of "say it differently" resolves a
+   * sentence whose only correct form is above the level.
+   *
+   * WHAT. Tarone's (1977) taxonomy of communication strategies, filtered to
+   * what this app can do. The division that matters is REDUCTION (dodge the gap
+   * -- abandon it, change the subject) against ACHIEVEMENT (solve it --
+   * circumlocute, approximate, ask for help). Learners move from the first to
+   * the second as they improve, so achievement strategies come first here and
+   * the topic pivot is last. RESEARCH.md, "When the level cannot say it".
+   *
+   * SELECTION IS BY RULE, not by another model call. The app already holds the
+   * evidence a person would use: whether the gate's own correction needs a word
+   * above the level (then only introducing it or naming the problem can work),
+   * whether the validator keeps rejecting the same word (then say it another
+   * way), and whether the model has stopped changing its answer (then it is
+   * stuck and needs a smaller target). A call would spend a third round trip on
+   * an already slow turn to reach a conclusion the evidence already names.
+   *
+   * Never the same strategy twice in one turn. That alone ends the identical
+   * repeat, which is the cheapest win here and needs no model to be cleverer.
+   */
+  var STRATEGIES = {
+    /* The partner already does this, silently and badly -- 沙漠 became
+     * 很干很干的地方 because nothing said it was allowed. Saying so is the
+     * whole of this one. */
+    circumlocute: function (o) {
+      return (o.blocked ? "「" + o.blocked + "」学生不认识。" : "") +
+        "请不要用这个词，用学生认识的词把这个意思说清楚。可以多说几个字。";
+    },
+    /* The app's own escape hatch, and not the unused channel this repo believed
+     * -- it fires on 9% of real assistant messages unprompted. Offered only when
+     * the gate's correction NEEDS the word, and capped by the caller, because it
+     * spends new-word budget from outside the pacing system. */
+    introduce: function (o) {
+      return "这个意思一定要用「" + o.blocked + "」。请先这样介绍它：" +
+        "[[NEED:" + o.blocked + "|拼音|English]]，再用它说一句话。";
+    },
+    /* Negotiation of meaning: the interaction literature's mechanism, and the
+     * strategy of a MORE proficient speaker rather than a weaker one. */
+    metalinguistic: function () {
+      return "这个意思用简单的词说不清楚。请直接告诉学生这个词太难，" +
+        "然后换一个说法，或者问学生一个问题。";
+    },
+    approximate: function (o) {
+      return "请用一个意思差不多、学生认识的词。不用完全一样，" +
+        (o.blocked ? "但是不要用「" + o.blocked + "」。" : "接近就可以。");
+    },
+    /* For the turn that has stopped moving: it is not going to find a way to
+     * say the whole idea, so ask for less of it. */
+    reduce: function () {
+      return "请说一件小一点的事，用短的句子。不用把刚才的意思都说出来。";
+    },
+    appeal: function () {
+      return "请不要说这件事了，直接问学生一个和这个话题有关的问题。";
+    },
+    pivot: function () {
+      return "这个话题太难说。请说一件别的事，换一个简单的话题。";
+    }
+  };
+
+  /* The order each situation tries things in. First untried one wins. */
+  var LADDERS = {
+    // The fix itself is above the level. Rephrasing cannot reach it.
+    unsayable: ["introduce", "metalinguistic", "approximate", "reduce", "appeal", "pivot"],
+    // The model has stopped changing its answer. It needs a smaller target.
+    stuck:     ["reduce", "appeal", "metalinguistic", "circumlocute", "pivot"],
+    // The same word keeps being rejected. Say it another way.
+    sameWord:  ["circumlocute", "approximate", "reduce", "metalinguistic", "appeal", "pivot"],
+    plain:     ["circumlocute", "reduce", "metalinguistic", "appeal", "pivot"]
+  };
+
+  /* o: { gateFails, tried, blocked, repeated, sameWord, allowIntroduce }
+   * Returns { id, text } or null once every strategy has been spent.
+   *
+   * gateFails < 2 returns null on purpose: the first failure gets the plain
+   * correction, which is usually enough, and a turn that would have recovered
+   * on its own should not be told to start circumlocuting. */
+  function repairStrategy(o) {
+    o = o || {};
+    if ((o.gateFails || 0) < 2) return null;
+    var tried = o.tried || [];
+    var ladder = o.blocked ? LADDERS.unsayable
+               : o.repeated ? LADDERS.stuck
+               : o.sameWord ? LADDERS.sameWord
+               : LADDERS.plain;
+    for (var i = 0; i < ladder.length; i++) {
+      var id = ladder[i];
+      if (tried.indexOf(id) !== -1) continue;
+      // Introducing a word needs a word AND the caller's permission:
+      // DEFAULT_RATE is spent by pacing, not by the repair loop.
+      if (id === "introduce" && !(o.blocked && o.allowIntroduce)) continue;
+      return { id: id, text: STRATEGIES[id](o) };
+    }
+    return null;
+  }
+
   /* Who is in this story, asked before it is written.
    *
    * Answered in the [[NEED:]] shape on purpose: extractNeeds() already parses
@@ -1320,6 +1427,8 @@
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
+                        repairStrategy: repairStrategy,
+                        STRATEGY_IDS: Object.keys(STRATEGIES),
               drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
               report: report,
               castPrompt: castPrompt,

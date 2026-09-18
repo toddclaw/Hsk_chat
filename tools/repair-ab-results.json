@@ -1,0 +1,589 @@
+{
+ "when": "2026-09-18T01:26:07.057Z",
+ "tries": 6,
+ "rows": [
+  {
+   "i": 1,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "今天很热，我想吃冷的东西。你今天想吃什么？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "text": "今天热，我想吃冷的。我昨天吃了一个红色水果的冷东西。你喜欢吃哪个冷东西？"
+   }
+  },
+  {
+   "i": 0,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "我今天很好，谢谢。我吃了早饭，现在不想吃东西。你今天吃早饭了吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "我今天很好，谢谢。上午我喝了一点咖啡。你今天吃饭了吗？"
+   }
+  },
+  {
+   "i": 2,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "咖啡我不太喜欢。我喝过，不好喝。你喜欢什么咖啡？"
+   }
+  },
+  {
+   "i": 3,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "text": "没关系。你说得很好。五点半很早，我觉得你起床很早。我七点起床。你早上做什么？"
+   }
+  },
+  {
+   "i": 4,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "运动很好。运动后休息，身体不累。我星期天也休息。你星期天喜欢做什么？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "运动很好。运动后休息也很好。我星期天也休息。你星期天喜欢做什么？"
+   }
+  },
+  {
+   "i": 8,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "text": "你说得对。每天学习两小时很好。你学了什么？"
+   }
+  },
+  {
+   "i": 6,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "对不起。你每天写东西写多长时间？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "对不起。你写东西多吗？我写得慢。你写得快吗？"
+   }
+  },
+  {
+   "i": 7,
+   "base": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "text": "电脑不好学，但是多做就会了。我每天看电脑画画。你每天做什么？"
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 10,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "你的朋友都在学电脑，真好。你想教别人，很好。你为什么想教别人？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "你很好。教书很好。我认识一位老师，她教中文。你想教什么？"
+   }
+  },
+  {
+   "i": 5,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [
+     "introduce"
+    ]
+   }
+  },
+  {
+   "i": 12,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 11,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "text": "你教朋友中文，真好。你朋友喜欢学吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "text": "你教朋友中文，很好。你朋友喜欢学吗？"
+   }
+  },
+  {
+   "i": 9,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "text": "你每天学两个小时，很好。我每天做电脑的工作。你学电脑的时候高兴吗？"
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [
+     "introduce",
+     "metalinguistic"
+    ]
+   }
+  },
+  {
+   "i": 13,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "你太太说得对。你要工作。你今天做了什么工作？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "你太太说得对。你要工作。你在家看书吗？"
+   }
+  },
+  {
+   "i": 14,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 15,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [
+     "introduce"
+    ]
+   }
+  },
+  {
+   "i": 18,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 17,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 16,
+   "base": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "text": "我家有三个人。我妈妈、爸爸和我。你家有几个人？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 1,
+    "strategies": [],
+    "text": "我家有三个人。我妈妈、我爸爸和我。你家有几个人？"
+   }
+  },
+  {
+   "i": 19,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "你真好，开车送朋友去医院。我今天走路去超市了。你朋友怎么了？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [
+     "circumlocute",
+     "reduce"
+    ],
+    "text": "你真好。我今天走路去超市了。你昨天去哪儿了？"
+   }
+  },
+  {
+   "i": 20,
+   "base": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "你朋友现在好一点儿了，真好。我的朋友在医院工作，他是医生。你想去医院看看他吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "你朋友好一点儿了，真好。那个医生在医院工作，他是我的朋友。你想见他吗？他可以帮你。"
+   }
+  },
+  {
+   "i": 22,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "不客气！我也很高兴。我明天要见医生，她爱说好玩儿的事。你星期三可以吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "不客气！我也很高兴。我今天喝了一些茶。你喜欢喝什么茶？"
+   }
+  },
+  {
+   "i": 24,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 21,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [
+     "circumlocute",
+     "reduce"
+    ],
+    "text": "好的，我明天去医院。医生在那儿等我们。你想去吗？"
+   }
+  },
+  {
+   "i": 25,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 23,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我最喜欢天的颜色，因为看起来很舒服。你呢？你喜欢什么颜色？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "我最喜欢天的颜色，因为很好看。你呢？你喜欢什么颜色？"
+   }
+  },
+  {
+   "i": 27,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我喜欢听歌。今天我看了一本很好玩的书。你喜欢做什么？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "我喜欢听歌。今天我听了一些中文歌。你喜欢听什么歌？"
+   }
+  },
+  {
+   "i": 28,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "我不是真人，我是AI。我每天学习中文，想和你做朋友。你今天高兴吗？"
+   }
+  },
+  {
+   "i": 26,
+   "base": {
+    "end": "clean",
+    "attempt": 6,
+    "strategies": [],
+    "text": "你晚上出去过很多次了，很好。我只去过一次，是在天热的时候。你去的时候拿什么东西？"
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 30,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": [
+     "introduce"
+    ]
+   }
+  },
+  {
+   "i": 29,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "送一本书和一点喝的东西吧，他会高兴的。我上个星期送朋友一本书，他很喜欢。你朋友喜欢什么书？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "送他一本书和喝的吧，他会高兴的。我上个月送了朋友一本书，他也请我喝了水。你朋友喜欢看什么书？"
+   }
+  },
+  {
+   "i": 31,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "你现在很忙，过几天会好。我每天读十分钟，很快乐。你每天有几分钟可以读书吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "你忙完可以读一点点书。我每天读一会儿，很快乐。你最喜欢什么时候休息？"
+   }
+  },
+  {
+   "i": 34,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我不喝这个。我爱喝茶。你爱喝什么？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我不喝那个。我喝茶。你喝过茶吗？"
+   }
+  },
+  {
+   "i": 35,
+   "base": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我喜欢吃绿色的菜，也吃肉。今天我吃了肉和面。你今天早上吃了什么？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "我吃肉，也吃菜。今天我做了菜。你经常在家做饭吗？"
+   }
+  },
+  {
+   "i": 37,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "我身体很好，每天走很多路。昨天我买了新穿的，走得好。你每天走路吗？"
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 33,
+   "base": {
+    "end": "clean",
+    "attempt": 5,
+    "strategies": [],
+    "text": "你工作离家近，开车只要二十分钟，真好。我走路去，路上还能看看花。你孩子喜欢学校里的花吗？"
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 3,
+    "strategies": [],
+    "text": "你工作离家近，开车只要二十分钟，真不错。我昨天走路去公司，天气很好。你孩子喜欢在学校外面玩吗？"
+   }
+  },
+  {
+   "i": 36,
+   "base": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "小花很漂亮，我也喜欢看花。昨天我去外面看了很多漂亮的花。你最喜欢什么颜色的花？"
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 38,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   }
+  },
+  {
+   "i": 32,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 4,
+    "strategies": [],
+    "text": "我没有公司，我在电脑上工作。我每天在手机和电脑上说话。你家离公司远吗？坐车要多长时间？"
+   }
+  },
+  {
+   "i": 39,
+   "base": {
+    "end": "stub",
+    "attempt": 6,
+    "strategies": []
+   },
+   "lad": {
+    "end": "clean",
+    "attempt": 2,
+    "strategies": [],
+    "text": "休息好了，身体会好。我也要睡觉了。明天见！"
+   }
+  }
+ ]
+}

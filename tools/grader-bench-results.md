@@ -1827,6 +1827,54 @@ honest sentence is **"no missed outright error in fifty turns it passed"**, not
 "catches everything". Widening that interval means labelling more passes, and
 nothing else.
 
+## Round twenty-five: the repair ladder, and a comparison that cannot see it
+
+The retry loop said the same thing on every attempt. A production session showed
+what that costs: ten of fourteen turns spent all six tries, four attempts inside
+one turn came back byte-identical, and three of the fights were unwinnable --
+the gate asks for 练武术 while the validator forbids 练.
+
+`HSKPrompt.repairStrategy()` picks a different strategy each time, by rule from
+evidence the app already holds: whether the gate's own correction needs a word
+above the level (run `better` through the same validator the reply faces),
+whether the model has stopped changing its answer, whether the same word keeps
+being rejected. Tarone's taxonomy, achievement strategies first and the topic
+pivot last. `tools/repair-ab.js` replays real learner turns through the real
+prompt, validator and gate, and runs both arms over the same turns.
+
+| 40 real learner turns, 6 tries | rescued | stub | mean tries |
+|---|---|---|---|
+| base — repair as shipped | 58% (23/40) | 43% | 4.3 |
+| ladder | 63% (25/40) | 38% | 4.2 |
+
+**Paired: the ladder rescued 7 the base lost and lost 5 the base rescued.
+Exact McNemar p = 0.77. There is no effect here to report.**
+
+### Why the comparison could not have worked
+
+**The ladder engaged on 6 of 40 turns.** On the other 34 both arms ran
+identical code, so five sixths of the sample was measuring temperature against
+itself. The four-turn smoke run had already shown the noise floor: one turn
+differed between arms with *zero* strategies applied.
+
+The strategy only fires from the second gate failure, and most turns never have
+a second gate failure. Sampling turns at random and hoping enough of them are
+hard is the same mistake round ten made at the sentence level and round
+seventeen found: **the population that can answer the question is a small tail
+of the one being sampled.** The fix is the same -- condition on it. Run the base
+arm, keep the turns it loses, and test the ladder against those.
+
+### One thing worth looking at, on six turns and therefore worth nothing yet
+
+`introduce` -- offer the `[[NEED:]]` channel for the word the fix needs -- fired
+four times and **every one of the four still ended in the stub.** The pairing
+that did rescue a turn was `circumlocute → reduce`.
+
+If that survives a proper sample it is interesting, because the channel is not
+unused: it fires unprompted on 9% of real assistant messages. A model that
+reaches for it on its own and refuses it when instructed would be worth knowing
+about, and it is the opposite of what the design assumed.
+
 ## What to measure next
 
 The positive class is now the binding constraint: it cannot distinguish a judge

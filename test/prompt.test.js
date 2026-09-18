@@ -1186,5 +1186,75 @@ const GT = "我家在城市下面，离银行很近。", GL = "HSK 2";
 check(P.grade({ text: GT, label: GL }).indexOf("student of Chinese at " + GL) !== -1,
   "the learner prompt still names the level and the student");
 
+/* ------------------------------------------------- the repair strategies
+ *
+ * The property that matters most is the cheapest one: never the same strategy
+ * twice in a turn. A production session had four byte-identical attempts inside
+ * one turn because the repair said the same thing every time. */
+{
+  const walk = (o, n) => {
+    const tried = [], ids = [];
+    for (let f = 2; f <= n; f++) {
+      const r = P.repairStrategy(Object.assign({ gateFails: f, tried: tried }, o));
+      if (!r) break;
+      tried.push(r.id); ids.push(r.id);
+    }
+    return ids;
+  };
+  const uniq = a => a.length === new Set(a).size;
+
+  check(P.repairStrategy({ gateFails: 1, tried: [] }) === null,
+    "the first gate failure gets the plain correction, no strategy");
+  check(P.repairStrategy({ gateFails: 2, tried: [] }) !== null,
+    "the second one gets a strategy");
+
+  [["unsayable", { blocked: "练", allowIntroduce: true }],
+   ["stuck", { repeated: true }],
+   ["sameWord", { sameWord: true }],
+   ["plain", {}]].forEach(([name, o]) => {
+    const ids = walk(o, 12);
+    check(ids.length >= 4, `${name} offers several strategies`, JSON.stringify(ids));
+    check(uniq(ids), `${name} never repeats one in a turn`, JSON.stringify(ids));
+    check(P.repairStrategy(Object.assign({ gateFails: 9, tried: ids }, o)) === null,
+      `${name} runs out rather than looping`, JSON.stringify(ids));
+  });
+
+  /* The fix being above the level is the case the whole thing exists for: when
+   * the gate wants 练 and the validator forbids it, rephrasing cannot get
+   * there. Only teaching the word or naming the problem can. */
+  const unsayable = walk({ blocked: "练", allowIntroduce: true }, 12);
+  check(unsayable[0] === "introduce",
+    "an unsayable fix offers the [[NEED:]] channel first", JSON.stringify(unsayable));
+  check(unsayable.indexOf("circumlocute") === -1,
+    "and never suggests rephrasing, which cannot reach it", JSON.stringify(unsayable));
+
+  /* DEFAULT_RATE is spent by pacing. The repair loop may only introduce a word
+   * when the caller says the budget allows it. */
+  const noIntro = walk({ blocked: "练", allowIntroduce: false }, 12);
+  check(noIntro.indexOf("introduce") === -1,
+    "without permission it never reaches for a new word", JSON.stringify(noIntro));
+  check(noIntro[0] === "metalinguistic",
+    "and names the problem instead", JSON.stringify(noIntro));
+
+  // A stuck turn needs a smaller target, not another way to say the same thing.
+  check(walk({ repeated: true }, 12)[0] === "reduce",
+    "a turn that stopped changing is asked for less, first");
+
+  // Reduction strategies go last: they are what a weaker speaker falls back on.
+  ["unsayable", "stuck", "sameWord", "plain"].forEach(name => {
+    const o = { unsayable: { blocked: "练", allowIntroduce: true }, stuck: { repeated: true },
+                sameWord: { sameWord: true }, plain: {} }[name];
+    const ids = walk(o, 12);
+    check(ids[ids.length - 1] === "pivot",
+      `${name} keeps changing the subject for last`, JSON.stringify(ids));
+  });
+
+  // The instruction reaches the model in Chinese, like every other repair.
+  const t = P.repairStrategy({ gateFails: 2, tried: [], blocked: "练", allowIntroduce: true });
+  check(/[\u4e00-\u9fff]/.test(t.text), "the instruction is in Chinese", t.text);
+  check(t.text.indexOf("练") !== -1, "and names the word it is about", t.text);
+  check(t.text.indexOf("[[NEED:") !== -1, "and shows the exact markup to use", t.text);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
