@@ -6,7 +6,8 @@
 # so the public page is always main and testing a branch never touches it.
 # Pages must be set to deploy from the `gh-pages` branch, root folder — once.
 #
-# /preview/ lists every live preview and redirects to the one just published.
+# /preview/ lists every live preview and marks the one just published; it does
+# not redirect, so the list is what you land on and the branch is your choice.
 # That index and the pruning of dead previews are both done by one reconcile
 # against `git ls-remote`, run on every publish and every delete — see
 # .github/scripts/sync-previews.py for why it asks git rather than keeping a

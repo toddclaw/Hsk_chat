@@ -35,7 +35,7 @@ def reconcile(preview_dir, live_branches, owner, repo, latest=None):
     """Prune orphaned previews, then write the index. Returns (kept, removed).
 
     `latest` is the branch just published, or None when called from a delete
-    event. It only earns the redirect if its directory survived the prune.
+    event. It is only marked as such if its directory survived the prune.
     """
     by_dir = {safe_name(b): b for b in live_branches}
 
@@ -63,16 +63,14 @@ def reconcile(preview_dir, live_branches, owner, repo, latest=None):
             os.remove(index)
         return kept, removed
 
+    # A push to main or a delete event publishes no preview of its own, and
+    # `target` is now only a label -- so it stays empty rather than guessing.
+    # It used to fall back to the sole survivor, which was load-bearing while
+    # this page redirected; as a caption, "just published" about a branch
+    # nobody pushed is simply false.
     target = safe_name(latest) if latest and safe_name(latest) in by_dir else None
     if target and target not in kept:
         target = None
-    if target is None and len(kept) == 1:
-        # No branch published here -- a push to main, or a delete event. With a
-        # single preview left there is no ambiguity about where /preview/ should
-        # go, and this is the usual case: one branch open at a time. Without it,
-        # every push to main would strip the redirect from the branch you are
-        # actually testing on your phone.
-        target = kept[0]
 
     with open(index, "w") as f:
         f.write(render(kept, by_dir, target, owner, repo))
@@ -80,26 +78,26 @@ def reconcile(preview_dir, live_branches, owner, repo, latest=None):
 
 
 def render(kept, by_dir, target, owner, repo):
-    """The preview index: a list of every live preview, and -- when we know
-    which branch was just published and it is still here -- a redirect to it.
+    """The preview index: a list of every live preview, with the one just
+    published marked.
 
-    The redirect is the phone case: /preview/ should land on the build you just
-    pushed without a tap. The list is the fallback for every other case, and is
-    always present underneath so a redirect that fires on the wrong branch is
-    recoverable rather than a dead end.
+    This page used to carry a zero-delay <meta refresh> to that branch, on the
+    phone argument that /preview/ should land on the build you just pushed
+    without a tap. In use it flashed past unread and took you somewhere before
+    you had seen the choice, which is the opposite of what a chooser is for.
+    Landing on the list costs one tap and is the whole point of the page.
     """
     e = html.escape
-    redirect = ('<meta http-equiv="refresh" content="0;url=./%s/">\n' % e(target)) if target else ""
     rows = "\n".join(
         '  <li><a href="./%s/">%s</a>%s</li>' % (
             e(d), e(by_dir.get(d, d)), " &larr; just published" if d == target else "")
         for d in kept)
-    heading = ("Redirecting to <code>%s</code>&hellip; " % e(by_dir.get(target, target))
+    heading = ("Just published: <code>%s</code>. " % e(by_dir.get(target, target))
                if target else "")
     return f'''<!DOCTYPE html>
 <meta charset="utf-8">
 <title>HSK Chat Preview</title>
-{redirect}<meta name="robots" content="noindex">
+<meta name="robots" content="noindex">
 <style>
   body{{background:#0f1317;color:#e8edf2;font:16px/1.5 system-ui,sans-serif;padding:40px}}
   .banner{{background:#2a343e;border:1px solid #5a4a22;border-radius:10px;padding:20px}}
@@ -119,7 +117,7 @@ def render(kept, by_dir, target, owner, repo):
 
 
 def selftest():
-    """The prune rule and the redirect rule, which are the two things a
+    """The prune rule and the just-published marker, which are the two things a
     silently-broken cleanup job would get wrong again."""
     import tempfile
 
@@ -141,7 +139,8 @@ def selftest():
         assert kept == ["feat-a", "main-ish"], kept
         assert removed == ["claude-old", "v71"], removed
         assert not os.path.exists(os.path.join(d, "recent-branches.json")), "state file left behind"
-        assert 'content="0;url=./feat-a/"' in page(), "no redirect to the published branch"
+        assert "just published" in page(), "published branch not marked"
+        assert "http-equiv" not in page(), "the index must never redirect -- it is a chooser"
         assert "./main-ish/" in page(), "surviving preview missing from the list"
         assert "v71" not in page(), "pruned preview still listed"
 
@@ -150,24 +149,23 @@ def selftest():
         kept2, removed2 = reconcile(d, ["feat/a", "main-ish"], "o", "r", latest="feat/a")
         assert kept2 == kept and removed2 == [], (kept2, removed2)
 
-        # Each of these must NOT redirect, and each needs two survivors so the
-        # sole-survivor rule below is not what is being measured.
-        for label, live, latest in [
-            ("no branch published", ["feat/a", "main-ish"], None),
-            ("target was pruned", ["feat/a", "main-ish"], "claude/old"),
-            ("target is live but has no preview dir", ["feat/a", "main-ish", "x/y"], "x/y"),
+        # Nothing was published here, so nothing may be captioned as though it
+        # was -- and the list has to survive every one of these.
+        for label, have, live, latest in [
+            ("no branch published", ["main-ish", "feat-a"], ["feat/a", "main-ish"], None),
+            ("target was pruned", ["main-ish", "feat-a"], ["feat/a", "main-ish"], "claude/old"),
+            ("target is live but has no preview dir",
+             ["main-ish", "feat-a"], ["feat/a", "main-ish", "x/y"], "x/y"),
+            # The sole survivor used to be captioned by default, to keep the
+            # redirect alive across a push to main. There is no redirect now.
+            ("sole survivor, nothing published", ["feat-a"], ["feat/a"], None),
         ]:
-            dirs("main-ish", "feat-a")
+            dirs(*have)
             reconcile(d, live, "o", "r", latest=latest)
             assert "http-equiv" not in page(), "redirected: " + label
-            assert "./main-ish/" in page() and "./feat-a/" in page(), "list lost: " + label
+            assert "just published" not in page(), "captioned as published: " + label
+            assert "./feat-a/" in page(), "list lost: " + label
         assert "x-y" not in page(), "listed a preview that does not exist"
-
-        # Sole survivor: a push to main publishes no preview of its own, and
-        # must not strip the redirect from the one branch that is open.
-        dirs("feat-a")
-        reconcile(d, ["feat/a"], "o", "r", latest=None)
-        assert 'content="0;url=./feat-a/"' in page(), "sole preview lost its redirect"
 
         # Last branch gone: the index written a moment ago must be removed, not
         # left pointing into a directory that no longer exists.
