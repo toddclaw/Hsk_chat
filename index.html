@@ -1176,7 +1176,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v116 — 2026-09-18";
+const VERSION   = "v117 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2159,6 +2159,10 @@ function windowed(excludeKind) {
  * frequency of their own. Six either way, matching what the prompt has always
  * been given. */
 function reuseFor(activity) {
+  /* Flashcard Chat's list is the set the learner chose and studied, read
+   * straight out of the transcript -- not a ranking over anything, which is
+   * what makes it stable for the whole conversation. */
+  if (HSKPrompt.activityFor(activity).reuse === "chosen") return flashcardTargets();
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
     /* Commonest-first, and NOT reordered by what has been credited today.
@@ -2213,7 +2217,7 @@ async function turn(ctx) {
    * in an activity that practises what the learner already has. Ghost Words and
    * Drills both say so on their own row (`newWords: false`) rather than being
    * named here, so the next one that needs it needs no edit to this line. */
-  const isFocused = currentActivity() === "focused";
+  const steers = HSKPrompt.activityFor(currentActivity()).steer === true;
   /* Captured now, not read later. A turn takes seconds and a story segment most
    * of a minute, and the learner can switch chats inside that window -- so by
    * the time the gate runs, currentActivity() is whatever they navigated TO.
@@ -2238,8 +2242,10 @@ async function turn(ctx) {
     : [];
   const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
-  // In Ghost Words, "required" is the first unused word to push production.
-  const required = isFocused ? ghostRequired(reuse) :
+  // In a steering activity -- Ghost Words, Flashcard Chat -- "required" is the
+  // first target that can still earn a credit today, which each row declares
+  // with `steer: true` rather than being named here.
+  const required = steers ? ghostRequired(reuse) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
   /* A story turn names its own model in ctx (storyStep(), and the discussing
    * phase send() sets up). Every other twenty turn -- opening, and every
@@ -2584,7 +2590,8 @@ function renderNotice(turnObj) {
  * transcript has to know to skip them -- here, and in the is-the-log-empty
  * check in renderAll(). */
 const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord",
-                              "drillTip", "drillEnd"]);
+                              "drillTip", "drillEnd",
+                              "flashcards", "flashcardTheme"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -3090,6 +3097,7 @@ function activityOf(c) {
   const msgs = (c && S.chatMsgs[c.id]) || [];
   if (msgs.some(m => m.role === "topic")) return "story";
   if (HSKMistakes.drillTagOf(msgs)) return "drill";
+  if (HSKPace.flashcardsOf(msgs).length) return "flashcard";
   return (c && c.activity) || "chat";
 }
 function currentActivity() { return activityOf(chatById(S.chatId)); }
@@ -3160,7 +3168,8 @@ function startActivity(id) {
   /* Same withholding as story time, for the same reason: nothing is
    * generated until the learner has chosen a role, since the role decides
    * what the model is even allowed to say. */
-  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" && id !== "drill") openingTurn();
+  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" &&
+      id !== "drill" && id !== "flashcard") openingTurn();
   return c;
 }
 
@@ -3880,8 +3889,8 @@ async function gradeTurn(turnObj) {
     /* Same reason as the three above: read BEFORE the await. Switching activity
      * mid-grade must not attach this conversation's ghost targets to another
      * one's verdict. */
-    const ghosting = currentActivity() === "focused";
-    const ghostTargets = ghosting ? reuseFor("focused").map(e => e.w) : [];
+    const ghosting = HSKPrompt.activityFor(currentActivity()).steer === true;
+    const ghostTargets = ghosting ? reuseFor(currentActivity()).map(e => e.w) : [];
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
@@ -6034,7 +6043,8 @@ function renderComposer() {
   const listening = (currentActivity() === "story" && !anyStoryQuestion() &&
     !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS)) ||
     (currentActivity() === "twenty" && !(c && c.side)) ||
-    (currentActivity() === "drill" && (!drillTag() || drillDone()));
+    (currentActivity() === "drill" && (!drillTag() || drillDone())) ||
+    (currentActivity() === "flashcard" && !flashcardWords().length);
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -6456,6 +6466,102 @@ function ghostProgressMap() {
       .filter(function (tok) { return tok.kind === "word"; })
       .map(function (tok) { return tok.text; });
   });
+}
+
+/* ------------------------------------------------------- Flashcard Chat */
+
+/* This conversation's chosen set, and the theme the chooser named it. Read out
+ * of the transcript markers, so a set survives a reload and syncs with the
+ * conversation without a column of its own. */
+function flashcardWords() { return HSKPace.flashcardsOf(S.history); }
+function flashcardTheme() { return HSKPace.flashcardThemeOf(S.history); }
+function flashcardRounds() { return HSKPace.setRounds(flashcardWords(), ghostProgressMap()); }
+function flashcardDone() { return flashcardRounds() >= S.ghostUses; }
+
+/* The last UTC day each word appeared anywhere in the history, in either
+ * direction. Read counts as well as written: the first of the two populations
+ * flashcardPool() builds is "the partner used this at me and I have never used
+ * it back", which cannot be seen from the learner's messages alone.
+ *
+ * ponytail: segments every message in every conversation on each call, which is
+ * strictly more work than ghostProgressMap()'s user-only scan. Called once when
+ * the chooser button is pressed, never in a render loop. Cache it behind the
+ * same guard as mistakeCounts() if a long history ever makes the button feel
+ * slow. */
+function lastSeenMap() {
+  const out = {};
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (!t || !t.text) return;
+      if (t.role !== "user" && t.role !== "assistant") return;   // skip markers
+      const day = String(t.created_at || "").slice(0, 10);
+      if (!day) return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind !== "word") return;
+        if (!out[tok.text] || out[tok.text] < day) out[tok.text] = day;
+      });
+    });
+  });
+  return out;
+}
+
+/* Every Flashcard Chat's set, with the conversation's own updated_at so
+ * reservedWords() can tell an active set from an abandoned one. */
+function inFlightSets() {
+  const out = [];
+  (S.chats || []).forEach(function (c) {
+    if (!c || c.deleted) return;
+    const words = HSKPace.flashcardsOf(S.chatMsgs[c.id] || []);
+    if (words.length) out.push({ words: words, updated: c.updated_at });
+  });
+  return out;
+}
+
+/* Candidates for a NEW set: the pool arithmetic over live state, with every
+ * word an unfinished set is still working on held back. */
+function flashcardCandidates() {
+  const today = HSKMistakes.dayKey(new Date().toISOString());
+  const ghost = ghostProgressMap();
+  return HSKPace.flashcardPool({
+    entries: S.base, seen: lastSeenMap(), ghost: ghost, ghostUses: S.ghostUses,
+    reserved: HSKPace.reservedWords({ sets: inFlightSets(), ghost: ghost,
+                                      ghostUses: S.ghostUses, today: today }),
+    today: today, n: HSKPace.CANDIDATES_SHOWN
+  });
+}
+
+/* The stored set as the shape reuseFor() hands out everywhere else: the word,
+ * its pinyin and gloss for the banner, its ghost count, and whether today's
+ * credit is already banked. Same fields readiness().unused carries, so the
+ * banner, the partner targeting and gradeTurn()'s per-word verdict all read one
+ * shape whichever activity produced it. */
+function flashcardTargets() {
+  const prog = ghostProgressMap();
+  const today = HSKMistakes.dayKey(new Date().toISOString());
+  const byWord = new Map(S.base.map(e => [e.w, e]));
+  return flashcardWords().map(function (w) {
+    const e = byWord.get(w) || { w: w };
+    return { w: w, p: e.p, d: e.d,
+             ghostN: (prog[w] && prog[w].n) || 0,
+             ghostToday: !!(prog[w] && prog[w].last === today) };
+  });
+}
+
+/* Choosing the set is what starts the chat. The markers go in the transcript,
+ * then the partner opens -- the same withholding story time, 20 Questions and
+ * drills all use: nothing is generated, and nothing is spent, until the learner
+ * has chosen. */
+function startFlashcardsWith(words, theme) {
+  if (!words || !words.length || flashcardWords().length) return;
+  const at = new Date().toISOString();
+  S.history.push({ role: "flashcards", text: words.join(HSKPace.SET_SEP),
+                   id: newMessageId(), created_at: at });
+  if (theme) S.history.push({ role: "flashcardTheme", text: theme,
+                              id: newMessageId(), created_at: at });
+  persist();
+  renderAll();
+  renderStarters();
+  openingTurn();
 }
 
 /* Everything report.js needs, gathered from live state in one place.
