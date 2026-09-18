@@ -168,14 +168,17 @@ check(P.flashcardPool({ entries: FC, today: TODAY }).length === 0,
 /* Unranked words weigh nothing in the coverage arithmetic and sort last in
  * buildPool(); the same must hold here or the commonest-first promise is
  * broken by a word the corpus never saw. */
-const unranked = P.flashcardPool({
+/* `unrankedPool`, not `unranked`: test/pace.test.js:155 already declares a
+   top-level `const unranked` for toTarget()'s fixtures, and a second one in the
+   same module scope is a SyntaxError. */
+const unrankedPool = P.flashcardPool({
   entries: FC.concat([{ w: "叉子", p: "chāzi", d: "fork" }]),
   seen: { "叉子": TODAY, "从来": TODAY }, ghost: {}, ghostUses: 3,
   reserved: new Set(), today: TODAY, n: 10
 });
-check(unranked.map(e => e.w).join() === "从来,叉子",
+check(unrankedPool.map(e => e.w).join() === "从来,叉子",
   "an unranked word sorts after every ranked one",
-  unranked.map(e => e.w).join());
+  unrankedPool.map(e => e.w).join());
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
