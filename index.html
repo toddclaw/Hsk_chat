@@ -750,7 +750,9 @@ footer{
       <div class="note">The prompts behind <b>English translation</b>, <b>English explanation</b>
       and <b>Check my grammar</b>. <code>{text}</code> is the sentence,
       <code>{level}</code> your level, <code>{recent}</code> the words you have just been
-      introduced to, and <code>{context}</code> the turns leading up to it (grammar check
+      introduced to, <code>{grade}</code> the verdict the grader already gave the sentence
+      (grammar check only, and empty when the grader is off), and
+      <code>{context}</code> the turns leading up to it (grammar check
       only). Untouched, each keeps tracking the app's own version rather than freezing
       today's wording. These run on the teaching model, not the chat model.</div>
 
@@ -1169,7 +1171,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v114 — 2026-09-17";
+const VERSION   = "v115 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2084,7 +2086,7 @@ function defaultTeachPrompt(spec, vars) {
   }
   return HSKPrompt.explain({ text: vars.text, own: spec.own, label: vars.level,
                              recent: vars.recent, context: vars.context,
-                             followUp: vars.followUp });
+                             grade: vars.grade, followUp: vars.followUp });
 }
 
 /* An untouched prompt keeps calling prompt.js rather than storing a copy of
@@ -2098,6 +2100,7 @@ function teachPromptFor(key, vars) {
   return custom.replace(/\{text\}/g, vars.text)
                .replace(/\{level\}/g, vars.level)
                .replace(/\{recent\}/g, vars.recent || "none yet")
+               .replace(/\{grade\}/g, HSKPrompt.gradeBlock(vars.grade).trim())
                .replace(/\{context\}/g, (vars.context || [])
                  .map(t => (t.role === "user" ? "Student: " : "Partner: ") + t.text)
                  .join("\n") || "(nothing yet)");
@@ -2121,8 +2124,14 @@ async function translateText(text, own) {
 }
 
 function explainSystemPrompt(turnObj, own, followUp) {
+  /* The grader's verdict, on your own sentences only. It is the badge this
+   * sheet was opened from, so handing it over is what stops the sheet arguing
+   * with the tick or cross the learner just tapped. Absent when the grader is
+   * switched off, still running, or came back unreadable -- explain() derives
+   * its own verdict in that case, exactly as it always did. */
   return teachPromptFor(own ? "explainMine" : "explainReply",
     { text: turnObj.text, level: levelLabel(), recent: recentWords(),
+      grade: own ? turnObj.grade : null,
       context: own ? contextFor(turnObj) : [], followUp: !!followUp });
 }
 
@@ -7170,7 +7179,7 @@ function renderTeachPrompts() {
   TEACH_PROMPTS.forEach(spec => {
     const custom = (S.teachPrompts || {})[spec.key] || "";
     const shown = custom || defaultTeachPrompt(spec,
-      { text: "{text}", level: "{level}", recent: "{recent}",
+      { text: "{text}", level: "{level}", recent: "{recent}", grade: null,
         context: [{ role: "context", text: "{context}" }] });
     teachShown[spec.key] = shown;
 

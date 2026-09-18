@@ -1288,6 +1288,73 @@ check(P.grade({ text: GT, label: GL }).indexOf("student of Chinese at " + GL) !=
   check(P.planInstruction("我也喜欢热天。").indexOf("我也喜欢热天。") !== -1,
     "the instruction carries the plan it is following");
 }
+/* ---------------------------------------------------------------------------
+ * The grammar check reads the grader's verdict instead of deriving its own.
+ *
+ * Both run on the same sentence and answer the same question in different
+ * shapes, and when each decided for itself the learner got a red cross on the
+ * message and "Natural." at the top of the sheet that cross opened. */
+const gOk = { ok: true, cats: { word: true, grammar: true, order: true, natural: true },
+  errors: [], better: "" };
+const gIdiom = { ok: false, cats: { word: true, grammar: true, order: true, natural: false },
+  errors: [{ tag: "unnatural", note: "太生硬。" }], better: "请给我一杯水。" };
+const gWrong = { ok: false, cats: { word: true, grammar: false, order: false, natural: true },
+  errors: [{ tag: "aspect-le", note: "完成用了。" }], better: "我昨天去了公园。" };
+
+check(P.verdictFor(gOk) === P.VERDICTS.ok, "a passing grade maps to Natural.");
+check(P.verdictFor(gIdiom) === P.VERDICTS.idiom,
+  "only naturalness faulted maps to the middle verdict", P.verdictFor(gIdiom));
+check(P.verdictFor(gWrong) === P.VERDICTS.wrong,
+  "any other fault maps to Not correct.", P.verdictFor(gWrong));
+check(P.verdictFor(null) === "", "no grade yields no verdict");
+check(P.verdictFor({ unreadable: true, ok: true }) === "",
+  "an unreadable grade yields no verdict rather than a false pass");
+
+const exGraded = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2", grade: gWrong });
+check(exGraded.includes("Start with exactly this line"),
+  "with a grade, the verdict is given rather than chosen");
+check(!exGraded.includes(P.VERDICTS.idiom),
+  "and the other two verdicts are not offered as alternatives");
+check(exGraded.includes("aspect-le (了)"),
+  "the tag is named by its code, since its label alone is the bare character");
+check(exGraded.includes("完成用了。") && exGraded.includes("我昨天去了公园。"),
+  "the grader's note and correction are handed over, not re-derived");
+check(!exGraded.includes("很高兴了"),
+  "but never the tag's worked example -- a wrong form in a prompt gets reproduced");
+check(/disagree/.test(exGraded),
+  "disagreement stays possible, but has to be stated rather than silently substituted");
+
+/* Only the branch that applies. With the verdict handed over, the shape rules
+ * for the other two are dead text -- and measured, the model read them anyway
+ * and appended "Natural." under an unidiomatic verdict, putting a contradicting
+ * verdict at the bottom of the sheet built to stop verdicts contradicting. */
+check(!/After "Natural\." stop immediately/.test(exGraded),
+  "a handed non-pass verdict is not also told what to do after Natural.");
+check(/never end with one of the other verdict lines/.test(exGraded),
+  "and is told not to close with one");
+const exPass = P.explain({ text: "我昨天去公园了。", own: true, label: "HSK 2", grade: gOk });
+check(/Stop immediately after that line/.test(exPass),
+  "a handed pass is told to stop and nothing else");
+check(!/corrected sentence/.test(exPass),
+  "and is not told how to present a correction it will not be making");
+
+const exUngraded = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2" });
+check(exUngraded.includes("Start with exactly one of these three lines"),
+  "with no grade, the verdict is chosen exactly as before");
+check(exUngraded.includes(P.VERDICTS.ok) && exUngraded.includes(P.VERDICTS.idiom) &&
+      exUngraded.includes(P.VERDICTS.wrong), "and all three are offered");
+check(!/A grader has already judged/.test(exUngraded), "and no verdict is claimed");
+
+const exFollow = P.explain({ text: "我昨天去公园", own: true, label: "HSK 2",
+  grade: gWrong, followUp: true });
+check(exFollow.includes("Its verdict: " + P.VERDICTS.wrong),
+  "a follow-up is told which verdict it is following up on");
+check(!exFollow.includes("Start with exactly"),
+  "and is still not made to answer in the verdict shape");
+
+const exReply = P.explain({ text: "我昨天去了公园。", own: false, label: "HSK 2", grade: gWrong });
+check(!/A grader has already judged/.test(exReply),
+  "the partner's reply is never graded, so its explanation is never handed a verdict");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
