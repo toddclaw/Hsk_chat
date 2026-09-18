@@ -1,0 +1,1231 @@
+{
+ "model": "qwen/qwen3-235b-a22b-2507",
+ "arm": "decomposed",
+ "when": "2026-09-16T17:24:39.836Z",
+ "rows": [
+  {
+   "id": "P001",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P002",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P003",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P004",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P005",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P006",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P007",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P008",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P009",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P010",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P011",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P012",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P013",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P014",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P015",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P016",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P017",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P018",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P019",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P020",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P021",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P022",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P023",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P024",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P025",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P026",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P027",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P028",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P029",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P030",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P031",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P032",
+   "activity": "story",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P033",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P034",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P035",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P036",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P037",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P038",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P039",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P040",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P041",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P042",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P043",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P044",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P045",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P046",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P047",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P048",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P049",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P050",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P051",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P052",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P053",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P054",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P055",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P056",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P057",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P058",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P059",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P060",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P061",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P062",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P063",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P064",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P065",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P066",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P067",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P068",
+   "activity": "story",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P069",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P070",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P071",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P072",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P073",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P074",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P075",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P076",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P077",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P078",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P079",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P080",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P081",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P082",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P083",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P084",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P085",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P086",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P087",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P088",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P089",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P090",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P091",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P092",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P093",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P094",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P095",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P096",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P097",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P098",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P099",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P100",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P101",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P102",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P103",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P104",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P105",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P106",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P107",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P108",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P109",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P110",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P111",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P112",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P113",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P114",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P115",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P116",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P117",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P118",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P119",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P120",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P121",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P122",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P123",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P124",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P125",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P126",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P127",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P128",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P129",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P130",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P131",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P132",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P133",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P134",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P135",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P136",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P137",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P138",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P139",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P140",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P141",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P142",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P143",
+   "activity": "story",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P144",
+   "activity": "story",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P145",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P146",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P147",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P148",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P149",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P150",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P151",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P152",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P153",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P154",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P155",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P156",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P157",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P158",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P159",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P160",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P161",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P162",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P163",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P164",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P165",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P166",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P167",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P168",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P169",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P170",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P171",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P172",
+   "activity": "focused",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P173",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P174",
+   "activity": "focused",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P175",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P176",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P177",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P178",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P179",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P180",
+   "activity": "story",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P181",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P182",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P183",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P184",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P185",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P186",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P187",
+   "activity": "chat",
+   "level": 3,
+   "ok": false
+  },
+  {
+   "id": "P188",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P189",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P190",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P191",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P192",
+   "activity": "chat",
+   "level": 3,
+   "ok": true
+  },
+  {
+   "id": "P193",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P194",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P195",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P196",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P197",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P198",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P199",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P200",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P201",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P202",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  },
+  {
+   "id": "P203",
+   "activity": "chat",
+   "level": 2,
+   "ok": true
+  },
+  {
+   "id": "P204",
+   "activity": "chat",
+   "level": 2,
+   "ok": false
+  }
+ ]
+}

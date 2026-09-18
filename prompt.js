@@ -1110,17 +1110,47 @@
       "No headings, no bullet lists, no bold, and no closing encouragement.";
   }
 
+  /* The same prompt, judging the PARTNER instead of the learner.
+   *
+   * `partner:true` is the arm round eleven measured at fourteen points: it says
+   * the conversation partner wrote the text and names no level. `bar:"soft"`
+   * is round fourteen's one-clause edit on top of that, which stops a grader
+   * condemning every sentence it would merely have phrased differently.
+   *
+   * Written as options on grade() rather than as a second prompt so there is
+   * one body to keep correct. tools/grader-bench.js builds the same two strings
+   * by substitution for the benchmark, and test/prompt.test.js asserts the two
+   * routes agree CHARACTER FOR CHARACTER -- so the prompt the gate ships is
+   * provably the prompt the 222-turn corpus measured, and stays that way. */
   function grade(opts) {
     var tags = TAGS.map(function (r) {
       return "  " + r[0] + "  (" + r[1] + ")  e.g. " + r[2];
     }).join("\n");
-    return "You are grading one sentence written by a student of Chinese at " +
-      opts.label + ".\n\n" +
+    var partner = !!opts.partner;
+    var okLine = partner
+      ? (opts.bar === "soft"
+          ? "ok        — false only when there is a real fault here: something wrong, " +
+            "or something no native speaker would say. A sentence that is plainer, " +
+            "shorter or less graceful than the one you would have written is not a " +
+            "fault -- pass it. Ask whether a learner copying this sentence would be " +
+            "copying a mistake, not whether you would have written it this way.\n"
+          : "ok        — true only if a native speaker would write this exactly as it " +
+            "stands.\n")
+      : "ok        — true only if you would let the sentence stand as written.\n";
+    return (partner
+      ? "You are checking one sentence of Chinese written by a language-learning " +
+        "app's conversation partner. The learner reads it and copies it, so it has " +
+        "to be Chinese a native speaker would actually write.\n\n"
+      : "You are grading one sentence written by a student of Chinese at " +
+        opts.label + ".\n\n") +
       /* Same framing explain() uses and for the same measured reason: without
        * being told the sentence may be wrong, a model answers as though it
        * were and grades everything correct. */
-      "The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
-      "correct. Equally, do not manufacture a problem to have something to teach -- a " +
+      (partner
+        ? "It was written by a model, so it reads fluently and may still be wrong. " +
+          "Fluent is not the same as correct -- do not assume it is correct."
+        : "The student wrote it THEMSELVES, so it may well be wrong. Do not assume it is " +
+          "correct.") + " Equally, do not manufacture a problem to have something to teach -- a " +
       "correct sentence must come back with every category true and no errors.\n\n" +
       "Two failure modes are easy to misread. The student types pinyin and picks a " +
       "character from a list, so a wrong character is usually a homophone of the right " +
@@ -1130,10 +1160,12 @@
       "Reply with only a JSON object, no prose and no code fence:\n" +
       '{"ok":true,"meant":"","better":"",' +
       '"cats":{"word":true,"grammar":true,"order":true,"natural":true},"errors":[]}\n\n' +
-      "ok        — true only if you would let the sentence stand as written.\n" +
+      okLine +
       "meant     — in English, your best guess at what they were trying to say.\n" +
-      "better    — the sentence as a native speaker would write it, staying inside " +
-      opts.label + " vocabulary where possible. Empty string when ok is true.\n" +
+      "better    — the sentence as a native speaker would write it, " +
+      (partner ? "keeping as close to the original as the fix allows"
+               : "staying inside " + opts.label + " vocabulary where possible") +
+      ". Empty string when ok is true.\n" +
       "cats      — true means that category is fine, false means it is where the " +
       "problem is. More than one may be false.\n" +
       "errors    — one entry per distinct mistake, [] when ok is true. Each is " +
@@ -1148,7 +1180,167 @@
       "edit -- a missing measure word is measure-word even though the fix inserts a " +
       "word, and a 比 sentence with 很 in it is comparison-bi even though the fix " +
       "deletes one.\n\n" +
-      contextBlock(opts.context) + "The student wrote: " + opts.text;
+      contextBlock(opts.context) +
+      (partner ? "The sentence: " : "The student wrote: ") + opts.text;
+  }
+
+  /* --------------------------------------------------- planning the reply
+   *
+   * Decide WHAT to say before deciding how, and check it can be said at this
+   * level before spending a generation and two graders on it.
+   *
+   * WHY IT EXISTS. The failures were never phrasing failures. The partner tried
+   * to describe a desert, tried to say "practise martial arts", tried to say "I
+   * received a letter" -- it chose something HSK 2 cannot afford and then spent
+   * six tries failing to afford it. Repair argues about wording long after the
+   * decision that doomed the turn. Round twenty-seven: on the turns a plan is
+   * made, 57 of 69 turns survive against 46 of 69, paired 14-3, p = 0.01, and
+   * mean tries falls from 4.1 to 3.3 -- so the quality arrives with LESS
+   * latency, which had not happened before in this study.
+   *
+   * WHY IN CHINESE, when planning in English was the obvious first try: not
+   * fluency, CHECKABILITY. An English plan has to declare which Chinese words it
+   * intends to use, and a declaration is self-reported -- it can name five and
+   * write twenty. A Chinese plan goes through the validator whole. Measured, the
+   * two are the same on outcome and the Chinese one finds unaffordable plans
+   * sooner: 24 re-plans against 38 over the same 69 turns.
+   *
+   * THE ANCHOR IS LOAD-BEARING. Told only to plan something sayable, the planner
+   * drifts: a message about coffee and a 5:30 alarm came back with a remark
+   * about breakfast, and an apple and a cup of tea appeared from nowhere. It is
+   * cheap to say "answer what they actually said" and it cost nothing to fix.
+   *
+   * tools/repair-ab.js calls THIS function, so the measurement is of the string
+   * that ships. */
+  function planPrompt(opts) {
+    var convo = (opts.turns || []).slice(-4).map(function (m) {
+      return (m.role === "user" ? "学生：" : "伙伴：") + m.text;
+    }).join("\n");
+    var banned = opts.banned || [];
+    return "学生在学中文，水平是" + opts.label + "。下面是他们的对话：\n\n" + convo +
+      "\n\n请先想一想伙伴下一句要说什么意思。不要写完整的回答，" +
+      "只用最简单的话写出你要说的意思，一两句就行。\n\n" +
+      "一定要回答学生刚才说的话。先想清楚学生说了什么，再想你要怎么回答他。" +
+      "不要换一个别的、比较好说的话题。\n\n" +
+      "只可以用" + opts.label + "的词。这个词表很小，没有「沙漠」，没有「练」，" +
+      "没有「封」。请想一个用这些简单的词就能说清楚的意思，" +
+      "不要想一个说不出来、要绕着说的意思。\n\n" +
+      (banned.length ? "这些词太难，不可以用：" + banned.join("、") + "。" +
+        "请换一个不用这些词的意思。\n\n" : "") +
+      "只写中文，不要解释。";
+  }
+
+  /* What to hand the partner once a plan has survived the validator. */
+  function planInstruction(plan) {
+    return "请按这个意思回答学生，可以说得自然一点：\n" + plan +
+      "\n\n只用学生认识的词。只说中文，不要解释。";
+  }
+
+  /* ------------------------------------------- repair strategies
+   *
+   * What to tell the partner when the correctness gate has faulted the same
+   * turn more than once. Not a prompt tweak -- the thing the retry loop was
+   * missing: a way to try something DIFFERENT.
+   *
+   * WHY. Read off a production session: ten of fourteen turns spent all six
+   * tries, and four attempts inside one turn came back byte-identical -- same
+   * sentence, same complaint, four times, because the repair said the same
+   * thing every time. Three of the fights were unwinnable by construction: the
+   * gate asks for 练武术 and the validator forbids 练; it asks for 一封信 and
+   * the validator forbids 封. No amount of "say it differently" resolves a
+   * sentence whose only correct form is above the level.
+   *
+   * WHAT. Tarone's (1977) taxonomy of communication strategies, filtered to
+   * what this app can do. The division that matters is REDUCTION (dodge the gap
+   * -- abandon it, change the subject) against ACHIEVEMENT (solve it --
+   * circumlocute, approximate, ask for help). Learners move from the first to
+   * the second as they improve, so achievement strategies come first here and
+   * the topic pivot is last. RESEARCH.md, "When the level cannot say it".
+   *
+   * SELECTION IS BY RULE, not by another model call. The app already holds the
+   * evidence a person would use: whether the gate's own correction needs a word
+   * above the level (then only introducing it or naming the problem can work),
+   * whether the validator keeps rejecting the same word (then say it another
+   * way), and whether the model has stopped changing its answer (then it is
+   * stuck and needs a smaller target). A call would spend a third round trip on
+   * an already slow turn to reach a conclusion the evidence already names.
+   *
+   * Never the same strategy twice in one turn. That alone ends the identical
+   * repeat, which is the cheapest win here and needs no model to be cleverer.
+   */
+  var STRATEGIES = {
+    /* The partner already does this, silently and badly -- 沙漠 became
+     * 很干很干的地方 because nothing said it was allowed. Saying so is the
+     * whole of this one. */
+    circumlocute: function (o) {
+      return (o.blocked ? "「" + o.blocked + "」学生不认识。" : "") +
+        "请不要用这个词，用学生认识的词把这个意思说清楚。可以多说几个字。";
+    },
+    /* The app's own escape hatch, and not the unused channel this repo believed
+     * -- it fires on 9% of real assistant messages unprompted. Offered only when
+     * the gate's correction NEEDS the word, and capped by the caller, because it
+     * spends new-word budget from outside the pacing system. */
+    introduce: function (o) {
+      return "这个意思一定要用「" + o.blocked + "」。请先这样介绍它：" +
+        "[[NEED:" + o.blocked + "|拼音|English]]，再用它说一句话。";
+    },
+    /* Negotiation of meaning: the interaction literature's mechanism, and the
+     * strategy of a MORE proficient speaker rather than a weaker one. */
+    metalinguistic: function () {
+      return "这个意思用简单的词说不清楚。请直接告诉学生这个词太难，" +
+        "然后换一个说法，或者问学生一个问题。";
+    },
+    approximate: function (o) {
+      return "请用一个意思差不多、学生认识的词。不用完全一样，" +
+        (o.blocked ? "但是不要用「" + o.blocked + "」。" : "接近就可以。");
+    },
+    /* For the turn that has stopped moving: it is not going to find a way to
+     * say the whole idea, so ask for less of it. */
+    reduce: function () {
+      return "请说一件小一点的事，用短的句子。不用把刚才的意思都说出来。";
+    },
+    appeal: function () {
+      return "请不要说这件事了，直接问学生一个和这个话题有关的问题。";
+    },
+    pivot: function () {
+      return "这个话题太难说。请说一件别的事，换一个简单的话题。";
+    }
+  };
+
+  /* The order each situation tries things in. First untried one wins. */
+  var LADDERS = {
+    // The fix itself is above the level. Rephrasing cannot reach it.
+    unsayable: ["introduce", "metalinguistic", "approximate", "reduce", "appeal", "pivot"],
+    // The model has stopped changing its answer. It needs a smaller target.
+    stuck:     ["reduce", "appeal", "metalinguistic", "circumlocute", "pivot"],
+    // The same word keeps being rejected. Say it another way.
+    sameWord:  ["circumlocute", "approximate", "reduce", "metalinguistic", "appeal", "pivot"],
+    plain:     ["circumlocute", "reduce", "metalinguistic", "appeal", "pivot"]
+  };
+
+  /* o: { gateFails, tried, blocked, repeated, sameWord, allowIntroduce }
+   * Returns { id, text } or null once every strategy has been spent.
+   *
+   * gateFails < 2 returns null on purpose: the first failure gets the plain
+   * correction, which is usually enough, and a turn that would have recovered
+   * on its own should not be told to start circumlocuting. */
+  function repairStrategy(o) {
+    o = o || {};
+    if ((o.gateFails || 0) < 2) return null;
+    var tried = o.tried || [];
+    var ladder = o.blocked ? LADDERS.unsayable
+               : o.repeated ? LADDERS.stuck
+               : o.sameWord ? LADDERS.sameWord
+               : LADDERS.plain;
+    for (var i = 0; i < ladder.length; i++) {
+      var id = ladder[i];
+      if (tried.indexOf(id) !== -1) continue;
+      // Introducing a word needs a word AND the caller's permission:
+      // DEFAULT_RATE is spent by pacing, not by the repair loop.
+      if (id === "introduce" && !(o.blocked && o.allowIntroduce)) continue;
+      return { id: id, text: STRATEGIES[id](o) };
+    }
+    return null;
   }
 
   /* Who is in this story, asked before it is written.
@@ -1366,7 +1558,8 @@
        * the question -- but the thing being checked is still the one line, and
        * putting the transcript last keeps it read as background rather than as
        * more material to comment on. */
-      contextBlock(opts.context) + "The student wrote: " + opts.text;
+      contextBlock(opts.context) +
+      "The student wrote: " + opts.text;
   }
 
   var api = { LEVEL_STYLE: LEVEL_STYLE, LENGTHS: LENGTHS, STARTERS: STARTERS,
@@ -1380,6 +1573,9 @@
               QUESTION_SHAPES: QUESTION_SHAPES,
               build: build, activityRules: activityRules,
                         translate: translate, explain: explain, grade: grade,
+                        repairStrategy: repairStrategy,
+                        planPrompt: planPrompt, planInstruction: planInstruction,
+                        STRATEGY_IDS: Object.keys(STRATEGIES),
               drillCheck: drillCheck, drillWord: drillWord, wordTip: wordTip,
               report: report,
               castPrompt: castPrompt,

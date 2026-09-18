@@ -1,0 +1,10 @@
+{
+"_note": "Claude's labels, not a human's. round nine measures what that is worth: 93% blind against MuCGEC. wrong = a native speaker would call it an error. unnatural = grammatical, but not what anyone would write. english = Latin-script leakage, a rule-4 violation the two Chinese axes do not cover.",
+"wrong": ["P004","P006","P032","P064","P067","P082","P086","P095","P099","P113",
+          "P122","P123","P124","P126","P137","P163","P185","P187"],
+"unnatural": ["P012","P023","P028","P038","P041","P046","P051","P054","P060","P062",
+              "P063","P068","P081","P084","P089","P108","P110","P114","P132","P134",
+              "P142","P147","P156","P165","P170","P179","P182","P184","P190","P198",
+              "P200","P202"],
+"english": ["P005","P022","P204"]
+}

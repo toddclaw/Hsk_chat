@@ -1,0 +1,70 @@
+{
+ "n": 120,
+ "ok": 111,
+ "cell": {
+  "wrong": {
+   "hit": 56,
+   "n": 61
+  },
+  "right": {
+   "hit": 55,
+   "n": 59
+  }
+ },
+ "misses": [
+  {
+   "id": "A004",
+   "truth": "right",
+   "said": "wrong",
+   "level": 4
+  },
+  {
+   "id": "A102",
+   "truth": "wrong",
+   "said": "right",
+   "level": 4
+  },
+  {
+   "id": "A023",
+   "truth": "right",
+   "said": "wrong",
+   "level": 4
+  },
+  {
+   "id": "A015",
+   "truth": "wrong",
+   "said": "right",
+   "level": 4
+  },
+  {
+   "id": "A111",
+   "truth": "wrong",
+   "said": "right",
+   "level": 4
+  },
+  {
+   "id": "A113",
+   "truth": "wrong",
+   "said": "right",
+   "level": 4
+  },
+  {
+   "id": "A098",
+   "truth": "right",
+   "said": "wrong",
+   "level": 2
+  },
+  {
+   "id": "A055",
+   "truth": "right",
+   "said": "wrong",
+   "level": 4
+  },
+  {
+   "id": "A091",
+   "truth": "wrong",
+   "said": "right",
+   "level": 4
+  }
+ ]
+}

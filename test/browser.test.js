@@ -1487,7 +1487,10 @@ check(usedGroups && usedGroups.first === "\u7684",
     const calls = await exec("return window.__t.calls;");
     const deletes = calls.filter(c => c.op === "delete");
     const tables = deletes.map(c => c.table).sort();
-    const want = ["conversations", "messages", "prefs",
+    /* debug_log is on this list deliberately. It holds whole model replies and
+     * whole learner sentences, so a wipe that skipped it would leave the most
+     * verbatim copy of the conversation on the server. */
+    const want = ["conversations", "messages", "prefs", "debug_log",
                   "vocab_extra", "vocab_known", "vocab_learning", "retrievals"];
 
     check(want.every(t => tables.includes(t)),
@@ -2575,14 +2578,422 @@ check(usedGroups && usedGroups.first === "\u7684",
       "story turns request the story model",
       JSON.stringify(await exec("return window.__models;")));
 
-    // A chat turn must not, or every conversation silently costs story money.
+    /* A chat turn must not, or every conversation silently costs story money.
+     * It is no longer true that every call a chat turn makes is on the chat
+     * model -- the correctness gate's slow half runs on GATE_MODEL -- so this
+     * asks what it always meant to ask: nothing here reaches for Sonnet. */
     await exec("window.__models = []; window.newChat('chat');");
     await exec("window.openingTurn();");
     await waitFor("window.__models.length > 0", "a chat turn");
     check(await exec(
-      "return window.__models.every(function (m) { return !m; });") === true,
+      "return window.__models.every(function (m) {" +
+      "  return m !== 'anthropic/claude-sonnet-4.5'; });") === true,
       "while a chat turn does not -- it uses the chat model",
       JSON.stringify(await exec("return window.__models;")));
+
+    /* ------------------------------------------- the correctness gate
+     *
+     * The thing the gate is FOR: a partner sentence the graders fault must never
+     * reach the screen. Todd copies the partner as his main way of learning, so
+     * a bad sentence shown is a bad sentence practised -- the repair happens in
+     * the retry loop and the learner only ever sees what came out clean.
+     *
+     * Both sentences are HSK 1 so the vocabulary validator has no opinion and
+     * the only thing deciding the outcome is the gate. */
+    const gateStub = `
+      window.__turns = ["\u6211\u5728\u5bb6\u3002", "\u6211\u5728\u5b66\u6821\u3002"];
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        // The planner asks first and must not eat the queued replies.
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
+        if (c.indexOf("conversation partner") !== -1) {     // a gate call
+          window.__gateTokens = maxTok;
+          var faulty = c.indexOf("\u6211\u5728\u5bb6\u3002") !== -1;
+          window.__graded.push((model || "teach") + ":" + (faulty ? "fault" : "pass"));
+          return Promise.resolve(JSON.stringify(faulty
+            ? { ok: false, meant: "", better: "\u6211\u5728\u5b66\u6821\u3002",
+                cats: {}, errors: [{ tag: "wrong-word", note: "x" }] }
+            : { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        return Promise.resolve(window.__turns.shift() || "\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`;
+    await exec(gateStub);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a gated turn");
+    const shown = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(shown.indexOf("\u5728\u5bb6") === -1,
+      "a partner sentence the gate faults never reaches the screen", shown);
+    check(shown.indexOf("\u5728\u5b66\u6821") !== -1,
+      "and the repaired one does", shown);
+
+    /* The ceiling the prompts were measured at, asserted because getting it
+     * wrong is silent: a reasoning model spends its budget thinking before it
+     * writes, so a low ceiling returns finish_reason "length" with empty
+     * content, which gateFault reads as a failed call and passes the turn. It
+     * shipped at 400 and the slow grader never answered once. */
+    check(await exec("return window.__gateTokens;") === 4000,
+      "the gate asks for the token ceiling its prompts were benchmarked at",
+      JSON.stringify(await exec("return window.__gateTokens;")));
+
+    // The fast grader first; the slow one only on what the fast one passed.
+    const graded = await exec("return window.__graded;");
+    check(graded[0] === "teach:fault",
+      "the cheap fast grader is asked first", JSON.stringify(graded));
+    check(graded.every(g => g !== "z-ai/glm-5.3-flash:fault") &&
+          graded.some(g => g.indexOf("z-ai/glm-5.3-flash") === 0),
+      "and the reasoning model is only spent on a turn the fast one passed",
+      JSON.stringify(graded));
+
+    /* And when it can never be satisfied, the learner gets the stub rather than
+     * the sentence. This is the case the gate exists for and the one an early
+     * version got wrong: skipping the check on the final attempt showed ungated
+     * Chinese exactly when the partner had proved hardest to correct. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {
+          window.__graded.push(model || "teach");
+          return Promise.resolve(JSON.stringify({ ok: false, meant: "",
+            better: "\u6211\u5728\u5b66\u6821\u3002", cats: {},
+            errors: [{ tag: "wrong-word", note: "x" }] }));
+        }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a stubbed turn");
+    const exhausted = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(exhausted.indexOf("\u5728\u5bb6") === -1,
+      "a sentence the gate never passes does not reach the screen on the last try",
+      exhausted);
+    check(await exec("return window.__graded.length;") >= 3,
+      "and every attempt was checked, including the last",
+      JSON.stringify(await exec("return window.__graded;")));
+
+    /* A gate that cannot answer must never take the conversation with it.
+     *
+     * The check runs a reasoning model on the critical path of every turn, and
+     * callModel has no timeout because until the gate existed every call
+     * answered in about two seconds. Both ways it can go wrong -- an error, and
+     * a stall -- have to end with the learner reading Chinese. */
+    check(await exec(`
+      return window.withTimeout(Promise.resolve("ok"), 50, "x");`) === "ok",
+      "withTimeout passes a value through when the call beats the clock");
+    check(await exec(`
+      return window.withTimeout(new Promise(function () {}), 20, "slow grader")
+        .then(function () { return "resolved"; },
+              function (e) { return e.kind + ":" + /slow grader/.test(e.message); });`)
+        === "timeout:true",
+      "and rejects with a timeout naming the call when it does not");
+
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__graded = [];
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {
+          window.__graded.push(model || "teach");
+          return Promise.reject(new Error("grader is down"));
+        }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "a turn whose gate is broken");
+    check((await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;"))
+        .indexOf("\u5728\u5bb6") !== -1,
+      "a gate that throws passes the turn rather than blocking the conversation");
+    check(await exec("return window.__graded.length;") === 1,
+      "and gives up on the first failure instead of trying the slow one too",
+      JSON.stringify(await exec("return window.__graded;")));
+
+    /* The wait says which try it is on. Six tries, each costing a generation
+     * and up to two grader calls, is minutes of an unchanging "..." otherwise --
+     * which reads as a hang rather than as work. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await exec(`
+      window.__resolve = null;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1) {      // hold the gate open
+          return new Promise(function (r) { window.__resolve = r; });
+        }
+        return Promise.resolve("\u6211\u5728\u5bb6\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("window.__resolve", "the gate to be in flight");
+    const waiting = await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;");
+    check(/1\/\d/.test(waiting),
+      "the waiting bubble says which try it is on while the gate runs", waiting);
+    check(waiting.indexOf("\u68c0\u67e5\u4e2d") === 0,
+      "and still says it is checking", waiting);
+
+    /* And a render must not delete it out from under the turn.
+     *
+     * renderAll() empties #log, and the learner's own grade calls renderAll()
+     * from its finally -- so on every message sent, a grade landing mid-turn
+     * took the progress bubble with it. Latent for as long as turns were short;
+     * certain once the gate made them long enough that the grade reliably lands
+     * in the middle of one. */
+    const survived = await exec(`
+      window.renderAll();
+      var b = document.querySelector("#log .msg.bot .bubble");
+      return b ? b.textContent : "";`);
+    check(survived === waiting,
+      "a re-render mid-turn leaves the progress bubble standing, counter and all",
+      JSON.stringify([waiting, survived]));
+
+    // Let it finish so the next test starts from a quiet app.
+    await exec(`window.__resolve(JSON.stringify(
+      { ok: true, meant: "", better: "", cats: {}, errors: [] })); return true;`);
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the turn to land");
+    // ...and stops being restored the moment the turn is over, or a finished
+    // story would leave "Thinking of a question..." on screen for ever.
+    check(await exec(`
+      window.renderAll();
+      return document.querySelectorAll("#log .msg.bot").length;`) === 1,
+      "and is gone for good once the turn lands, not re-added by every render");
+
+    /* ------------------------------------------- the diagnostic log
+     *
+     * console.log is wrapped, so the eight [gate]/[attempt]/[repair] lines that
+     * already existed are captured without being touched. Two properties matter
+     * more than the capture itself: the real console still works, and a console
+     * call can never throw into whatever was mid-turn -- which is exactly when
+     * this is running. */
+    check(await exec(`
+      window.__seen = [];
+      var real = console.log;
+      console.log("[test] hello", { a: 1 });
+      var raw = JSON.parse(localStorage["hsk1chat.logBuf"] || "[]");
+      return raw.some(function (l) {
+        return l.m.indexOf("[test] hello") !== -1 && l.m.indexOf('"a":1') !== -1; });`) === true,
+      "console.log is captured into the buffer, objects and all");
+
+    check(await exec(`
+      var out = null;
+      var real = console.log;
+      console.log = function () { out = arguments[0]; real.apply(console, arguments); };
+      return "kept";`) === "kept",
+      "and the real console still runs underneath");
+
+    // A key must never reach the log, whatever prints it.
+    check(await exec(`
+      console.log("using key sk-or-v1-SECRETVALUE now");
+      var raw = JSON.parse(localStorage["hsk1chat.logBuf"] || "[]");
+      return raw.some(function (l) { return l.m.indexOf("SECRETVALUE") !== -1; });`) === false,
+      "an API key printed to the console is scrubbed before it is buffered");
+
+    // Off means off, including what is already held.
+    check(await exec(`
+      document.querySelector("#debugLogOn").checked = false;
+      document.querySelector("#debugLogOn").onchange({ target: { checked: false } });
+      console.log("[test] after off");
+      return JSON.parse(localStorage["hsk1chat.logBuf"] || "[]").length;`) === 0,
+      "turning it off drops the buffer and stops capturing");
+    await exec(`
+      document.querySelector("#debugLogOn").onchange({ target: { checked: true } });
+      return true;`);
+
+    /* The badge counts work done, not which try survived.
+     *
+     * A reply the partner keeps echoing back is kept as the best answer so far
+     * and asked about again -- and `x = x || {...}` keeps the FIRST capture, so
+     * the attempt number it carried was the one it was captured on. Spread over
+     * the return it said "3 tries" while the progress counter had been watched
+     * climbing to 6, and under-counted the retries metric by everything after
+     * the reply it ended up showing. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      return true;`);
+    await go(base);                 // a clean app: send() refuses while S.busy
+    await exec(`
+      window.__gens = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1 ||
+            c.indexOf("student of Chinese") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)   // the planner, not a try
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
+        window.__gens++;
+        return Promise.resolve("\u4f60\u4eca\u5929\u597d\u5417\uff1f");  // echoes it back
+      };
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      window.newChat("chat");
+      document.querySelector("#input").value = "\u4f60\u4eca\u5929\u597d\u5417\uff1f";
+      document.querySelector("#send").click();
+      return true;`);
+    await waitFor("window.__gens > 0", "the partner to be asked at all");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the echoed reply to land");
+    const tries = await exec(`
+      var b = document.querySelector("#log .msg.bot .badge.warn");
+      return { badge: b ? b.textContent : "", gens: window.__gens };`);
+    check(tries.gens > 1, "the echo was retried at all", JSON.stringify(tries));
+    check(tries.badge === tries.gens + " tries",
+      "the badge counts every try on the echo path", JSON.stringify(tries));
+
+    /* Ghost Words is where this actually went wrong. The echo path above falls
+     * through to the ordinary return on its last attempt, which always counted
+     * correctly; a required word that never arrives does not, and comes back
+     * through the soft-miss return carrying the attempt it was CAPTURED on. */
+    await exec(
+      "localStorage.setItem('hsk1chat.learning', JSON.stringify([" +
+      "{w:'\u82f9\u679c',p:'ping guo',d:'apple',seen:9,from:2}," +
+      "{w:'\u7c73\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));" +
+      "localStorage.setItem('hsk1chat.chats', '[]');" +
+      "localStorage.setItem('hsk1chat.chatMsgs', '{}');" +
+      "localStorage.setItem('hsk1chat.apiKey', JSON.stringify('test-key-never-sent'));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after reload");
+    await exec(`
+      window.__gens = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("conversation partner") !== -1 ||
+            c.indexOf("student of Chinese") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1)   // the planner, not a try
+          return Promise.resolve("\u6211\u5f88\u597d\u3002");
+        window.__gens++;
+        return Promise.resolve("\u4eca\u5929\u5f88\u597d\u3002");  // never the ghost word
+      };
+      window.newChat("focused");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
+      "the reply that never used the ghost word");
+    const ghost = await exec(`
+      var b = document.querySelector("#log .msg.bot .badge.warn");
+      return { badge: b ? b.textContent : "", gens: window.__gens };`);
+    check(ghost.gens > 1, "a missing required word is retried", JSON.stringify(ghost));
+    check(ghost.badge === ghost.gens + " tries",
+      "and the badge reports every try spent, not the one that survived",
+      JSON.stringify(ghost));
+
+    /* ------------------------------------------------ the planner
+     *
+     * A plan has to REACH the generation, and an unaffordable plan has to be
+     * re-planned rather than followed -- the check is the whole reason the plan
+     * is written in Chinese rather than English. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("test-key-never-sent"));
+      return true;`);
+    await go(base);
+    await exec(`
+      window.__plans = 0; window.__sawPlan = false;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1) {   // the plan prompt
+          window.__plans++;
+          // First plan uses an out-of-level word; the re-plan must not.
+          return Promise.resolve(window.__plans === 1
+            ? "\u6211\u559c\u6b22\u6c99\u6f20\u3002"     // 沙漠, above HSK 2
+            : "\u6211\u5728\u5bb6\u3002");
+        }
+        if (c.indexOf("conversation partner") !== -1) {
+          return Promise.resolve(JSON.stringify(
+            { ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        }
+        // The generation: did the approved plan reach it?
+        if (msgs.some(function (m) { return (m.content || "").indexOf("\u6211\u5728\u5bb6\u3002") !== -1
+              && (m.content || "").indexOf("\u8bf7\u6309\u8fd9\u4e2a\u610f\u601d") !== -1; }))
+          window.__sawPlan = true;
+        return Promise.resolve("\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "a planned turn");
+    check(await exec("return window.__plans;") >= 2,
+      "an unaffordable plan is re-planned rather than followed",
+      JSON.stringify(await exec("return window.__plans;")));
+    check(await exec("return window.__sawPlan;") === true,
+      "and the approved plan reaches the generation");
+
+    // Off means no planning calls at all.
+    await exec(`
+      localStorage.setItem("hsk1chat.plan", "false");
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(`
+      window.__plans = 0;
+      window.callModel = function (msgs, maxTok, model) {
+        var c = msgs[msgs.length - 1].content;
+        if (c.indexOf("\u8bf7\u5148\u60f3\u4e00\u60f3") !== -1) { window.__plans++; }
+        if (c.indexOf("conversation partner") !== -1)
+          return Promise.resolve(JSON.stringify({ ok: true, meant: "", better: "", cats: {}, errors: [] }));
+        return Promise.resolve("\u6211\u5728\u5b66\u6821\u3002");
+      };
+      window.newChat("chat");
+      return true;`);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "an unplanned turn");
+    check(await exec("return window.__plans;") === 0,
+      "with the setting off it never plans");
+    await exec('localStorage.setItem("hsk1chat.plan", "true"); return true;');
+    await go(base);
+
+    // Off, it costs nothing and blocks nothing. S is not on window, so the
+    // setting is set where it lives and the page reloaded onto it.
+    await exec(`
+      localStorage.setItem("hsk1chat.gate", "false");
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(gateStub);
+    await exec("window.openingTurn();");
+    await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1", "an ungated turn");
+    check((await exec("return window.__graded;")).length === 0,
+      "with the setting off the gate spends no calls at all",
+      JSON.stringify(await exec("return window.__graded;")));
+    check((await exec(
+      "return document.querySelector('#log .msg.bot .bubble').textContent;"))
+        .indexOf("\u5728\u5bb6") !== -1,
+      "and the sentence it would have caught goes straight through");
+    await exec('localStorage.setItem("hsk1chat.gate", "true"); return true;');
+    await go(base);
 
     /* Questions are available at every pause, not only after the last segment,
      * and they run on the teaching model: a question about a story already

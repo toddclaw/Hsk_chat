@@ -1,0 +1,2370 @@
+{
+  "negative": {
+    "source": "MuCGEC dev set",
+    "url": "https://github.com/HillZhang1999/MuCGEC",
+    "licence": "Apache-2.0",
+    "citation": "Zhang et al., MuCGEC, NAACL 2022."
+  },
+  "positive": [
+    {
+      "source": "this repo's STARTERS and LEVEL_STYLE samples",
+      "licence": "same as this repo"
+    },
+    {
+      "source": "Tatoeba",
+      "url": "https://tatoeba.org",
+      "licence": "CC-BY 2.0 FR",
+      "note": "Sentences from Tatoeba (https://tatoeba.org), CC-BY 2.0 FR. Filtered by this repo's validator to HSK 4 and below."
+    }
+  ],
+  "built": "2026-09-16T03:51:53.185Z",
+  "maxLevel": 4,
+  "items": [
+    {
+      "text": "再说，他们可能以为自己吸烟时对别人带来的不便和不舒服也不可能很大。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我不愿意这么过分的喜欢歌手。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "学生大概做飞机去北京。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "如果父母本身的行为已经是很差，那他们的孩子也很有可能变坏了。父母应该好好地改他们自己的态度才教他们的孩子。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "除了母亲以外，父亲对我的影响也不少。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "所以我从小到现在在这些快餐吃饭的机会很少。对我来说每次饭都很重要。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "再见，我有要很多功课要做。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我也来介绍一下儿我的家吧。我家有四口人。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "女服务员回去后，我们一起笑了起来。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "我生了第一个孩子的时候完全不知道怎么照顾孩子。可是我母亲住在我家附近，常常问她怎么做好。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "”这样注意的话，肯定对孩子好的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "总之，我想应该父母使孩子在健康的环境中长大。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这好像影响到现在我在上海读书的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "可是有一些人呢肯定没有特别的爱好的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "吃惊的是虽然这些男人都是二十几岁，其中六个却不工作。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "有这个事情后天天很早回来，然后我帮妈妈做菜。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "还有想作为好老师的话，不能给孩子一个答案。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "她有两个姐姐、一个妹妹和西个哥哥。但是，在她的家只有西个养：父母、妹妹和她。他们有四个猫。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "还有我要感谢我的父母，他们不仅对我来说是非常好的老师，他们也是非常好的朋友。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这是我最后的一封信，分开不是容易事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "我的儿子已经大了两个月。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "我很高兴她给我这个她做的礼物。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "这是我最后的一封信分开分手",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "那可以减少吸烟人的增加。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "就一个人的生命有关。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但将来还是愿意做一个母亲，因此现在还是坚持下去看多点的世界，教我将来的孩子多点的事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在山上有比较多雪。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "不是请假，而且不上课、不上班、没有学习、没有工作那样的人是一种病。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "父母当孩子的老师，这不只是孩子小时候的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "虽然有苦难，我知道世界上应该有更辛苦的人。我不饿，不渴，我知道哪去睡觉，有家庭，有朋友。我真的不是最辛苦的人。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这样一个月很快过去了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "我觉得这个暑假学校很有意思。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "他们用很长时间学这些东西，因为他们是第一位人这样做的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "昨天下雨很多。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "我也机场工作。虽然我的工作很无聊，我很喜欢我的同事。目前我的梦是去亚洲工作。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我说我有很好的朋友，还有很好同学。他们在一起，我感到很愉快。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在我的家有四家人：我爸爸，妈妈，哥哥和我。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "我不想开车在法国。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "几年前，虽然吸烟对个人健康，但吸不吸烟是个人的选择。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是现在的压岁钱变成一种大家的烦恼事情",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "那个是多有意思啊！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "如果父母是很努力工作的人，他们的孩子一定将来关于任何的事努力做。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我一心告诉他我自行车丢了。我也告诉他我十分对不起。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "”他跟我说“我想做医生因为我父母都是医生”。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我活美国。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我没有够朋友。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我知道爷爷，奶奶有这样的想法，但是我自己的父母？！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我又感觉到了被深深的感动。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "人生可以说是个练习不生气。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我想这样的态度是对自己和国家都不好。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我看世界上最有名的人可能也有五年吧，甚至十年。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "希望将来吸烟者会越来越减少。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我爸爸和妈妈越来越老，我爸爸快六十五岁，而且他的心不太好，我害怕有问题。所有机会我就去看他。一起吃饭，天儿。对我说，这个是非常重要的！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "什么是我的梦想呢？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "其次，吸烟给周围人比自己更深刻的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "如果你不知道将来你应该丢面子”。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是连有孙女以后父母给他们留下的经验、知识，他们永远不会忘记。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "因为，孩子在生长的过程上很受父母的影响。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "那么谁给我们知识呢，大大概的情况下父母教我们最基本的东西。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "还要提一个事。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我小时候记得她常常很晚回到家。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "在学校能学到什么数学呀、音乐呀、技术呀什么什么的，可是那样的课并没有关系跟他们的性格。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我在三年之间一直跟一样的人在一起，从来没有换过班。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我想没有这个网站的话，我不会学习这样开心。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "我觉得中国也这几年慢慢开始减少吸烟者运动。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我看到杂志里的她一直读书的照片。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "西班牙的生活有好处和坏处。我来讲你们坏处之一。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这是我人生中最好的时间。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "有这样的教育，我们对健康和环境的看法也就变化。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这样的大会不但让人考虑到问题，而且各国能介绍自己的美丽的的地方。对没有旅游机会的人来说，是一个很像旅游的经验。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "刚好那道题很难，不想了半天也想不出来。我突然想出一个问题就是让他去问他的父母吧。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "坐快速火车去父亲家。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我父母以前都是动物员，所以对我来说父母就是体育老师。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "人还少时候什么都不知道，连说话也不会说。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "那边的环境很漂亮，我感觉到了中国的香。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我的看法是家长和学者都在不同的出发点来看待这个问题。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在这个全世界人口中，一半以上的人吸烟，所以很多人病死。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "还有，吸烟对不吸烟还是有很多坏处。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "当然不能说对孩子的教育教养只父母有责任，学校的老师也很重要。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我已经订票飞机票。久后，为了我的职业，我要常常旅行。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "那么他们的年收入大概多少的呢？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "可是，迟早要用光。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我会跟他联系说汉语。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "比如说是生活方式，吃的东西都会有区别。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我们刚到公园就被天下雨了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "还有我的父亲是厚道的人，所以我从他的身上学了待人的做法。我妈妈是因为以前家里没有什么钱所以为了养我们做生意很勇敢，我在她的身上学了要怎么面对困难而且勇敢。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我们小的时候，我们很喜欢在一起又比赛、又玩。我们在学校的操场常常打了网球、蓝球、排球，很有意思了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是，今天转换心情，想写比较轻松愉快的事情。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是昨天有了考试。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "一点浪漫也没有，但现在的她又觉得这样认识好多美丽。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我想现在就自由地周游世界，但我知道不可以。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "你现在这样能吃晚饭，是很幸福的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我花了才7个小时。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "现在已经晚了。我要去睡觉了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "我想在这儿跟朋友们交流。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "他们了解这些情况才可以吸烟。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "父母对孩子的爱情是在世界上最重要的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "和别的音乐不一样有特别的颜色，尤其是吸引人能力。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是我越看她越有了一种不能说明的感情，她不仅是漂亮，又唱歌唱得也很不错。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "说明了流行音乐对社会没有一点好处。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "吃了又健康。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "街上常常会看到吸烟者。现在在中国很多人吸烟，而大多数的人把吸好的烟扔掉地上。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "不仅跟孩子在一起的时间，对孩子的爱情也有关系。我觉得父母对孩子的爱情和别人对孩子的不能比较。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是，在日本当留学生也有不满意的地方，因为留学生很少有机会和日本的老百性交流。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在大学有朋友。他们跟我喜欢学习汉语。他们很喜欢听音乐，去看电影，旅行。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "星期三后天在商店买东西。星期四早上给我的亚洲朋友打电话。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "真正能解决问题恐怕还是家长本身！",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "看到邮件我真可惜，好像不可能跟她见面呢。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这歌也最早中文的歌。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "所以只有父母在孩子面前试着表现出最好的一面，再加上孩子后天的努力，孩子不会成为一个失败的社会分子。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "不必考虑的问间是。还有他们的主要关心是怎么可以能保护身体、环境等等。再说他们对于绿色环境，绿色食品研究研究。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "有钱的国家不要只帮自己的回收计划。它们也可以花钱帮没有钱的国家开始这样的计划。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "其实这个问题现在在日本让父亲的人很难看的一个问题了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "同时这些东西全都是通过自己的父母来得到的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我对男女分班的看法反对。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "谁知道回答这叫闪电结婚，而且现在很流行不是吗？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "所以父母也多关心自己的孩子。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "今天我累得连换衣服也不想做。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我看他们就想多么难看。而周围的大人一个也不注意他们。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这次我就是一个人去，所以我希望我会见面些个住在北京的人儿。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "两年前我在大学认识了一个好朋友，她叫玛丽，她二十岁。有时她一点儿脾气，可是不常常脾气。我跟也在一起的时候总是笑。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "如果是我，选后者的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在哥哥的生日我就认识他。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "在这时往往先在自己身上看看有没有问题的存在的家长，才是好家长。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "现在不管是女人还男人都吸烟。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我觉得贵的食物不一定是好的。在中国时候，我发现了有一些地方哪儿可以买到非常便宜的食物，但它们并是好的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "它把很多病的发病大大增加几倍。由此可见，吸烟对吸烟者有直接的关系。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "所以不会给人家烟。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是他们演很熟练。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "中国的面条比日本的有点儿不一样味道。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "从少年到今天我没有什么“我爱这个人”的感觉。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我们生活的社会是互相共存的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "父母和儿女永远会有不同的想法。家庭里永远会有问题，但是最多，而希望你高兴生活。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "这样世界是一定美好的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "但是她们来的时候，我不在北京，已经回国以后的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "不要努力记住，听几次就够记住。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我们改变了我们的地球，所以我们要保护这个地球的自然。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "而想得到更丰富的知识就是从阅读来取得。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "所以我从上个星期到九月份在上海。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "昨天晚上我和父亲一起在一个有名、可爱的饭店去吃饭。我们想一边吃什么，一边讨论一些家庭的问题。听热闹，高兴的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "为了以后的事情，我要去复印了。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "所以人们现在最关心的是对自己的健康。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "刚开始一点也不懂生意的事情，有很多困难的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "总得来说，对孩子的教育父母有第一责任的。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "我的感觉一点儿容易。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "在一个节日的时候我听到有很好听的声音。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 3
+    },
+    {
+      "text": "各商店不一定卖本来的东西。",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 4
+    },
+    {
+      "text": "现在二零一零年？",
+      "truth": "wrong",
+      "cls": "mucgec",
+      "level": 2
+    },
+    {
+      "text": "你好！你叫什么名字？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你是哪国人？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你今天好吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你喜欢吃什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你会说中文吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你家有几个人？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "今天热吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你几点睡觉？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你想喝茶还是喝水？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你有中国朋友吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你家在哪儿？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你想去哪儿？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "你昨天做什么了？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你有什么爱好？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你喜欢什么运动？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你去过中国吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你几点起床？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你今天想做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你会做饭吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你最喜欢什么颜色？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你觉得中文有意思吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你家离公司远吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "你为什么开始学中文？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你喜欢夏天还是冬天？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你觉得学中文难吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你以后有什么打算？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你喜欢住在大城市还是小地方？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你最近在忙什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你昨天晚上做了什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你觉得朋友最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你周末一般怎么过？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "你觉得工作最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你小时候的梦想是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你旅行的时候喜欢做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你觉得学一门语言最重要的是什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你怎么安排自己的时间？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你最近有没有养成什么好习惯？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你觉得网上购物方便吗？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你更喜欢一个人还是跟朋友一起？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "你好！我很高兴。你叫什么名字？",
+      "truth": "right",
+      "cls": "app",
+      "level": 1
+    },
+    {
+      "text": "我今天很忙。上午我去了商店，买了一些水果。你今天做什么了？",
+      "truth": "right",
+      "cls": "app",
+      "level": 2
+    },
+    {
+      "text": "因为今天下雨，所以我没有出去。我在家看完了一本书，觉得很有意思。你喜欢在家做什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 3
+    },
+    {
+      "text": "这本书我已经看了一半，虽然有点难，但是越看越有意思。除了小说以外，我也喜欢看历史书。你最近在看什么？",
+      "truth": "right",
+      "cls": "app",
+      "level": 4
+    },
+    {
+      "text": "我该去睡觉了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "护士会告诉你怎么做。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你更喜欢哪个，这个还是那个？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "把你的名字用大写写下来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "跳上一列正在开的火车是很危险的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我不觉得她像她妈妈。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "她喜欢网球并成为了一个网球教练。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这是我的自行车。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我没有一个愿意跟我一起旅行的人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "不管发生什么，都不要改变主意。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "昨天我第一次打了网球。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你不该吃太多。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我和他都不相信。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我不太喜欢看电视。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我能坐在这儿吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你的年龄是多少？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "马是种很有用的动物。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他可以用12秒跑100米。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我很累，早早就上床了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他死得不幸福。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你用完了把它放回去。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我想那是真的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我喜欢他不是因为他人好，而是因为他诚实。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我弟弟今年十一岁。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我支持你们。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "请问新桥饭店离这儿远不远？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我在公园散步。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "在你的词典查一查这个词。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他们继续谈了几小时。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我很高兴遇见了你。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他每天早上洗澡。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "今天早上我去了公园。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "郊区很安静......",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "叫一个腌笃鲜汤吧。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你为什么要到我们公司来应聘？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "哦，能不能请你帮我听一下电话？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我当时每个月都会购买五本书。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "她总是把自己的房子打扫得很干净。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "不要进来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "两个男孩子从房间里跑出来了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我今天得把这本书还给图书馆。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我数年来都和这家商店做生意。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你喜欢做什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你应该更小心的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "打网球是他的兴趣。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你为什么不相信我？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我爱看足球。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我们能在哪儿打电话？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你气死我了！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "她申请了签证。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "一种语言永远不够。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我本想去参加音乐会的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "一开始许多事情看上去不同了，但我很快习惯了我的新生活。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "鸟喜欢大米。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他说得很快。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我真的很喜欢狗。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你昨天打棒球了没有？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "她七点起床。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "祝你生日快乐。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我为自己的低分数对自己生气。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这样呢，是对的吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "您觉得我是在开玩笑吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我决定告诉她我爱她。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "昨天是我的生日。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我想变成你。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他怕死吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "他是个教师。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "2010这个数字里有两个零。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "他很容易感冒。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我朋友问我是不是觉得还好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你最好去。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他把东西留给了他的儿子。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "昨天下小雨。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "爸爸回家了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你喝咖啡吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "当他睡觉的时候，他让窗子一直开着。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "即使我穿得很多仍然是很冷。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你是哪国人？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "虽然她很累了，她还是继续工作。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "她会说中文，却不会说普通话。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "今天我爱整个世界。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你的头发有春天的味道。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "把门打开一点。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我想和你讨论一些事情。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我同意你一部分的意见。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这个主意不错。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我能在这里学习吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "她们没有心吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "甚至在夏天，这里都很冷。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我的母亲从不早起来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "他的腿受伤了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "哪一本书都好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "又开始刮台风了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "那个路口发生过什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "请再说一遍!",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他告诉我她生病了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他过来请我去帮那个他。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我喜欢看篮球比赛。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "车后座可以坐三个人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "多好的一天那！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "多漂亮的一个杯子啊！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他喜欢睡觉。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我希望离开那个城市，并且不再回来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "一切都还顺利吧？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "现在美国有三千一百万年龄在六十五岁以上的老人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "您的工资是每个月打入您的工资卡吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我不知道这是什么东西，但是它很大。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他十分会开玩笑。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "这不安全。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "真是烦死了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我有条大狗。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "这条鱼很好吃。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我高兴你喜欢我的朋友。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "这个笑话的意思是什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这样做，一来可以认识更多的中国朋友，二来可以锻炼你的口语。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "水果对身体非常好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我没有总想着她了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他对你说了些什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "您能为爱情而死吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我丈夫总是在床上看书。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你的考试通过了吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这太无聊了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我是个高中生。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "明天会出太阳吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "让他等着吧！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我想再次回到我的童年。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我爱这个男人。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我的父母是从中国来的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "后会有期。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我知道这对您来说很重要。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "狗和猫你更喜欢哪一个？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "很快就到夏天了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他们赢了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "时间过得真快。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我需要我的大衣。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "马克给他的儿子买了辆车。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你们害怕。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "文件被风刮起来。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我们是朋友。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "草地看来不错。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你能把你的联系方式发给我吗?",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "他一定没有多考虑就说了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "他知道怎么玩棒球。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你目前做了很好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我有很多事要做。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我能跟任何人工作。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我的车今天早上坏了，星期五才能修好。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "昨天星期六。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "医生也许这么说过。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我在等我的朋友。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "下一个是谁？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我准时赶上了火车。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你要买点东西吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "一切正常。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "当时我什么都不能做。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我买了一辆电动自行车。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你知道谁弄坏的窗户吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "情况不允许我出国。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你记得这是在哪一年发生的吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "昨天我第一次骑了马。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我的航班什么时候开发？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "家庭的每个人都在周六的早上在家里。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "这个早上这么热。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他试图保护她。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "明天你几点要上学？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他是作者。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我知道这不是真的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你的哥哥在哪里?",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "以后怎样呢？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "一个是红色的，另一个是白色的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我们之前没有见过吧。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "好吧，好吧，我已经走了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你怎么还一个人？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "欢迎来到中国！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "你得写点什么。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "狗喝了些水就走了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我星期天不工作。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我变了这么多吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "今天也太热了吧。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他把一百万美元分给他五个儿子。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "没有什么比游泳更让我开心。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "她想一起住。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "多么大的一辆卡车啊！",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "午饭吃什么？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "那个人的衣服很好看。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我全身疼痛。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "她是一个朋友吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "妈妈每天叫我起床上学。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我可以睡觉了吗？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "明天不想去学校。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "你自己都不知道？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "她最近生了孩子。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "我的心七上八下的。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "聚会要开始了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    },
+    {
+      "text": "你为什么不相信呢？",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "我再也想不起来了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我说完了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "他出发了。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 3
+    },
+    {
+      "text": "他坐在了她的旁边。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 2
+    },
+    {
+      "text": "我只是跟你客气一下。",
+      "truth": "right",
+      "cls": "tatoeba",
+      "level": 4
+    }
+  ]
+}

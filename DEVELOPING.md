@@ -20,6 +20,7 @@ file is deliberately not on it).
 - [Releasing and previews](#releasing-and-previews)
 - [OpenRouter](#openrouter)
 - [Supabase](#supabase)
+- [What a partner turn goes through](#what-a-partner-turn-goes-through)
 - [The validator](#the-validator)
 - [Git and GitHub](#git-and-github)
 
@@ -208,6 +209,68 @@ were real.
 almost no name characters, and `王` is HSK 4 (see [The validator](#the-validator)). It added
 noise to both arms and buried the effect. Seed sentences for any pacing or prompt experiment
 must be namefree, or the thing being measured is the name.
+
+### Worked example: the contradiction that was load-bearing
+
+Ghost Words targets words the learner was taught and has never produced. Pacing
+teaches above the level, so at HSK 2 that list held 被 and 把 — and the level's
+own grammar rule forbids exactly those. One system prompt, four rules apart:
+
+```
+3.  可以用「了」「过」…。还不要用：把、被、难的动词补语。
+13. 学生最近学了这些词，请多用：被、把、为了、放、生活、手表。
+```
+
+The partner shipped 我的书被我放在桌子上了。为了生活好，我把手表也放好。你被妈妈帮
+忙过吗？ — 被 three times, 被字句 none. A reflexive agent, then 被 bolted onto
+帮忙, which is intransitive and cannot passivise. Every word validated; vocabulary
+was never the problem.
+
+Two candidate fixes, and only one of them is real.
+
+The first: the demand was nested inside `if (offer.length)`, and Ghost Words
+carries `newWords: false`, so `offer` is empty on every one of its turns. The
+requirement was enforced in `turn()`'s retry loop and **printed nowhere**. That
+one is a plain bug.
+
+The second is the trap. A grammar word *is* its grammar, so a ghost 被 is the
+most valuable item the unused list can hold — taught, never once produced. Since
+rule 3 forbids what rule 13 demands, lift the ban for words the learner has been
+taught. Obviously correct, argued for on pedagogical grounds by the learner, and
+backwards. `tools/ghost-grammar-ab.js`, end-to-end usable replies:
+
+| | | end to end |
+| --- | --- | --- |
+| demand unstated, ban intact | as shipped | 1/20 (5%) |
+| demand stated, ban intact | the bug fix | **21/50 (42%)** |
+| demand stated, ban lifted | the "obvious" fix | 8/50 (16%) |
+
+`p = 0.0034` for the fix, `p = 0.0076` for lifting the ban making it worse.
+
+**The ban was not only a prohibition. It was the only thing in the prompt telling
+the partner the structure is hard.** Forbidden and required at once, the model
+used 被 once, in the safest passive it knows — 被猫吃了一点儿, 被朋友拿走了.
+Lift the ban and 被 becomes ordinary, 把 unlocks alongside it (1.44 per reply
+against 0.64), and the partner chains them into two-clause sentences while
+cramming four ghost words a reply instead of three. It reproduces the reported
+defect rather than curing it.
+
+A second round asked whether the caution could be stated out loud instead — a
+2×2 over ban on/off × caution explicit/implicit, 30 runs an arm. Nothing beat
+leaving the ban alone, and the explicit caution failed in **two opposite
+directions**: with the ban it invited overreach (highest 被 rate, lowest
+accuracy), without it invited avoidance (lowest 被 rate of any arm).
+
+Rules of thumb this adds to the list above:
+
+- **A constraint may be doing work other than constraining.** Before removing a
+  contradiction, ask what the redundant half is signalling. Difficulty, register
+  and caution all ride on prohibitions that look purely restrictive.
+- **Put the control arm in to be falsified.** `stated` was included expecting it
+  to lose. It won, and that is the only reason the wrong fix did not ship.
+- **Replicate the control.** Its first run read 55%, its second 33% — consistent
+  (`p = 0.15`) and poolable at 42%, but the first figure alone was optimistic and
+  had already been quoted.
 
 ### Worked example: story time's position rule, and its names
 
@@ -698,6 +761,76 @@ Project setup lives in README.md. What is easy to get wrong:
   visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
   real row every 3 days; it needs the `SUPABASE_URL` and
   `SUPABASE_SERVICE_ROLE_KEY` repository secrets.
+
+## What a partner turn goes through
+
+By v114 a single reply from the partner can cost a dozen model calls, and the
+order they happen in is the design. `turn()` in `index.html` is the whole of it.
+
+```
+  PLAN          decide what to say, in Chinese, and check it against the level
+                -- up to 3 re-plans          chat and Ghost Words only
+    |
+    v
+  GENERATE      the reply, given the plan if there is one
+    |
+    v
+  VOCABULARY    HSK.validate() -- is every word in the allowlist?     free
+    |                                    fails -> repair, retry
+    v
+  SENSE         is every word used in a SENSE this level allows?   1 call/word
+    |           (得 as a complement, 过 as a verb)
+    |                                    fails -> repair, retry
+    v
+  GATE          is it correct, and worth copying?             1-2 calls
+    |           nativeFrame on the teaching model, then softBar on
+    |           glm-5.3-flash only if the first passed
+    |                                    fails -> repair + a STRATEGY, retry
+    v
+  SOFT CHECKS   echo? required word missing?  keep the best answer, ask again
+    |
+    v
+  the learner reads it -- or 我不会说 if the tries ran out
+```
+
+Four things about that order, each of which was arrived at the hard way:
+
+- **Planning is first because repair is too late.** The failures were content
+  choices, not phrasings: the partner tried to describe a desert, and no
+  rewording gets there. `RESEARCH.md`, "When the level cannot say it".
+- **The gate is spent only on replies that already passed vocabulary**, like the
+  sense check, because grading a reply that is about to be repaired anyway is a
+  wasted call.
+- **The gate is above the soft checks**, because those keep their best answer and
+  show it when the tries run out. Below them, that kept answer reaches the
+  screen ungraded.
+- **Correctness never degrades to "show it anyway".** A turn that cannot be
+  repaired becomes the stub. That is a deliberate trade: the learner copies the
+  partner, so a bad sentence shown is a bad sentence practised.
+
+### Which activities get what
+
+| | plan | gate | why |
+|---|---|---|---|
+| chat, focused | yes | yes | free-form; the partner chooses what to say |
+| twenty, drill | no | yes | content already dictated by the prompt |
+| story | no | no | Sonnet, narrative not reply, and it writes better Chinese |
+
+### Everything here is a switch
+
+`Think before answering`, `Check the partner's Chinese too` and `Keep a
+diagnostic log` are all in Settings and all default on. The first two change
+latency enough to want an off switch that does not need a deploy; the third
+writes your conversations to a table.
+
+### The failure paths all fail open
+
+A grader that errors, times out (25s) or returns nothing passes the turn. A
+planner that cannot find an affordable plan generates unplanned. A missing
+`debug_log` table logs locally. **None of these block the conversation**, because
+a language partner that stops talking is worse than one that occasionally says
+something imperfect -- and every one of them is logged, so "it quietly stopped
+working" is visible rather than inferred.
 
 ## The validator
 
