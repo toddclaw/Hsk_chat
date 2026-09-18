@@ -1149,7 +1149,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v112 — 2026-09-17";
+const VERSION   = "v113 — 2026-09-17";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1809,7 +1809,7 @@ function withTimeout(p, ms, what) {
  * A FAILED CALL PASSES THE TURN. A gate that blocked on API trouble would take
  * the conversation down with it, and an ungraded turn is the behaviour the app
  * had for its whole life until now. */
-async function gateFault(text) {
+async function gateFault(text, lex) {
   for (const [model, opts] of [[null, { partner: true }],
                                [GATE_MODEL, { partner: true, bar: "soft" }]]) {
     let g;
@@ -1830,8 +1830,19 @@ async function gateFault(text) {
      * the model's punctuation rather than the partner's Chinese. */
     if (!g || g.ok) continue;
     const notes = (g.errors || []).map(e => e.note).filter(Boolean).join(" ");
-    console.log("[gate] " + (model || "teach") + " faulted:", text, g.better, notes);
-    return { better: g.better || "", note: notes };
+    /* THE EVIDENCE THE REPAIR LOOP NEEDS, and the gate is the only place that
+     * has it: run the correction through the SAME validator the reply faces. A
+     * fix the learner is not allowed to read is a fix the partner cannot use,
+     * and no amount of "say it differently" reaches it -- that is the
+     * 练武术 / 练习武术 loop, six tries and a stub. Naming the blocking word
+     * turns an unwinnable fight into a choice between teaching it and saying
+     * so. */
+    const blocked = lex
+      ? ((HSK.validate(g.better || "", lex).filter(v => v.kind === "bad" && !v.name)[0] || {}).text || "")
+      : "";
+    console.log("[gate] " + (model || "teach") + " faulted:", text, g.better, notes,
+                blocked ? "(fix needs out-of-level 「" + blocked + "」)" : "");
+    return { better: g.better || "", note: notes, blocked: blocked };
   }
   return null;
 }
@@ -1842,10 +1853,15 @@ async function gateFault(text) {
  * confirms a fault 5 times in 7 shown the original and the repair side by side,
  * and 2 in 7 asked about the fault in the abstract. Telling it only "something
  * was unnatural" is the phrasing that has scored near zero on three probes. */
-function gateRepairPrompt(fault) {
-  return "你刚才写的中文有问题：" + (fault.note || "不是中国人会说的话") + "。" +
-    (fault.better ? "更自然的说法是「" + fault.better + "」。" : "") +
-    "请用这个意思重新说一次，其他的规则不变。";
+function gateRepairPrompt(fault, strategy) {
+  /* The correction goes in even when it is out of level. It never reaches the
+   * screen -- it is guidance for the model, and the model is the one being
+   * asked to work around it. Round eight measured the shape: this model acts on
+   * two concrete sentences where it ignores an abstract complaint. */
+  const base = "你刚才写的中文有问题：" + (fault.note || "不是中国人会说的话") + "。" +
+    (fault.better ? "更自然的说法是「" + fault.better + "」。" : "");
+  if (strategy) return base + strategy.text + "只说中文，不要解释。";
+  return base + "请用这个意思重新说一次，其他的规则不变。";
 }
 
 // Failures carry a kind, because the useful response differs: a missing key is
@@ -2139,6 +2155,12 @@ async function turn(ctx) {
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
   let attempt = 0, last = null, missed = null, echoed = null;
+  /* The turn's own memory, for the repair ladder. `gateFails` is counted apart
+   * from `attempt` because vocabulary repairs converge -- the validator names
+   * the word and the model swaps it -- while gate failures are the ones that
+   * loop, so the strategies are aimed at those. */
+  let gateFails = 0; const triedStrategies = [];
+  let prevText = null, prevBad = null, introduced = false;
   const tries = (ctx && ctx.attempts) || S.attempts;
 
   while (attempt < tries) {
@@ -2229,11 +2251,28 @@ async function turn(ctx) {
          * having finished and lost the answer. The wait is one wait; it says
          * so once. */
         status("检查中… " + attempt + "/" + tries);
-        const fault = await gateFault(ex.text);
+        const fault = await gateFault(ex.text, lex);
         if (fault) {
+          gateFails++;
+          /* At most one introduced word per turn, and none at all if pacing has
+           * already spent the budget on this one. DEFAULT_RATE is 45 characters
+           * per new word and the repair loop is not the pacing system. */
+          const strategy = HSKPrompt.repairStrategy({
+            gateFails: gateFails, tried: triedStrategies, blocked: fault.blocked,
+            repeated: ex.text === prevText,
+            sameWord: false,
+            allowIntroduce: !introduced && !ex.needs.length && !offer.length
+          });
+          if (strategy) {
+            triedStrategies.push(strategy.id);
+            if (strategy.id === "introduce") introduced = true;
+            console.log("[gate] strategy " + strategy.id +
+                        (fault.blocked ? " (blocked: " + fault.blocked + ")" : ""));
+          }
           scratch.push({ role: "assistant", content: raw });
-          scratch.push({ role: "user", content: gateRepairPrompt(fault) });
+          scratch.push({ role: "user", content: gateRepairPrompt(fault, strategy) });
           console.log("[gate] retrying");
+          prevText = ex.text;
           continue;
         }
       }
@@ -2286,6 +2325,12 @@ async function turn(ctx) {
     }
 
     last = ex.text;
+    /* Carried for the repair ladder: an attempt identical to the last one means
+     * the model has stopped moving, and the same rejected word twice means
+     * rephrasing is not working. Both pick a different strategy. */
+    const badNow = violations.filter(v => v.kind === "bad").map(v => v.text).sort().join(",");
+    prevText = ex.text;
+    prevBad = badNow;
     scratch.push({ role: "assistant", content: raw });
     const rp = repairPrompt(violations, attempt + 1);
     console.log("[repair]", rp);
