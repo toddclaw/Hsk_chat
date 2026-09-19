@@ -153,6 +153,14 @@
    *   1. read but never written -- the partner has used it to you and you have
    *      never produced it. The reported complaint, directly.
    *   2. lapsed -- you produced it once and have not met it in STALE_DAYS.
+   *
+   * `written` answers "have you ever typed this", and `ghost` answers "have you
+   * typed it correctly on N separate days". They are NOT the same question and
+   * using the second for the first is a measured defect: on real data 51% of a
+   * learner's messages fail the whole-sentence grade, so 23% of the words they
+   * had actually written read as never-written and came back as flashcards.
+   * The strict counter still decides what is OWNED, which is the question it
+   * was built for.
    *      Backfill, so a learner whose partner has taught them everything still
    *      gets a full set.
    *
@@ -169,6 +177,7 @@
     var seen = o.seen || {}, ghost = o.ghost || {};
     var uses = o.ghostUses || 3;
     var reserved = o.reserved instanceof Set ? o.reserved : new Set(o.reserved || []);
+    var written = o.written instanceof Set ? o.written : new Set(o.written || []);
     var fresh = [], lapsed = [];
     (o.entries || []).forEach(function (e) {
       if (!e || !e.w) return;
@@ -177,7 +186,7 @@
       if (reserved.has(e.w)) return;
       var n = (ghost[e.w] && ghost[e.w].n) || 0;
       if (n >= uses) return;                             // already yours
-      if (n === 0) fresh.push(e);
+      if (!written.has(e.w)) fresh.push(e);
       else if (daysBetween(day, o.today) >= STALE_DAYS) lapsed.push(e);
     });
     var byRank = function (a, b) {

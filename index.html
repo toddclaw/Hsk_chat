@@ -1178,7 +1178,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v120 — 2026-09-18";
+const VERSION   = "v121 — 2026-09-18";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1458,6 +1458,12 @@ function needsSoFar(upTo) {
   const out = [];
   for (const t of S.history) {
     (t.needs || []).forEach(n => {
+      /* A word the learner said No to is not legal here, and this is the only
+       * place that can enforce it: this list feeds BOTH the lexicon turn()
+       * validates against and the one renderMessage() paints with, so filtering
+       * here blocks the word and marks it in one move. Without this, `state`
+       * was a flag with no reader and No did nothing at all. */
+      if (n.state === "rejected") return;
       if (!out.some(e => e.w === n.w)) out.push({ w: n.w, p: n.p, d: n.d });
     });
     if (upTo && t === upTo) break;
@@ -2739,7 +2745,22 @@ function renderMessage(turnObj, shownExtra) {
     yes.onclick = () => { acceptWord(n, turnObj.text); box.remove(); };
     const no = document.createElement("button");
     no.textContent = "No";
-    no.onclick = () => { n.state = "rejected"; persist(); box.remove(); };
+    /* "No" means do not say that to me, not say it and let me read it anyway.
+     * needsSoFar() above has already stopped the word being legal; this asks
+     * for the turn again without it, through the same path "Try again" uses.
+     *
+     * Only when the rejected word is in the NEWEST message. retryLast() rewinds
+     * to the last user turn, so calling it from a card further up the log would
+     * discard replies the learner never objected to. Rejecting an older one
+     * still blocks the word everywhere and repaints it as the violation it has
+     * now become -- which is why the else branch is a render, not nothing. */
+    no.onclick = () => {
+      n.state = "rejected";
+      persist();
+      box.remove();
+      if (!S.busy && S.history[S.history.length - 1] === turnObj) retryLast();
+      else renderAll();
+    };
     row.append(yes, no);
     el.appendChild(box);
   });
@@ -4138,10 +4159,28 @@ function cardWords() {
   return S.extra.concat(S.learning);
 }
 
+/* Two cards a word, not one: hanzi -> meaning is recognition, meaning -> hanzi
+ * is production, and the gap between those two is the entire thing this app is
+ * for. Asked for as all six permutations of hanzi/pinyin/English; two of those
+ * six test neither the character nor production, and six cards a word turns a
+ * five-word set into thirty, which is the review-queue overwhelm the flashcard
+ * activity was shaped to avoid (RESEARCH.md, "Choosing a set of words to study
+ * away from the app").
+ *
+ * Anki keys duplicates on the first field, so the two rows are distinct notes
+ * rather than a collision: one starts with the hanzi, the other with the gloss.
+ * Pleco is untouched -- it generates directions itself. */
 function ankiCsv(words) {
   const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
-  return "#separator:comma\n#html:true\n" + (words || cardWords()).map(e =>
-    q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
+  const rows = [];
+  (words || cardWords()).forEach(e => {
+    const back = [e.p, e.d, e.s].filter(Boolean).join("<br>");
+    rows.push(q(e.w) + "," + q(back));
+    /* No gloss, no reverse card -- a front of "" would be an unanswerable
+     * prompt, and Anki would treat every one of them as the same note. */
+    if (e.d) rows.push(q(e.d) + "," + q([e.w, e.p].filter(Boolean).join("<br>")));
+  });
+  return "#separator:comma\n#html:true\n" + rows.join("\n") + "\n";
 }
 
 // Pleco's flashcard import format: headword, pinyin, definition, tab separated.
@@ -6511,6 +6550,31 @@ function ownWriting(t) {
   return starterTexts().indexOf(String((t && t.text) || "").trim()) === -1;
 }
 
+/* Every in-level word the learner has ever typed, whatever the grader made of
+ * the sentence around it.
+ *
+ * Deliberately NOT producedWords() below, which additionally requires the word
+ * to have been used CORRECTLY -- that is the right bar for retiring a word and
+ * the wrong one for choosing what to study. Measured on real data: 51% of
+ * graded messages fail the whole-sentence check, so the strict bar called 23%
+ * of this learner's written vocabulary unwritten and handed those words back as
+ * flashcards. 那 was the reported case, and it has a second cause on top: it
+ * segments as its own word in only 2 of the 9 messages containing it, because
+ * 那个/那儿/那里/那么 each swallow it whole. Nothing here fixes that half --
+ * a word only counts where the segmenter can see it. */
+function writtenWords() {
+  const out = new Set();
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (!t || t.role !== "user" || !t.text || !ownWriting(t)) return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind === "word") out.add(tok.text);
+      });
+    });
+  });
+  return out;
+}
+
 function producedWords() {
   const out = new Set();
   const scan = function (list) {
@@ -6667,6 +6731,7 @@ function flashcardCandidates() {
   const ghost = ghostProgressMap();
   return HSKPace.flashcardPool({
     entries: S.base, seen: lastSeenMap(), ghost: ghost, ghostUses: S.ghostUses,
+    written: writtenWords(),
     reserved: HSKPace.reservedWords({ sets: inFlightSets(), ghost: ghost,
                                       ghostUses: S.ghostUses, today: today }),
     today: today, n: HSKPace.CANDIDATES_SHOWN

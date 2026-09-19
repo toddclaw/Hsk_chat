@@ -293,7 +293,7 @@ check(P.daysBetween("", TODAY) === Infinity,
 check(P.daysBetween(TODAY, TODAY) === 0, "the same day is zero days apart");
 
 const fcPool = o => P.flashcardPool(Object.assign(
-  { entries: FC, seen: {}, ghost: {}, ghostUses: 3,
+  { entries: FC, seen: {}, ghost: {}, ghostUses: 3, written: new Set(),
     reserved: new Set(), today: TODAY, n: 10 }, o));
 
 // Read but never written: seen in the history, never produced correctly.
@@ -304,14 +304,27 @@ check(fcPool({ seen: {} }).length === 0,
   "a word never seen at all is not a candidate");
 
 // Lapsed: produced before, but not recently.
-check(fcPool({ seen: { "苹果": "2026-09-17" }, ghost: { "苹果": { n: 1 } } }).length === 0,
-  "a word produced and seen yesterday is neither population");
-check(fcPool({ seen: { "苹果": "2026-01-01" }, ghost: { "苹果": { n: 1 } } })
+check(fcPool({ seen: { "苹果": "2026-09-17" }, written: new Set(["苹果"]) }).length === 0,
+  "a word written and seen yesterday is neither population");
+check(fcPool({ seen: { "苹果": "2026-01-01" }, written: new Set(["苹果"]) })
         .map(e => e.w).join() === "苹果",
-  "a word produced once and unseen for months is lapsed");
+  "a word written once and unseen for months is lapsed");
+
+/* The reported bug, as a test. 那 was handed back as a flashcard after the
+   learner had written it nine times, because `ghost` counts only words used
+   correctly in a sentence the grader passed WHOLE -- and 51% of real messages
+   do not pass. Written-ness and correctness are different questions and this
+   is the one that must ask the loose one. */
+check(fcPool({ seen: { "苹果": TODAY }, written: new Set(["苹果"]), ghost: {} }).length === 0,
+  "a word the learner has written is never offered as never-written, even with no credits",
+  fcPool({ seen: { "苹果": TODAY }, written: new Set(["苹果"]), ghost: {} }).map(e => e.w).join());
+check(fcPool({ seen: { "苹果": TODAY }, ghost: { "苹果": { n: 2 } } })
+        .map(e => e.w).join() === "苹果",
+  "and credits alone do not make a word written -- `written` is the only gate on population 1");
 check(fcPool({ seen: { "苹果": "2026-01-01" }, ghost: { "苹果": { n: 3 } } }).length === 0,
   "a word already owned is excluded however stale it is");
-check(fcPool({ seen: { "苹果": "2026-01-01" }, ghost: { "苹果": { n: 3 } }, ghostUses: 6 })
+check(fcPool({ seen: { "苹果": "2026-01-01" }, written: new Set(["苹果"]),
+               ghost: { "苹果": { n: 3 } }, ghostUses: 6 })
         .map(e => e.w).join() === "苹果",
   "and ownership is judged against ghostUses, not a hardcoded 3");
 
@@ -320,7 +333,7 @@ check(fcPool({ seen: { "苹果": "2026-01-01" }, ghost: { "苹果": { n: 3 } }, 
  * is the whole point -- the populations do not interleave by frequency. */
 const ordered = fcPool({
   seen: { "回答": TODAY, "颜色": TODAY, "医生": "2026-01-01", "机场": "2026-01-01" },
-  ghost: { "医生": { n: 1 }, "机场": { n: 2 } }
+  written: new Set(["医生", "机场"])
 });
 check(ordered.map(e => e.w).join() === "回答,颜色,医生,机场",
   "read-never-written comes first, lapsed backfills, each commonest-first",
