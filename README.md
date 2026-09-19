@@ -765,6 +765,7 @@ The header's first control is what kind of session this is:
 |---|---|---|
 | **Chat** | open conversation, the app as it always was | you |
 | **Ghost Words** | the partner steers toward words you were taught and have not yet used enough times to own | the partner |
+| **Flashcard Chat** | five words pulled from your own history to study away from the app, then a conversation steered at them until you own them | the partner |
 | **Story time** | a five-part story at your level, then questions about it | the partner |
 | **20 Questions** | one of you thinks of something, the other guesses | either |
 | **Drills** | one mistake the grader keeps flagging, until you get it right six times | the partner |
@@ -787,6 +788,29 @@ already existed, already sorted commonest-first, so the activity is one extra ru
 different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
 maintaining per level and would fight the word goal whenever the two disagreed. The words pull
 the conversation somewhere on their own.
+
+**Flashcard Chat** is two steps, because the reported problem was retrieval, not
+recognition: *"Once I'm reminded of the words I realize I can actually express my
+thoughts."* Press **Choose 5 words** and the app runs arithmetic over your own history —
+words the partner has used to you that you have never produced, and words you have not met
+in a month — sorted commonest-first, and hands you a set of five. Nothing here can be
+out-of-level: every candidate comes from your current level's own list. Export the set to
+Pleco or Anki with the same buttons the 词 panel uses, and go study it away from the app —
+that half of the job is exactly what those apps already do well, and this feature does not
+duplicate it.
+
+Come back and the chat that opens is steered at those five words, the same way Ghost Words
+steers at its list. A strip on screen tracks the set with a marker like `Day 1 ✓ · Day 2 ·
+3/5`: a round is every word used correctly once, and **Correct uses to retire a ghost word**
+in Settings — the same setting Ghost Words uses, three by default — is how many rounds it
+takes before the set is done. At most one credit per word per day, so a round cannot close
+in under a day. When every word reaches that count the strip reads **Activity Complete!**
+and phase one — the button — comes back for the next set.
+
+Starting a second Flashcard Chat while a first is still unfinished never hands back a word
+the first is still working on; an in-progress set's words are held out of the candidate pool
+until it finishes, or until its conversation has gone quiet for a month, whichever comes
+first.
 
 **Drills** works one mistake at a time. The chooser lists the categories you are actually
 accruing, with your own most recent sentence in each; picking one asks a second question —

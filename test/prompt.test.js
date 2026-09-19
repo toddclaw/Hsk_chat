@@ -1356,5 +1356,24 @@ const exReply = P.explain({ text: "我昨天去了公园。", own: false, label:
 check(!/A grader has already judged/.test(exReply),
   "the partner's reply is never graded, so its explanation is never handed a verdict");
 
+// --- Flashcard Chat ---------------------------------------------------------
+const fcRow = P.ACTIVITIES.flashcard;
+check(!!fcRow, "Flashcard Chat is a row in the ACTIVITIES table");
+check(fcRow && fcRow.label === "Flashcard Chat", "and it is labelled for the menu");
+check(fcRow && fcRow.newWords === false,
+  "it introduces no new words, as Ghost Words and Drills do not");
+check(fcRow && fcRow.reuse === "chosen",
+  "its reuse list is the set the learner chose, not the unused list");
+check(fcRow && fcRow.steer === true,
+  "and it declares that the partner must work at a word from that list");
+check(P.ACTIVITIES.focused.steer === true,
+  "Ghost Words declares the same thing on its own row rather than in index.html");
+check(P.ACTIVITIES.chat.steer !== true && P.ACTIVITIES.story.steer !== true,
+  "ordinary chat and story time do not steer");
+check(P.activityFor("flashcard") === fcRow,
+  "activityFor resolves it by id");
+check(typeof (fcRow && fcRow.note) === "string" && fcRow.note.length > 0,
+  "and it explains itself in the activity note");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

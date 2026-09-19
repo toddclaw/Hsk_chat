@@ -185,8 +185,8 @@ check(P.PROMOTE_AT === 6, "a word is new until 6 sightings, not 3");
 
 /* ------------------------------------------------ documented figures ------
  *
- * README.md and RESEARCH.md both reason in concrete numbers -- 520 words at
- * HSK 1, 741 new at HSK 2, ~85% coverage, ~147 words to the threshold -- and
+ * README.md and RESEARCH.md both reason in concrete numbers -- 300 words at
+ * HSK 1, 197 new at HSK 2, 88% coverage, 58 words to the threshold -- and
  * RESEARCH.md is published for people to check the argument against. Prose
  * drifts from data silently: the README's counts were already stale by a dozen
  * words before anyone noticed. Pin them.
@@ -206,6 +206,12 @@ check(Math.round(P.coverage(h2, h1w) * 100) === 88,
 check(P.toTarget(h2, h1w, P.READY_AT) === 58,
   "and 58 words reach the mark, the number the panel shows a beginner",
   `actually ${P.toTarget(h2, h1w, P.READY_AT)}`);
+/* The lower reference, which pace.js's own toTarget() comment quotes. Pinned
+   for the same reason as the line above: that comment is the argument for
+   weighting by 1/rank at all, and a stale number in it reads as a refutation. */
+check(P.toTarget(h2, h1w, 0.95) === 23,
+  "and 23 words reach the 95% reference, as toTarget()'s comment says",
+  `actually ${P.toTarget(h2, h1w, 0.95)}`);
 
 /* Story segments exist so the per-turn pacing constants keep meaning what
  * RESEARCH.md says: a segment must earn at least one credit, and a story must
@@ -264,6 +270,159 @@ check(oneShot.credits === P.CREDIT_CAP,
 check(oneShot.credits < storyCredits(SEG),
   "which is strictly fewer new words than segmenting yields",
   oneShot.credits + " vs " + storyCredits(SEG));
+
+// --- the flashcard pool -----------------------------------------------------
+/* Fixtures rather than real data: the point of these functions is the
+ * partition and the ordering, and a hand-built lexicon says what the
+ * populations are supposed to be far more legibly than hsk2.json can. */
+const FC = [
+  { w: "苹果", p: "píngguǒ", d: "apple", f: 100 },
+  { w: "医生", p: "yīshēng", d: "doctor", f: 200 },
+  { w: "回答", p: "huídá", d: "answer", f: 300 },
+  { w: "颜色", p: "yánsè", d: "colour", f: 400 },
+  { w: "机场", p: "jīchǎng", d: "airport", f: 500 },
+  { w: "从来", p: "cónglái", d: "never", f: 600 }
+];
+const TODAY = "2026-09-18";
+
+check(P.daysBetween("2026-09-01", TODAY) === 17,
+  "daysBetween counts whole days between two day keys",
+  String(P.daysBetween("2026-09-01", TODAY)));
+check(P.daysBetween("", TODAY) === Infinity,
+  "a missing day key is infinitely old, never zero days old");
+check(P.daysBetween(TODAY, TODAY) === 0, "the same day is zero days apart");
+
+const fcPool = o => P.flashcardPool(Object.assign(
+  { entries: FC, seen: {}, ghost: {}, ghostUses: 3, written: new Set(),
+    reserved: new Set(), today: TODAY, n: 10 }, o));
+
+// Read but never written: seen in the history, never produced correctly.
+check(fcPool({ seen: { "苹果": TODAY } }).map(e => e.w).join() === "苹果",
+  "a word read today and never written is a candidate",
+  fcPool({ seen: { "苹果": TODAY } }).map(e => e.w).join());
+check(fcPool({ seen: {} }).length === 0,
+  "a word never seen at all is not a candidate");
+
+// Lapsed: produced before, but not recently.
+check(fcPool({ seen: { "苹果": "2026-09-17" }, written: new Set(["苹果"]) }).length === 0,
+  "a word written and seen yesterday is neither population");
+check(fcPool({ seen: { "苹果": "2026-01-01" }, written: new Set(["苹果"]) })
+        .map(e => e.w).join() === "苹果",
+  "a word written once and unseen for months is lapsed");
+
+/* The reported bug, as a test. 那 was handed back as a flashcard after the
+   learner had written it nine times, because `ghost` counts only words used
+   correctly in a sentence the grader passed WHOLE -- and 51% of real messages
+   do not pass. Written-ness and correctness are different questions and this
+   is the one that must ask the loose one. */
+check(fcPool({ seen: { "苹果": TODAY }, written: new Set(["苹果"]), ghost: {} }).length === 0,
+  "a word the learner has written is never offered as never-written, even with no credits",
+  fcPool({ seen: { "苹果": TODAY }, written: new Set(["苹果"]), ghost: {} }).map(e => e.w).join());
+check(fcPool({ seen: { "苹果": TODAY }, ghost: { "苹果": { n: 2 } } })
+        .map(e => e.w).join() === "苹果",
+  "and credits alone do not make a word written -- `written` is the only gate on population 1");
+check(fcPool({ seen: { "苹果": "2026-01-01" }, ghost: { "苹果": { n: 3 } } }).length === 0,
+  "a word already owned is excluded however stale it is");
+check(fcPool({ seen: { "苹果": "2026-01-01" }, written: new Set(["苹果"]),
+               ghost: { "苹果": { n: 3 } }, ghostUses: 6 })
+        .map(e => e.w).join() === "苹果",
+  "and ownership is judged against ghostUses, not a hardcoded 3");
+
+/* The ordering the learner asked for: read-but-never-written first, lapsed
+ * only as backfill. 医生 is commoner than 回答 and still comes second, which
+ * is the whole point -- the populations do not interleave by frequency. */
+const ordered = fcPool({
+  seen: { "回答": TODAY, "颜色": TODAY, "医生": "2026-01-01", "机场": "2026-01-01" },
+  written: new Set(["医生", "机场"])
+});
+check(ordered.map(e => e.w).join() === "回答,颜色,医生,机场",
+  "read-never-written comes first, lapsed backfills, each commonest-first",
+  ordered.map(e => e.w).join());
+
+check(fcPool({ seen: { "回答": TODAY, "颜色": TODAY }, n: 1 })
+        .map(e => e.w).join() === "回答",
+  "n caps the list");
+check(fcPool({ seen: { "回答": TODAY, "颜色": TODAY },
+               reserved: new Set(["回答"]) }).map(e => e.w).join() === "颜色",
+  "a reserved word is never offered");
+check(P.flashcardPool({}).length === 0,
+  "an empty options object yields an empty pool rather than throwing");
+check(P.flashcardPool({ entries: FC, today: TODAY }).length === 0,
+  "and a learner with no history gets no candidates");
+
+/* Unranked words weigh nothing in the coverage arithmetic and sort last in
+ * buildPool(); the same must hold here or the commonest-first promise is
+ * broken by a word the corpus never saw. */
+const unrankedPool = P.flashcardPool({
+  entries: FC.concat([{ w: "叉子", p: "chāzi", d: "fork" }]),
+  seen: { "叉子": TODAY, "从来": TODAY }, ghost: {}, ghostUses: 3,
+  reserved: new Set(), today: TODAY, n: 10
+});
+check(unrankedPool.map(e => e.w).join() === "从来,叉子",
+  "an unranked word sorts after every ranked one",
+  unrankedPool.map(e => e.w).join());
+
+// --- reservation ------------------------------------------------------------
+check(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 }, "医生": { n: 1 } }) === 1,
+  "a set has banked as many rounds as its WEAKEST word",
+  String(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 }, "医生": { n: 1 } })));
+check(P.setRounds(["苹果", "医生"], { "苹果": { n: 2 } }) === 0,
+  "a word with no credits at all pins the set at zero");
+check(P.setRounds([], {}) === 0, "an empty set has banked nothing");
+check(P.setRounds(null, null) === 0, "and a missing set does not throw");
+
+const res = o => P.reservedWords(Object.assign(
+  { sets: [], ghost: {}, ghostUses: 3, today: TODAY }, o));
+
+check(res({ sets: [{ words: ["苹果", "医生"], updated: TODAY }] }).has("苹果"),
+  "an unfinished set started today reserves its words");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY }],
+            ghost: { "苹果": { n: 3 } } }).size === 0,
+  "a finished set reserves nothing");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY }],
+            ghost: { "苹果": { n: 3 } }, ghostUses: 6 }).has("苹果"),
+  "and finished is judged against ghostUses, not a hardcoded 3");
+check(res({ sets: [{ words: ["苹果"], updated: "2026-01-01" }] }).size === 0,
+  "a set abandoned past RESERVE_DAYS releases its words");
+check(res({ sets: [{ words: ["苹果"], updated: "2026-09-18T11:00:00.000Z" }] }).has("苹果"),
+  "an ISO timestamp works as well as a day key");
+check(res({ sets: [{ words: ["苹果"], updated: TODAY },
+                    { words: ["医生"], updated: TODAY }] }).size === 2,
+  "several in-flight sets all reserve");
+check(P.reservedWords({}).size === 0,
+  "no sets at all reserves nothing and does not throw");
+
+/* The two halves together: a word locked by an in-flight set must not come
+ * back as a candidate for the next one. This is the learner's stated
+ * requirement and it is the only place the two functions meet. */
+const locked = P.reservedWords({
+  sets: [{ words: ["回答"], updated: TODAY }], ghost: {}, ghostUses: 3, today: TODAY });
+check(P.flashcardPool({ entries: FC, seen: { "回答": TODAY, "颜色": TODAY },
+                        ghost: {}, ghostUses: 3, reserved: locked,
+                        today: TODAY, n: 10 }).map(e => e.w).join() === "颜色",
+  "a second set cannot repeat a word the first is still working on");
+
+// --- reading a set back out of a transcript ---------------------------------
+const setMsgs = [
+  { role: "flashcards", text: "苹果,医生,回答" },
+  { role: "flashcardTheme", text: "a visit to the doctor" },
+  { role: "user", text: "我去医院" }
+];
+check(P.flashcardsOf(setMsgs).join() === "苹果,医生,回答",
+  "the chosen set is read back out of the transcript",
+  P.flashcardsOf(setMsgs).join());
+check(P.flashcardThemeOf(setMsgs) === "a visit to the doctor",
+  "and so is the theme");
+check(P.flashcardsOf([{ role: "user", text: "你好" }]).length === 0,
+  "an ordinary chat holds no set");
+check(P.flashcardThemeOf([]) === "" && P.flashcardsOf([]).length === 0,
+  "an empty transcript yields an empty set and an empty theme");
+check(P.flashcardsOf(null).length === 0, "and a missing transcript does not throw");
+check(P.flashcardsOf([{ role: "flashcards", text: "" }]).length === 0,
+  "an empty marker is an empty set, not a set containing one empty string");
+check(P.flashcardsOf([{ role: "flashcards", text: "苹果, 医生 " }]).join() === "苹果,医生",
+  "stray whitespace around a word is trimmed",
+  P.flashcardsOf([{ role: "flashcards", text: "苹果, 医生 " }]).join());
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
