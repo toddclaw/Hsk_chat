@@ -384,7 +384,20 @@ check(res({ sets: [{ words: ["苹果"], updated: TODAY }],
   "and finished is judged against ghostUses, not a hardcoded 3");
 check(res({ sets: [{ words: ["苹果"], updated: "2026-01-01" }] }).size === 0,
   "a set abandoned past RESERVE_DAYS releases its words");
-check(res({ sets: [{ words: ["苹果"], updated: "2026-09-18T11:00:00.000Z" }] }).has("苹果"),
+/* The two sides of this comparison must share a calendar base. `today` is the
+ * learner's LOCAL day, and a conversation's updated_at is a full UTC stamp --
+ * sliced rather than converted, an evening west of Greenwich reads as the next
+ * day, so the set holds its words a day past RESERVE_DAYS. Built from local
+ * components so it says the same thing on any machine. */
+const evening = new Date(2026, 8, 18, 21, 0, 0);          // local 9pm, 18 Sept
+check(P.dayKeyOf(evening.toISOString()) === "2026-09-18",
+  "a full stamp becomes the local day key, not the UTC one");
+check(P.dayKeyOf("2026-09-18") === "2026-09-18", "a bare day key passes through");
+check(P.dayKeyOf("") === "" && P.dayKeyOf("nonsense") === "",
+  "and an unusable stamp is empty, which daysBetween() reads as Infinity");
+check(P.daysBetween(P.dayKeyOf(evening.toISOString()), "2026-09-20") === 2,
+  "so an evening session two days ago is two days ago, not one");
+check(res({ sets: [{ words: ["苹果"], updated: new Date(2026, 8, 18, 11, 0, 0).toISOString() }] }).has("苹果"),
   "an ISO timestamp works as well as a day key");
 check(res({ sets: [{ words: ["苹果"], updated: TODAY },
                     { words: ["医生"], updated: TODAY }] }).size === 2,

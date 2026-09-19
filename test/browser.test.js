@@ -31,12 +31,20 @@ const ROOT = path.join(__dirname, "..");
  * than written into the file: a date literal here passes on the day it is
  * written and fails silently every day after. */
 const TODAY = new Date().toLocaleDateString("en-CA");
-/* UTC, matching HSKRetrieval.dayOf()/ghostDayKey() (both slice an ISO string,
- * not a local calendar day) -- computed per run for the same reason as TODAY. */
-const GAP_YDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-/* Today in the same UTC day the ghost credit counts in, for seeding a credit
- * that has to read as "banked today" rather than "banked at some point". */
-const GHOST_TODAY = new Date().toISOString().slice(0, 10);
+/* All three are the LOCAL calendar day, which is what every day key in the app
+ * became in v122: HSKTime.dayKey() always was, and HSKMistakes.dayKey() and
+ * HSKRetrieval.dayOf() stopped slicing the UTC ISO string. These two were UTC
+ * to match the old behaviour, and west of Greenwich that is the same string as
+ * the local one until late afternoon -- so leaving them would have passed all
+ * morning and started failing after dinner, which is the exact trap the note on
+ * TODAY above warns about. */
+const GAP_YDAY = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+/* A stamp inside the day the ghost credit counts in, for seeding a credit that
+ * has to read as "banked today" rather than "banked at some point". The whole
+ * timestamp, not a bare date with a Z hour appended: ten in the morning UTC is
+ * already tomorrow at UTC+14, which is how this seeded a credit the app then
+ * correctly refused to call today's. */
+const GHOST_TODAY_AT = new Date().toISOString();
 let pass = 0, fail = 0;
 const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
@@ -1938,6 +1946,15 @@ check(usedGroups && usedGroups.first === "\u7684",
      * browser test can have. Graded clean and on three separate days: the
      * fallback rule, which is all that exists until the verdict lands in the
      * next task. */
+    /* Local wall-clock, converted to the ISO stamp a message actually carries.
+     * A literal "...T10:00:00Z" is a different calendar day either side of
+     * Greenwich, and the ghost counter now asks about the learner's local day
+     * -- so a fixture meaning "twice on one day" has to be built from local
+     * components or it means "twice on two days" in Auckland. Caught by running
+     * this suite under TZ=Pacific/Auckland, which is worth doing after touching
+     * anything that counts days. */
+    const at = (day, hour) => new Date(2026, 8, day, hour, 0, 0).toISOString();
+
     const seedGhost = async (days) => {
       await exec(
         "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
@@ -1949,7 +1966,7 @@ check(usedGroups && usedGroups.first === "\u7684",
       await go(base);
     };
 
-    await seedGhost(["2026-09-01T10:00:00Z"]);
+    await seedGhost([at(1, 10)]);
     let gn = await exec(
       "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
     check(gn === 1, "one clean message is one ghost credit", String(gn));
@@ -1968,13 +1985,12 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the banner shows how far along a ghost word is, not just its name",
       banner.slice(0, 400));
 
-    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-01T18:00:00Z"]);
+    await seedGhost([at(1, 10), at(1, 18)]);
     gn = await exec(
       "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
     check(gn === 1, "two messages on one day are still one credit", String(gn));
 
-    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-02T10:00:00Z",
-                     "2026-09-03T10:00:00Z"]);
+    await seedGhost([at(1, 10), at(2, 10), at(3, 10)]);
     const gone = await exec(
       "return window.readiness().unused.map(function (e) { return e.w; })" +
       ".indexOf('\\u82f9\\u679c') === -1;");
@@ -2016,7 +2032,7 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "m.ghostkeep = [{role:'user', id:'gk0', text:" + JSON.stringify(head) +
-      ", created_at:" + JSON.stringify(GHOST_TODAY + "T10:00:00Z") +
+      ", created_at:" + JSON.stringify(GHOST_TODAY_AT) +
       ", grade:{ok:true, errors:[]}}];" +
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
     await go(base);
@@ -4813,6 +4829,80 @@ check(usedGroups && usedGroups.first === "\u7684",
     const fcReuse = await exec(`return window.reuseFor("flashcard").map(function (e) { return e.w; });`);
     check(JSON.stringify(fcReuse) === JSON.stringify(fcSet),
       "reuseFor('flashcard') returns the chosen set", JSON.stringify(fcReuse));
+
+    /* The layout the learner asked for: the export lives in the banner at the
+     * top of the log, the per-word counts live on the strip above the composer.
+     * Both are asserted by position, not merely by existing, because the whole
+     * complaint was where they were -- having to scroll to the top of the chat
+     * to read a number needed on every turn. */
+    const fcStrip = await exec(
+      `return document.querySelector('#starters .fcstatus').textContent;`);
+    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcStrip),
+      "the word counts are on the strip above the composer", fcStrip);
+    const fcExports = await exec(
+      `return Array.prototype.map.call(document.querySelectorAll('#log .hint button.fcx'),
+         function (b) { return b.textContent; });`);
+    check(fcExports.length === 2 && fcExports.join("|").indexOf("Anki") !== -1,
+      "both exports are in the banner at the top of the log", JSON.stringify(fcExports));
+    /* The banner is an innerHTML string, so its handlers are inline attributes.
+     * A typo in one is not a syntax error anywhere -- the button simply renders
+     * and does nothing -- so what is checked is that the browser compiled the
+     * attribute into a handler, and that what it calls exists. Not clicked:
+     * that would start a real download. */
+    check(await exec(
+      `return Array.prototype.every.call(document.querySelectorAll('#log .hint button.fcx'),
+         function (b) { return typeof b.onclick === "function"; });`),
+      "each inline export handler compiled");
+    check(await exec(`return typeof window.exportCards === "function" &&
+                             typeof window.flashcardTargets === "function";`),
+      "and the functions they call are reachable from the page");
+
+    /* The set is what tells one Flashcard Chat apart from the next in the list;
+     * the partner's opening sentence does not. */
+    const fcTitle = await exec(`return window.currentChat().title;`);
+    check(fcSet.every(w => fcTitle.indexOf(w) !== -1),
+      "the conversation is titled with its words, not its first sentence", fcTitle);
+
+    /* Every word in the set credited today, which is the day's natural stopping
+     * point: nothing the learner writes now can move a counter, because a word
+     * earns at most one credit a day. The activity has to SAY so -- without it
+     * the learner keeps writing into an activity that has silently stopped
+     * responding, which is indistinguishable from it being broken.
+     *
+     * Seeded rather than played out: three days of real conversation is not
+     * something a browser test can have, the same reason seedGhost() exists
+     * above. Stamped with the moment the run is happening, so "today" is
+     * whatever today is wherever this runs. */
+    const fcChatId = await exec(`return window.currentChat().id;`);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.fcday = " + JSON.stringify(fcSet) +
+      ".map(function (w, i) { return { role: 'user', id: 'fcd' + i, text: w," +
+      " created_at: new Date().toISOString(), grade: { ok: true, errors: [] } }; });" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the day's credits");
+    await exec(`window.openChat(${JSON.stringify(fcChatId)}); return true;`);
+    const fcDayDone = await exec(`return window.flashcardDayDone();`);
+    check(fcDayDone === true,
+      "one credit on every word is the day done",
+      JSON.stringify(await exec(`return window.flashcardTargets();`)));
+    check((await exec(`return document.querySelector('#starters .fcstatus').textContent;`))
+            .indexOf("come back tomorrow") !== -1,
+      "the strip above the composer says so");
+    const fcDayBanner = await exec(`return document.querySelector('#log .hint').textContent;`);
+    check(/Day 1 done/.test(fcDayBanner) && /Day 2 of 3 opens tomorrow/.test(fcDayBanner),
+      "and the banner says which day just closed and which one opens next",
+      fcDayBanner.slice(0, 300));
+    /* The conversation is not over and must not read as over: the learner comes
+     * back to this same chat tomorrow, so the composer stays open. */
+    check(await exec(`return document.querySelector('#input').disabled === false;`),
+      "the composer stays open -- the conversation continues tomorrow");
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.fcday; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after clearing the credits");
 
     /* A second Flashcard Chat, started while the first is unfinished, must
      * not be handed back a word the first still holds (the reservation

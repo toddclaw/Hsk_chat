@@ -532,6 +532,55 @@ sufficient for every activity rather than four of five.
 
 ---
 
+## Ghost Words should be Flashcard Chat with a different pool
+
+**Asked for:** Todd, 2026-09-19, after two weeks of using both.
+
+The verdict on the pair after living with them: Flashcard Chat is the shape that
+works, and Ghost Words should be the same activity drawing from a different pool.
+Concretely, Ghost Words would take a chosen set of five words, offer them for
+export, and run the same three days of practice, instead of what it does now.
+
+The two are closer than they look and the differences are all in one direction.
+Flashcard Chat pins a set of `SET_SIZE` words into the transcript as a
+`role: "flashcards"` marker the moment the learner presses the button, and every
+consumer reads that marker: the banner, `reuseFor()`, the export, the day strip,
+the completion state and — since v122 — the conversation's title. Ghost Words
+pins nothing. Its targets are the first six of `readiness().unused` recomputed
+on every render, so the set drifts as words are credited, there is nothing to
+export, there is no notion of a round or a day or a finish, and an old
+conversation cannot be titled with the words it practised because nothing
+records what they were.
+
+Everything downstream of the marker already generalises: `flashcardTargets()`
+hands back the same shape `readiness().unused` does, `ghostProgress()` is shared,
+`HSKPace.setRounds()` derives the day from `min(ghostN)` across the set, and
+`reservedWords()` already holds a word back while another set is working on it.
+So this is mostly deletion — Ghost Words stops computing a live list and starts
+reading a marker — plus a chooser it does not have.
+
+**What it would take.** A `role: "focus"` marker written when the conversation
+starts, carrying the chosen words, and `reuseFor("focused")` reading it instead
+of recomputing. A chooser for the set, which is `renderFlashcardControl()`'s
+phase 1 over `readiness().unused` rather than `flashcardPool()`. Then the banner,
+strip, export, day count, completion message and title fall out of the code
+Flashcard Chat already has, and the two activities differ in exactly one
+function: which pool the chooser draws from.
+
+**What to decide first.** Whether an in-flight Ghost Words set reserves its words
+against Flashcard Chat and vice versa — `reservedWords()` takes `sets`, so the
+mechanism exists, but the two pools overlap and a word held by one activity
+being unofferable in the other is a product decision, not a technical one. Also
+whether the existing six-at-a-time behaviour is worth keeping anywhere, since the
+set size is what makes a day countable.
+
+**Two other entries close with it.** "Ghost Words and 20 Questions have no marker
+in their own transcript" above is solved outright for Ghost Words by the marker
+this needs. And the chat-browser title for Ghost Words, deferred out of the
+v122 work for exactly this reason, comes for free once there is a set to name.
+
+---
+
 ## The grader reports only failures, so transfer is invisible
 
 **Found:** designing the Mistakes Drills Activity, 2026-09-07, working out whether a

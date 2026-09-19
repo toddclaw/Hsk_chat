@@ -222,6 +222,23 @@ header button{padding:8px 10px; flex:0 0 auto}
 }
 #starters::-webkit-scrollbar{display:none}
 #starters:empty{display:none}
+/* Flashcard Chat's status, pinned here rather than in the banner: it is read on
+   every turn, and the banner is two messages from the top by then. Scrolls
+   sideways with the strip it lives in rather than wrapping, so it cannot grow
+   tall enough to eat the composer on a phone. */
+#starters .fcstatus{
+  flex:1 1 auto; min-width:0; white-space:nowrap; overflow-x:auto;
+  scrollbar-width:none; font-size:19px; color:var(--accent); font-weight:600;
+  align-self:center;
+}
+#starters .fcstatus::-webkit-scrollbar{display:none}
+#starters .fcchip{display:inline-block; margin-right:12px}
+#starters .fcchip.spent{opacity:.55}
+#starters .fcstatus i{font-style:normal; font-size:14px; color:var(--dim); font-weight:400}
+/* The exports sit in the banner now. Sized down from a primary action: they are
+   pressed once a day at most, and the banner is not a place for two big
+   buttons. */
+.hint button.fcx{font-size:14px; padding:5px 10px; min-height:0; margin:6px 6px 8px 0}
 #starters button{
   flex:0 0 auto; white-space:nowrap; font-size:17px; padding:7px 13px;
   min-height:0; border-radius:999px; color:var(--ink);
@@ -1178,7 +1195,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v121 — 2026-09-18";
+const VERSION   = "v122 — 2026-09-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1571,6 +1588,21 @@ async function loadDict() {
 
 function lengthSpec() { return HSKPrompt.LENGTHS[S.replyLength] || HSKPrompt.LENGTHS.short; }
 
+/* Is the reply being generated the first thing anyone says in this conversation?
+ *
+ * Not S.history.length === 0, which this was and which is wrong for every
+ * activity that writes a marker before it opens: Flashcard Chat pushes its set
+ * and its theme into the history and only then calls openingTurn(), so the
+ * array is two long and `opening` was false on the one turn it exists to
+ * describe. Story time and drills write markers the same way.
+ *
+ * The right question is whether the MODEL has been shown anything, and that is
+ * exactly windowed()'s filter -- markers are not roles it sends. Asked here so
+ * the two systemPrompt() branches cannot drift apart on the answer. */
+function isOpeningTurn() {
+  return !S.history.some(t => t.role === "user" || t.role === "assistant");
+}
+
 /* Convert app-authored Chinese (prompt rules, samples, starters) word by word.
  * Word-level rather than character-level because that is where the ambiguity
  * lives: 干 is 幹 or 乾 depending on the word it sits in, and the wordlist
@@ -1622,7 +1654,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       drillWord: currentActivity() === "drill" ? drillWord() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
-      opening: S.history.length === 0,
+      opening: isOpeningTurn(),
       convert: toScript
     });
     if (mech.length) out += "\n\n" + mech.join("\n");
@@ -1657,7 +1689,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     drillWord: currentActivity() === "drill" ? drillWord() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
-    opening: S.history.length === 0,
+    opening: isOpeningTurn(),
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -2824,7 +2856,9 @@ function renderConversation() {
         'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
         'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
         'already banked; a word that reaches ' + S.ghostUses + "/" + S.ghostUses +
-        ' is yours, and stays here until your next conversation.</span></div>';
+        ' is yours, and stays here until your next conversation. Using a word ' +
+        'WRONG takes a day back off it, once a day at most, which is why a ' +
+        'count can go down.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
@@ -2861,26 +2895,35 @@ function renderConversation() {
         strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
       }
     }
-    const chips = targets.map(e =>
-      '<span style="display:inline-block;margin:0 10px 4px 0' +
-        (e.ghostToday ? ';opacity:.55' : '') + '">' + escapeHtml(e.w) +
-      '<span style="font-size:14px;color:var(--dim)"> ' +
-        (e.ghostN || 0) + "/" + goal + (e.ghostToday ? " ✓" : "") +
-      "</span></span>").join("");
     const theme = flashcardTheme();
+    /* The words themselves are NOT here any more: they live on the strip above
+     * the composer, which is pinned, because "how am I doing" is a question
+     * asked on every turn and this banner scrolls away after two of them. What
+     * stays here is what you ask for once a day at most -- the export, and
+     * where you are in the set. */
     return '<div class="hint"><b>Flashcard Chat</b>' +
       (theme ? " — " + escapeHtml(theme) : "") + "<br>" +
+      '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
+      '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
+      '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +
       (flashcardDone(targets)
         ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
           '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
           'correctly on ' + goal + ' separate days. Start a new Flashcard Chat ' +
           'for the next set.</span><br>'
-        : "Use these words in your replies:<br>") +
-      '<b style="color:var(--accent);font-size:22px">' + chips + "</b><br>" +
-      '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
+        : flashcardDayDone(targets)
+          ? '<b style="color:var(--accent);font-size:20px">Day ' + rounds +
+            ' done \u2014 come back tomorrow.</b><br>' +
+            '<span style="color:var(--dim)">Every word in the set has today\'s ' +
+            'credit, and a word can only earn one a day. Day ' + (rounds + 1) +
+            ' of ' + goal + ' opens tomorrow \u2014 this conversation will still be ' +
+            'here, so you can pick it up where you left off. Keep chatting if you ' +
+            'want to; it just will not move the counters today.</span><br>'
+          : "") +
       '<span style="color:var(--dim)">One use counts per day, and only the word ' +
       'itself is judged — a mistake elsewhere in the sentence does not cost ' +
-      'you the credit.</span></div>';
+      'you the credit. Using a word WRONG takes a day back off it, once a day ' +
+      'at most, which is why a count can go down.</span></div>';
   }
   /* Drills banner, like Ghost Words': what you are drilling stays on screen for
    * the whole conversation, because "which mistake was this again" is the
@@ -3087,6 +3130,19 @@ function newId() {
  * user-only rule leaves every story in the list called "New chat". A plain chat
  * still starts with the learner, so nothing there changes. */
 function titleFrom(turns) {
+  /* A Flashcard Chat is titled by the words it is practising, not by whatever
+   * the partner happened to open with. In the chat list the set IS what
+   * distinguishes one of these conversations from the next -- three of them
+   * opened by the same partner with the same instruction produce three near
+   * identical first sentences, and the learner picking day two out of the list
+   * is looking for their words.
+   *
+   * Read from the transcript marker, so it is that conversation's own set and
+   * not today's: an old chat keeps the title it earned. Ghost Words cannot do
+   * this yet -- it pins no set anywhere, which is backlog item "Ghost Words
+   * should be Flashcard Chat with a different pool". */
+  const set = HSKPace.flashcardsOf(turns || []);
+  if (set.length) return set.join("\u3001");
   const first = (turns || []).find(t =>
     (t.role === "user" || t.role === "assistant") && t.text);
   if (!first) return "New chat";
@@ -5079,16 +5135,9 @@ function fillActivities() {
       note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
     }
   }
-  /* Same reasoning as Ghost Words' strip above: this line is visible while the
-   * banner has scrolled away, and "which five words was this" is the question
-   * it would otherwise leave unanswered. */
-  if (cur === "flashcard") {
-    const targets = flashcardTargets();
-    if (targets.length) {
-      note = (flashcardDone(targets) ? "Complete — " : "Day " + (flashcardRounds(targets) + 1) + " — ") +
-        targets.map(e => e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、");
-    }
-  }
+  /* Flashcard Chat used to repeat its word counts here. It does not any more:
+   * the strip above the composer carries them, which is both bigger and nearer
+   * the thumb, and three copies of one number on one screen is two too many. */
   const el = $("#activityNote");
   if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
@@ -6327,22 +6376,30 @@ function renderFlashcardControl(box) {
  * chooser's message has scrolled away. */
 function renderFlashcardSetControl(box) {
   const targets = flashcardTargets();
-  const note = document.createElement("div");
-  note.className = "note";
-  const theme = flashcardTheme();
-  note.textContent = (theme ? theme + " — " : "") +
-    targets.map(e => e.w).join("、");
-  box.appendChild(note);
-
-  const anki = document.createElement("button");
-  anki.textContent = "Export for Anki";
-  anki.onclick = () => exportCards("anki", targets);
-  box.appendChild(anki);
-
-  const pleco = document.createElement("button");
-  pleco.textContent = "Export for Pleco";
-  pleco.onclick = () => exportCards("pleco", targets);
-  box.appendChild(pleco);
+  const line = document.createElement("div");
+  line.className = "fcstatus";
+  /* Built as nodes rather than innerHTML: the words come out of the wordlists
+   * and go nowhere near a template, so there is nothing here that has to be
+   * remembered to escape. */
+  targets.forEach(e => {
+    const chip = document.createElement("span");
+    chip.className = "fcchip" + (e.ghostToday ? " spent" : "");
+    chip.append(e.w);
+    const n = document.createElement("i");
+    n.textContent = " " + (e.ghostN || 0) + "/" + S.ghostUses + (e.ghostToday ? " \u2713" : "");
+    chip.append(n);
+    line.appendChild(chip);
+  });
+  if (flashcardDone(targets)) {
+    const done = document.createElement("i");
+    done.textContent = " \u2014 complete";
+    line.appendChild(done);
+  } else if (flashcardDayDone(targets)) {
+    const done = document.createElement("i");
+    done.textContent = " \u2014 all banked, come back tomorrow";
+    line.appendChild(done);
+  }
+  box.appendChild(line);
 }
 
 /* The chooser. Curated ideas, topics already read, a box, and make-something-up
@@ -6683,7 +6740,20 @@ function flashcardDone(targets) {
   return list.length > 0 && flashcardRounds(list) >= S.ghostUses;
 }
 
-/* The last UTC day each word appeared anywhere in the history, in either
+/* Today is spent: every word in the set already has its one credit for the day,
+ * so nothing the learner writes now can move a counter.
+ *
+ * Worth saying out loud rather than leaving them to infer it from five greyed
+ * chips. Without it the activity has no visible stopping point -- the learner
+ * keeps going, nothing moves, and the only reading available is that it has
+ * stopped working. Not the same question as flashcardDone(), which is the whole
+ * set finished; this one recurs once a day until then. */
+function flashcardDayDone(targets) {
+  const list = targets || flashcardTargets();
+  return list.length > 0 && !flashcardDone(list) && list.every(e => e.ghostToday);
+}
+
+/* The last day each word appeared anywhere in the history, in either
  * direction. Read counts as well as written: the first of the two populations
  * flashcardPool() builds is "the partner used this at me and I have never used
  * it back", which cannot be seen from the learner's messages alone.
@@ -6701,7 +6771,7 @@ function lastSeenMap() {
     (S.chatMsgs[cid] || []).forEach(function (t) {
       if (!t || !t.text) return;
       if (t.role !== "user" && t.role !== "assistant") return;   // skip markers
-      const day = String(t.created_at || "").slice(0, 10);
+      const day = HSKMistakes.dayKey(t.created_at);
       if (!day) return;
       HSK.segment(t.text, S.lex).forEach(function (tok) {
         if (tok.kind !== "word") return;
@@ -7261,7 +7331,9 @@ function addByHand() {
 $("#addWordBtn").onclick = addByHand;
 function exportCards(kind, words) {
   if (!(words || cardWords()).length) { $("#expNote").textContent = "No words to export yet."; return; }
-  const stamp = new Date().toISOString().slice(0, 10);
+  /* The learner's local day, not UTC: a set exported at eight in the evening
+   * in Denver was arriving stamped with tomorrow's date. */
+  const stamp = ghostDayKey();
   if (kind === "anki") deliver(ankiCsv(words), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
   else deliver(plecoTsv(words), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
 }

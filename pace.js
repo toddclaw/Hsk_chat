@@ -136,9 +136,31 @@
    * "is this older than N", and answering 0 for a word with no recorded
    * sighting would say the freshest possible thing about the least evidence.
    *
-   * UTC, like every other day key in this app: two devices in two timezones
-   * have to agree, and mistakes.js records why a flight must not move a
-   * learner's numbers. */
+   * The keys themselves are the learner's local day -- mistakes.js dayKey()
+   * says why -- but the arithmetic here is deliberately done in UTC: both
+   * sides are already bare "YYYY-MM-DD", so pinning them to midnight UTC
+   * makes this a pure subtraction of calendar days with no DST hole in it. */
+  /* A day key out of either a bare "YYYY-MM-DD" or a whole ISO timestamp.
+   *
+   * A full stamp is converted through the LOCAL calendar, never sliced. Slicing
+   * yields the UTC day, and everything this module is compared against --
+   * `today`, the ghost credit days, the last-seen map -- is the learner's local
+   * day since v122. Two bases meeting here is not a visible error, it is a
+   * boundary that lands a day out: a set touched at 9pm on the 18th in Denver
+   * slices to the 19th, so it reads a day younger than it is and holds its
+   * words one day longer than RESERVE_DAYS. Done here rather than at the caller
+   * because this is where the comparison happens, and a caller that forgets is
+   * a silent off-by-one rather than a failure. */
+  function dayKeyOf(v) {
+    var s = String(v || "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return "";
+    var m = String(d.getMonth() + 1), day = String(d.getDate());
+    return d.getFullYear() + "-" + (m.length < 2 ? "0" + m : m) +
+           "-" + (day.length < 2 ? "0" + day : day);
+  }
+
   function daysBetween(from, to) {
     var a = Date.parse(String(from || "") + "T00:00:00Z");
     var b = Date.parse(String(to || "") + "T00:00:00Z");
@@ -229,7 +251,7 @@
     (o.sets || []).forEach(function (s) {
       if (!s || !(s.words || []).length) return;
       if (setRounds(s.words, o.ghost) >= (o.ghostUses || 3)) return;   // finished
-      if (daysBetween(String(s.updated || "").slice(0, 10), o.today) >= RESERVE_DAYS) return;
+      if (daysBetween(dayKeyOf(s.updated), o.today) >= RESERVE_DAYS) return;
       s.words.forEach(function (w) { if (w) out.add(w); });
     });
     return out;
@@ -315,7 +337,7 @@
     FORCE_AFTER: FORCE_AFTER, shouldForce: shouldForce,
     SET_SIZE: SET_SIZE, SET_MAX: SET_MAX, STALE_DAYS: STALE_DAYS,
     RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
-    daysBetween: daysBetween, flashcardPool: flashcardPool,
+    daysBetween: daysBetween, dayKeyOf: dayKeyOf, flashcardPool: flashcardPool,
     setRounds: setRounds, reservedWords: reservedWords,
     SET_SEP: SET_SEP, flashcardsOf: flashcardsOf,
     flashcardThemeOf: flashcardThemeOf,

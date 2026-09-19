@@ -272,6 +272,55 @@ Rules of thumb this adds to the list above:
   (`p = 0.15`) and poolable at 42%, but the first figure alone was optimistic and
   had already been quoted.
 
+### Worked example: a bug that looked like leaked state and was a rule
+
+Reported against v121: a new Ghost Words conversation opened with a partner
+statement that was plainly the middle of a chat, and no such chat was on screen.
+The natural reading, and the one the report made, is that the previous Ghost
+Words conversation was being fed to the model.
+
+It was not, and the check is cheap. Print what the request actually carries. An
+opening turn sends the system prompt and **zero messages** — `windowed()` maps
+`S.history`, which is the new conversation's own array, and `needsSoFar()` walks
+the same one. The only cross-conversation thing in the prompt is the target word
+list, which is words and never sentences.
+
+The cause was four rules above the targeting rule:
+
+```
+5. 先回答学生说的话，再说一点你自己的事，最后问一个新问题。
+6. 不要把学生的话重复一遍。学生刚问过的问题，不要再问他。
+```
+
+Rule 5 orders the model to answer what the student said on the one turn where
+the student has said nothing, and rule 6 asserts that the student has just asked
+something. Obeying them requires inventing a prior turn, and an invented prior
+turn is what a continuation reads like. Nothing was remembered; something was
+manufactured.
+
+20 Questions had already hit this and it is recorded in `prompt.js` at the
+`opening` branch: measured live, every guesser opening was plain small talk with
+no sign a game had started, because a reactive-only rule gives the model nothing
+to say when there is no turn to react to. The fix there and here is the same —
+state the first-turn behaviour instead of leaving the model to infer it from an
+empty transcript — and it is now scoped by `act.converse`, so the two activities
+that already declare their own opening are untouched.
+
+A second defect fell out of fixing it. `opening` was computed as
+`S.history.length === 0`, which is false for every activity that writes a marker
+before it opens: Flashcard Chat pushes its set and theme into the history and
+only then generates. The flag was wrong on the exact turn it exists to describe.
+It now asks whether the model has been shown anything — the same filter
+`windowed()` uses — rather than whether the array is empty.
+
+Rules of thumb:
+
+- **"It remembers the last conversation" is usually "it invented one."** A model
+  told to react with nothing to react to will supply the missing half. Check what
+  the request carries before looking for a leak.
+- **A flag named for a turn must be computed over what the model sees**, not over
+  what the array holds. Markers are in the array and not in the request.
+
 ### Worked example: story time's position rule, and its names
 
 Story time generates five segments in sequence — one per tap since v63, back to back before

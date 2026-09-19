@@ -908,6 +908,38 @@ var guesserLater = P.build({ level: 1, label: "HSK 1", length: "short",
 check(guesserLater.indexOf(GUESSER_OPENING_LINE) === -1,
   "and that instruction does not repeat on later turns either");
 
+/* Reported: a new Ghost Words conversation opened with a partner statement that
+ * read as the continuation of a chat the learner could not see. Nothing leaked
+ * between conversations -- an opening request carries the system prompt and no
+ * messages at all. The cause was the reactive turn-taking rule, which orders
+ * the model to answer what the student said on a turn where the student has
+ * said nothing, so it invents the thing it is answering. Same defect and same
+ * fix as 20 Questions above. */
+var ANSWER_FIRST = "先回答学生说的话";
+var opened = P.build({ level: 1, label: "HSK 1", length: "short", activity: "focused",
+                       reuse: [{ w: "因为" }], opening: true });
+check(opened.indexOf(ANSWER_FIRST) === -1,
+  "an opening turn is not told to answer a student who has not spoken yet");
+check(opened.indexOf("学生还没有说话") !== -1 &&
+      opened.indexOf("不要提以前的事") !== -1,
+  "it is told this is the first thing said and not to refer back");
+check(opened.indexOf("学生刚问过的问题") === -1,
+  "and not told the student has just asked something");
+var continued = P.build({ level: 1, label: "HSK 1", length: "short", activity: "focused",
+                          reuse: [{ w: "因为" }], opening: false });
+check(continued.indexOf(ANSWER_FIRST) !== -1 &&
+      continued.indexOf("学生还没有说话") === -1,
+  "every later turn keeps the reactive rules and loses the opening one");
+/* The targeting rule is what makes the activity itself, and suppressing the
+ * reactive rules must not take it with them. */
+check(opened.indexOf("一次也没有自己用过") !== -1,
+  "the Ghost Words steering rule survives the opening turn");
+/* Scoped by converse, so the two activities that already state their own
+ * opening behaviour are untouched by this. */
+check(P.build({ level: 1, label: "HSK 1", length: "short", activity: "twenty",
+                side: "answerer", opening: true }).indexOf("学生还没有说话") === -1,
+  "20 Questions keeps its own opening instruction and does not get a second");
+
 // Rule numbering must survive the opening instruction too.
 var openingNums = answererOpening.split("\n").map(function (l) {
   return (/^(\d+)\. /.exec(l) || [])[1];
