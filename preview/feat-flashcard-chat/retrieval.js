@@ -22,7 +22,16 @@
    * says why local dates would let a flight move a learner's numbers. Four
    * characters of arithmetic, duplicated rather than imported: no module in
    * this repo requires another. */
-  function dayOf(iso) { return String(iso || "").slice(0, 10); }
+  /* The learner's local day, for the reason mistakes.js dayKey() gives at
+   * length: a UTC key puts every evening session west of Greenwich on
+   * tomorrow, which is the common case being wrong to spare the rare one. */
+  function dayOf(iso) {
+    var d = new Date(String(iso || ""));
+    if (!iso || isNaN(d.getTime())) return "";
+    var m = String(d.getMonth() + 1), day = String(d.getDate());
+    return d.getFullYear() + "-" + (m.length < 2 ? "0" + m : m) +
+           "-" + (day.length < 2 ? "0" + day : day);
+  }
 
   /* n counts DISTINCT ok days. Two devices offline on the same day push two
    * rows, and that is the intended shape -- the table has no unique constraint

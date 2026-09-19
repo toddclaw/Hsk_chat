@@ -357,8 +357,17 @@ candidates and one tap is therefore as well-evidenced as typing through an IME,
 and is one gesture instead of ten.
 
 **Why nothing from today.** Retrieval after a gap is the mechanism. A sentence
-read four minutes ago tests the screen, not memory. It is the same UTC
+read four minutes ago tests the screen, not memory. It is the same
 `dayKey()` the ghost and drill counters use, for the same reason.
+
+That key is the learner's **local** day, and was UTC until 2026-09-19. The
+argument for UTC was that two devices in two timezones must agree and that a
+flight must not move a learner's numbers. The argument against it is that west
+of Greenwich every evening session lands on tomorrow's key: the credit is
+recorded on a day that has not happened, the word still reads as banked the
+whole of the next morning, and the flashcard export is stamped tomorrow. A
+daily error for a hemisphere is worse than an occasional one for a traveller,
+and the counts are derived by scanning, so nothing is stored wrong either way.
 
 **Why the count is also the selector.** The word with the fewest retrievals is
 the next one asked, so a wrong answer — which banks the day without adding to

@@ -682,7 +682,23 @@
     /* Turn-taking. Suppressed for an activity that is not a conversation --
      * inside a story these would make every segment end by questioning the
      * learner, which is the opposite of listening to a story. */
-    if (act.converse) {
+    if (act.converse && opts.opening) {
+      /* The opening turn has nothing to react to, and the three reactive rules
+       * below do not merely fail to help there -- they actively produce the
+       * bug. "先回答学生说的话" is an instruction to answer something the
+       * student has not said, so the model invents what it is answering, and
+       * rule 6's "学生刚问过的问题" tells it the student has just asked
+       * something. The result reads as the tail of a conversation the learner
+       * cannot see, and was reported as exactly that: a new Ghost Words chat
+       * opening mid-thread. Nothing was leaking between conversations -- an
+       * opening request carries the system prompt and no messages at all.
+       *
+       * Same defect and same fix as 20 Questions' two roles above, which were
+       * measured live: a reactive-only rule gives the model nothing to say
+       * when there is no turn to react to. */
+      rules.push(convert("现在是你们的第一句话，学生还没有说话。先打个招呼，再问一个问题。") +
+                 convert("不要提以前的事，也不要装作你们以前说过话。"));
+    } else if (act.converse) {
       rules.push(convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"));
       rules.push(convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"));
       /* Correcting is not the same failure mode as echoing: an echo hands back
