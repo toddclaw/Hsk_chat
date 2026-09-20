@@ -327,6 +327,26 @@ three days while the best possible day earns one — which is the reset rule abo
 reached by another road, and reached fastest by the learner struggling with the
 word. One day of practice is one day of practice in both directions.
 
+**A slip has to be about the word, and the correction is the evidence** (v124).
+The per-word verdict is asked in its own call precisely so that a mistake
+elsewhere in the sentence cannot cost the target its credit, and on real traffic
+that is not enough: the check blames a target for the error standing next to it.
+Four sentences in one flashcard set, 2026-09-20, all about 再 —
+昨天我再找不到这本书, 我希望明天我不再找这本书, the grader's *own* correction of
+that one (不要再), and finally 不用再. The first three came back wrong on 再,
+and the three corrections were 再找这本书, 不要再找, 不用再找: **再 survives every
+one of them.** What moved each time was the modal beside it, 不 → 不要 → 不用.
+The learner lost a day for a word the app itself kept putting back in his mouth,
+including on the sentence it had just told him to write.
+
+So a wrong verdict demotes only when the grader's own `better` no longer
+contains the word. A repair that leaves the word standing is not a repair *of*
+that word, whatever the per-word call answered. The rule is deliberately
+one-sided: credit is untouched, so it can never invent progress, and the cost of
+being wrong is a real misuse going uncharged — a counter that falls slower, not
+one that rises on nothing. That the grader contradicted its own correction twice
+in four turns is a separate fault and is in BACKLOG.md.
+
 **Flat intervals, not expanding ones.** This is a one-day Leitner interval.
 Expanding intervals — a retired word returning at 7 days, then 30, as a
 retention check — are the better answer and were declined as a scheduler rather

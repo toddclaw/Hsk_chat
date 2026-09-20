@@ -461,6 +461,24 @@ check(M.ghostVerdict({ ok: true, ghost: { "米饭": { used: true, ok: false } } 
   "说话") === "ok",
   "a verdict about another word does not decide this one");
 
+/* A wrong verdict on a word the correction KEPT. Real verdicts, 2026-09-20:
+ * three sentences in one flashcard set came back wrong on 再 while every
+ * correction the grader offered still contained 再 -- what it actually moved
+ * was the modal next to it, 不 → 不要 → 不用. A repair that leaves the word
+ * standing is not a repair of that word. */
+check(M.ghostVerdict({ ok: false, better: "我希望明天我不要再找这本书。",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "none",
+  "a word the grader's own correction kept is not demoted");
+check(M.ghostVerdict({ ok: false, better: "我希望明天我不用找这本书。",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "wrong",
+  "a word the correction removed is still demoted");
+check(M.ghostVerdict({ ok: false, better: "",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "wrong",
+  "a failed sentence with no correction offered demotes as it always did");
+check(M.ghostVerdict({ ok: false, better: "我不要再找这本书。",
+  ghost: { "再": { used: true, ok: true } } }, "再") === "ok",
+  "and the rule is one-sided: a kept word that was used correctly still credits");
+
 const gp = (turns) => M.ghostProgress(turns, saysWord);
 
 check((gp([gturn(at(1, 10), true)])["说话"] || {}).n === 1,

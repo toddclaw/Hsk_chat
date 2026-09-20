@@ -581,6 +581,61 @@ v122 work for exactly this reason, comes for free once there is a set to name.
 
 ---
 
+## The grader marks its own correction wrong, one turn later
+
+**Found:** 2026-09-20, in real use, from one Flashcard Chat set working the word
+再. Four consecutive learner sentences and their stored verdicts, straight out of
+`messages.grade`:
+
+| written | verdict | error named | `better` offered |
+|---|---|---|---|
+| 昨天我再找不到这本书 | ✗ | wrong-word, 再 | 昨天我再找这本书，找不到 |
+| 我希望明天我不再找这本书 | ✗ | aspect-le, note about a 了 that is not in the sentence | 我希望明天我不要再找这本书 |
+| 我希望明天我不要再找这本书 (**the line above, copied**) | ✗ | wrong-word, 再 | 我希望明天我不用再找这本书 |
+| 我希望明天我不用再找这本书 | ✓ | — | — |
+
+Three faults, in ascending order of how much they cost:
+
+- **It rejected its own correction.** Row three is row two's `better`, written
+  back verbatim, and it came back wrong with a fresh correction. A learner who
+  does exactly what the app told them to do is marked down for it, and there is
+  no way for them to read that as anything but the app being broken.
+- **The tag is invented.** Row two is filed under aspect-le with a note about
+  the placement of 了. There is no 了 in the sentence. That verdict is in the
+  mistake ledger now, aging out over ninety days like a real one.
+- **The blame lands on the wrong word.** Every correction keeps 再 and changes
+  the modal beside it, 不 → 不要 → 不用, yet the per-word call said 再 was wrong
+  three times. The credit half of that is fixed in v124 (a wrong verdict on a
+  word the correction KEPT no longer demotes, RESEARCH.md, "Retiring a ghost
+  word") — but the ledger entry and the ✗ on the message are untouched, and the
+  underlying misattribution is still there.
+
+**Why this is not a quick prompt edit.** It is the grader's own string, the one
+`test/prompt.test.js` pins character for character and every tag number in
+RESEARCH.md describes, and four prompt fixes in this study have moved the number
+the wrong way. `tools/grade-audit.js` scores it at 85% on 208 of Todd's real
+sentences and this is what some of the other 15% looks like.
+
+**What would settle it:** these four rows are a fixture, not an anecdote —
+`grade-audit` already holds them. Two things worth measuring, in order:
+
+1. **Stability.** Re-grade a sentence the grader itself proposed, across the
+   stored corpus: take every verdict with a `better`, feed the `better` back in
+   as a fresh sentence, and count how many come back ✗. A grader that will not
+   pass its own output has a number, and nobody has taken it. Free apart from
+   the calls, and it needs no labels — the grader is being scored against
+   itself.
+2. **Whether showing it the exchange helps.** The check is one-shot and has no
+   idea it wrote the sentence it is judging. `contextBlock()` already exists.
+   Measure before believing it: telling a model it is looking at its own work is
+   exactly the shape of change that has backfired here before.
+
+Until then the honest reading is that the ✓/✗ on a repair turn is noisier than
+the 85% headline suggests, because a repair turn is where the learner is
+writing the grader's words back at it.
+
+---
+
 ## The grader reports only failures, so transfer is invisible
 
 **Found:** designing the Mistakes Drills Activity, 2026-09-07, working out whether a
