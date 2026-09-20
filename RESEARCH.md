@@ -347,6 +347,29 @@ being wrong is a real misuse going uncharged — a counter that falls slower, no
 one that rises on nothing. That the grader contradicted its own correction twice
 in four turns is a separate fault and is in BACKLOG.md.
 
+**A chosen set, not a live list** (v125). The activity practises five words the
+learner pressed a button for, written into the transcript and fixed for the
+conversation, rather than the first six of the unused list recomputed on every
+render. Two arguments, one pedagogical and one about the machinery.
+
+Hulstijn & Laufer's learner-imposed need, and the Self-Determination note in
+"Choosing a set of words to study away from the app", both turn on the learner
+*asking* for the words. A list the app recomputes behind them is not something
+they asked for; the same words, chosen by pressing a button, are. That is the
+argument the flashcard work already made, and the ghost pool is the other shelf
+it applies to. `SET_SIZE = 5` and the 5–7 range behind it (Nation's word cards)
+govern here for the same reason they govern there, which is why the old six
+went rather than being kept as a second mode.
+
+The machinery argument is sharper. A set is what makes a day countable —
+`setRounds()` is `min(ghostN)` across the set, and a list that changes as words
+are credited has no minimum to take, so the activity had no notion of a round,
+a day or a finish. Worse, a live list can drop a word at the moment it succeeds:
+the learner saw 把 0/3, wrote 把, and watched it leave the banner instead of
+ticking to 1/3 — and it left `gradeTurn()`'s target list with it, so the next
+sentence containing 把 got no per-word verdict at all. A set written down cannot
+drift under the learner.
+
 **Flat intervals, not expanding ones.** This is a one-day Leitner interval.
 Expanding intervals — a retired word returning at 7 days, then 30, as a
 retention check — are the better answer and were declined as a scheduler rather

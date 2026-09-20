@@ -271,6 +271,18 @@
    * comma is a different character (U+FF0C). */
   var SET_SEP = ",";
 
+  /* Named because three files write them and a mistyped string literal is
+   * silent: the marker simply never matches and the activity looks empty.
+   *
+   * Two roles rather than one shared one. Every CONSUMER wants "whatever set
+   * this conversation is practising", which is setWordsOf() below -- but
+   * activityOf() has to tell a Ghost Words conversation from a flashcard one
+   * when the `activity` column is the thing that went missing, and a shared
+   * role would make that impossible. The reading is generalised; the writing
+   * is not. */
+  var SET_ROLE = "flashcards";
+  var FOCUS_ROLE = "focus";
+
   function markerText(msgs, role) {
     for (var i = 0; i < (msgs || []).length; i++) {
       if (msgs[i] && msgs[i].role === role) return msgs[i].text || "";
@@ -278,10 +290,22 @@
     return "";
   }
 
-  function flashcardsOf(msgs) {
-    return markerText(msgs, "flashcards").split(SET_SEP)
+  function wordsIn(msgs, role) {
+    return markerText(msgs, role).split(SET_SEP)
       .map(function (w) { return w.trim(); })
       .filter(function (w) { return w.length > 0; });
+  }
+
+  function flashcardsOf(msgs) { return wordsIn(msgs, SET_ROLE); }
+  function focusOf(msgs) { return wordsIn(msgs, FOCUS_ROLE); }
+
+  /* The set this conversation is working on, whichever activity chose it.
+   * What every consumer reads -- the banner, the strip, the export, the day
+   * count, the title, the reservation scan -- so that a second activity riding
+   * this design costs one function and not a parallel set of them. */
+  function setWordsOf(msgs) {
+    var focus = focusOf(msgs);
+    return focus.length ? focus : flashcardsOf(msgs);
   }
 
   function flashcardThemeOf(msgs) { return markerText(msgs, "flashcardTheme"); }
@@ -339,7 +363,8 @@
     RESERVE_DAYS: RESERVE_DAYS, CANDIDATES_SHOWN: CANDIDATES_SHOWN,
     daysBetween: daysBetween, dayKeyOf: dayKeyOf, flashcardPool: flashcardPool,
     setRounds: setRounds, reservedWords: reservedWords,
-    SET_SEP: SET_SEP, flashcardsOf: flashcardsOf,
+    SET_SEP: SET_SEP, SET_ROLE: SET_ROLE, FOCUS_ROLE: FOCUS_ROLE,
+    flashcardsOf: flashcardsOf, focusOf: focusOf, setWordsOf: setWordsOf,
     flashcardThemeOf: flashcardThemeOf,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,

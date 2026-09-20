@@ -437,5 +437,34 @@ check(P.flashcardsOf([{ role: "flashcards", text: "苹果, 医生 " }]).join() =
   "stray whitespace around a word is trimmed",
   P.flashcardsOf([{ role: "flashcards", text: "苹果, 医生 " }]).join());
 
+/* Ghost Words writes its own marker role, and every CONSUMER reads either. The
+ * roles stay distinct because activityOf() has to tell the two activities apart
+ * when the `activity` column is what went missing. */
+const focusMsgs = [{ role: "focus", text: "从来,颜色" },
+                   { role: "user", text: "我从来没去过" }];
+check(P.focusOf(focusMsgs).join() === "从来,颜色",
+  "a Ghost Words set is read back out of its own marker", P.focusOf(focusMsgs).join());
+check(P.focusOf([{ role: "focus", text: "从来, 颜色 " }]).join() === "从来,颜色",
+  "and is parsed exactly like the flashcard one");
+check(P.flashcardsOf(focusMsgs).length === 0 && P.focusOf(setMsgs).length === 0,
+  "the two markers do not answer for each other -- activityOf() depends on it");
+check(P.setWordsOf(setMsgs).join() === "苹果,医生,回答" &&
+      P.setWordsOf(focusMsgs).join() === "从来,颜色",
+  "setWordsOf reads whichever set the conversation carries");
+check(P.setWordsOf([{ role: "user", text: "你好" }]).length === 0 &&
+      P.setWordsOf(null).length === 0,
+  "and yields nothing for a plain chat or a missing transcript");
+
+/* Reservation is shared across the two activities: a word Ghost Words is still
+ * working on is not offered to Flashcard Chat, and the other way round. The
+ * pools barely overlap today -- ghost words come from above the level -- so
+ * this is insurance for the word that crosses when the learner promotes. */
+const bothLocked = P.reservedWords({
+  sets: [{ words: ["回答"], updated: TODAY }, { words: ["颜色"], updated: TODAY }],
+  ghost: {}, ghostUses: 3, today: TODAY });
+check(bothLocked.has("回答") && bothLocked.has("颜色"),
+  "a flashcard set and a ghost set reserve into the same pool",
+  JSON.stringify([...bothLocked]));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
