@@ -552,6 +552,13 @@ sufficient for every activity rather than four of five.
 
 **Asked for:** Todd, 2026-09-19, after two weeks of using both.
 
+**Planned:** `docs/superpowers/plans/2026-09-20-ghost-words-as-sets.md`. It
+answers the two open questions at the foot of this entry — five words and the
+live six deleted, reservation shared across both activities — and adds a third
+decision this entry did not raise: a distinct `role: "focus"` marker rather than
+a second use of `"flashcards"`, so `activityOf()` can still tell the two apart.
+Seven tasks, and the diff is mostly deletion.
+
 The verdict on the pair after living with them: Flashcard Chat is the shape that
 works, and Ghost Words should be the same activity drawing from a different pool.
 Concretely, Ghost Words would take a chosen set of five words, offer them for
@@ -594,6 +601,13 @@ set size is what makes a day countable.
 in their own transcript" above is solved outright for Ghost Words by the marker
 this needs. And the chat-browser title for Ghost Words, deferred out of the
 v122 work for exactly this reason, comes for free once there is a set to name.
+
+**And one deletion is worth more than the feature.** `reuseFor()`'s
+`reuse: "unused"` branch carries a comment about a live list reordering itself
+at the moment a word earns its credit — the word vanished from the banner before
+the learner saw the tick, and stopped getting its own per-word verdict on the
+next message. That class of bug needs a list that can change under you. A chosen
+set cannot.
 
 ---
 
