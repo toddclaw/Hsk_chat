@@ -1195,7 +1195,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v122 — 2026-09-19";
+const VERSION   = "v123 — 2026-09-19";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4099,12 +4099,18 @@ async function gradeTurn(turnObj) {
     delete turnObj.grading;
     persist();
     renderAll();
-    /* The verdict is on the message, but a drill's progress line is in the
-     * starters strip, and nothing here ever re-rendered it: a whole session
-     * read "0 of 6 correct" with every credit already stored. Skipped while a
-     * turn is still running -- renderStarters() blanks the strip when S.busy,
-     * and runTurn()'s own finally renders it again the moment the reply lands. */
-    if (!S.busy) renderStarters();
+    /* The verdict is on the message, but the counters it moves -- a drill's
+     * progress line, a flashcard set's per-word counts -- are in the starters
+     * strip, and nothing here ever re-rendered it: a whole session read
+     * "0 of 6 correct" with every credit already stored.
+     *
+     * Unconditional now, including mid-turn. The grade lands while the partner
+     * is still writing, which is exactly when the learner is looking at the
+     * counters, and this used to skip it because renderStarters() blanked the
+     * strip whenever S.busy. The two controls it reaches now draw their status
+     * either way and withhold only what can be pressed, so the credit shows
+     * when it is earned rather than whenever the reply happens to arrive. */
+    renderStarters();
   }
 }
 
@@ -6307,8 +6313,10 @@ function renderExampleChoices(box, m) {
  * There is no "next" button -- the learner advances a drill by writing, unlike
  * story time where the partner does the producing. */
 function renderDrillControl(box) {
-  if (S.busy) return;
-  if (!drillTag()) return renderDrillChooser(box);
+  /* Same split as the flashcard strip above: the progress line is status and
+   * renders mid-turn so a credit shows as soon as it is earned; the chooser and
+   * the stop button are controls and stay hidden while the partner writes. */
+  if (!drillTag()) { if (!S.busy) renderDrillChooser(box); return; }
   const note = document.createElement("div");
   note.className = "note";
   const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
@@ -6322,7 +6330,7 @@ function renderDrillControl(box) {
       (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "") +
       (why ? " \u00b7 " + why : "");
   box.appendChild(note);
-  if (drillDone()) return;
+  if (drillDone() || S.busy) return;
   const stop = document.createElement("button");
   stop.textContent = "End drill";
   stop.onclick = endDrill;
@@ -6339,8 +6347,13 @@ function renderDrillControl(box) {
  * Nothing here can show an out-of-level word: every candidate came out of
  * S.base, which is the level's own allowlist. */
 function renderFlashcardControl(box) {
-  if (S.busy) return;
+  /* The set's counters are STATUS and render while a turn is in flight; the
+   * chooser below is a CONTROL and does not. That split is what lets the
+   * counts move the moment the grader answers: the verdict lands while the
+   * partner is still writing, and hiding the strip until the reply arrived was
+   * the only reason the learner had to wait for it. */
   if (flashcardWords().length) return renderFlashcardSetControl(box);
+  if (S.busy) return;
   if (!S.grader) {
     box.innerHTML = '<div class="note">The word list is built from messages the grader ' +
       'has checked, so there is nothing to choose from with checking off. Turn the ' +

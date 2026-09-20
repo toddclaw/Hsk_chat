@@ -4904,6 +4904,45 @@ check(usedGroups && usedGroups.first === "\u7684",
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after clearing the credits");
 
+    /* The counts stay on the strip through a turn that is still running, which
+     * is when the grader's verdict actually lands: gradeTurn() repaints the
+     * strip as soon as it has a grade, and that repaint used to be skipped
+     * because the strip blanked itself whenever S.busy -- so a credit earned on
+     * send stayed invisible until the partner had finished writing.
+     *
+     * S.busy is not reachable from here, so the only way to observe the busy
+     * state is to be in it: a stub that never resolves holds the app there
+     * until the test lets it go, the same trick the story-time section uses.
+     * The held turn's own messages are rolled back afterwards -- the sections
+     * below read this conversation's history. */
+    await exec(`window.openChat(${JSON.stringify(fcChatId)}); return true;`);
+    const fcSaved = await exec("return localStorage.getItem('hsk1chat.chatMsgs');");
+    await exec(
+      "window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};" +
+      "document.querySelector('#input').value = '\u6211\u5f88\u597d';" +
+      "window.send(); return true;");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "a flashcard turn to be in flight");
+    const fcBusyStrip = await exec(
+      "window.renderStarters();" +
+      "var el = document.querySelector('#starters .fcstatus');" +
+      "return el ? el.textContent : '';");
+    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcBusyStrip),
+      "the word counts stay on the strip mid-turn, so a credit shows when it is earned",
+      fcBusyStrip);
+    /* Wound up by reloading rather than by stopping: the stub holds both calls
+     * send() makes -- the grader's and the turn's -- and only one of them can
+     * be released through `window.__rej`. The reload drops both, and the
+     * history is put back first so the sections below see the conversation
+     * exactly as they left it. */
+    await exec("localStorage.setItem('hsk1chat.chatMsgs', " +
+      JSON.stringify(fcSaved) + "); return true;");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the held turn");
+
     /* A second Flashcard Chat, started while the first is unfinished, must
      * not be handed back a word the first still holds (the reservation
      * rule). startActivity() opens a new conversation, so this is a fresh
