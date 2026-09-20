@@ -59,6 +59,13 @@ activity.
    then **retranslation**, which is the only productive retrieval available and the
    only production task in the app with a reference answer to mark against.
 
+**Out of band, because real use found it.** The grader rejecting its own
+correction (2026-09-20) is not ranked among the features below: it is a
+correctness fault in the one component every other item on this list is
+measured through. Its first step is a free measurement and sits in the cheap
+list further down; the prompt work, if the number says there is any, is a
+project of its own and is not costed here.
+
 **The expensive one, and it is still worth it.**
 
 6. **The grader's `used` array (transfer).** The learner's own earmark for the spare
@@ -78,6 +85,15 @@ something silently.
   **Still open**, and the first thing to fix before any A/B is re-run.
 - 为什么 at HSK 1 — burns repairs at the level where pacing is most fragile.
   **Still open**; needs a counted run, so it was out of the trust pass.
+- **Does the grader pass its own corrections?** Found in real use on 2026-09-20,
+  not in a harness: it marked its own `better` wrong one turn later, on the turn
+  where the learner is writing its words back at it. The measurement is the
+  cheap part and needs no labels — feed every stored `better` back in as a fresh
+  sentence and count the ✗s. **Do that before touching the prompt**, which is
+  the string `test/prompt.test.js` pins and every tag number in RESEARCH.md
+  describes. **Still open**, and now the highest-value unknown about the grader,
+  because a repair turn is exactly where a learner is most likely to be told
+  they are wrong for doing as they were told.
 
 **After that.** Quality and polish, in rough order: word rescue (a game built on
 parts that exist — fun, but the research says it teaches little that Ghost Words and
@@ -619,12 +635,14 @@ sentences and this is what some of the other 15% looks like.
 **What would settle it:** these four rows are a fixture, not an anecdote —
 `grade-audit` already holds them. Two things worth measuring, in order:
 
-1. **Stability.** Re-grade a sentence the grader itself proposed, across the
-   stored corpus: take every verdict with a `better`, feed the `better` back in
-   as a fresh sentence, and count how many come back ✗. A grader that will not
-   pass its own output has a number, and nobody has taken it. Free apart from
-   the calls, and it needs no labels — the grader is being scored against
-   itself.
+1. **Stability.** `tools/grader-stability.js`, to be written, on the model of
+   `tools/grade-audit.js`: across the stored corpus take every verdict carrying
+   a `better`, feed that `better` back in as a fresh sentence, and count how
+   many come back ✗ — with the disagreeing pairs printed, because the pairs are
+   the fixture any prompt work would be measured on. A grader that will not pass
+   its own output has a number, and nobody has taken it. Cheap (a few hundred
+   calls at ~$0.0001) and it needs no labels: the grader is scored against
+   itself, so there is nothing to hand-mark and nothing to blind.
 2. **Whether showing it the exchange helps.** The check is one-shot and has no
    idea it wrote the sentence it is judging. `contextBlock()` already exists.
    Measure before believing it: telling a model it is looking at its own work is
