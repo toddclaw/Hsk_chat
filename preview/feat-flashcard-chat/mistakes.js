@@ -152,7 +152,30 @@
     var v = grade.ghost && grade.ghost[word];
     if (v && typeof v === "object") {
       if (v.used !== true) return "none";
-      return v.ok === true ? "ok" : "wrong";
+      if (v.ok === true) return "ok";
+      /* A WRONG verdict on a word the grader's own correction KEPT costs
+       * nothing. The correction is the grader saying what the sentence should
+       * have been; a word still standing in it is a word the repair did not
+       * touch, so it cannot be the thing that was wrong -- whatever the
+       * per-word call said.
+       *
+       * Found in real use, 2026-09-20, on one flashcard set. Four sentences
+       * around 再: 昨天我再找不到这本书, 我希望明天我不再找这本书, the grader's
+       * OWN better for that one (不要再), and 不用再. The first three came back
+       * wrong on 再 and the corrections were 再找这本书, 不要再找, 不用再找 --
+       * 再 survives all three. What moved each time was the modal beside it,
+       * 不 to 不要 to 不用, and the per-word question kept blaming the target
+       * for its neighbour. RESEARCH.md, "Retiring a ghost word".
+       *
+       * Deliberately one-sided. Credit is untouched, so this can never invent
+       * progress; the worst it can do is leave a real misuse uncharged, which
+       * slows a counter's fall. Being penalised for a word the app itself put
+       * back in your mouth is the failure worth removing.
+       *
+       * ponytail: a plain substring test, so a learner writing traditional
+       * against a simplified correction falls back to demoting as before.
+       * Fold both scripts in if that ever reads as wrong. */
+      return String(grade.better || "").indexOf(word) !== -1 ? "none" : "wrong";
     }
     return grade.ok === true ? "ok" : "none";
   }
