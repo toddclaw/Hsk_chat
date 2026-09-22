@@ -583,6 +583,29 @@ recorded. They keep their transcript and their composer and say so; nothing is
 back-filled, because nobody knows which six words they were targeting — not
 recording them is what was wrong with the old design.
 
+**The "already reading the set" claim above was wrong about the title, and
+about four other things** (v130). Asked to verify that the two activities
+differed only in their pool, five divergences turned up. `titleFrom()` called
+`flashcardsOf()`, which reads only the flashcard marker, so no Ghost Words
+conversation was ever titled by its set. `report.js`'s `ACTIVITY_IDS` had no
+`flashcard` entry and `brief()` drops conversations whose id it does not know,
+so every Flashcard Chat was uncounted in the progress report — while the
+comment above the list claimed a test held it in step with `ACTIVITIES`, and no
+such test existed. The prompt preview in Settings listed Ghost Words and not
+Flashcard Chat. `#activityNote` showed a live word list for Ghost Words only,
+which is a duplicate of the strip above the composer and was dropped for both.
+And a `flashcardTheme` marker existed on the write side for Flashcard Chat
+alone; the only caller has passed `""` in every version of the file, so it was
+deleted rather than generalised.
+
+Each one was a branch keyed on the activity id, sitting a long way from the
+other branches keyed on the activity id. So the structural answer is
+`SET_KINDS` in `index.html`: one table holding the marker role, the pool and
+the three strings that describe it, and a rule that nothing outside it may name
+a set activity by id. `activityOf()` is the sole exception, being the function
+whose job is telling them apart, and `test/release.test.js` scans the source
+and fails on any third one.
+
 The verdict on the pair after living with them: Flashcard Chat is the shape that
 works, and Ghost Words should be the same activity drawing from a different pool.
 Concretely, Ghost Words would take a chosen set of five words, offer them for

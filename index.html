@@ -1200,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v129 — 2026-09-22";
+const VERSION   = "v130 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2627,7 +2627,7 @@ function renderNotice(turnObj) {
  * check in renderAll(). */
 const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord",
                               "drillTip", "drillEnd",
-                              "flashcards", "flashcardTheme", "focus"]);
+                              "flashcards", "focus"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -2888,14 +2888,12 @@ function renderConversation() {
         strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
       }
     }
-    const theme = flashcardTheme();
     /* The words themselves are NOT here any more: they live on the strip above
      * the composer, which is pinned, because "how am I doing" is a question
      * asked on every turn and this banner scrolls away after two of them. What
      * stays here is what you ask for once a day at most -- the export, and
      * where you are in the set. */
-    return '<div class="hint"><b>' + escapeHtml(actLabel) + '</b>' +
-      (theme ? " — " + escapeHtml(theme) : "") + "<br>" +
+    return '<div class="hint"><b>' + escapeHtml(actLabel) + "</b><br>" +
       '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
       '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
       '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +
@@ -2980,11 +2978,7 @@ function renderConversation() {
       hintText = 'Pick a mistake to drill, below.';
     } else if (HSKPrompt.activityFor(currentActivity()).reuse === "chosen") {
       if (flashcardWords().length) { log.innerHTML = flashcardBanner(); return; }
-      hintText = currentActivity() === "focused"
-        ? 'Pick your words below.<br>' + HSKPace.SET_SIZE + ' words the app has ' +
-          'taught you and you have never written — study them, then use them here.'
-        : 'Pick your words below.<br>Five words from your own history, ' +
-          'to study as flashcards — then come back and use them here.';
+      hintText = setKind().hint;
     } else {
       hintText = 'Say something in Chinese.<br>Tap any word for pinyin and meaning.<br>' +
         'Replies are checked against the ' + levelLabel() +
@@ -3126,10 +3120,14 @@ function titleFrom(turns) {
    * is looking for their words.
    *
    * Read from the transcript marker, so it is that conversation's own set and
-   * not today's: an old chat keeps the title it earned. Ghost Words cannot do
-   * this yet -- it pins no set anywhere, which is backlog item "Ghost Words
-   * should be Flashcard Chat with a different pool". */
-  const set = HSKPace.flashcardsOf(turns || []);
+   * not today's: an old chat keeps the title it earned.
+   *
+   * setWordsOf(), not flashcardsOf(): Ghost Words has pinned a set since v125
+   * and writes its own marker role, so reading only the flashcard role left
+   * every Ghost Words conversation titled by whatever the partner opened
+   * with -- and three days of one set open near-identically, which is the
+   * exact case this function exists for. */
+  const set = HSKPace.setWordsOf(turns || []);
   if (set.length) return set.join("\u3001");
   const first = (turns || []).find(t =>
     (t.role === "user" || t.role === "assistant") && t.text);
@@ -5124,31 +5122,14 @@ function fillActivities() {
   $("#activity").insertAdjacentHTML("beforeend",
     '<option value="__gapfill">Gap-fill</option>');
   const act = HSKPrompt.ACTIVITIES[cur];
-  let note = act && act.note;
-  /* Ghost Words: show the target words so the user knows what to aim for. */
-  if (cur === "focused") {
-    const targets = reuseFor("focused");
-    if (legacySetChat()) {
-      note = "Started before Ghost Words worked in sets, so it has no set — " +
-        "keep chatting here, or start a new one to pick " + HSKPace.SET_SIZE + " words.";
-    } else if (targets && targets.length) {
-      /* Ticked the same way the strip above the composer is, and for the same
-       * reason it stopped carrying counts: this was the last n/N left on the
-       * screen once the strip dropped its own, which made it the only number
-       * of its kind and therefore the one that got read as something else. */
-      note = "Focus words: " + targets.slice(0, 6).map(e =>
-          e.w + (wordSettled(e) ? " \u2713" : "")).join("、") +
-        " — tap words in chat for pinyin/meaning";
-    } else {
-      note = ghostCandidates().length
-        ? "Pick your " + HSKPace.SET_SIZE + " words below — words the app has " +
-          "taught you and you have never written."
-        : "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then come back.";
-    }
-  }
-  /* Flashcard Chat used to repeat its word counts here. It does not any more:
-   * the strip above the composer carries them, which is both bigger and nearer
-   * the thumb, and three copies of one number on one screen is two too many. */
+  /* The set activities show their standing description here and nothing live.
+   * Ghost Words used to repeat its word list; Flashcard Chat dropped the same
+   * repetition earlier, for the reason that now applies to both -- this strip
+   * and the one above the composer are BOTH pinned, so a live list here is a
+   * second copy of the same words on screen at the same time, and the copy
+   * further from the thumb. The chooser, the legacy note and the per-word
+   * ticks all live on the strip above the composer, which is one place. */
+  const note = act && act.note;
   const el = $("#activityNote");
   if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
@@ -6390,39 +6371,27 @@ function renderFlashcardControl(box) {
     return;
   }
 
-  /* The one function the two activities differ in. Everything below this line
-   * -- the button, the set size, the empty branch, the grader branch -- is
-   * shared, which is the whole claim this design was built on. */
-  const ghost = currentActivity() === "focused";
-  const candidates = ghost ? ghostCandidates() : flashcardCandidates();
+  /* The pool and the three strings that describe it are the ONLY things the
+   * two activities differ in here, and they come off the row rather than out
+   * of a ternary. The button, the set size, the empty branch and the grader
+   * branch are shared, which is the claim this design was built on. */
+  const kind = setKind();
+  const candidates = kind.pool();
   const note = document.createElement("div");
   note.className = "note";
   if (!candidates.length) {
-    /* The empty case is where a learner is most likely to be stuck, so each
-     * activity says what would fill its own pool. Ghost Words' wording is the
-     * one its old banner carried: the setting it names is the only thing that
-     * puts words in there. */
-    note.innerHTML = ghost
-      ? "No unused words yet. Turn on <b>Introduce words from the next level</b> " +
-        "in Settings → Learning, chat for a while, then come back."
-      : "No words to study yet. Chat for a while — this list is " +
-        "built from words the partner has used with you, and words you have not " +
-        "met in a month.";
+    note.innerHTML = kind.empty;
     box.appendChild(note);
     return;
   }
-  note.textContent = ghost
-    ? "Get " + HSKPace.SET_SIZE + " words the app has taught you and you have " +
-      "never written, study them in Pleco or Anki, then come back and use them here."
-    : "Get " + HSKPace.SET_SIZE + " words from your own history, " +
-      "study them in Pleco or Anki, then come back and use them here.";
+  note.textContent = kind.pitch;
   box.appendChild(note);
 
   const go = document.createElement("button");
   go.className = "story";
   go.textContent = "Choose " + HSKPace.SET_SIZE + " words";
   go.onclick = () => startFlashcardsWith(
-    candidates.slice(0, HSKPace.SET_SIZE).map(e => e.w), "");
+    candidates.slice(0, HSKPace.SET_SIZE).map(e => e.w));
   box.appendChild(go);
 }
 
@@ -6763,18 +6732,65 @@ function ghostProgressMap() {
   });
 }
 
-/* ------------------------------------------------------- Flashcard Chat */
+/* ------------------------------------------------------ the set activities */
 
-/* This conversation's chosen set, and the theme the chooser named it. Read out
- * of the transcript markers, so a set survives a reload and syncs with the
- * conversation without a column of its own. */
+/* Everything Ghost Words and Flashcard Chat differ in, in one place.
+ *
+ * They are the same activity with two pools, and the divergences that got
+ * fixed in v130 all had the same shape: a branch keyed on the activity id,
+ * somewhere a long way from every other branch keyed on the activity id, so
+ * one of them got updated and the rest did not. A chat title read only the
+ * flashcard marker; the progress report knew only the ghost id; one of the
+ * two had a live note the other had dropped on purpose.
+ *
+ * So the rule is: nothing outside this table may branch on WHICH set activity
+ * this is. Everything else asks `reuse === "chosen"` and is one code path. A
+ * third set activity is a row here and no edit anywhere else.
+ *
+ * `role` is the marker written into the transcript, and the two stay distinct
+ * because activityOf() has to tell the conversations apart when the `activity`
+ * column is the thing that went missing -- pace.js, SET_ROLE/FOCUS_ROLE, says
+ * why reading is generalised and writing is not. */
+const SET_KINDS = {
+  focused: {
+    role: HSKPace.FOCUS_ROLE,
+    pool: () => ghostCandidates(),
+    hint: "Pick your words below.<br>" + HSKPace.SET_SIZE + " words the app " +
+      "has taught you and you have never written — study them, then use them here.",
+    /* The empty case is where a learner is most likely to be stuck, so each
+     * pool says what would fill its own. This wording is the one Ghost Words'
+     * old banner carried: the setting it names is the only thing that puts
+     * words in there. */
+    empty: "No unused words yet. Turn on <b>Introduce words from the next " +
+      "level</b> in Settings → Learning, chat for a while, then come back.",
+    pitch: "Get " + HSKPace.SET_SIZE + " words the app has taught you and you " +
+      "have never written, study them in Pleco or Anki, then come back and use them here."
+  },
+  flashcard: {
+    role: HSKPace.SET_ROLE,
+    pool: () => flashcardCandidates(),
+    hint: "Pick your words below.<br>" + HSKPace.SET_SIZE + " words from your " +
+      "own history, to study as flashcards — then come back and use them here.",
+    empty: "No words to study yet. Chat for a while — this list is built from " +
+      "words the partner has used with you, and words you have not met in a month.",
+    pitch: "Get " + HSKPace.SET_SIZE + " words from your own history, " +
+      "study them in Pleco or Anki, then come back and use them here."
+  }
+};
+
+/* Null for any activity that does not choose a set, so a caller that forgot to
+ * check gets a thrown property access here rather than silently taking the
+ * ghost branch, which is what a `=== "focused"` ternary did. */
+function setKind(activity) { return SET_KINDS[activity || currentActivity()] || null; }
+
+/* Read out of the transcript marker, so a set survives a reload and syncs with
+ * the conversation without a column of its own. */
 /* The set this conversation is practising, whichever activity chose it --
  * `flashcards` for Flashcard Chat, `focus` for Ghost Words. Deliberately still
  * named for the first of the two: the name is on thirty call sites and every
  * one of them means "the set", so a rename would be a bigger diff than the
  * feature that needed it. */
 function flashcardWords() { return HSKPace.setWordsOf(S.history); }
-function flashcardTheme() { return HSKPace.flashcardThemeOf(S.history); }
 function flashcardRounds(targets) {
   const list = targets || flashcardTargets();
   return list.length ? Math.min.apply(null, list.map(e => e.ghostN || 0)) : 0;
@@ -6934,20 +6950,12 @@ function flashcardTargets() {
  * then the partner opens -- the same withholding story time, 20 Questions and
  * drills all use: nothing is generated, and nothing is spent, until the learner
  * has chosen. */
-function startFlashcardsWith(words, theme) {
+function startFlashcardsWith(words) {
   if (!words || !words.length || flashcardWords().length) return;
   const at = new Date().toISOString();
-  /* Which marker is the one thing the WRITE side branches on: the two roles
-   * stay distinct so activityOf() can still name the activity from a transcript
-   * whose `activity` column went missing. Reading is generalised (setWordsOf),
-   * writing is not. */
-  const role = currentActivity() === "focused" ? HSKPace.FOCUS_ROLE : HSKPace.SET_ROLE;
+  const role = setKind().role;
   S.history.push({ role: role, text: words.join(HSKPace.SET_SEP),
                    id: newMessageId(), created_at: at });
-  /* Flashcard-only, and stays that way while nothing picks a theme for a ghost
-   * set: an unused marker is one more thing to keep correct for nothing. */
-  if (theme) S.history.push({ role: "flashcardTheme", text: theme,
-                              id: newMessageId(), created_at: at });
   persist();
   renderAll();
   renderStarters();
@@ -7723,7 +7731,12 @@ function renderActivityPrompts() {
   };
   const specs = [
     { label: "Chat", activity: "chat" },
-    { label: "Ghost Words", activity: "focused", opts: { reuse: reuseFor("focused") } },
+    /* Built from SET_KINDS rather than listed: Flashcard Chat was missing from
+     * this preview for its whole life because it was a hand-written list and
+     * nobody hand-wrote it. A new set activity now appears here on its own. */
+    ...Object.keys(SET_KINDS).map(id => ({
+      label: HSKPrompt.activityFor(id).label, activity: id,
+      opts: { reuse: reuseFor(id) } })),
     { label: "Story time (opening segment)", activity: "story",
       opts: { storySegment: { index: 0, of: STORY_SEGMENTS } } },
     { label: "20 Questions — “I’ll think of a word” (opening turn)", activity: "twenty",

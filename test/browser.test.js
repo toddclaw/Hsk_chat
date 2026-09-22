@@ -2012,8 +2012,19 @@ check(usedGroups && usedGroups.first === "\u7684",
       "var msgs = m[window.currentChat().id] || [];" +
       "return msgs.filter(function (t) { return t.role === 'focus'; }).length;")) === 1,
       "Ghost Words writes its own marker role, not the flashcard one");
+    const focusedSetWords = await exec("return window.flashcardWords();");
+    /* And the title reads THAT marker (v130). titleFrom() used to call
+     * flashcardsOf(), which sees only the flashcard role, so every Ghost Words
+     * conversation fell through to "whatever the partner opened with" -- and
+     * three days of one set open near-identically, which is the case the
+     * set-titling exists for. setWordsOf() reads either marker. */
+    const ghostTitle = await exec("return window.currentChat().title;");
+    check(focusedSetWords.every(w => ghostTitle.indexOf(w) !== -1),
+      "and the conversation is titled with its set, not its first sentence",
+      ghostTitle + " vs " + JSON.stringify(focusedSetWords));
     const focusedReuse = await exec(
       "return window.reuseFor('focused').map(function (e) { return e.w; });");
+
     check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
       "Ghost Words reuses a word the learner has never written",
       JSON.stringify(focusedReuse));

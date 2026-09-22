@@ -56,8 +56,15 @@ check(b1.activities.story === 0 && b1.activities.twenty === 0 &&
       b1.activities.drill === 0,
   "an untouched activity is a zero, never an absent key: a model handed a gap fills it",
   JSON.stringify(b1.activities));
-check(Object.keys(b1.activities).length === 5,
-  "all five activities are always present", JSON.stringify(b1.activities));
+/* Held against prompt.js rather than against a number. The old check counted
+ * five keys and passed while "flashcard" was missing -- and a missing id is
+ * not a cosmetic gap: brief() skips those conversations outright, so every
+ * Flashcard Chat was uncounted. A count cannot notice an activity that was
+ * never added; the real list can. */
+const ACTS = Object.keys(require("../prompt.js").ACTIVITIES).sort();
+check(Object.keys(b1.activities).sort().join() === ACTS.join(),
+  "every activity prompt.js defines is always present, never an absent key",
+  JSON.stringify(Object.keys(b1.activities).sort()) + " vs " + JSON.stringify(ACTS));
 
 const b2 = R.brief(input({
   chats: [{ id: "a", activity: "focused" }, { id: "b", activity: "story" },

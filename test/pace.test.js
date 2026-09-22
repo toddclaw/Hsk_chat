@@ -418,18 +418,15 @@ check(P.flashcardPool({ entries: FC, seen: { "回答": TODAY, "颜色": TODAY },
 // --- reading a set back out of a transcript ---------------------------------
 const setMsgs = [
   { role: "flashcards", text: "苹果,医生,回答" },
-  { role: "flashcardTheme", text: "a visit to the doctor" },
   { role: "user", text: "我去医院" }
 ];
 check(P.flashcardsOf(setMsgs).join() === "苹果,医生,回答",
   "the chosen set is read back out of the transcript",
   P.flashcardsOf(setMsgs).join());
-check(P.flashcardThemeOf(setMsgs) === "a visit to the doctor",
-  "and so is the theme");
 check(P.flashcardsOf([{ role: "user", text: "你好" }]).length === 0,
   "an ordinary chat holds no set");
-check(P.flashcardThemeOf([]) === "" && P.flashcardsOf([]).length === 0,
-  "an empty transcript yields an empty set and an empty theme");
+check(P.flashcardsOf([]).length === 0 && P.setWordsOf([]).length === 0,
+  "an empty transcript yields an empty set");
 check(P.flashcardsOf(null).length === 0, "and a missing transcript does not throw");
 check(P.flashcardsOf([{ role: "flashcards", text: "" }]).length === 0,
   "an empty marker is an empty set, not a set containing one empty string");
