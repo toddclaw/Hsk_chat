@@ -104,5 +104,45 @@ check(groups.length === 2, `pages.yml gives each job a concurrency group (found 
 check(new Set(groups).size === groups.length, "publish and cleanup use different groups",
   `both are in ${groups[0]}, so a delete can displace a queued publish`);
 
+/* 7. The two set activities must not grow a third branch keyed on their id.
+ *
+ *    Ghost Words and Flashcard Chat are one activity with two pools, and every
+ *    divergence between them that v130 fixed had the same shape: a `=== "focused"`
+ *    somewhere a long way from all the others, so one got updated and the rest
+ *    did not. A chat title read only the flashcard marker, the progress report
+ *    knew only the ghost id, the prompt preview listed one of the two.
+ *
+ *    SET_KINDS holds everything they differ in. The only place left that is
+ *    allowed to name an id is activityOf(), which is the function whose whole
+ *    job is telling them apart. Anything else is a divergence waiting to
+ *    happen and belongs on the table instead.
+ *
+ *    Comment text is skipped, so the reasoning above can name them freely. */
+const app = read("index.html");
+const codeLines = [];
+let inBlock = false;
+for (const line of app.split("\n")) {
+  const t = line.trim();
+  let keep = line;
+  if (inBlock) {
+    const end = keep.indexOf("*/");
+    if (end === -1) continue;
+    inBlock = false;
+    keep = keep.slice(end + 2);
+  } else if (t.startsWith("//")) {
+    continue;
+  }
+  const open = keep.indexOf("/*");
+  if (open !== -1 && keep.indexOf("*/", open) === -1) { inBlock = true; keep = keep.slice(0, open); }
+  codeLines.push(keep);
+}
+const idHits = codeLines.filter(l => /"(focused|flashcard)"/.test(l)).map(l => l.trim());
+check(idHits.every(l => /^(if \(.*\) )?return "(focused|flashcard)";$/.test(l)),
+  "only activityOf() names a set activity by id; everything else goes through SET_KINDS",
+  JSON.stringify(idHits, null, 1));
+check(idHits.length === 2,
+  "and it names each of the two exactly once",
+  JSON.stringify(idHits));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

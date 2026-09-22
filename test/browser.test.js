@@ -273,7 +273,13 @@ return true;
            * is the shape a real answer arrives in: Markdown nobody asked for. */
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }],
-          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+          /* Failed, with a correction: the only seeded turn that has one, so the
+           * second-bubble checks below have both states to compare. errors is
+           * empty on purpose -- this turn feeds the mistake ledger too, and a
+           * tag here would move counts the drill checks assert on. */
+          grade: { ok: false, better: "\u4f60\u597d\u5417",
+                   cats: { word: true, grammar: true, order: true, natural: false },
+                   errors: [] } },
         /* A real learner's worth of typing, not two short turns. The progress
          * panel measures production by segmenting these, and a two-word
          * history cannot reach the states where the reading and production
@@ -361,6 +367,30 @@ return true;
       "a user message offers a translation button", JSON.stringify(ownBtns));
     check(!!ownBtns && ownBtns.indexOf("Check my grammar") !== -1,
       "a user message offers the grammar-check button", JSON.stringify(ownBtns));
+
+    /* A grader correction renders as a second bubble under your own sentence,
+     * with yours faded. The first seeded user turn failed and carries one; the
+     * last passed and does not, which is the pair that makes this mean
+     * something -- a rule that added a bubble to every message, or to none,
+     * would sail through either check alone. */
+    const fixed = await exec(`
+      function shape(m) {
+        return { bubbles: m.querySelectorAll('.bubble').length,
+                 first: m.querySelector('.bubble').className,
+                 fix: (m.querySelector('.bubble.fix') || {}).textContent,
+                 src: (m.querySelector('.bubble.fix') || { dataset: {} }).dataset.src };
+      }
+      var msgs = document.querySelectorAll('#log .msg.user');
+      return { bad: shape(msgs[0]), good: shape(msgs[msgs.length - 1]) };`);
+    check(fixed.bad.bubbles === 2, "a correction renders as a second bubble",
+      JSON.stringify(fixed.bad));
+    check(/\bcorrected\b/.test(fixed.bad.first || ""),
+      "and fades the sentence it corrects", JSON.stringify(fixed.bad));
+    check(fixed.bad.fix === "\u4f60\u597d\u5417" && fixed.bad.src === "\u4f60\u597d\u5417",
+      "the second bubble holds the correction, and is tappable",
+      JSON.stringify(fixed.bad));
+    check(fixed.good.bubbles === 1, "a sentence the grader passed gets no second bubble",
+      JSON.stringify(fixed.good));
 
     /* Yellow means "already answered -- pressing this is free and instant".
      * The seed gives both states from one render: the first user turn has a
@@ -1290,7 +1320,10 @@ check(usedGroups && usedGroups.first === "\u7684",
       document.querySelector('#input').value = "\u6211\u6628\u5929\u5f88\u9ad8\u5174\u4e86\u3002";
       document.querySelector('#send').click();
       return true;`);
-    await waitFor(`document.querySelectorAll('#log .msg.user .grade.bad').length > 0`,
+    /* Two, not one: the seeded first turn already carries a failed grade, so
+       waiting for "any cross on screen" would return before this send was
+       graded at all. */
+    await waitFor(`document.querySelectorAll('#log .msg.user .grade.bad').length > 1`,
       "the grade badge landing on the message");
     check(true, "a graded message shows a cross rather than a tick");
 
@@ -1304,7 +1337,9 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(!!sentGrade && /The student wrote:/.test(sentGrade.messages[0].content),
       "and is given the sentence it is grading");
 
-    await exec(`document.querySelector('#log .msg.user .grade.bad').click(); return true;`);
+    await exec(`
+      var bad = document.querySelectorAll('#log .msg.user .grade.bad');
+      bad[bad.length - 1].click(); return true;`);
     await waitFor("document.querySelector('#gradeSheet').classList.contains('open')",
       "the grade detail sheet");
     const detail = await exec(`
@@ -1686,11 +1721,12 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec("return window.currentActivity();") === "focused",
       "choosing an activity opens a conversation in it");
 
-    /* The activity change above started an opening turn against the seeded
-     * key, and everything below is about the busy state, so wait for that one
-     * to finish first or it is the turn being observed. */
+    /* Ghost Words starts on its chooser and generates nothing (v126), so
+     * there is no opening turn to wait out here. Kept as a guard anyway:
+     * everything below is about the busy state, so anything still in flight
+     * would be the turn being observed. */
     await waitFor("document.querySelector('#send').textContent === '\\u9001'",
-      "the focused-chat opening turn to settle", 30000);
+      "no turn in flight after choosing Ghost Words", 30000);
 
     /* S.busy is not reachable from here, so the only way to observe the busy
      * state is to be in it: a stub that never resolves on its own holds the app
@@ -1805,8 +1841,11 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return h ? /start the story/i.test(h.innerHTML) : true;") === false,
       "and does not point at a \"Start the story\" button that is not on screen");
     await exec("window.newChat('focused'); window.renderStarters();");
-    check(await exec("return document.querySelectorAll('#starters button').length;") === 0,
-      "and neither does Ghost Words");
+    check(await exec(
+      "return Array.prototype.every.call(document.querySelectorAll('#starters button'),"
+      + " function (b) { return /Choose/.test(b.textContent); });") === true,
+      "and Ghost Words offers its chooser rather than learner openers",
+      await exec("return document.querySelector('#starters').textContent;"));
 
 
     /* ------------------------------------ the chooser replaces auto-start */
@@ -1833,6 +1872,34 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return Array.prototype.some.call(document.querySelectorAll('#starters button')," +
       "  function (b) { return /make something up/i.test(b.textContent); });") === true,
       "and a make-something-up button");
+
+    /* Ghost Words, same rule, and it did NOT hold between v125 and v126: the
+     * partner opened the moment the activity was picked, the chooser was
+     * hidden while that ran, and the assistant turn it left behind made
+     * legacySetChat() read the conversation as one that can never get a set.
+     * Both chosen-set activities are asked, so the next one cannot regress.
+     *
+     * Read off the send button rather than the chooser: openingTurn() sets
+     * the busy flag and renders it SYNCHRONOUSLY, so \u505c here means a turn
+     * started no matter how fast the stub resolves -- and an empty candidate
+     * pool renders a note with no button, so "is there a chooser button" is
+     * not a question this state can answer. \u9001 is send, \u505c stop. */
+    for (const act of ["focused", "flashcard"]) {
+      const busy = await exec(
+        "window.__calls = 0; window.startActivity(arguments[0]);" +
+        "return document.querySelector('#send').textContent;", [act]);
+      check(busy === "\u9001", "picking " + act + " starts no partner turn", busy);
+      check(await exec("return window.__calls;") === 0,
+        "and spends nothing until the words are chosen",
+        String(await exec("return window.__calls;")));
+      check(await exec("return window.currentActivity();") === act,
+        "and the conversation is in " + act);
+      check(await exec("return document.querySelector('#input').disabled;") === true,
+        "and the composer is closed until a set exists");
+    }
+    await exec("window.startActivity('story');");
+    await waitFor("document.querySelector('#storyTopicInput')",
+      "back on the story chooser");
 
     /* The curated ideas are a sample, not a fixed slice -- HSK 1's pool has
      * five and the chooser shows four, drawn through sampleOf() rather than
@@ -1920,13 +1987,72 @@ check(usedGroups && usedGroups.first === "\u7684",
       "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));");
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after reload");
-    await exec("window.newChat('focused');");
+    await exec("window.callModel = function () { return Promise.resolve('\u4f60\u597d\uff01'); };" +
+      "window.newChat('focused'); return true;");
 
+    /* Ghost Words is a chosen set since v125, so it opens on a chooser and
+     * reuses nothing until the learner presses it -- the same withholding
+     * Flashcard Chat, story time, 20 Questions and drills all use. */
+    await waitFor("document.querySelectorAll('#starters button').length > 0",
+      "the Ghost Words chooser to appear");
+    check(await exec("return document.querySelector('#input').disabled;") === true,
+      "the composer is closed until a ghost set is chosen");
+    check((await exec("return window.reuseFor('focused');")).length === 0,
+      "and nothing is being targeted yet");
+    const ghostCands = await exec(
+      "return window.ghostCandidates().map(function (e) { return e.w; });");
+    check(ghostCands.indexOf("\u82f9\u679c") !== -1,
+      "the pool is words the app taught and the learner has never written",
+      JSON.stringify(ghostCands));
+
+    await exec("document.querySelectorAll('#starters button')[0].click(); return true;");
+    await waitFor("window.flashcardWords().length > 0", "the focus marker to be written");
+    check((await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "var msgs = m[window.currentChat().id] || [];" +
+      "return msgs.filter(function (t) { return t.role === 'focus'; }).length;")) === 1,
+      "Ghost Words writes its own marker role, not the flashcard one");
+    const focusedSetWords = await exec("return window.flashcardWords();");
+    /* And the title reads THAT marker (v130). titleFrom() used to call
+     * flashcardsOf(), which sees only the flashcard role, so every Ghost Words
+     * conversation fell through to "whatever the partner opened with" -- and
+     * three days of one set open near-identically, which is the case the
+     * set-titling exists for. setWordsOf() reads either marker. */
+    const ghostTitle = await exec("return window.currentChat().title;");
+    check(focusedSetWords.every(w => ghostTitle.indexOf(w) !== -1),
+      "and the conversation is titled with its set, not its first sentence",
+      ghostTitle + " vs " + JSON.stringify(focusedSetWords));
     const focusedReuse = await exec(
       "return window.reuseFor('focused').map(function (e) { return e.w; });");
+
     check(focusedReuse.indexOf("\u82f9\u679c") !== -1,
       "Ghost Words reuses a word the learner has never written",
       JSON.stringify(focusedReuse));
+    check(focusedReuse.length === (await exec("return window.HSKPace.SET_SIZE;")) ||
+          focusedReuse.length === ghostCands.length,
+      "and takes a whole set, or the whole pool when it is smaller",
+      JSON.stringify(focusedReuse));
+    /* The marker is its OWN role, so a conversation whose `activity` column was
+     * lost is still named correctly rather than read as a flashcard chat. */
+    check(await exec("return window.currentActivity();") === "focused",
+      "the conversation is still Ghost Words after the set is written");
+    check(await exec(
+      "var id = window.currentChat().id;" +
+      "var cs = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "var c = cs.filter(function (x) { return x.id === id; })[0] || {};" +
+      "c.activity = '';" +
+      "return window.activityOf(c);") === "focused",
+      "and is inferred from its own marker when the activity column is lost");
+    const ghostBannerHtml = await exec("return document.querySelector('#log').innerHTML;");
+    check(/Ghost Words/.test(ghostBannerHtml) && !/Flashcard Chat/.test(ghostBannerHtml),
+      "the shared banner is titled for the activity that owns it",
+      ghostBannerHtml.slice(0, 300));
+    check((await exec(
+      "return document.querySelectorAll('#log .hint button.fcx').length;")) === 2,
+      "and offers the same two exports");
+    check((await exec(
+      "return document.querySelector('#starters .fcstatus') ? true : false;")) === true,
+      "with the per-word counts on the strip above the composer");
     const chatReuse = await exec(
       "return window.reuseFor('chat').map(function (e) { return e.w; });");
     check(JSON.stringify(chatReuse) !== JSON.stringify(focusedReuse),
@@ -1976,14 +2102,33 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(still === true,
       "and one credit does not retire the word: it is one of three");
 
-    /* The banner has to say this, not just the readiness() plumbing above --
-     * a learner reads the banner, not the console. Reuses the single-credit
-     * state seedGhost() just built rather than seeding a second time. */
-    await exec("window.newChat('focused'); return true;");
-    const banner = await exec("return document.querySelector('#log').innerHTML;");
-    check(/1\s*\/\s*3/.test(banner),
-      "the banner shows how far along a ghost word is, not just its name",
-      banner.slice(0, 400));
+    /* The strip has to say this, not just the readiness() plumbing above -- a
+     * learner reads the screen, not the console. Reuses the single-credit state
+     * seedGhost() just built rather than seeding a second time, and chooses a
+     * set, because a set is what the activity practises since v125. */
+    /* The set is named rather than taken from ghostCandidates(): the set chosen
+     * a few checks above is still in flight, so it has these two words reserved
+     * -- which is the reservation rule working, and is asserted directly further
+     * down. What is under test here is the count on the strip. */
+    await exec("window.callModel = function () { return Promise.resolve('\u4f60\u597d\uff01'); };" +
+      "window.newChat('focused');" +
+      "window.startFlashcardsWith(['\u82f9\u679c', '\u7c73\u996d'], '');" +
+      "return true;");
+    await waitFor("window.flashcardWords().length > 0", "the chosen ghost set");
+    const banner = await exec(
+      "window.renderStarters();" +
+      "return document.querySelector('#starters .fcstatus').textContent;");
+    /* The strip names what you still owe and carries no per-word count (v129).
+     * 苹果 has one credit, earned on a day that is not today, so it is neither
+     * banked for today nor finished -- and the learner's job is identical
+     * either way: use it correctly once. The number said nothing they could
+     * act on and was read as the banner's fraction. */
+    check(banner.indexOf("\u82f9\u679c") !== -1 && banner.indexOf("\u7c73\u996d") !== -1,
+      "the strip names both words of the set", banner.slice(0, 400));
+    check(!/\d+\s*\/\s*\d+/.test(banner),
+      "and carries no per-word count", banner.slice(0, 400));
+    check(banner.indexOf("\u2713") === -1,
+      "and nothing is ticked while a word is still owed today", banner.slice(0, 400));
 
     await seedGhost([at(1, 10), at(1, 18)]);
     gn = await exec(
@@ -1997,19 +2142,18 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(gone === true,
       "three credits on three days retires the word from the ghost list");
 
-    /* ------------- the banner must not lose a word the moment it succeeds.
+    /* ------------- a chosen set cannot drop a word, by construction.
      *
-     * v104: the learner saw "把 0/3", wrote a sentence with 把, and watched it
-     * disappear off the banner instead of ticking over to 1/3. The list is cut
-     * to six, and it used to be re-sorted first so anything credited today went
-     * to the back -- so earning a credit could push the word out of the six. It
-     * went off gradeTurn()'s target list with it, so the NEXT message with that
-     * word got no per-word verdict and fell back to the whole-sentence gate:
-     * one mistake anywhere in the sentence and the credit was lost too, which
-     * is the "it did not give me credit" half of the same report.
+     * v104, and the reason Ghost Words works in sets at all: the learner saw
+     * "把 0/3", wrote a sentence with 把, and watched it leave the banner
+     * instead of ticking to 1/3. The targets were the first six of a live list
+     * that re-sorted as credits landed. The same list was gradeTurn()'s target
+     * list, so a word that fell out stopped getting its own per-word verdict on
+     * the NEXT message and fell back to the whole-sentence gate -- the "it did
+     * not give me credit" half of the same report.
      *
-     * Eight words, because the bug cannot show with six or fewer. Commonest
-     * first, so the order is the frequency order and not an accident. */
+     * Eight words, because the bug could not show with six or fewer. The set is
+     * five of them and does not change again. */
     const eight = ["\u81ea\u5df1", "\u5df2\u7ecf", "\u8fd9\u6837", "\u56e0\u4e3a",
                    "\u4f46\u662f", "\u53ef\u80fd", "\u5f00\u59cb", "\u6240\u4ee5"];
     await exec(
@@ -2021,14 +2165,26 @@ check(usedGroups && usedGroups.first === "\u7684",
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after the eight-word seed");
 
-    const sixBefore = await exec(
-      "return window.reuseFor('focused').map(function (e) { return e.w; });");
-    check(sixBefore.length === 6 && sixBefore[0] === eight[0],
-      "eight taught words give six ghost targets, commonest first",
-      JSON.stringify(sixBefore));
+    const poolBefore = await exec(
+      "return window.ghostCandidates().map(function (e) { return e.w; });");
+    check(poolBefore.length === eight.length && poolBefore[0] === eight[0],
+      "every taught word is a candidate, commonest first",
+      JSON.stringify(poolBefore));
 
-    /* One clean use of the head word, dated today. */
-    const head = sixBefore[0];
+    await exec("window.callModel = function () { return Promise.resolve('\u4f60\u597d\uff01'); };" +
+      "window.newChat('focused');" +
+      "window.startFlashcardsWith(window.ghostCandidates()" +
+      "  .slice(0, window.HSKPace.SET_SIZE).map(function (e) { return e.w; }), '');" +
+      "return true;");
+    await waitFor("window.flashcardWords().length > 0", "the chosen ghost set");
+    const setWords = await exec("return window.flashcardWords();");
+    check(setWords.length === 5 && setWords[0] === eight[0],
+      "the set is five of them, taken commonest first", JSON.stringify(setWords));
+    const ghostChatId = await exec("return window.currentChat().id;");
+
+    /* One clean use of the head word, dated today, written into THIS
+     * conversation so the set stays put. */
+    const head = setWords[0];
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "m.ghostkeep = [{role:'user', id:'gk0', text:" + JSON.stringify(head) +
@@ -2037,68 +2193,92 @@ check(usedGroups && usedGroups.first === "\u7684",
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after the credit");
+    await exec("window.openChat(" + JSON.stringify(ghostChatId) + "); return true;");
 
-    const sixAfter = await exec("return window.reuseFor('focused');");
-    check(sixAfter.length === 6 && sixAfter[0].w === head,
-      "a ghost word keeps its place in the list the moment it earns a credit",
-      JSON.stringify(sixAfter.map(e => e.w)));
-    check(sixAfter[0].ghostN === 1 && sixAfter[0].ghostToday === true,
+    const afterCredit = await exec("return window.reuseFor('focused');");
+    check(afterCredit.length === 5 && afterCredit[0].w === head,
+      "a credited word keeps its place: the set is what it was when it was chosen",
+      JSON.stringify(afterCredit.map(e => e.w)));
+    check(afterCredit[0].ghostN === 1 && afterCredit[0].ghostToday === true,
       "and carries the credit it just earned, rather than vanishing with it",
-      JSON.stringify(sixAfter[0]));
-
-    /* The banner is what the learner actually reads, so the tick has to be
-     * there and not merely in the plumbing above. */
-    await exec("window.newChat('focused'); return true;");
-    const tick = await exec("return document.querySelector('#log').innerHTML;");
-    check(new RegExp(head + "[\\s\\S]{0,120}?1\\s*/\\s*3\\s*\u2713").test(tick),
-      "the banner shows the word with its new count and today's tick",
-      tick.slice(0, 500));
+      JSON.stringify(afterCredit[0]));
+    check(afterCredit.every(e => e.p && e.d),
+      "every word in a ghost set reaches the banner with its pinyin and gloss",
+      JSON.stringify(afterCredit));
 
     /* What the old sort was actually for, kept where it costs nothing: the
      * partner is steered at a word that can still move today, even though the
      * banked one keeps its place on screen. */
     check(await exec("return window.ghostRequired(window.reuseFor('focused'));")
-            === sixBefore[1],
+            === setWords[1],
       "and the partner is pointed at the first word not yet banked today");
     check(await exec("return window.ghostRequired([{w:'a',ghostToday:true}]);") === "a",
       "falling back to the head of the list when every target is banked");
 
-    /* ------------- and a finished word stays until the next conversation.
-     *
-     * At S.ghostUses credits the word leaves the targeting for good, which is
-     * right, and used to remove it from the banner in the same render -- so the
-     * last thing the learner saw was the word disappearing, which reads as
-     * failure rather than as success. It stays, greyed and ticked, for the rest
-     * of the conversation it finished in. */
+    /* A finished word stays in the set it was finished in -- which now needs no
+     * rule of its own, because the set is a fact in the transcript and not a
+     * list recomputed per render. */
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "m.ghostkeep = [0, 1, 2].map(function (i) {" +
       "  return {role:'user', id:'gk' + i, text:" + JSON.stringify(head) +
       ", created_at:'2026-09-0' + (i + 1) + 'T10:00:00Z'," +
       " grade:{ok:true, errors:[]}}; });" +
-      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));" +
-      "var cs = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
-      "cs.unshift({id:'ghostkeep', title:'ghost', activity:'focused', level:1," +
-      " created_at:'2026-09-01T10:00:00Z', updated_at:'2026-09-03T10:00:00Z'," +
-      " deleted:false});" +
-      "localStorage.setItem('hsk1chat.chats', JSON.stringify(cs));");
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
     await go(base);
     await waitFor("document.querySelector('#activity')", "app ready after the third credit");
+    await exec("window.openChat(" + JSON.stringify(ghostChatId) + "); return true;");
+    const doneStrip = await exec(
+      "window.renderStarters();" +
+      "return document.querySelector('#starters .fcstatus').textContent;");
+    /* The word that reached the threshold is ticked and stays ticked -- its
+     * last credit was days ago, so this is the finished half of wordSettled(),
+     * not today's. The rest of the set is still owed and carries no tick. */
+    check((doneStrip.match(/\u2713/g) || []).length === 1,
+      "the conversation it finished in ticks exactly the word that finished",
+      doneStrip.slice(0, 300));
+    check(/\u2713/.test(doneStrip.slice(0, doneStrip.indexOf("\u5df2\u7ecf"))),
+      "and the tick is on the first word, which is the one that has three days",
+      doneStrip.slice(0, 300));
 
-    check((await exec("return window.reuseFor('focused').map(function (e) { return e.w; });"))
-            .indexOf(head) === -1,
-      "a finished word is no longer a target");
-    await exec("window.openChat('ghostkeep'); return true;");
-    const doneBanner = await exec("return document.querySelector('#log').innerHTML;");
-    check(new RegExp(head + "[\\s\\S]{0,120}?3\\s*/\\s*3\\s*\u2713").test(doneBanner),
-      "but the conversation it finished in still shows it, complete and ticked",
-      doneBanner.slice(0, 600));
+    /* A word that is finished, or that another set is still working on, is not
+     * offered again -- and the reservation is shared with Flashcard Chat, which
+     * is the only place decision 2 of the plan is visible. */
+    const poolAfter = await exec(
+      "return window.ghostCandidates().map(function (e) { return e.w; });");
+    check(poolAfter.indexOf(head) === -1,
+      "a finished word is not offered to the next set", JSON.stringify(poolAfter));
+    check(setWords.slice(1).every(w => poolAfter.indexOf(w) === -1),
+      "nor is one the unfinished set is still holding", JSON.stringify(poolAfter));
+    check((await exec("return window.flashcardCandidates().map(function (e) { return e.w; });"))
+            .every(w => setWords.indexOf(w) === -1),
+      "and Flashcard Chat will not re-offer a word Ghost Words holds either");
 
-    await exec("window.newChat('focused'); return true;");
-    const nextBanner = await exec("return document.querySelector('#log').innerHTML;");
-    check(nextBanner.indexOf(head) === -1,
-      "and the next conversation gives the slot to a word still to do",
-      nextBanner.slice(0, 400));
+    /* A Ghost Words conversation from before sets existed: no marker, real
+     * messages. It keeps its transcript and its composer, and says why there is
+     * no set rather than showing a chooser over the top of it. */
+    await exec(
+      "var cs = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "cs.unshift({id:'ghostlegacy', title:'old ghost', activity:'focused', level:1," +
+      " created_at:'2026-09-01T10:00:00Z', updated_at:'2026-09-01T10:05:00Z'," +
+      " deleted:false});" +
+      "localStorage.setItem('hsk1chat.chats', JSON.stringify(cs));" +
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.ghostlegacy = [{role:'assistant', id:'gl0', text:'\u4f60\u597d\uff01'," +
+      " created_at:'2026-09-01T10:00:00Z'}];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready with a legacy ghost chat");
+    await exec("window.openChat('ghostlegacy'); return true;");
+    check(await exec("return document.querySelector('#input').disabled;") === false,
+      "a Ghost Words conversation from before sets keeps its composer");
+    check(/no set to show/.test(await exec(
+      "return document.querySelector('#starters').textContent;")),
+      "and says why there is none instead of offering a chooser over its history",
+      await exec("return document.querySelector('#starters').textContent;"));
+    check((await exec("return window.reuseFor('focused');")).length === 0,
+      "with nothing targeted, which is the truth about it");
+
 
     /* localStorage alone is not enough: the live S.chatMsgs the page is
      * running against still holds ghosttest (S itself is unreachable from
@@ -2109,7 +2289,7 @@ check(usedGroups && usedGroups.first === "\u7684",
      * the now-clean storage. */
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
-      "delete m.ghosttest; delete m.ghostkeep;" +
+      "delete m.ghosttest; delete m.ghostkeep; delete m.ghostlegacy;" +
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));" +
       /* And the two-word learning seed the per-word verdict test below needs:
        * the eight-word block above replaced it. */
@@ -2118,7 +2298,19 @@ check(usedGroups && usedGroups.first === "\u7684",
       "{w:'\\u7c73\\u996d',p:'mi fan',d:'rice',seen:9,from:2}]));" +
       "localStorage.setItem('hsk1chat.chats', JSON.stringify(" +
       "  (JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]'))" +
-      "    .filter(function (c) { return c.id !== 'ghostkeep'; })));");
+      "    .filter(function (c) { return c.id !== 'ghostkeep' && c.id !== 'ghostlegacy'; })));" +
+      /* A Ghost Words conversation with its set already chosen, seeded the way
+       * everything else here is seeded. The verdict test below needs targets,
+       * and targets come from the marker since v125 -- pressing the chooser
+       * instead would fire an opening turn against a stub meant for grading. */
+      "var m2 = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m2.ghostverdict = [{role:'focus', id:'gv0', text:'\\u82f9\\u679c,\\u7c73\\u996d'," +
+      " created_at:'2026-09-05T09:00:00Z'}];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m2));" +
+      "var cs2 = JSON.parse(localStorage.getItem('hsk1chat.chats') || '[]');" +
+      "cs2.unshift({id:'ghostverdict', title:'ghost set', activity:'focused', level:1," +
+      " created_at:'2026-09-05T09:00:00Z', updated_at:'2026-09-05T09:00:00Z', deleted:false});" +
+      "localStorage.setItem('hsk1chat.chats', JSON.stringify(cs2));");
     await go(base);
 
     /* S.grader is on the same unreachable const as S.history above -- through
@@ -2142,7 +2334,7 @@ check(usedGroups && usedGroups.first === "\u7684",
       "\\\"better\\\":\\\"\\u6211\\u5403\\u82f9\\u679c\\\",\\\"cats\\\":{}," +
       "\\\"errors\\\":[{\\\"tag\\\":\\\"aspect-le\\\",\\\"note\\\":\\\"x\\\"}]}');" +
       "}; return true;");
-    await exec("window.newChat('focused'); return true;");
+    await exec("window.openChat('ghostverdict'); return true;");
     const turnObj = await exec(
       "var t = { role: 'user', text: '\\u82f9\\u679c', id: 'gt1'," +
       " created_at: '2026-09-05T10:00:00Z' };" +
@@ -3046,7 +3238,11 @@ check(usedGroups && usedGroups.first === "\u7684",
       };
       window.newChat("focused");
       return true;`);
-    await exec("window.openingTurn();");
+    /* Choosing the set is what opens a Ghost Words conversation since v125, and
+     * it fires the opening turn itself -- so this is the turn under test and
+     * there is no separate openingTurn() call. */
+    await exec("window.startFlashcardsWith(['\u82f9\u679c', '\u7c73\u996d'], ''); return true;");
+    await waitFor("window.flashcardWords().length > 0", "the chosen ghost set");
     await waitFor("document.querySelectorAll('#log .msg.bot').length >= 1",
       "the reply that never used the ghost word");
     const ghost = await exec(`
@@ -4837,8 +5033,8 @@ check(usedGroups && usedGroups.first === "\u7684",
      * to read a number needed on every turn. */
     const fcStrip = await exec(
       `return document.querySelector('#starters .fcstatus').textContent;`);
-    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcStrip),
-      "the word counts are on the strip above the composer", fcStrip);
+    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && !/\d+\/\d+/.test(fcStrip),
+      "the set's words are on the strip above the composer, without counts", fcStrip);
     const fcExports = await exec(
       `return Array.prototype.map.call(document.querySelectorAll('#log .hint button.fcx'),
          function (b) { return b.textContent; });`);
@@ -4856,6 +5052,56 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec(`return typeof window.exportCards === "function" &&
                              typeof window.flashcardTargets === "function";`),
       "and the functions they call are reachable from the page");
+
+    /* The partner must stop leaning on a word that cannot earn anything today
+     * (v129). The soft steer -- systemPrompt()'s "\u8bf7\u591a\u7528" line --
+     * used to render the whole set every turn, so banking three of five left
+     * the model still being asked to work all five. Only the HARD requirement
+     * narrowed, and the soft steer is most of what the model acts on.
+     *
+     * Read off the system prompt that turn() actually built rather than off
+     * reuseFor(), which is deliberately unfiltered: it is also gradeTurn()'s
+     * target list, and a word banked today still has to be graded if the
+     * learner uses it again. */
+    const fcSteerChat = await exec(`return window.currentChat().id;`);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.fcsteer = [{ role: 'user', id: 'fcs0', text: " + JSON.stringify(fcSet[0]) +
+      ", created_at: new Date().toISOString(), grade: { ok: true, errors: [] } }];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after one word banked");
+    await exec(`window.openChat(${JSON.stringify(fcSteerChat)}); return true;`);
+    const fcSteerSaved = await exec("return localStorage.getItem('hsk1chat.chatMsgs');");
+    check(await exec(
+      "return window.flashcardTargets().filter(function (e) { return e.ghostToday; })" +
+      "  .map(function (e) { return e.w; }).join('');") === fcSet[0],
+      "exactly the seeded word is banked for today");
+    await exec(
+      "window.__sys = '';" +
+      "window.callModel = function (msgs) {" +
+      "  if (msgs && msgs[0] && msgs[0].role === 'system') window.__sys = msgs[0].content;" +
+      "  return Promise.resolve('\u4f60\u597d\uff01');" +
+      "};" +
+      "document.querySelector('#input').value = '\u6211\u5f88\u597d';" +
+      "window.send(); return true;");
+    await waitFor("window.__sys && window.__sys.length > 0", "the steered system prompt");
+    const fcSys = await exec("return window.__sys;");
+    const fcSteerLine = fcSys.split("\n").filter(l => l.indexOf("\u8bf7\u591a\u7528") !== -1)[0] || "";
+    check(fcSteerLine !== "", "the prompt carries a reuse line", fcSys.slice(0, 400));
+    check(fcSteerLine.indexOf(fcSet[0]) === -1,
+      "and the word already banked today is not in it", fcSteerLine);
+    check(fcSet.slice(1).every(w => fcSteerLine.indexOf(w) !== -1),
+      "while every word still owed is", fcSteerLine);
+    /* Wound back: the sections below read this conversation's history. */
+    await exec("localStorage.setItem('hsk1chat.chatMsgs', arguments[0]); return true;",
+      [fcSteerSaved]);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.fcsteer; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after clearing the steer seed");
+    await exec(`window.openChat(${JSON.stringify(fcSteerChat)}); return true;`);
 
     /* The set is what tells one Flashcard Chat apart from the next in the list;
      * the partner's opening sentence does not. */
@@ -4890,14 +5136,22 @@ check(usedGroups && usedGroups.first === "\u7684",
     check((await exec(`return document.querySelector('#starters .fcstatus').textContent;`))
             .indexOf("come back tomorrow") !== -1,
       "the strip above the composer says so");
-    const fcDayBanner = await exec(`return document.querySelector('#log .hint').textContent;`);
-    check(/Day 1 done/.test(fcDayBanner) && /Day 2 of 3 opens tomorrow/.test(fcDayBanner),
-      "and the banner says which day just closed and which one opens next",
-      fcDayBanner.slice(0, 300));
-    /* The conversation is not over and must not read as over: the learner comes
-     * back to this same chat tomorrow, so the composer stays open. */
-    check(await exec(`return document.querySelector('#input').disabled === false;`),
-      "the composer stays open -- the conversation continues tomorrow");
+    /* Said at the FOOT of the log, next to the composer it closes -- the
+     * banner at the top scrolls away after two turns, which is why this used
+     * to be announced in the one place the learner was not looking. */
+    const fcDayBanner = await exec(`return document.querySelector('#log').textContent;`);
+    check(/Done for today/.test(fcDayBanner) && /Come back tomorrow/.test(fcDayBanner),
+      "the log says the day is banked and to come back tomorrow",
+      fcDayBanner.slice(-300));
+    check(/Switch to Chat/.test(fcDayBanner),
+      "and names the way out, so a dead composer does not read as a broken app",
+      fcDayBanner.slice(-300));
+    /* Reversed in v129, and deliberately: the day is banked, nothing the
+     * learner writes can move a counter, and an activity that has stopped
+     * counting should stop rather than invite more typing at it. The learner
+     * asked for the hard stop -- the point is to go and do something else. */
+    check(await exec(`return document.querySelector('#input').disabled === true;`),
+      "and typing is closed here until tomorrow");
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "delete m.fcday; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
@@ -4930,8 +5184,8 @@ check(usedGroups && usedGroups.first === "\u7684",
       "window.renderStarters();" +
       "var el = document.querySelector('#starters .fcstatus');" +
       "return el ? el.textContent : '';");
-    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcBusyStrip),
-      "the word counts stay on the strip mid-turn, so a credit shows when it is earned",
+    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1),
+      "the set stays on the strip mid-turn, so a tick shows when it is earned",
       fcBusyStrip);
     /* Wound up by reloading rather than by stopping: the stub holds both calls
      * send() makes -- the grader's and the turn's -- and only one of them can

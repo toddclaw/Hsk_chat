@@ -285,7 +285,8 @@ immediately visible.
 
 **Informed by the literature; the numbers themselves are not measured.**
 `GHOST_USES = 3` by default (settable 1–6), at most one credit per word per
-calendar day, and a wrong use costs one credit back.
+calendar day, and a day is banked only if the last counting use of the word in
+it was correct.
 
 The Ghost Words activity targets words the app taught and the learner has never
 written. Until v95 a single clean message retired one, which is the bottom of
@@ -298,9 +299,10 @@ drill's spacing cap does not apply to it in the same way. That is true and
 incomplete: the literature splits repetition by purpose, with massed repetition
 helping initial encoding and spaced repetition driving retention. Both apply, at
 different scales. Within a day, repeated production is the encoding work and is
-not limited — write the word as often as you like. Across days, only the first
-correct use counts, because that is the interval that predicts whether the word
-survives the week.
+not limited — write the word as often as you like. Across days a day is worth
+one credit however many times the word is written, because that is the interval
+that predicts whether the word survives the week. Which use in the day decides
+it is the next section.
 
 The per-day cap is therefore the same rule, and the same `dayKey()`, as the
 drill's, and it is here for the same reason recorded there: session length must
@@ -312,20 +314,38 @@ days rather than three sentences in a row. It is a *productive* threshold and is
 not derived from the receptive studies behind `PROMOTE_AT = 6`; it is a setting
 rather than a constant precisely because it is unmeasured.
 
-**Why a slip costs one and not everything.** Until v95 failure was free: a wrong
-use of a ghost word simply did not count, so progress was a ratchet that only
-clicked forward and a learner could grind out a word regardless of how many
-attempts missed. Anki demotes a lapsed card, and something had to. Full reset
-was rejected: at a threshold of three, one slip on day three would send the word
-back to nothing, which is the shape of rule this document already warns against
-for the mistake count — punishing the outcome the feature exists to produce.
-Demote-by-one is the proportionate version.
+**Why a slip costs the day it is in** (v129). Until v95 failure was free: a
+wrong use of a ghost word simply did not count, so progress was a ratchet that
+only clicked forward and a learner could grind out a word regardless of how many
+attempts missed. Anki demotes a lapsed card, and something had to. Full reset was
+rejected: at a threshold of three, one slip on day three would send the word back
+to nothing, which is the shape of rule this document already warns against for
+the mistake count — punishing the outcome the feature exists to produce.
 
-The per-day cap applies to demotions as well, for the same reason and to keep
-the two directions symmetric. Uncapped, three wrong uses in one afternoon cost
-three days while the best possible day earns one — which is the reset rule above,
-reached by another road, and reached fastest by the learner struggling with the
-word. One day of practice is one day of practice in both directions.
+v95 answered with demote-by-one, capped once a day in each direction to keep them
+symmetric. That was two counters with two independent caps, and the caps are
+where it broke down. The cap in the demotion direction made the second slip of a
+day free, so right-wrong-right-wrong banked the day: the learner ended on an
+error and the counter recorded a success. The cap in the credit direction made
+the *first* slip unrecoverable, because the credit was already spent — a wrong
+use after the day's credit could never be made good, so "keep trying until you
+get it right" was true before the credit landed and false after it.
+
+One rule replaces both: **the last counting use of a word on a day decides that
+day, and the day is banked only if it was correct.** Right-wrong-right-wrong
+does not bank. A slip re-opens the word for the rest of the day, so trying again
+works in either order. And the per-day cap is no longer a rule at all — it falls
+out of a day having one verdict.
+
+What changes pedagogically is the reach. Demote-by-one let a miss on day three
+take away day two; the day rule forfeits day three and leaves the earlier days
+standing. Failure is still not free — the day is lost, and a day cannot be
+bought back by writing the word again correctly *after* having got it wrong, only
+by ending on a correct use — but it no longer reaches backwards into practice
+that already happened. Ending the session on a correct production is also the
+thing the learner is being asked to build, which the old rule could actively
+discourage: once the credit was banked, the safest play was to stop using the
+word.
 
 **A slip has to be about the word, and the correction is the evidence** (v124).
 The per-word verdict is asked in its own call precisely so that a mistake
@@ -346,6 +366,43 @@ one-sided: credit is untouched, so it can never invent progress, and the cost of
 being wrong is a real misuse going uncharged — a counter that falls slower, not
 one that rises on nothing. That the grader contradicted its own correction twice
 in four turns is a separate fault and is in BACKLOG.md.
+
+**The day ends the conversation** (v129). When every word in the set is settled
+— banked today, or finished outright — the composer closes and the activity says
+so at the foot of the log, rather than staying open on an activity that has told
+the learner it has stopped counting. Before this it invited more typing and
+explicitly said the typing would not count, which is the worst of both: the
+learner keeps working and the work is worth nothing.
+
+The spacing argument is the whole point. A day's credit is capped because the
+interval between productions is what predicts retention, so the correct thing to
+do once the day is banked is to stop and let the interval happen. Switching to
+Chat in the header is one tap and opens a different conversation, so the lock is
+on the activity and not on the app — which the message says, because a dead
+composer with no explanation reads as a bug rather than as an ending.
+
+**A chosen set, not a live list** (v125). The activity practises five words the
+learner pressed a button for, written into the transcript and fixed for the
+conversation, rather than the first six of the unused list recomputed on every
+render. Two arguments, one pedagogical and one about the machinery.
+
+Hulstijn & Laufer's learner-imposed need, and the Self-Determination note in
+"Choosing a set of words to study away from the app", both turn on the learner
+*asking* for the words. A list the app recomputes behind them is not something
+they asked for; the same words, chosen by pressing a button, are. That is the
+argument the flashcard work already made, and the ghost pool is the other shelf
+it applies to. `SET_SIZE = 5` and the 5–7 range behind it (Nation's word cards)
+govern here for the same reason they govern there, which is why the old six
+went rather than being kept as a second mode.
+
+The machinery argument is sharper. A set is what makes a day countable —
+`setRounds()` is `min(ghostN)` across the set, and a list that changes as words
+are credited has no minimum to take, so the activity had no notion of a round,
+a day or a finish. Worse, a live list can drop a word at the moment it succeeds:
+the learner saw 把 0/3, wrote 把, and watched it leave the banner instead of
+ticking to 1/3 — and it left `gradeTurn()`'s target list with it, so the next
+sentence containing 把 got no per-word verdict at all. A set written down cannot
+drift under the learner.
 
 **Flat intervals, not expanding ones.** This is a one-day Leitner interval.
 Expanding intervals — a retired word returning at 7 days, then 30, as a

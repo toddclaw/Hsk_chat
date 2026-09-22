@@ -2,6 +2,14 @@
 
 **Asked for:** 2026-09-18. **Designed with the learner** the same day.
 
+**A second activity rides this design since v125.** Ghost Words is this, drawing
+from the unused list instead of the learner's own history:
+`docs/superpowers/plans/2026-09-20-ghost-words-as-sets.md`. The claim below that
+the machinery generalises — that the banner, the strip, the export, the day
+count, the completion state and the title all read the SET and not the activity
+— is no longer a claim. The second activity cost one marker role, one pool
+function and one flag in the chooser, and deleted more than it added.
+
 A two-step activity. Press a button and the app hands you five to seven words
 drawn from your own history, exported to Pleco or Anki. You study them away from
 the app. You come back and the partner steers the conversation at exactly those

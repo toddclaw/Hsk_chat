@@ -491,7 +491,8 @@ check(P.activityFor(undefined) === P.ACTIVITIES.chat, "so does a missing one");
 check(P.ACTIVITIES.chat.converse === true, "chat converses");
 check(P.ACTIVITIES.story.converse === false, "story does not converse mid-narrative");
 check(P.ACTIVITIES.story.gen === "segments", "story generates in segments");
-check(P.ACTIVITIES.focused.reuse === "unused", "focused chat draws reuse from the unused list");
+check(P.ACTIVITIES.focused.reuse === "chosen",
+  "Ghost Words draws reuse from the set the learner chose, not a live list");
 
 // The conversational rules must actually leave the prompt for story time.
 const ASK_RULE = "\u6700\u540e\u95ee\u4e00\u4e2a\u65b0\u95ee\u9898";

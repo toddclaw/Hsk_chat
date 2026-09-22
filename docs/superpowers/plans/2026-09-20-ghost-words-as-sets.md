@@ -1,6 +1,12 @@
 # Ghost Words as a Chosen Set — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Built 2026-09-20 as v125.** All seven tasks done, all three decisions as
+> written. One thing the plan missed, recorded in `BACKLOG.md`:
+> `flashcardTargets()` looked entries up in `S.base` alone, and every ghost word
+> is from above the level, so a set would have reached the banner and the export
+> with no pinyin and no gloss. `S.learning` and `S.extra` are in the lookup now.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Ghost Words becomes Flashcard Chat drawing from a different pool. You
 press a button, get five words the app has taught you and you have never written,
@@ -130,7 +136,7 @@ plain node for the tests. Do not add a `package.json`.
 - `HSKPace.setWordsOf(msgs)` → `Array`. Whichever set marker the transcript
   carries, `[]` for neither. This is what every consumer reads.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `test/pace.test.js`:
 
@@ -144,7 +150,7 @@ Append to `test/pace.test.js`:
 - `reservedWords()` holds back words from a `focus` set exactly as it does a
   flashcard one (pass both kinds in `sets` and assert the union).
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
 `focusOf` is `flashcardsOf` with a different role argument. `setWordsOf` is
 `focusOf(msgs)` when a focus marker is present, else `flashcardsOf(msgs)`.
@@ -164,7 +170,7 @@ is what feeds it both kinds.
   (`index.html:3230`)
 - Test: `test/prompt.test.js`, `test/browser.test.js` (Task 6)
 
-- [ ] **Step 1: The table**
+- [x] **Step 1: The table**
 
 `ACTIVITIES.focused.reuse` becomes `"chosen"`. Leave `steer: true` and leave the
 rules text alone: "带着话题往这些词的方向走" is the stronger steering instruction
@@ -174,7 +180,7 @@ changing a prompt is a measurement this task has not earned.
 `test/prompt.test.js` asserts the table; update the row's expectation and add one
 that both steering activities now reuse `"chosen"`.
 
-- [ ] **Step 2: The reader**
+- [x] **Step 2: The reader**
 
 - `flashcardWords()` → `HSKPace.setWordsOf(S.history)`. Every consumer of it —
   `flashcardTargets()`, the banner, the composer gate, the title — now works for
@@ -208,12 +214,12 @@ empty set. Do not ship a version bump from this task.
   `flashcardCandidates()` returns: `readiness().unused`, minus
   `HSKPace.reservedWords(...)`, capped at `HSKPace.CANDIDATES_SHOWN`.
 
-- [ ] **Step 1: Reservation sees both kinds**
+- [x] **Step 1: Reservation sees both kinds**
 
 `inFlightSets()` reads `HSKPace.setWordsOf()` instead of `flashcardsOf()`. One
 word, and it is what makes decision 2 true.
 
-- [ ] **Step 2: The pool**
+- [x] **Step 2: The pool**
 
 `readiness().unused` is already sorted commonest-first and already carries
 `ghostN` and `ghostToday`, so `ghostCandidates()` is a filter and a slice. It
@@ -222,7 +228,7 @@ does **not** go through `flashcardPool()`: that function's two populations
 conversation, and a ghost word is by definition one they have never written.
 Reuse the constants, not the arithmetic.
 
-- [ ] **Step 3: The chooser picks its pool**
+- [x] **Step 3: The chooser picks its pool**
 
 `renderFlashcardControl()` takes the candidate list from the activity:
 `currentActivity() === "focused" ? ghostCandidates() : flashcardCandidates()`.
@@ -241,7 +247,7 @@ case is where a learner is most likely to be stuck:
   building the list, which is true here too (credits come from graded messages).
   Reuse it.
 
-- [ ] **Step 4: Writing the marker**
+- [x] **Step 4: Writing the marker**
 
 `startFlashcardsWith(words, theme)` writes `HSKPace.FOCUS_ROLE` when the current
 activity is `"focused"` and `HSKPace.SET_ROLE` otherwise. The theme marker stays
@@ -260,7 +266,7 @@ writes a `focus` marker, and `reuseFor("focused")` returns the five chosen words
   `ghostBanner()` (`index.html:2834` area) and `ghostFinishedHere()`
   (`index.html:6678`), and their call sites in `renderConversation()`
 
-- [ ] **Step 1: Parameterise the title**
+- [x] **Step 1: Parameterise the title**
 
 `flashcardBanner()` returns `""` unless the activity has `reuse === "chosen"`.
 Its heading becomes `HSKPrompt.ACTIVITIES[currentActivity()].label`, so it reads
@@ -270,14 +276,14 @@ Its heading becomes `HSKPrompt.ACTIVITIES[currentActivity()].label`, so it reads
 The export buttons stay for both. A ghost set is exactly the kind of list Pleco
 and Anki are good at, and the backlog entry asks for it in as many words.
 
-- [ ] **Step 2: Delete**
+- [x] **Step 2: Delete**
 
 - `ghostBanner()` and both of its call sites.
 - `ghostFinishedHere()`: it exists so a word that finishes mid-conversation does
   not vanish from a live list. A chosen set cannot lose a word, so the function
   has nothing left to do. Check there is no other caller before deleting.
 
-- [ ] **Step 3: Bump and verify**
+- [x] **Step 3: Bump and verify**
 
 This is the first task that leaves the app coherent. Bump `VERSION` and `CACHE`
 together, run `sh test/run.sh`, and drive it by hand once: choose a set, write
@@ -297,7 +303,7 @@ make an old conversation unusable.
 **Files:**
 - Modify: `index.html` — `renderComposer()`, `renderFlashcardControl()`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 A set-based activity with no marker **and** a non-empty transcript is a legacy
 conversation: leave the composer open, show one note on the strip saying this
@@ -309,7 +315,7 @@ The partner steers at nothing in such a conversation (`reuseFor()` returns the
 empty set), which is the honest outcome: nobody knows what six words it was
 targeting, because that was exactly the problem.
 
-- [ ] **Step 2: Verification**
+- [x] **Step 2: Verification**
 
 Browser test in Task 6. By hand: open an old Ghost Words conversation, confirm
 you can still type in it and that it says why there is no set.
@@ -322,7 +328,7 @@ you can still type in it and that it says why there is no set.
 - Modify: `test/browser.test.js` (the flashcard block is the model; the Ghost
   Words block above it changes)
 
-- [ ] **Step 1: Rewrite the Ghost Words browser block**
+- [x] **Step 1: Rewrite the Ghost Words browser block**
 
 The existing block asserts the live-six behaviour and has to go with it. What
 replaces it, following the flashcard block almost line for line:
@@ -342,7 +348,7 @@ replaces it, following the flashcard block almost line for line:
 - a legacy Ghost Words transcript (seeded through `localStorage`, no marker,
   with messages) keeps its composer enabled.
 
-- [ ] **Step 2: Verification**
+- [x] **Step 2: Verification**
 
 `sh test/run.sh`, everything green, browser suite included.
 
@@ -350,7 +356,7 @@ replaces it, following the flashcard block almost line for line:
 
 ### Task 7: Close it out
 
-- [ ] **Step 1: Documentation**
+- [x] **Step 1: Documentation**
 
 - `RESEARCH.md`, "Retiring a ghost word": the activity now practises a chosen
   set of `SET_SIZE`, so the reasoning in "Why the set is small" and "Why a list
@@ -370,7 +376,7 @@ replaces it, following the flashcard block almost line for line:
   a second activity now rides this design, with a pointer here. The spec claims
   the machinery generalises; this is the evidence.
 
-- [ ] **Step 2: Version and verify**
+- [x] **Step 2: Version and verify**
 
 Bump `VERSION` and `CACHE` together if Task 4's bump is no longer the last
 user-visible change, then:

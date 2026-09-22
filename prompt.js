@@ -362,7 +362,13 @@
         "让学生自己说出来。如果学生没有用这些词，继续问，直到他们用到。"
       ],
       names: null,
-      reuse: "unused",
+      /* The set the learner chose, read out of the transcript, exactly as
+       * Flashcard Chat reads its own -- not a live ranking recomputed per
+       * render. A list that reorders itself the moment a word is credited took
+       * that word off the banner before the learner saw the tick it had just
+       * earned, and off gradeTurn()'s target list on the next message too. A
+       * chosen set cannot drift. */
+      reuse: "chosen",
       gen: "turn",
       converse: true,
       /* Practice of what the learner already has. A word they have never seen

@@ -526,7 +526,7 @@ not nothing. The UI follows from that answer.
 
 ---
 
-## Ghost Words and 20 Questions have no marker in their own transcript
+## 20 Questions has no marker in its own transcript — half closed
 
 **Found:** the v100 sync repair, 2026-09-12 (`fde8095`).
 
@@ -542,22 +542,69 @@ thing that went missing. Both still depend on the row being right and on
 `mergeConversations()` refusing to let a lost value overwrite a real one. That
 held this time; it is the same class of dependency that just failed.
 
-**What would settle it:** a marker message for Ghost Words and one for
-20 Questions, of the kind story and drill already carry, so the transcript is
-sufficient for every activity rather than four of five.
+**Ghost Words is done, v125.** Making it a chosen set gave it a
+`role: "focus"` marker carrying the words, and `activityOf()` reads it — which
+is why that work kept the two set roles distinct instead of reusing
+`"flashcards"` for both: one shared role would have recovered the wrong activity
+name. The chat-browser title for a Ghost Words conversation, deferred out of the
+v122 work, came with it.
+
+**What would settle the rest:** a marker message for 20 Questions, of the kind
+story, drill and both set activities now carry, so the transcript is sufficient
+for every activity rather than four of five.
 
 ---
 
-## Ghost Words should be Flashcard Chat with a different pool
+## ~~Ghost Words should be Flashcard Chat with a different pool~~ — built, v125
 
 **Asked for:** Todd, 2026-09-19, after two weeks of using both.
+**Planned:** `docs/superpowers/plans/2026-09-20-ghost-words-as-sets.md`.
+**Built:** 2026-09-20, as planned, all three decisions as written — five words
+with the live six deleted, reservation shared across both activities, and a
+distinct `role: "focus"` marker so `activityOf()` can still tell the two apart.
 
-**Planned:** `docs/superpowers/plans/2026-09-20-ghost-words-as-sets.md`. It
-answers the two open questions at the foot of this entry — five words and the
-live six deleted, reservation shared across both activities — and adds a third
-decision this entry did not raise: a distinct `role: "focus"` marker rather than
-a second use of `"flashcards"`, so `activityOf()` can still tell the two apart.
-Seven tasks, and the diff is mostly deletion.
+**What it cost, against what it removed.** `ghostBanner()`, `ghostFinishedHere()`
+and `reuseFor()`'s whole `reuse: "unused"` branch are gone; what arrived is
+`focusOf()`/`setWordsOf()` in `pace.js`, `ghostCandidates()` in `index.html`, a
+`reuse: "chosen"` on one ACTIVITIES row, and a `ghost` flag in the chooser. The
+banner, strip, export, day count, completion, title, reservation and per-word
+verdict were all already reading the set rather than the activity, exactly as
+the flashcard spec claimed they would.
+
+**One thing the plan did not foresee.** `flashcardTargets()` looked its entries
+up in `S.base` alone, which is the level's own list — and every ghost word is
+from ABOVE the level, so a whole set would have reached the banner and the
+export with no pinyin and no gloss. `S.learning` and `S.extra` are in the lookup
+now, and `test/browser.test.js` asserts every word in a ghost set arrives with
+both fields.
+
+**Kept as a caveat, not a bug.** Conversations started before v125 have no set
+recorded. They keep their transcript and their composer and say so; nothing is
+back-filled, because nobody knows which six words they were targeting — not
+recording them is what was wrong with the old design.
+
+**The "already reading the set" claim above was wrong about the title, and
+about four other things** (v130). Asked to verify that the two activities
+differed only in their pool, five divergences turned up. `titleFrom()` called
+`flashcardsOf()`, which reads only the flashcard marker, so no Ghost Words
+conversation was ever titled by its set. `report.js`'s `ACTIVITY_IDS` had no
+`flashcard` entry and `brief()` drops conversations whose id it does not know,
+so every Flashcard Chat was uncounted in the progress report — while the
+comment above the list claimed a test held it in step with `ACTIVITIES`, and no
+such test existed. The prompt preview in Settings listed Ghost Words and not
+Flashcard Chat. `#activityNote` showed a live word list for Ghost Words only,
+which is a duplicate of the strip above the composer and was dropped for both.
+And a `flashcardTheme` marker existed on the write side for Flashcard Chat
+alone; the only caller has passed `""` in every version of the file, so it was
+deleted rather than generalised.
+
+Each one was a branch keyed on the activity id, sitting a long way from the
+other branches keyed on the activity id. So the structural answer is
+`SET_KINDS` in `index.html`: one table holding the marker role, the pool and
+the three strings that describe it, and a rule that nothing outside it may name
+a set activity by id. `activityOf()` is the sole exception, being the function
+whose job is telling them apart, and `test/release.test.js` scans the source
+and fails on any third one.
 
 The verdict on the pair after living with them: Flashcard Chat is the shape that
 works, and Ghost Words should be the same activity drawing from a different pool.
