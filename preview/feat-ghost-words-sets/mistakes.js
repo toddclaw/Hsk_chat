@@ -211,26 +211,42 @@
       var x = String((a && a.created_at) || ""), y = String((b && b.created_at) || "");
       return x < y ? -1 : x > y ? 1 : 0;
     });
-    var out = {}, credited = {}, demoted = {};
-    function slot(w) {
-      if (!out[w]) { out[w] = { n: 0, last: "" }; credited[w] = {}; demoted[w] = {}; }
-      return out[w];
-    }
+    /* The LAST counting use of a word on a day decides that day, and a day is
+     * banked only if that last use was correct. One rule where there used to
+     * be two counters with two independent per-day caps -- earn once a day,
+     * lose once a day -- which is why right-wrong-right-wrong used to bank the
+     * day: the second slip was free under the cap.
+     *
+     * What it buys, beyond being one rule instead of two: a slip re-opens the
+     * word for the rest of the day, so "keep trying until you get it right" is
+     * literally true, where before a wrong use AFTER the credit was both
+     * uncharged in display terms and impossible to make good the same day.
+     *
+     * It also stops a slip reaching backwards. A miss on day three forfeits
+     * day three and leaves days one and two standing, where demote-by-one took
+     * an earned day away. RESEARCH.md, "Why a slip costs the day it is in".
+     *
+     * A turn with no usable timestamp buckets under "" and counts as its own
+     * day, which is what the credit map did with it too. */
+    var days = {};
     rows.forEach(function (t) {
       var day = dayKey(t && t.created_at);
-      var seen = {};
       (wordsOf(t) || []).forEach(function (w) {
-        if (seen[w]) return;            // one message credits a word once
-        seen[w] = true;
         var v = ghostVerdict(t && t.grade, w);
-        if (v === "ok") {
-          var s = slot(w);
-          if (!credited[w][day]) { credited[w][day] = true; s.n++; s.last = day; }
-        } else if (v === "wrong") {
-          var f = slot(w);
-          if (!demoted[w][day]) { demoted[w][day] = true; f.n = Math.max(0, f.n - 1); }
-        }
+        if (v !== "ok" && v !== "wrong") return;
+        if (!days[w]) days[w] = {};
+        days[w][day] = v;          // later rows overwrite earlier ones
       });
+    });
+    var out = {};
+    Object.keys(days).forEach(function (w) {
+      var n = 0, last = "";
+      Object.keys(days[w]).forEach(function (d) {
+        if (days[w][d] !== "ok") return;
+        n++;
+        if (d > last) last = d;
+      });
+      out[w] = { n: n, last: last };
     });
     return out;
   }
