@@ -2107,9 +2107,17 @@ check(usedGroups && usedGroups.first === "\u7684",
     const banner = await exec(
       "window.renderStarters();" +
       "return document.querySelector('#starters .fcstatus').textContent;");
-    check(/1\s*\/\s*3/.test(banner),
-      "the strip shows how far along a ghost word is, not just its name",
-      banner.slice(0, 400));
+    /* The strip names what you still owe and carries no per-word count (v129).
+     * 苹果 has one credit, earned on a day that is not today, so it is neither
+     * banked for today nor finished -- and the learner's job is identical
+     * either way: use it correctly once. The number said nothing they could
+     * act on and was read as the banner's fraction. */
+    check(banner.indexOf("\u82f9\u679c") !== -1 && banner.indexOf("\u7c73\u996d") !== -1,
+      "the strip names both words of the set", banner.slice(0, 400));
+    check(!/\d+\s*\/\s*\d+/.test(banner),
+      "and carries no per-word count", banner.slice(0, 400));
+    check(banner.indexOf("\u2713") === -1,
+      "and nothing is ticked while a word is still owed today", banner.slice(0, 400));
 
     await seedGhost([at(1, 10), at(1, 18)]);
     gn = await exec(
@@ -2212,8 +2220,14 @@ check(usedGroups && usedGroups.first === "\u7684",
     const doneStrip = await exec(
       "window.renderStarters();" +
       "return document.querySelector('#starters .fcstatus').textContent;");
-    check(new RegExp("3\\s*/\\s*3").test(doneStrip),
-      "the conversation it finished in still shows it, complete and ticked",
+    /* The word that reached the threshold is ticked and stays ticked -- its
+     * last credit was days ago, so this is the finished half of wordSettled(),
+     * not today's. The rest of the set is still owed and carries no tick. */
+    check((doneStrip.match(/\u2713/g) || []).length === 1,
+      "the conversation it finished in ticks exactly the word that finished",
+      doneStrip.slice(0, 300));
+    check(/\u2713/.test(doneStrip.slice(0, doneStrip.indexOf("\u5df2\u7ecf"))),
+      "and the tick is on the first word, which is the one that has three days",
       doneStrip.slice(0, 300));
 
     /* A word that is finished, or that another set is still working on, is not
@@ -5008,8 +5022,8 @@ check(usedGroups && usedGroups.first === "\u7684",
      * to read a number needed on every turn. */
     const fcStrip = await exec(
       `return document.querySelector('#starters .fcstatus').textContent;`);
-    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcStrip),
-      "the word counts are on the strip above the composer", fcStrip);
+    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && !/\d+\/\d+/.test(fcStrip),
+      "the set's words are on the strip above the composer, without counts", fcStrip);
     const fcExports = await exec(
       `return Array.prototype.map.call(document.querySelectorAll('#log .hint button.fcx'),
          function (b) { return b.textContent; });`);
@@ -5027,6 +5041,56 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec(`return typeof window.exportCards === "function" &&
                              typeof window.flashcardTargets === "function";`),
       "and the functions they call are reachable from the page");
+
+    /* The partner must stop leaning on a word that cannot earn anything today
+     * (v129). The soft steer -- systemPrompt()'s "\u8bf7\u591a\u7528" line --
+     * used to render the whole set every turn, so banking three of five left
+     * the model still being asked to work all five. Only the HARD requirement
+     * narrowed, and the soft steer is most of what the model acts on.
+     *
+     * Read off the system prompt that turn() actually built rather than off
+     * reuseFor(), which is deliberately unfiltered: it is also gradeTurn()'s
+     * target list, and a word banked today still has to be graded if the
+     * learner uses it again. */
+    const fcSteerChat = await exec(`return window.currentChat().id;`);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.fcsteer = [{ role: 'user', id: 'fcs0', text: " + JSON.stringify(fcSet[0]) +
+      ", created_at: new Date().toISOString(), grade: { ok: true, errors: [] } }];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after one word banked");
+    await exec(`window.openChat(${JSON.stringify(fcSteerChat)}); return true;`);
+    const fcSteerSaved = await exec("return localStorage.getItem('hsk1chat.chatMsgs');");
+    check(await exec(
+      "return window.flashcardTargets().filter(function (e) { return e.ghostToday; })" +
+      "  .map(function (e) { return e.w; }).join('');") === fcSet[0],
+      "exactly the seeded word is banked for today");
+    await exec(
+      "window.__sys = '';" +
+      "window.callModel = function (msgs) {" +
+      "  if (msgs && msgs[0] && msgs[0].role === 'system') window.__sys = msgs[0].content;" +
+      "  return Promise.resolve('\u4f60\u597d\uff01');" +
+      "};" +
+      "document.querySelector('#input').value = '\u6211\u5f88\u597d';" +
+      "window.send(); return true;");
+    await waitFor("window.__sys && window.__sys.length > 0", "the steered system prompt");
+    const fcSys = await exec("return window.__sys;");
+    const fcSteerLine = fcSys.split("\n").filter(l => l.indexOf("\u8bf7\u591a\u7528") !== -1)[0] || "";
+    check(fcSteerLine !== "", "the prompt carries a reuse line", fcSys.slice(0, 400));
+    check(fcSteerLine.indexOf(fcSet[0]) === -1,
+      "and the word already banked today is not in it", fcSteerLine);
+    check(fcSet.slice(1).every(w => fcSteerLine.indexOf(w) !== -1),
+      "while every word still owed is", fcSteerLine);
+    /* Wound back: the sections below read this conversation's history. */
+    await exec("localStorage.setItem('hsk1chat.chatMsgs', arguments[0]); return true;",
+      [fcSteerSaved]);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.fcsteer; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after clearing the steer seed");
+    await exec(`window.openChat(${JSON.stringify(fcSteerChat)}); return true;`);
 
     /* The set is what tells one Flashcard Chat apart from the next in the list;
      * the partner's opening sentence does not. */
@@ -5061,14 +5125,22 @@ check(usedGroups && usedGroups.first === "\u7684",
     check((await exec(`return document.querySelector('#starters .fcstatus').textContent;`))
             .indexOf("come back tomorrow") !== -1,
       "the strip above the composer says so");
-    const fcDayBanner = await exec(`return document.querySelector('#log .hint').textContent;`);
-    check(/Day 1 done/.test(fcDayBanner) && /Day 2 of 3 opens tomorrow/.test(fcDayBanner),
-      "and the banner says which day just closed and which one opens next",
-      fcDayBanner.slice(0, 300));
-    /* The conversation is not over and must not read as over: the learner comes
-     * back to this same chat tomorrow, so the composer stays open. */
-    check(await exec(`return document.querySelector('#input').disabled === false;`),
-      "the composer stays open -- the conversation continues tomorrow");
+    /* Said at the FOOT of the log, next to the composer it closes -- the
+     * banner at the top scrolls away after two turns, which is why this used
+     * to be announced in the one place the learner was not looking. */
+    const fcDayBanner = await exec(`return document.querySelector('#log').textContent;`);
+    check(/Done for today/.test(fcDayBanner) && /Come back tomorrow/.test(fcDayBanner),
+      "the log says the day is banked and to come back tomorrow",
+      fcDayBanner.slice(-300));
+    check(/Switch to Chat/.test(fcDayBanner),
+      "and names the way out, so a dead composer does not read as a broken app",
+      fcDayBanner.slice(-300));
+    /* Reversed in v129, and deliberately: the day is banked, nothing the
+     * learner writes can move a counter, and an activity that has stopped
+     * counting should stop rather than invite more typing at it. The learner
+     * asked for the hard stop -- the point is to go and do something else. */
+    check(await exec(`return document.querySelector('#input').disabled === true;`),
+      "and typing is closed here until tomorrow");
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "delete m.fcday; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
@@ -5101,8 +5173,8 @@ check(usedGroups && usedGroups.first === "\u7684",
       "window.renderStarters();" +
       "var el = document.querySelector('#starters .fcstatus');" +
       "return el ? el.textContent : '';");
-    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcBusyStrip),
-      "the word counts stay on the strip mid-turn, so a credit shows when it is earned",
+    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1),
+      "the set stays on the strip mid-turn, so a tick shows when it is earned",
       fcBusyStrip);
     /* Wound up by reloading rather than by stopping: the stub holds both calls
      * send() makes -- the grader's and the turn's -- and only one of them can

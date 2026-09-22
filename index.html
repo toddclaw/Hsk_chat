@@ -1200,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v128 — 2026-09-22";
+const VERSION   = "v129 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2274,7 +2274,14 @@ async function turn(ctx) {
   // In a steering activity -- Ghost Words, Flashcard Chat -- "required" is the
   // first target that can still earn a credit today, which each row declares
   // with `steer: true` rather than being named here.
-  const required = steers ? ghostRequired(reuse) :
+  /* Only the words still owed. `reuse` renders as "please use these a lot"
+   * and until now it was the whole set, every turn -- so after three of five
+   * were banked the partner was still being told to lean on all five,
+   * including any that had finished the set outright. The hard requirement
+   * already narrowed (ghostRequired skips what is banked); the soft steer did
+   * not, and the soft steer is most of what the model acts on. */
+  const steerable = steers ? reuse.filter(e => !wordSettled(e)) : reuse;
+  const required = steers ? ghostRequired(steerable) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
   /* A story turn names its own model in ctx (storyStep(), and the discussing
    * phase send() sets up). Every other twenty turn -- opening, and every
@@ -2283,7 +2290,7 @@ async function turn(ctx) {
    * threaded through every caller. */
   const model = (ctx && ctx.model) || (currentActivity() === "twenty" ? twentyModel() : null);
 
-  const scratch = [{ role: "system", content: systemPrompt(offer, reuse, required, ctx) }]
+  const scratch = [{ role: "system", content: systemPrompt(offer, steerable, required, ctx) }]
     .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
   // What the learner just said, for the echo check below.
   const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
@@ -2892,24 +2899,14 @@ function renderConversation() {
       '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
       '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
       '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +
-      (flashcardDone(targets)
-        ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
-          '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
-          'correctly on ' + goal + ' separate days. Start a new ' +
-          escapeHtml(actLabel) + ' for the next set.</span><br>'
-        : flashcardDayDone(targets)
-          ? '<b style="color:var(--accent);font-size:20px">Day ' + rounds +
-            ' done \u2014 come back tomorrow.</b><br>' +
-            '<span style="color:var(--dim)">Every word in the set has today\'s ' +
-            'credit, and a word can only earn one a day. Day ' + (rounds + 1) +
-            ' of ' + goal + ' opens tomorrow \u2014 this conversation will still be ' +
-            'here, so you can pick it up where you left off. Keep chatting if you ' +
-            'want to; it just will not move the counters today.</span><br>'
-          : "") +
-      '<span style="color:var(--dim)">One use counts per day, and only the word ' +
-      'itself is judged — a mistake elsewhere in the sentence does not cost ' +
-      'you the credit. Using a word WRONG takes a day back off it, once a day ' +
-      'at most, which is why a count can go down.</span></div>';
+      /* Neither ending is announced here any more. Both are said at the foot
+       * of the log, where the composer they close is, and the banner scrolls
+       * away after two turns -- so saying it twice meant saying it once in
+       * the place nobody was looking. */
+      '<span style="color:var(--dim)">Ending a day on a correct use banks that ' +
+      'day for the word. Get one wrong and the word re-opens \u2014 keep going ' +
+      'until you end on a good one. Only the word itself is judged: a mistake ' +
+      'elsewhere in the sentence does not cost you the day.</span></div>';
   }
   /* Drills banner, like Ghost Words': what you are drilling stays on screen for
    * the whole conversation, because "which mistake was this again" is the
@@ -3000,6 +2997,11 @@ function renderConversation() {
   bindTip();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
+  /* Rendered, never stored. Banking the last word of the day must not write a
+   * row into the transcript: a re-grade that un-banks it would leave the row
+   * lying, and it would sync to every other device as a message nobody sent.
+   * Recomputed each render, so it appears and disappears with the state. */
+  log.insertAdjacentHTML("beforeend", setLockLine());
   log.scrollTop = log.scrollHeight;
 }
 
@@ -5130,11 +5132,12 @@ function fillActivities() {
       note = "Started before Ghost Words worked in sets, so it has no set — " +
         "keep chatting here, or start a new one to pick " + HSKPace.SET_SIZE + " words.";
     } else if (targets && targets.length) {
-      /* The same n/N the banner shows. This strip is visible while the banner
-       * has scrolled away, and "why is 苹果 still here" is the question it
-       * would otherwise leave unanswered. */
+      /* Ticked the same way the strip above the composer is, and for the same
+       * reason it stopped carrying counts: this was the last n/N left on the
+       * screen once the strip dropped its own, which made it the only number
+       * of its kind and therefore the one that got read as something else. */
       note = "Focus words: " + targets.slice(0, 6).map(e =>
-          e.w + " " + (e.ghostN || 0) + "/" + S.ghostUses).join("、") +
+          e.w + (wordSettled(e) ? " \u2713" : "")).join("、") +
         " — tap words in chat for pinyin/meaning";
     } else {
       note = ghostCandidates().length
@@ -6225,7 +6228,8 @@ function renderComposer() {
     (currentActivity() === "twenty" && !(c && c.side)) ||
     (currentActivity() === "drill" && (!drillTag() || drillDone())) ||
     (HSKPrompt.activityFor(currentActivity()).reuse === "chosen" &&
-      !flashcardWords().length && !legacySetChat());
+      !flashcardWords().length && !legacySetChat()) ||
+    setLocked();
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -6433,13 +6437,22 @@ function renderFlashcardSetControl(box) {
   /* Built as nodes rather than innerHTML: the words come out of the wordlists
    * and go nowhere near a template, so there is nothing here that has to be
    * remembered to escape. */
+  /* Two states, and no per-word count. The count was never actionable: every
+   * day the job is the same one -- use all five correctly, once each -- so
+   * knowing one word is on its first day and another on its third changed
+   * nothing the learner would do, while sitting next to the banner's own
+   * fraction and being read as the same kind of number. Set-level progress is
+   * the banner's job; this strip answers "which words do I still owe". */
   targets.forEach(e => {
+    const settled = wordSettled(e);
     const chip = document.createElement("span");
-    chip.className = "fcchip" + (e.ghostToday ? " spent" : "");
+    chip.className = "fcchip" + (settled ? " spent" : "");
     chip.append(e.w);
-    const n = document.createElement("i");
-    n.textContent = " " + (e.ghostN || 0) + "/" + S.ghostUses + (e.ghostToday ? " \u2713" : "");
-    chip.append(n);
+    if (settled) {
+      const n = document.createElement("i");
+      n.textContent = " \u2713";
+      chip.append(n);
+    }
     line.appendChild(chip);
   });
   if (flashcardDone(targets)) {
@@ -6769,6 +6782,44 @@ function flashcardRounds(targets) {
 function flashcardDone(targets) {
   const list = targets || flashcardTargets();
   return list.length > 0 && flashcardRounds(list) >= S.ghostUses;
+}
+
+/* Nothing left to do with this word: today is banked, or the whole threshold
+ * is met and it never needs working again. The ONE predicate the chips, the
+ * composer lock and the partner's steer list all read, so the three cannot
+ * disagree about whether a word is still owed -- which they did, in the
+ * direction that matters least to the code and most to the learner: the
+ * partner kept steering at words that could not earn anything. */
+function wordSettled(e) {
+  return !!e.ghostToday || ((e && e.ghostN) || 0) >= S.ghostUses;
+}
+
+/* What the locked composer is for. Says which of the two ends it is, and
+ * names the way out: a dead input box with no explanation reads as the app
+ * breaking rather than as the activity finishing. */
+function setLockLine() {
+  if (!setLocked()) return "";
+  const targets = flashcardTargets();
+  const label = HSKPrompt.activityFor(currentActivity()).label;
+  return '<div class="hint">' + (flashcardDone(targets)
+    ? '<b style="color:var(--accent);font-size:20px">Activity complete</b><br>' +
+      "All " + targets.length + " words banked on " + S.ghostUses +
+      " separate days. Start a new " + escapeHtml(label) + " for the next set."
+    : '<b style="color:var(--accent);font-size:20px">Done for today</b><br>' +
+      "Every word in the set is banked. Come back tomorrow \u2014 this " +
+      "conversation will still be here. Go and do something else with today.") +
+    '<br><span style="color:var(--dim)">Typing is closed here until then. ' +
+    'Switch to Chat in the header if you want to keep talking.</span></div>';
+}
+
+/* The day is over for this set, or the set is finished. Both close the
+ * composer: an activity that has told you it stopped counting should not also
+ * invite you to keep typing at it. Switching to Chat in the header is the way
+ * out and opens a new conversation, so this locks the activity, not the app. */
+function setLocked() {
+  if (HSKPrompt.activityFor(currentActivity()).reuse !== "chosen") return false;
+  const targets = flashcardTargets();
+  return targets.length > 0 && targets.every(wordSettled);
 }
 
 /* Today is spent: every word in the set already has its one credit for the day,

@@ -490,34 +490,44 @@ check((gp([gturn(at(1, 10), true),
            gturn(at(2, 10), true),
            gturn(at(3, 10), true)])["说话"] || {}).n === 3,
   "three credits on three days count three");
+/* The rule is the LAST counting use of the day, not credit-and-demote
+ * arithmetic. A day whose last use was wrong is simply not banked, and a day
+ * already banked can never be taken away by a later day's slip. */
+const gwrong = (when) => gturn(when, false, { "说话": { used: true, ok: false } });
 check((gp([gturn(at(1, 10), true),
            gturn(at(2, 10), true),
-           gturn(at(3, 10), false,
-                 { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
-  "a wrong use demotes by one, it does not reset to zero");
-check((gp([gturn(at(1, 10), false,
-                 { "说话": { used: true, ok: false } })])["说话"] || {}).n === 0,
-  "a demotion floors at zero rather than going negative");
+           gwrong(at(3, 10))])["说话"] || {}).n === 2,
+  "a wrong day is not banked, and does not touch the days already banked");
+check((gp([gwrong(at(1, 10))])["说话"] || {}).n === 0,
+  "a word only ever used wrong sits at zero rather than going negative");
 check((gp([gturn(at(1, 10), true),
-           gturn(at(1, 12), false,
-                 { "说话": { used: true, ok: false } }),
-           gturn(at(1, 14), true)])["说话"] || {}).n === 0,
-  "a demotion followed by a same-day success does not re-earn that day");
-// The cap runs both ways. Uncapped, this would be 0 -- three days of work undone
-// in one afternoon, which is the reset rule RESEARCH.md rejects.
-const gwrong = (when) => gturn(when, false, { "说话": { used: true, ok: false } });
+           gwrong(at(1, 12)),
+           gturn(at(1, 14), true)])["说话"] || {}).n === 1,
+  "a slip re-opens the day and a later correct use banks it");
+check((gp([gturn(at(1, 10), true),
+           gwrong(at(1, 12))])["说话"] || {}).n === 0,
+  "and ending the day wrong loses it, however well the day started");
+/* The case the old two-counter rule could not express: the second slip was
+ * free under the per-day demotion cap, so this banked the day. */
+check((gp([gturn(at(1, 10), true), gwrong(at(1, 11)),
+           gturn(at(1, 12), true), gwrong(at(1, 13))])["说话"] || {}).n === 0,
+  "right-wrong-right-wrong does not bank the day");
 check((gp([gturn(at(1, 10), true),
            gturn(at(2, 10), true),
            gturn(at(3, 10), true),
            gwrong(at(4, 10)), gwrong(at(4, 12)),
-           gwrong(at(4, 14))])["说话"] || {}).n === 2,
-  "three wrong uses in one day cost one credit, not three");
+           gwrong(at(4, 14))])["说话"] || {}).n === 3,
+  "three wrong uses in one day cost that day only, and it was never earned");
 check((gp([gturn(at(1, 10), true),
            gturn(at(2, 10), true),
            gturn(at(3, 10), true),
            gwrong(at(4, 10)),
-           gwrong(at(5, 10))])["说话"] || {}).n === 1,
-  "and wrong uses on two days cost two");
+           gwrong(at(5, 10))])["说话"] || {}).n === 3,
+  "and a bad day cannot reach back into a good one");
+check((gp([gturn(at(1, 10), true),
+           gturn(at(2, 10), true),
+           gwrong(at(3, 10))])["说话"] || {}).last === "2026-09-02",
+  "last names the most recent BANKED day, not the most recent use");
 check((gp([gturn(at(3, 10), true),
            gturn(at(1, 10), false,
                  { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
