@@ -308,7 +308,6 @@
     return focus.length ? focus : flashcardsOf(msgs);
   }
 
-  function flashcardThemeOf(msgs) { return markerText(msgs, "flashcardTheme"); }
 
   /* Share of a level's running text a given set of words covers, 0..1.
    *
@@ -365,7 +364,6 @@
     setRounds: setRounds, reservedWords: reservedWords,
     SET_SEP: SET_SEP, SET_ROLE: SET_ROLE, FOCUS_ROLE: FOCUS_ROLE,
     flashcardsOf: flashcardsOf, focusOf: focusOf, setWordsOf: setWordsOf,
-    flashcardThemeOf: flashcardThemeOf,
     buildPool: buildPool, countHan: countHan, earn: earn, slate: slate, spot: spot, isNew: isNew,
     ZIPF_EXP: ZIPF_EXP,
     /* The move-up recommendation fires here. 98%, the published "comfortable

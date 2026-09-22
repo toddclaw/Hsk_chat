@@ -22,8 +22,12 @@
   var SAMPLES = 3;
 
   /* Every activity, always, so the brief can carry an explicit zero for the
-   * ones untouched. Kept in step with prompt.js ACTIVITIES by report.test.js. */
-  var ACTIVITY_IDS = ["chat", "focused", "drill", "story", "twenty"];
+   * ones untouched -- and an id missing here is not merely absent from the
+   * brief, brief() drops those conversations entirely (`activities[id] ===
+   * undefined` below). "flashcard" was missing for the whole life
+   * of Flashcard Chat, so every one of those conversations went uncounted. Held in step with prompt.js ACTIVITIES by
+   * report.test.js, which it claimed to be before and was not. */
+  var ACTIVITY_IDS = ["chat", "focused", "drill", "story", "twenty", "flashcard"];
 
   var TAGS_SHOWN = 3;
 
