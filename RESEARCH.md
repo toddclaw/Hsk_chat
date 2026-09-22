@@ -765,6 +765,91 @@ Two smaller findings:
 - **Name the rule, not the edit.** Told to tag what was *fixed*, a missing measure word reads
   as a word being added. The instruction says to tag the rule that was broken.
 
+### The grader is 27 points harsher without the conversation
+
+**Measured, and it retires a standing puzzle.** `grade()` takes a `context` block — the
+previous four turns — and production has always passed it. A re-grade benchmark that omits it
+is measuring a grader the app does not ship.
+
+`tools/grade-order-ab.js`, 208 blind-labelled real sentences, three passes, `qwen3-235b`, the
+shipped prompt both times. The only difference is the context block.
+
+| | recall | specificity |
+| --- | --- | --- |
+| no context | 86% | **61%** |
+| with context | 83% | **88%** |
+| stored production verdicts | 83% | 86% |
+
+Specificity moves 27 points, p < 0.001. Recall does not move. With context the fresh run is
+indistinguishable from production's own stored verdicts (88% against 86%, p = 0.75), so the
+context arm is a faithful reproduction and the no-context arm is not.
+
+**This explains why `grader-bench.js` leans harsh.** That benchmark scores 66% specificity on
+MuCGEC and the discrepancy against real traffic has been recorded here as a property of the
+corpus — advanced learner essay prose, minimally repaired. It is simpler than that: MuCGEC
+sentences are standalone, so there is no context to pass, and no-context grading measures 61%
+on *our own* sentences. 66 and 61 are the same number.
+
+| benchmark | context | specificity |
+| --- | --- | --- |
+| grader-bench, MuCGEC | none available | 66% |
+| this study, real sentences | withheld | 61% |
+| this study, real sentences | passed | 88% |
+| production, stored | passed | 86% |
+
+The harshness is the missing context, not the corpus. It does not reproduce on real sentences
+because on real sentences the grader is given the conversation.
+
+The rule this leaves: **a fresh re-grade of learner sentences must pass context or it is not
+the shipped grader.** grader-bench cannot, which is a real ceiling on what that benchmark can
+say about specificity — quote its recall, and take its false-alarm rate as an upper bound.
+
+### Tags that name a character the sentence does not contain
+
+**Measured on stored verdicts, no API calls.** Nine of the seventeen tags ARE a character —
+了, 过, 着, 在, 不/没, 的/地/得, 比, 把, 被 — so the rule they name cannot have been broken
+unless that character is in the sentence or in the correction. Across 299 real production
+verdicts, **8 of 44 marker-tag firings named a character present in neither**. Five were 了.
+
+Reported from real use, and the complaint was that it undermines confidence in the whole
+verdict:
+
+| the learner wrote | the grader's own correction | what it said |
+| --- | --- | --- |
+| 你能带水**吧**？ | 你能带水**吗**？ | "The aspect particle 了…" |
+| 我一定**想**去 | 我一定**要**去 | "了 is missing after 要" |
+| 我们前天很忙，**不会**去公园 | **没有**去公园 | tagged `aspect-guo`, note never mentions 过 |
+
+In every one the grader found a real fault and fixed it correctly, then filed it under a
+heading with no basis in either sentence. **The taxonomy was not missing a code**: 不会→没有 is
+`negation-bu-mei` and 把/被 confusion is `bei-construction`, both already in the list. This is
+misfiling, not a gap, so making the list longer or shorter does not address it.
+
+Two candidate causes were measured and neither survived:
+
+| hypothesis | test | result |
+| --- | --- | --- |
+| the label is committed before its justification exists — `{"tag":"","note":""}` emits the tag first | flip to `{"note":"","tag":""}`, 208 sentences x 3 passes x 2 arms | 10% vs 7% ghosts, **p = 0.56**; recall and specificity unmoved |
+| the marker is being read out of the conversation context | compare ghost and legitimate firings for the marker's presence in context | 6/8 ghosts **and 32/36 legitimate** firings have it; 了 is in nearly every exchange and the test cannot discriminate |
+
+The rate is stable but small — 9% of marker firings in a faithful reproduction, ~2% of
+sentences written, matching the 2.7% in stored history. Every ghost-rate comparison came back
+non-significant (p ≥ 0.09), so this is not a defect prompt work can move at any sample size
+worth buying.
+
+What shipped is a parser guard, `HSKPrompt.markerMissing()`, next to the self-consistency
+checks `parseGrade()` already runs — `noEdit`, the recomputed `ok`, the unknown-tag drop. A
+verdict that contradicts itself does not reach the screen. Replayed over all 299 stored
+verdicts it drops exactly those 8 headings, flips **no** verdict to a green tick, and costs
+**zero** drill material: the dropped entries carried no extracted drill word in any of the 8
+cases, while the correct diagnosis was already sitting beside them. All three sentences the
+learner complained about already carried the right drill word on their `unnatural` entry —
+我, 想, 吧 — under a 了 heading that was hiding it.
+
+The rule this leaves: **when a model must choose a label from a closed list, check the label
+against the text rather than arguing with the model about it.** The check is free and the
+argument is not.
+
 ### A response shape in the system role governs the whole conversation
 
 **Measured, after it shipped broken.** Making the grammar check verdict-first put *"start with
@@ -1721,6 +1806,26 @@ the shipped prompt answers in English **109 times in 110**, so the failure is a 
 tail and the rule has nothing to improve. Not shipped: a rule that cannot be shown to
 do anything is a line that has to win against the model's habit on every later call,
 for no measured benefit.
+
+### Reordering the grader's JSON so the reason precedes the label
+
+**Measured, and a null result.** The grader emits `{"tag":"","note":""}` per error, so the
+label is produced before the sentence justifying it — a plausible mechanism for the misfiled
+headings above, and the kind of ordering problem this study has found real elsewhere (the
+partner's reply is planned before it is written for exactly this reason). Flipping the pair to
+`{"note":"","tag":""}` changes nothing else.
+
+| arm | ghost firings | recall | specificity |
+| --- | --- | --- | --- |
+| shipped | 8/77 (10%) | 83% | 88% |
+| note first | 5/75 (7%) | 82% | 88% |
+
+208 sentences, three passes, two arms, with context. p = 0.56 on the ghost rate and no movement
+anywhere else. Run once more without context, both arms tie exactly at 4/83.
+
+Not shipped. The move-the-constraint-forward result is real where the model's *choice* is the
+failure; here the choice is already made from a closed list and reordering two fields does not
+revisit it.
 
 ### Sharpening a prompt rule by naming the failure
 

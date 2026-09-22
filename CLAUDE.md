@@ -86,8 +86,15 @@ The grader has three benchmarks, and the one that counts is real traffic.
   turns from the database, qwen activities only. `nativeFrame` scores **86%
   strict recall at 87% specificity for $0.0001 a turn**, and is the arm to use.
 - `tools/grader-bench.js` — MuCGEC learner error, human ground truth. 90%
-  recall, 66% specificity. Leans harsh, and that harshness does not reproduce on
-  real sentences.
+  recall, 66% specificity. **The harshness is the missing context, not the
+  corpus** — MuCGEC sentences are standalone, and withholding the context block
+  from real sentences reproduces it at 61%. Quote its recall; treat its
+  false-alarm rate as an upper bound. RESEARCH.md, "The grader is 27 points
+  harsher without the conversation".
+- `tools/grade-order-ab.js` — re-grades the 208 blind-labelled real sentences,
+  two prompt arms, scoring a mechanical ghost-tag rate as well as recall and
+  specificity. **Passes `context`, and anything that re-grades learner sentences
+  must**: without it specificity is 61% against production's 86%.
 - `tools/replay-partner.js` — fresh partner turns of the RIGHT kind, made by
   replaying Todd's own learner turns in context through the app's prompt. 282
   turns for $0.016, and it confirms the real-corpus numbers within a few points.

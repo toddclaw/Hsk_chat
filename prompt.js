@@ -901,6 +901,52 @@
     ["unnatural",              "unnatural phrasing",        "给我水 → 请给我一杯水",  "地道的说法"]
   ];
 
+  /* Nine of the seventeen tags ARE a character: the rule they name cannot have
+   * been broken unless that character is in the sentence or in the fix.
+   *
+   * This is the one self-check the taxonomy affords, and it is worth having
+   * because the model reaches for these tags when it has no code for the defect
+   * it actually found. Measured over 299 real production verdicts: 8 of 44
+   * marker-tag firings named a character that appears in NEITHER the learner's
+   * sentence nor the grader's own correction -- five of them 了, which is row
+   * two of the list and the most salient particle in learner Chinese. In every
+   * one the grader had already fixed a real fault (吧 for 吗, 想 for 要, a wrong
+   * character) and then wrote a note rationalising the tag it had emitted
+   * first: the JSON is {"tag":"","note":""}, so the label is committed before
+   * the reason for it exists.
+   *
+   * The learner sees the tag as a bold heading, so a rationalised 了 reads as
+   * "you got 了 wrong" on a sentence with no 了 in it, and that is the kind of
+   * thing that costs a grader its credibility even when the correction is
+   * right.
+   *
+   * Deliberately NOT a prompt fix. CLAUDE.md is explicit that a prompt edit
+   * needs a real-model A/B, four of them in this study moved the number the
+   * wrong way, and the parser is already where this app declines to trust the
+   * model about itself -- noEdit, the recomputed ok, the unknown-tag drop. */
+  var TAG_MARK = {
+    "aspect-le":         ["了"],
+    "aspect-guo":        ["过"],
+    "aspect-zhe":        ["着"],
+    "aspect-zai":        ["在"],
+    "negation-bu-mei":   ["不", "没"],
+    "de-particles":      ["的", "地", "得"],
+    "comparison-bi":     ["比"],
+    "ba-construction":   ["把"],
+    "bei-construction":  ["被"]
+  };
+
+  /* True when `tag` names a character that is in neither the sentence nor the
+   * correction, i.e. the verdict contradicts itself. False for every tag that
+   * names no character, so it can be asked about all seventeen. Fails open on a
+   * missing correction: an empty `better` is not evidence against the tag. */
+  function markerMissing(tag, text, better) {
+    var marks = TAG_MARK[tag];
+    if (!marks) return false;
+    var hay = String(text || "") + String(better || "");
+    return !marks.some(function (c) { return hay.indexOf(c) !== -1; });
+  }
+
   var ERROR_TAGS = TAGS.map(function (r) { return r[0]; });
   var TAG_LABEL = {};
   TAGS.forEach(function (r) { TAG_LABEL[r[0]] = r[1]; });
@@ -1639,6 +1685,7 @@
               titlePrompt: titlePrompt,
               ERROR_TAGS: ERROR_TAGS, TAG_LABEL: TAG_LABEL, TAG_ZH: TAG_ZH,
               TAG_EG: TAG_EG, ERROR_CLASS_TAGS: ERROR_CLASS_TAGS,
+              TAG_MARK: TAG_MARK, markerMissing: markerMissing,
               GRADE_CATS: GRADE_CATS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPrompt = api;

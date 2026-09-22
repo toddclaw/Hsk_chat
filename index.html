@@ -1200,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v130 — 2026-09-22";
+const VERSION   = "v131 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3940,6 +3940,11 @@ function parseGrade(raw, text) {
   });
   const errors = noEdit ? [] : (Array.isArray(g.errors) ? g.errors : [])
     .filter(e => e && KNOWN_TAGS.has(e.tag))
+    /* And a tag whose own character is in neither the sentence nor the fix.
+     * Same reason as noEdit above: a verdict that contradicts itself must not
+     * reach the screen. See TAG_MARK in prompt.js for what it is worth on real
+     * traffic. The correction still shows -- only the misfiled heading goes. */
+    .filter(e => !HSKPrompt.markerMissing(e.tag, text, g.better))
     .map(e => ({ tag: e.tag, note: String(e.note || "") }));
   /* ok is recomputed rather than trusted. A model that lists errors and still
    * says ok:true would show a green tick over a red detail sheet. */

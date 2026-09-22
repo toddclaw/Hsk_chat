@@ -1408,5 +1408,26 @@ check(P.activityFor("flashcard") === fcRow,
 check(typeof (fcRow && fcRow.note) === "string" && fcRow.note.length > 0,
   "and it explains itself in the activity note");
 
+
+/* The grader names a rule, and for nine of the seventeen tags the rule IS a
+ * character. A verdict that tags 了 when 了 is in neither the sentence nor the
+ * correction is not naming a rule, it is rationalising a tag it already
+ * emitted -- measured at 8 of 44 marker-tag firings across 299 real production
+ * verdicts, 5 of them 了. `markerMissing` is what lets the parser drop those,
+ * next to the self-consistency guards it already runs. */
+check(typeof P.markerMissing === "function", "markerMissing is exported");
+check(P.markerMissing("aspect-le", "\u6211\u5403\u996d", "\u6211\u5403\u996d\u5427") === true,
+  "a \u4e86 tag with no \u4e86 in the sentence or the correction is unjustified");
+check(P.markerMissing("aspect-le", "\u51e0\u5929\u524d\u6211\u4e70\u4e24\u672c\u4e66", "\u51e0\u5929\u524d\u6211\u4e70\u4e86\u4e24\u672c\u4e66") === false,
+  "a missing \u4e86 the correction inserts is a real \u4e86 error");
+check(P.markerMissing("aspect-le", "\u5f88\u9ad8\u5174\u4e86", "\u5f88\u9ad8\u5174") === false,
+  "an extra \u4e86 the correction deletes is a real \u4e86 error");
+check(P.markerMissing("de-particles", "\u4ed6\u8bf4\u7684\u5f88\u597d", "\u4ed6\u8bf4\u5f97\u5f88\u597d") === false,
+  "\u7684/\u5730/\u5f97 counts any of its three characters");
+check(P.markerMissing("unnatural", "\u6211\u5403\u996d", "\u8bf7\u6211\u5403\u996d") === false,
+  "a tag that names no character is never dropped");
+check(P.markerMissing("wrong-word", "abc", "def") === false,
+  "and neither is one outside the marker set");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
