@@ -433,6 +433,12 @@ const gturn = (when, ok, ghost) => ({
   grade: ghost ? { ok: ok, errors: [], ghost: ghost } : { ok: ok, errors: [] }
 });
 const saysWord = () => ["说话"];
+/* Local wall-clock, converted to the ISO stamp a stored message carries.
+ * dayKey() asks about the learner's local day, so at(1, 18) is
+ * the 1st in Denver and the 2nd in Auckland -- a fixture that means "twice on
+ * one day" has to be built from local components to mean it anywhere. Run this
+ * file under TZ=Pacific/Auckland after touching anything that counts days. */
+const at = (day, hour) => new Date(2026, 8, day, hour, 0, 0).toISOString();
 
 check(M.ghostVerdict({ ok: true, errors: [] }, "说话") === "ok",
   "no verdict and a clean sentence credits the word");
@@ -455,58 +461,93 @@ check(M.ghostVerdict({ ok: true, ghost: { "米饭": { used: true, ok: false } } 
   "说话") === "ok",
   "a verdict about another word does not decide this one");
 
+/* A wrong verdict on a word the correction KEPT. Real verdicts, 2026-09-20:
+ * three sentences in one flashcard set came back wrong on 再 while every
+ * correction the grader offered still contained 再 -- what it actually moved
+ * was the modal next to it, 不 → 不要 → 不用. A repair that leaves the word
+ * standing is not a repair of that word. */
+check(M.ghostVerdict({ ok: false, better: "我希望明天我不要再找这本书。",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "none",
+  "a word the grader's own correction kept is not demoted");
+check(M.ghostVerdict({ ok: false, better: "我希望明天我不用找这本书。",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "wrong",
+  "a word the correction removed is still demoted");
+check(M.ghostVerdict({ ok: false, better: "",
+  ghost: { "再": { used: true, ok: false } } }, "再") === "wrong",
+  "a failed sentence with no correction offered demotes as it always did");
+check(M.ghostVerdict({ ok: false, better: "我不要再找这本书。",
+  ghost: { "再": { used: true, ok: true } } }, "再") === "ok",
+  "and the rule is one-sided: a kept word that was used correctly still credits");
+
 const gp = (turns) => M.ghostProgress(turns, saysWord);
 
-check((gp([gturn("2026-09-01T10:00:00Z", true)])["说话"] || {}).n === 1,
+check((gp([gturn(at(1, 10), true)])["说话"] || {}).n === 1,
   "one clean message is one credit");
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-01T18:00:00Z", true)])["说话"] || {}).n === 1,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(1, 18), true)])["说话"] || {}).n === 1,
   "two credits on the same day count once");
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-02T10:00:00Z", true),
-           gturn("2026-09-03T10:00:00Z", true)])["说话"] || {}).n === 3,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(2, 10), true),
+           gturn(at(3, 10), true)])["说话"] || {}).n === 3,
   "three credits on three days count three");
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-02T10:00:00Z", true),
-           gturn("2026-09-03T10:00:00Z", false,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(2, 10), true),
+           gturn(at(3, 10), false,
                  { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
   "a wrong use demotes by one, it does not reset to zero");
-check((gp([gturn("2026-09-01T10:00:00Z", false,
+check((gp([gturn(at(1, 10), false,
                  { "说话": { used: true, ok: false } })])["说话"] || {}).n === 0,
   "a demotion floors at zero rather than going negative");
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-01T12:00:00Z", false,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(1, 12), false,
                  { "说话": { used: true, ok: false } }),
-           gturn("2026-09-01T14:00:00Z", true)])["说话"] || {}).n === 0,
+           gturn(at(1, 14), true)])["说话"] || {}).n === 0,
   "a demotion followed by a same-day success does not re-earn that day");
 // The cap runs both ways. Uncapped, this would be 0 -- three days of work undone
 // in one afternoon, which is the reset rule RESEARCH.md rejects.
 const gwrong = (when) => gturn(when, false, { "说话": { used: true, ok: false } });
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-02T10:00:00Z", true),
-           gturn("2026-09-03T10:00:00Z", true),
-           gwrong("2026-09-04T10:00:00Z"), gwrong("2026-09-04T12:00:00Z"),
-           gwrong("2026-09-04T14:00:00Z")])["说话"] || {}).n === 2,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(2, 10), true),
+           gturn(at(3, 10), true),
+           gwrong(at(4, 10)), gwrong(at(4, 12)),
+           gwrong(at(4, 14))])["说话"] || {}).n === 2,
   "three wrong uses in one day cost one credit, not three");
-check((gp([gturn("2026-09-01T10:00:00Z", true),
-           gturn("2026-09-02T10:00:00Z", true),
-           gturn("2026-09-03T10:00:00Z", true),
-           gwrong("2026-09-04T10:00:00Z"),
-           gwrong("2026-09-05T10:00:00Z")])["说话"] || {}).n === 1,
+check((gp([gturn(at(1, 10), true),
+           gturn(at(2, 10), true),
+           gturn(at(3, 10), true),
+           gwrong(at(4, 10)),
+           gwrong(at(5, 10))])["说话"] || {}).n === 1,
   "and wrong uses on two days cost two");
-check((gp([gturn("2026-09-03T10:00:00Z", true),
-           gturn("2026-09-01T10:00:00Z", false,
+check((gp([gturn(at(3, 10), true),
+           gturn(at(1, 10), false,
                  { "说话": { used: true, ok: false } })])["说话"] || {}).n === 1,
   "the walk is ordered by timestamp, not by array order");
-check((gp([gturn("2026-09-01T10:00:00Z", true)])["说话"] || {}).last === "2026-09-01",
+check((gp([gturn(at(1, 10), true)])["说话"] || {}).last === "2026-09-01",
   "last names the most recently credited day");
-check(M.ghostProgress([{ role: "user", created_at: "2026-09-01T10:00:00Z",
+check(M.ghostProgress([{ role: "user", created_at: at(1, 10),
                          grade: { ok: true, errors: [] } }],
   () => ["说话", "说话"])["说话"].n === 1,
   "a word repeated inside one message earns that message's single credit once");
 check(Object.keys(gp([])).length === 0, "no messages is no progress");
-check(M.dayKey("2026-09-01T10:00:00Z") === "2026-09-01",
+check(M.dayKey(at(1, 10)) === "2026-09-01",
   "dayKey is exported for the caller that needs today's key");
+check(M.dayKey(null) === "" && M.dayKey("") === "" && M.dayKey("not a date") === "",
+  "dayKey answers \"\" rather than a garbage prefix");
+
+/* Built from LOCAL components on purpose, so these say the same thing on any
+ * machine. The reported bug: an evening session west of Greenwich is already
+ * tomorrow in UTC, so it was credited to a day that had not happened and the
+ * word still read as banked the whole of the next morning. */
+const evening = new Date(2026, 8, 18, 21, 0, 0);          // local 9pm, 18 Sept
+const nextMorning = new Date(2026, 8, 19, 9, 0, 0);       // local 9am, 19 Sept
+check(M.dayKey(evening.toISOString()) === "2026-09-18",
+  "dayKey is the learner's local day, not the UTC one");
+check(gp([gturn(evening.toISOString(), true),
+          gturn(nextMorning.toISOString(), true)])["说话"].n === 2,
+  "an evening use and the next morning's are two days, not one");
+check(gp([gturn(new Date(2026, 8, 18, 8, 0, 0).toISOString(), true),
+          gturn(evening.toISOString(), true)])["说话"].n === 1,
+  "morning and evening of one local day are still a single credit");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

@@ -371,8 +371,43 @@
        * rather than branched on in turn() so the next activity that wants it
        * says so on its own row. */
       newWords: false,
+      /* The partner does not merely prefer these words, it is required to work
+       * at one. Declared here rather than branched on in turn() and
+       * gradeTurn(), which is why Ghost Words now says it too. */
+      steer: true,
       note: "Ghost Words: practice words you've learned but never used. " +
         "The partner asks questions that need these words in the answer."
+    },
+    flashcard: {
+      label: "Flashcard Chat",
+      /* Two steps. The learner presses a button, gets five to seven words out
+       * of their own history, and studies them in Pleco or Anki; then they
+       * come back and this rule makes the partner build a conversation those
+       * words are the natural answer to.
+       *
+       * The instruction is Ghost Words' -- the same job, a different pool --
+       * and deliberately the same words, because that string is what the
+       * ghost-grammar A/B was run against. A paraphrase here would be an
+       * unmeasured prompt change for no reason. */
+      rules: [
+        "学生刚刚用卡片学了下面这些词，现在要练习自己说出来。" +
+        "请你带着话题往这些词的方向走，问一些必须用到这些词才好回答的问题，" +
+        "让学生自己说出来。如果学生没有用这些词，继续问，直到他们用到。"
+      ],
+      names: null,
+      reuse: "chosen",
+      gen: "turn",
+      converse: true,
+      /* Practice of what the learner has just studied. A word they have never
+       * seen is a second thing to get wrong in a sentence that is already
+       * hard -- the same reasoning as Ghost Words above. */
+      newWords: false,
+      /* The partner does not merely prefer these words, it is required to work
+       * at one. Declared here rather than branched on in turn() and
+       * gradeTurn(), which is why Ghost Words now says it too. */
+      steer: true,
+      note: "Flashcard Chat: get five words from your own history, study them " +
+        "in Pleco or Anki, then come back and use them in conversation."
     },
     drill: {
       label: "Drills",
@@ -647,7 +682,23 @@
     /* Turn-taking. Suppressed for an activity that is not a conversation --
      * inside a story these would make every segment end by questioning the
      * learner, which is the opposite of listening to a story. */
-    if (act.converse) {
+    if (act.converse && opts.opening) {
+      /* The opening turn has nothing to react to, and the three reactive rules
+       * below do not merely fail to help there -- they actively produce the
+       * bug. "先回答学生说的话" is an instruction to answer something the
+       * student has not said, so the model invents what it is answering, and
+       * rule 6's "学生刚问过的问题" tells it the student has just asked
+       * something. The result reads as the tail of a conversation the learner
+       * cannot see, and was reported as exactly that: a new Ghost Words chat
+       * opening mid-thread. Nothing was leaking between conversations -- an
+       * opening request carries the system prompt and no messages at all.
+       *
+       * Same defect and same fix as 20 Questions' two roles above, which were
+       * measured live: a reactive-only rule gives the model nothing to say
+       * when there is no turn to react to. */
+      rules.push(convert("现在是你们的第一句话，学生还没有说话。先打个招呼，再问一个问题。") +
+                 convert("不要提以前的事，也不要装作你们以前说过话。"));
+    } else if (act.converse) {
       rules.push(convert("先回答学生说的话，再说一点你自己的事，最后问一个新问题。"));
       rules.push(convert("不要把学生的话重复一遍。学生刚问过的问题，不要再问他。"));
       /* Correcting is not the same failure mode as echoing: an echo hands back

@@ -222,6 +222,23 @@ header button{padding:8px 10px; flex:0 0 auto}
 }
 #starters::-webkit-scrollbar{display:none}
 #starters:empty{display:none}
+/* Flashcard Chat's status, pinned here rather than in the banner: it is read on
+   every turn, and the banner is two messages from the top by then. Scrolls
+   sideways with the strip it lives in rather than wrapping, so it cannot grow
+   tall enough to eat the composer on a phone. */
+#starters .fcstatus{
+  flex:1 1 auto; min-width:0; white-space:nowrap; overflow-x:auto;
+  scrollbar-width:none; font-size:19px; color:var(--accent); font-weight:600;
+  align-self:center;
+}
+#starters .fcstatus::-webkit-scrollbar{display:none}
+#starters .fcchip{display:inline-block; margin-right:12px}
+#starters .fcchip.spent{opacity:.55}
+#starters .fcstatus i{font-style:normal; font-size:14px; color:var(--dim); font-weight:400}
+/* The exports sit in the banner now. Sized down from a primary action: they are
+   pressed once a day at most, and the banner is not a place for two big
+   buttons. */
+.hint button.fcx{font-size:14px; padding:5px 10px; min-height:0; margin:6px 6px 8px 0}
 #starters button{
   flex:0 0 auto; white-space:nowrap; font-size:17px; padding:7px 13px;
   min-height:0; border-radius:999px; color:var(--ink);
@@ -1146,7 +1163,7 @@ const GATE_MAX_TOKENS = 4000;
  * and nothing in twenty-four rounds measured a grader against it. A story
  * segment is also four times longer than a chat turn, so it would pay the
  * reasoning model's wait several times over to police the better writer. */
-const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false };
+const GATED = { chat: true, focused: true, twenty: true, drill: true, story: false, flashcard: true };
 
 /* Planning applies to the two free-form activities and no others.
  *
@@ -1156,7 +1173,9 @@ const GATED = { chat: true, focused: true, twenty: true, drill: true, story: fal
  * so a planner would be planning something the prompt has already decided, and
  * drill turns produce no errors in production anyway. Story is a narrative on a
  * stronger model, not a reply to a learner, and this prompt assumes a reply. */
-const PLANNED = { chat: true, focused: true };
+// Flashcard Chat is free-form and partner-chosen at the sentence level, steered
+// at a reuse list, exactly the shape "focused" (Ghost Words) already plans for.
+const PLANNED = { chat: true, focused: true, flashcard: true };
 
 /* HSK 3.0 bands, cumulative: each file contains every word from the levels
  * below it. Level 7 is the combined 7-9 band. */
@@ -1176,7 +1195,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v116 — 2026-09-18";
+const VERSION   = "v124 — 2026-09-20";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1456,6 +1475,12 @@ function needsSoFar(upTo) {
   const out = [];
   for (const t of S.history) {
     (t.needs || []).forEach(n => {
+      /* A word the learner said No to is not legal here, and this is the only
+       * place that can enforce it: this list feeds BOTH the lexicon turn()
+       * validates against and the one renderMessage() paints with, so filtering
+       * here blocks the word and marks it in one move. Without this, `state`
+       * was a flag with no reader and No did nothing at all. */
+      if (n.state === "rejected") return;
       if (!out.some(e => e.w === n.w)) out.push({ w: n.w, p: n.p, d: n.d });
     });
     if (upTo && t === upTo) break;
@@ -1563,6 +1588,21 @@ async function loadDict() {
 
 function lengthSpec() { return HSKPrompt.LENGTHS[S.replyLength] || HSKPrompt.LENGTHS.short; }
 
+/* Is the reply being generated the first thing anyone says in this conversation?
+ *
+ * Not S.history.length === 0, which this was and which is wrong for every
+ * activity that writes a marker before it opens: Flashcard Chat pushes its set
+ * and its theme into the history and only then calls openingTurn(), so the
+ * array is two long and `opening` was false on the one turn it exists to
+ * describe. Story time and drills write markers the same way.
+ *
+ * The right question is whether the MODEL has been shown anything, and that is
+ * exactly windowed()'s filter -- markers are not roles it sends. Asked here so
+ * the two systemPrompt() branches cannot drift apart on the answer. */
+function isOpeningTurn() {
+  return !S.history.some(t => t.role === "user" || t.role === "assistant");
+}
+
 /* Convert app-authored Chinese (prompt rules, samples, starters) word by word.
  * Word-level rather than character-level because that is where the ambiguity
  * lives: 干 is 幹 or 乾 depending on the word it sits in, and the wordlist
@@ -1614,7 +1654,7 @@ function systemPrompt(offer, reuse, required, ctx) {
       drillWord: currentActivity() === "drill" ? drillWord() : "",
       side: currentActivity() === "twenty" ? (cActRules && cActRules.side) : null,
       secret: currentActivity() === "twenty" ? (cActRules && cActRules.secret) : null,
-      opening: S.history.length === 0,
+      opening: isOpeningTurn(),
       convert: toScript
     });
     if (mech.length) out += "\n\n" + mech.join("\n");
@@ -1649,7 +1689,7 @@ function defaultPrompt(offer, reuse, required, ctx) {
     drillWord: currentActivity() === "drill" ? drillWord() : "",
     side: currentActivity() === "twenty" ? (c && c.side) : null,
     secret: currentActivity() === "twenty" ? (c && c.secret) : null,
-    opening: S.history.length === 0,
+    opening: isOpeningTurn(),
     // wordList() is already in the active script, so it must not be converted
     // a second time; build() appends it after the conversion hook.
     words: effectiveMode() === "with-list" ? wordList() : "",
@@ -2159,6 +2199,10 @@ function windowed(excludeKind) {
  * frequency of their own. Six either way, matching what the prompt has always
  * been given. */
 function reuseFor(activity) {
+  /* Flashcard Chat's list is the set the learner chose and studied, read
+   * straight out of the transcript -- not a ranking over anything, which is
+   * what makes it stable for the whole conversation. */
+  if (HSKPrompt.activityFor(activity).reuse === "chosen") return flashcardTargets();
   if (HSKPrompt.activityFor(activity).reuse === "unused") {
     const r = readiness();
     /* Commonest-first, and NOT reordered by what has been credited today.
@@ -2213,7 +2257,7 @@ async function turn(ctx) {
    * in an activity that practises what the learner already has. Ghost Words and
    * Drills both say so on their own row (`newWords: false`) rather than being
    * named here, so the next one that needs it needs no edit to this line. */
-  const isFocused = currentActivity() === "focused";
+  const steers = HSKPrompt.activityFor(currentActivity()).steer === true;
   /* Captured now, not read later. A turn takes seconds and a story segment most
    * of a minute, and the learner can switch chats inside that window -- so by
    * the time the gate runs, currentActivity() is whatever they navigated TO.
@@ -2238,8 +2282,10 @@ async function turn(ctx) {
     : [];
   const reuse = reuseFor(currentActivity());
   // After enough declined offers the top word becomes a condition of the reply.
-  // In Ghost Words, "required" is the first unused word to push production.
-  const required = isFocused ? ghostRequired(reuse) :
+  // In a steering activity -- Ghost Words, Flashcard Chat -- "required" is the
+  // first target that can still earn a credit today, which each row declares
+  // with `steer: true` rather than being named here.
+  const required = steers ? ghostRequired(reuse) :
     (offer.length && HSKPace.shouldForce(b.declines)) ? offer[0].w : "";
   /* A story turn names its own model in ctx (storyStep(), and the discussing
    * phase send() sets up). Every other twenty turn -- opening, and every
@@ -2584,7 +2630,8 @@ function renderNotice(turnObj) {
  * transcript has to know to skip them -- here, and in the is-the-log-empty
  * check in renderAll(). */
 const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord",
-                              "drillTip", "drillEnd"]);
+                              "drillTip", "drillEnd",
+                              "flashcards", "flashcardTheme"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -2730,7 +2777,22 @@ function renderMessage(turnObj, shownExtra) {
     yes.onclick = () => { acceptWord(n, turnObj.text); box.remove(); };
     const no = document.createElement("button");
     no.textContent = "No";
-    no.onclick = () => { n.state = "rejected"; persist(); box.remove(); };
+    /* "No" means do not say that to me, not say it and let me read it anyway.
+     * needsSoFar() above has already stopped the word being legal; this asks
+     * for the turn again without it, through the same path "Try again" uses.
+     *
+     * Only when the rejected word is in the NEWEST message. retryLast() rewinds
+     * to the last user turn, so calling it from a card further up the log would
+     * discard replies the learner never objected to. Rejecting an older one
+     * still blocks the word everywhere and repaints it as the violation it has
+     * now become -- which is why the else branch is a render, not nothing. */
+    no.onclick = () => {
+      n.state = "rejected";
+      persist();
+      box.remove();
+      if (!S.busy && S.history[S.history.length - 1] === turnObj) retryLast();
+      else renderAll();
+    };
     row.append(yes, no);
     el.appendChild(box);
   });
@@ -2794,11 +2856,74 @@ function renderConversation() {
         'One use counts per day, and only the word itself is judged \u2014 a mistake ' +
         'elsewhere in the sentence does not cost you the credit. \u2713 means today is ' +
         'already banked; a word that reaches ' + S.ghostUses + "/" + S.ghostUses +
-        ' is yours, and stays here until your next conversation.</span></div>';
+        ' is yours, and stays here until your next conversation. Using a word ' +
+        'WRONG takes a day back off it, once a day at most, which is why a ' +
+        'count can go down.</span></div>';
     }
     return '<div class="hint"><b>Ghost Words</b><br>No unused words yet.<br>' +
       'Turn on <b>Introduce words from the next level</b> in Settings \u2192 Learning, ' +
       'chat for a while, then switch back here.</div>';
+  }
+  /* Flashcard Chat's banner, like the two beside it: what you are working on
+   * stays on screen for the whole conversation.
+   *
+   * Rounds are derived -- min(ghostN) across the set, HSKPace.setRounds() --
+   * rather than counted anywhere, so a reload cannot lose one and two devices
+   * cannot disagree. A round is "every word used correctly once", and the ghost
+   * counter takes at most one credit per word per day, so a round cannot close
+   * in under a day.
+   *
+   * Which is why the label says Day and can lag the calendar: credit three
+   * words on Monday and two on Tuesday and "Day 1" ticks on Tuesday. It
+   * measures the SET, not the diary. Stated in the spec as a limitation rather
+   * than fixed, because counting practice days instead would be a third notion
+   * of progress on screen beside n/N and the round. */
+  function flashcardBanner() {
+    if (currentActivity() !== "flashcard") return "";
+    const targets = flashcardTargets();
+    if (!targets.length) return "";
+    const rounds = flashcardRounds(targets), goal = S.ghostUses;
+    const strip = [];
+    for (let i = 1; i <= goal; i++) {
+      if (i <= rounds) {
+        strip.push('<span style="margin-right:12px">Day ' + i + ' ✓</span>');
+      } else if (i === rounds + 1) {
+        const got = targets.filter(e => (e.ghostN || 0) >= i).length;
+        strip.push('<span style="margin-right:12px;color:var(--accent)">Day ' + i +
+          " · " + got + "/" + targets.length + "</span>");
+      } else {
+        strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
+      }
+    }
+    const theme = flashcardTheme();
+    /* The words themselves are NOT here any more: they live on the strip above
+     * the composer, which is pinned, because "how am I doing" is a question
+     * asked on every turn and this banner scrolls away after two of them. What
+     * stays here is what you ask for once a day at most -- the export, and
+     * where you are in the set. */
+    return '<div class="hint"><b>Flashcard Chat</b>' +
+      (theme ? " — " + escapeHtml(theme) : "") + "<br>" +
+      '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
+      '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
+      '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +
+      (flashcardDone(targets)
+        ? '<b style="color:var(--accent);font-size:20px">Activity Complete!</b><br>' +
+          '<span style="color:var(--dim)">All ' + targets.length + ' words used ' +
+          'correctly on ' + goal + ' separate days. Start a new Flashcard Chat ' +
+          'for the next set.</span><br>'
+        : flashcardDayDone(targets)
+          ? '<b style="color:var(--accent);font-size:20px">Day ' + rounds +
+            ' done \u2014 come back tomorrow.</b><br>' +
+            '<span style="color:var(--dim)">Every word in the set has today\'s ' +
+            'credit, and a word can only earn one a day. Day ' + (rounds + 1) +
+            ' of ' + goal + ' opens tomorrow \u2014 this conversation will still be ' +
+            'here, so you can pick it up where you left off. Keep chatting if you ' +
+            'want to; it just will not move the counters today.</span><br>'
+          : "") +
+      '<span style="color:var(--dim)">One use counts per day, and only the word ' +
+      'itself is judged — a mistake elsewhere in the sentence does not cost ' +
+      'you the credit. Using a word WRONG takes a day back off it, once a day ' +
+      'at most, which is why a count can go down.</span></div>';
   }
   /* Drills banner, like Ghost Words': what you are drilling stays on screen for
    * the whole conversation, because "which mistake was this again" is the
@@ -2870,6 +2995,10 @@ function renderConversation() {
     } else if (currentActivity() === "drill") {
       if (drillTag()) { log.innerHTML = drillBanner(); bindTip(); return; }
       hintText = 'Pick a mistake to drill, below.';
+    } else if (currentActivity() === "flashcard") {
+      if (flashcardWords().length) { log.innerHTML = flashcardBanner(); return; }
+      hintText = 'Pick your words below.<br>Five words from your own history, ' +
+        'to study as flashcards — then come back and use them here.';
     } else if (currentActivity() === "focused") {
       log.innerHTML = ghostBanner();
       return;
@@ -2881,7 +3010,7 @@ function renderConversation() {
     log.innerHTML = '<div class="hint">' + hintText + '</div>';
     return;
   }
-  log.innerHTML = ghostBanner() + drillBanner();
+  log.innerHTML = ghostBanner() + drillBanner() + flashcardBanner();
   bindTip();
   const shownExtra = new Set();   // added words already highlighted once, this pass
   S.history.forEach(t => renderMessage(t, shownExtra));
@@ -3001,6 +3130,19 @@ function newId() {
  * user-only rule leaves every story in the list called "New chat". A plain chat
  * still starts with the learner, so nothing there changes. */
 function titleFrom(turns) {
+  /* A Flashcard Chat is titled by the words it is practising, not by whatever
+   * the partner happened to open with. In the chat list the set IS what
+   * distinguishes one of these conversations from the next -- three of them
+   * opened by the same partner with the same instruction produce three near
+   * identical first sentences, and the learner picking day two out of the list
+   * is looking for their words.
+   *
+   * Read from the transcript marker, so it is that conversation's own set and
+   * not today's: an old chat keeps the title it earned. Ghost Words cannot do
+   * this yet -- it pins no set anywhere, which is backlog item "Ghost Words
+   * should be Flashcard Chat with a different pool". */
+  const set = HSKPace.flashcardsOf(turns || []);
+  if (set.length) return set.join("\u3001");
   const first = (turns || []).find(t =>
     (t.role === "user" || t.role === "assistant") && t.text);
   if (!first) return "New chat";
@@ -3090,6 +3232,7 @@ function activityOf(c) {
   const msgs = (c && S.chatMsgs[c.id]) || [];
   if (msgs.some(m => m.role === "topic")) return "story";
   if (HSKMistakes.drillTagOf(msgs)) return "drill";
+  if (HSKPace.flashcardsOf(msgs).length) return "flashcard";
   return (c && c.activity) || "chat";
 }
 function currentActivity() { return activityOf(chatById(S.chatId)); }
@@ -3160,7 +3303,8 @@ function startActivity(id) {
   /* Same withholding as story time, for the same reason: nothing is
    * generated until the learner has chosen a role, since the role decides
    * what the model is even allowed to say. */
-  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" && id !== "drill") openingTurn();
+  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" &&
+      id !== "drill" && id !== "flashcard") openingTurn();
   return c;
 }
 
@@ -3880,8 +4024,8 @@ async function gradeTurn(turnObj) {
     /* Same reason as the three above: read BEFORE the await. Switching activity
      * mid-grade must not attach this conversation's ghost targets to another
      * one's verdict. */
-    const ghosting = currentActivity() === "focused";
-    const ghostTargets = ghosting ? reuseFor("focused").map(e => e.w) : [];
+    const ghosting = HSKPrompt.activityFor(currentActivity()).steer === true;
+    const ghostTargets = ghosting ? reuseFor(currentActivity()).map(e => e.w) : [];
     const reply = await callModel([{ role: "user", content: teachPromptFor("grade", {
       text: turnObj.text, level: levelLabel(), recent: recentWords(),
       context: contextFor(turnObj)
@@ -3955,12 +4099,18 @@ async function gradeTurn(turnObj) {
     delete turnObj.grading;
     persist();
     renderAll();
-    /* The verdict is on the message, but a drill's progress line is in the
-     * starters strip, and nothing here ever re-rendered it: a whole session
-     * read "0 of 6 correct" with every credit already stored. Skipped while a
-     * turn is still running -- renderStarters() blanks the strip when S.busy,
-     * and runTurn()'s own finally renders it again the moment the reply lands. */
-    if (!S.busy) renderStarters();
+    /* The verdict is on the message, but the counters it moves -- a drill's
+     * progress line, a flashcard set's per-word counts -- are in the starters
+     * strip, and nothing here ever re-rendered it: a whole session read
+     * "0 of 6 correct" with every credit already stored.
+     *
+     * Unconditional now, including mid-turn. The grade lands while the partner
+     * is still writing, which is exactly when the learner is looking at the
+     * counters, and this used to skip it because renderStarters() blanked the
+     * strip whenever S.busy. The two controls it reaches now draw their status
+     * either way and withhold only what can be pressed, so the credit shows
+     * when it is earned rather than whenever the reply happens to arrive. */
+    renderStarters();
   }
 }
 
@@ -4065,21 +4215,40 @@ function cardBack(e) {
 }
 
 // Words the app introduced are exactly the ones worth drilling, so they go on
-// cards alongside the ones you added yourself.
+// cards alongside the ones you added yourself. Flashcard Chat passes its own
+// chosen set instead -- same file formats, a different five words.
 function cardWords() {
   return S.extra.concat(S.learning);
 }
 
-function ankiCsv() {
+/* Two cards a word, not one: hanzi -> meaning is recognition, meaning -> hanzi
+ * is production, and the gap between those two is the entire thing this app is
+ * for. Asked for as all six permutations of hanzi/pinyin/English; two of those
+ * six test neither the character nor production, and six cards a word turns a
+ * five-word set into thirty, which is the review-queue overwhelm the flashcard
+ * activity was shaped to avoid (RESEARCH.md, "Choosing a set of words to study
+ * away from the app").
+ *
+ * Anki keys duplicates on the first field, so the two rows are distinct notes
+ * rather than a collision: one starts with the hanzi, the other with the gloss.
+ * Pleco is untouched -- it generates directions itself. */
+function ankiCsv(words) {
   const q = t => '"' + String(t || "").replace(/"/g, '""') + '"';
-  return "#separator:comma\n#html:true\n" + cardWords().map(e =>
-    q(e.w) + "," + q([e.p, e.d, e.s].filter(Boolean).join("<br>"))).join("\n") + "\n";
+  const rows = [];
+  (words || cardWords()).forEach(e => {
+    const back = [e.p, e.d, e.s].filter(Boolean).join("<br>");
+    rows.push(q(e.w) + "," + q(back));
+    /* No gloss, no reverse card -- a front of "" would be an unanswerable
+     * prompt, and Anki would treat every one of them as the same note. */
+    if (e.d) rows.push(q(e.d) + "," + q([e.w, e.p].filter(Boolean).join("<br>")));
+  });
+  return "#separator:comma\n#html:true\n" + rows.join("\n") + "\n";
 }
 
 // Pleco's flashcard import format: headword, pinyin, definition, tab separated.
-function plecoTsv() {
+function plecoTsv(words) {
   const clean = t => String(t || "").replace(/[\t\r\n]+/g, " ");
-  return cardWords().map(e =>
+  return (words || cardWords()).map(e =>
     [clean(e.w), clean(e.p), clean([e.d, e.s].filter(Boolean).join(" // "))].join("\t")).join("\n") + "\n";
 }
 
@@ -4972,6 +5141,9 @@ function fillActivities() {
       note = "No unused words yet. Turn on 'Introduce words from the next level' in Settings → Learning, chat for a while, then switch back here.";
     }
   }
+  /* Flashcard Chat used to repeat its word counts here. It does not any more:
+   * the strip above the composer carries them, which is both bigger and nearer
+   * the thumb, and three copies of one number on one screen is two too many. */
   const el = $("#activityNote");
   if (el) { el.textContent = note || ""; el.style.display = note ? "" : "none"; }
 }
@@ -6034,7 +6206,8 @@ function renderComposer() {
   const listening = (currentActivity() === "story" && !anyStoryQuestion() &&
     !(S.history.some(t => t.role === "user") || storyTold() > STORY_SEGMENTS)) ||
     (currentActivity() === "twenty" && !(c && c.side)) ||
-    (currentActivity() === "drill" && (!drillTag() || drillDone()));
+    (currentActivity() === "drill" && (!drillTag() || drillDone())) ||
+    (currentActivity() === "flashcard" && !flashcardWords().length);
   input.disabled = listening;
   input.placeholder = listening ? "" : "\u7528\u4e2d\u6587\u5199\u2026";
 }
@@ -6140,8 +6313,10 @@ function renderExampleChoices(box, m) {
  * There is no "next" button -- the learner advances a drill by writing, unlike
  * story time where the partner does the producing. */
 function renderDrillControl(box) {
-  if (S.busy) return;
-  if (!drillTag()) return renderDrillChooser(box);
+  /* Same split as the flashcard strip above: the progress line is status and
+   * renders mid-turn so a credit shows as soon as it is earned; the chooser and
+   * the stop button are controls and stay hidden while the partner writes. */
+  if (!drillTag()) { if (!S.busy) renderDrillChooser(box); return; }
   const note = document.createElement("div");
   note.className = "note";
   const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
@@ -6155,11 +6330,89 @@ function renderDrillControl(box) {
       (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "") +
       (why ? " \u00b7 " + why : "");
   box.appendChild(note);
-  if (drillDone()) return;
+  if (drillDone() || S.busy) return;
   const stop = document.createElement("button");
   stop.textContent = "End drill";
   stop.onclick = endDrill;
   box.appendChild(stop);
+}
+
+/* Phase 1. No set yet, so no chat: a button, and what pressing it will do.
+ *
+ * A button rather than firing on open, which the learner chose: the whole point
+ * of the activity is that the list is one you asked for. Hulstijn & Laufer's
+ * learner-imposed need, and RESEARCH.md's Self-Determination note, both in
+ * "Choosing a set of words to study away from the app".
+ *
+ * Nothing here can show an out-of-level word: every candidate came out of
+ * S.base, which is the level's own allowlist. */
+function renderFlashcardControl(box) {
+  /* The set's counters are STATUS and render while a turn is in flight; the
+   * chooser below is a CONTROL and does not. That split is what lets the
+   * counts move the moment the grader answers: the verdict lands while the
+   * partner is still writing, and hiding the strip until the reply arrived was
+   * the only reason the learner had to wait for it. */
+  if (flashcardWords().length) return renderFlashcardSetControl(box);
+  if (S.busy) return;
+  if (!S.grader) {
+    box.innerHTML = '<div class="note">The word list is built from messages the grader ' +
+      'has checked, so there is nothing to choose from with checking off. Turn the ' +
+      'grader on in Settings.</div>';
+    return;
+  }
+
+  const candidates = flashcardCandidates();
+  const note = document.createElement("div");
+  note.className = "note";
+  if (!candidates.length) {
+    note.textContent = "No words to study yet. Chat for a while — this list is " +
+      "built from words the partner has used with you, and words you have not " +
+      "met in a month.";
+    box.appendChild(note);
+    return;
+  }
+  note.textContent = "Get " + HSKPace.SET_SIZE + " words from your own history, " +
+    "study them in Pleco or Anki, then come back and use them here.";
+  box.appendChild(note);
+
+  const go = document.createElement("button");
+  go.className = "story";
+  go.textContent = "Choose " + HSKPace.SET_SIZE + " words";
+  go.onclick = () => startFlashcardsWith(
+    candidates.slice(0, HSKPace.SET_SIZE).map(e => e.w), "");
+  box.appendChild(go);
+}
+
+/* Phase 1's other half: the set is chosen, so offer it for export. Stays on the
+ * strip for the whole conversation -- "what were my five words again" is a
+ * question the learner will have on day two and day three, by which time the
+ * chooser's message has scrolled away. */
+function renderFlashcardSetControl(box) {
+  const targets = flashcardTargets();
+  const line = document.createElement("div");
+  line.className = "fcstatus";
+  /* Built as nodes rather than innerHTML: the words come out of the wordlists
+   * and go nowhere near a template, so there is nothing here that has to be
+   * remembered to escape. */
+  targets.forEach(e => {
+    const chip = document.createElement("span");
+    chip.className = "fcchip" + (e.ghostToday ? " spent" : "");
+    chip.append(e.w);
+    const n = document.createElement("i");
+    n.textContent = " " + (e.ghostN || 0) + "/" + S.ghostUses + (e.ghostToday ? " \u2713" : "");
+    chip.append(n);
+    line.appendChild(chip);
+  });
+  if (flashcardDone(targets)) {
+    const done = document.createElement("i");
+    done.textContent = " \u2014 complete";
+    line.appendChild(done);
+  } else if (flashcardDayDone(targets)) {
+    const done = document.createElement("i");
+    done.textContent = " \u2014 all banked, come back tomorrow";
+    line.appendChild(done);
+  }
+  box.appendChild(line);
 }
 
 /* The chooser. Curated ideas, topics already read, a box, and make-something-up
@@ -6291,6 +6544,7 @@ function renderStarters() {
   if (currentActivity() === "story") return renderStoryControl(box);
   if (currentActivity() === "twenty") return renderTwentyControl(box);
   if (currentActivity() === "drill") return renderDrillControl(box);
+  if (currentActivity() === "flashcard") return renderFlashcardControl(box);
   if (!S.starters) return;
   if (currentActivity() !== "chat") return;
   HSKPrompt.startersFor(S.level).map(toScript).forEach(t => {
@@ -6364,6 +6618,31 @@ function starterTexts() {
 /* Did the learner write this, or tap it? */
 function ownWriting(t) {
   return starterTexts().indexOf(String((t && t.text) || "").trim()) === -1;
+}
+
+/* Every in-level word the learner has ever typed, whatever the grader made of
+ * the sentence around it.
+ *
+ * Deliberately NOT producedWords() below, which additionally requires the word
+ * to have been used CORRECTLY -- that is the right bar for retiring a word and
+ * the wrong one for choosing what to study. Measured on real data: 51% of
+ * graded messages fail the whole-sentence check, so the strict bar called 23%
+ * of this learner's written vocabulary unwritten and handed those words back as
+ * flashcards. 那 was the reported case, and it has a second cause on top: it
+ * segments as its own word in only 2 of the 9 messages containing it, because
+ * 那个/那儿/那里/那么 each swallow it whole. Nothing here fixes that half --
+ * a word only counts where the segmenter can see it. */
+function writtenWords() {
+  const out = new Set();
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (!t || t.role !== "user" || !t.text || !ownWriting(t)) return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind === "word") out.add(tok.text);
+      });
+    });
+  });
+  return out;
 }
 
 function producedWords() {
@@ -6456,6 +6735,124 @@ function ghostProgressMap() {
       .filter(function (tok) { return tok.kind === "word"; })
       .map(function (tok) { return tok.text; });
   });
+}
+
+/* ------------------------------------------------------- Flashcard Chat */
+
+/* This conversation's chosen set, and the theme the chooser named it. Read out
+ * of the transcript markers, so a set survives a reload and syncs with the
+ * conversation without a column of its own. */
+function flashcardWords() { return HSKPace.flashcardsOf(S.history); }
+function flashcardTheme() { return HSKPace.flashcardThemeOf(S.history); }
+function flashcardRounds(targets) {
+  const list = targets || flashcardTargets();
+  return list.length ? Math.min.apply(null, list.map(e => e.ghostN || 0)) : 0;
+}
+function flashcardDone(targets) {
+  const list = targets || flashcardTargets();
+  return list.length > 0 && flashcardRounds(list) >= S.ghostUses;
+}
+
+/* Today is spent: every word in the set already has its one credit for the day,
+ * so nothing the learner writes now can move a counter.
+ *
+ * Worth saying out loud rather than leaving them to infer it from five greyed
+ * chips. Without it the activity has no visible stopping point -- the learner
+ * keeps going, nothing moves, and the only reading available is that it has
+ * stopped working. Not the same question as flashcardDone(), which is the whole
+ * set finished; this one recurs once a day until then. */
+function flashcardDayDone(targets) {
+  const list = targets || flashcardTargets();
+  return list.length > 0 && !flashcardDone(list) && list.every(e => e.ghostToday);
+}
+
+/* The last day each word appeared anywhere in the history, in either
+ * direction. Read counts as well as written: the first of the two populations
+ * flashcardPool() builds is "the partner used this at me and I have never used
+ * it back", which cannot be seen from the learner's messages alone.
+ *
+ * ponytail: segments every message in every conversation on each call, which is
+ * strictly more work than ghostProgressMap()'s user-only scan. It runs on every
+ * renderStarters() while phase 1 (the chooser) is on screen, not once per press
+ * -- measured at ~47ms for 1200 messages, which is acceptable, and the grader
+ * guard at the top of renderFlashcardControl() short-circuits it in the common
+ * case of an empty pool. Cache it behind the same guard as mistakeCounts() if a
+ * long history ever makes the button feel slow. */
+function lastSeenMap() {
+  const out = {};
+  Object.keys(S.chatMsgs || {}).forEach(function (cid) {
+    (S.chatMsgs[cid] || []).forEach(function (t) {
+      if (!t || !t.text) return;
+      if (t.role !== "user" && t.role !== "assistant") return;   // skip markers
+      const day = HSKMistakes.dayKey(t.created_at);
+      if (!day) return;
+      HSK.segment(t.text, S.lex).forEach(function (tok) {
+        if (tok.kind !== "word") return;
+        if (!out[tok.text] || out[tok.text] < day) out[tok.text] = day;
+      });
+    });
+  });
+  return out;
+}
+
+/* Every Flashcard Chat's set, with the conversation's own updated_at so
+ * reservedWords() can tell an active set from an abandoned one. */
+function inFlightSets() {
+  const out = [];
+  (S.chats || []).forEach(function (c) {
+    if (!c || c.deleted) return;
+    const words = HSKPace.flashcardsOf(S.chatMsgs[c.id] || []);
+    if (words.length) out.push({ words: words, updated: c.updated_at });
+  });
+  return out;
+}
+
+/* Candidates for a NEW set: the pool arithmetic over live state, with every
+ * word an unfinished set is still working on held back. */
+function flashcardCandidates() {
+  const today = HSKMistakes.dayKey(new Date().toISOString());
+  const ghost = ghostProgressMap();
+  return HSKPace.flashcardPool({
+    entries: S.base, seen: lastSeenMap(), ghost: ghost, ghostUses: S.ghostUses,
+    written: writtenWords(),
+    reserved: HSKPace.reservedWords({ sets: inFlightSets(), ghost: ghost,
+                                      ghostUses: S.ghostUses, today: today }),
+    today: today, n: HSKPace.CANDIDATES_SHOWN
+  });
+}
+
+/* The stored set as the shape reuseFor() hands out everywhere else: the word,
+ * its pinyin and gloss for the banner, its ghost count, and whether today's
+ * credit is already banked. Same fields readiness().unused carries, so the
+ * banner, the partner targeting and gradeTurn()'s per-word verdict all read one
+ * shape whichever activity produced it. */
+function flashcardTargets() {
+  const prog = ghostProgressMap();
+  const today = HSKMistakes.dayKey(new Date().toISOString());
+  const byWord = new Map(S.base.map(e => [e.w, e]));
+  return flashcardWords().map(function (w) {
+    const e = byWord.get(w) || S.dict.get(w) || { w: w };
+    return { w: w, p: e.p, d: e.d,
+             ghostN: (prog[w] && prog[w].n) || 0,
+             ghostToday: !!(prog[w] && prog[w].last === today) };
+  });
+}
+
+/* Choosing the set is what starts the chat. The markers go in the transcript,
+ * then the partner opens -- the same withholding story time, 20 Questions and
+ * drills all use: nothing is generated, and nothing is spent, until the learner
+ * has chosen. */
+function startFlashcardsWith(words, theme) {
+  if (!words || !words.length || flashcardWords().length) return;
+  const at = new Date().toISOString();
+  S.history.push({ role: "flashcards", text: words.join(HSKPace.SET_SEP),
+                   id: newMessageId(), created_at: at });
+  if (theme) S.history.push({ role: "flashcardTheme", text: theme,
+                              id: newMessageId(), created_at: at });
+  persist();
+  renderAll();
+  renderStarters();
+  openingTurn();
 }
 
 /* Everything report.js needs, gathered from live state in one place.
@@ -6945,11 +7342,13 @@ function addByHand() {
   glossWords(missing);
 }
 $("#addWordBtn").onclick = addByHand;
-function exportCards(kind) {
-  if (!cardWords().length) { $("#expNote").textContent = "No words to export yet."; return; }
-  const stamp = new Date().toISOString().slice(0, 10);
-  if (kind === "anki") deliver(ankiCsv(), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
-  else deliver(plecoTsv(), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
+function exportCards(kind, words) {
+  if (!(words || cardWords()).length) { $("#expNote").textContent = "No words to export yet."; return; }
+  /* The learner's local day, not UTC: a set exported at eight in the evening
+   * in Denver was arriving stamped with tomorrow's date. */
+  const stamp = ghostDayKey();
+  if (kind === "anki") deliver(ankiCsv(words), "hsk-chat-" + stamp + ".csv", $("#expAnki"));
+  else deliver(plecoTsv(words), "hsk-chat-" + stamp + ".txt", $("#expPleco"));
 }
 $("#expAnki").onclick = () => exportCards("anki");
 $("#expPleco").onclick = () => exportCards("pleco");

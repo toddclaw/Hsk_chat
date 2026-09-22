@@ -52,9 +52,12 @@ check(R.ROUND === 10 && R.CANDIDATES === 4 && R.MIN_WORDS === 4,
   "constants are exported, not re-typed by callers");
 
 // --- dayOf coverage gaps ---------------------------------------------------
-check(R.dayOf("2026-09-01T12:00:00Z") === "2026-09-01", "dayOf extracts the day");
+check(R.dayOf(new Date(2026, 8, 1, 12, 0, 0).toISOString()) === "2026-09-01",
+  "dayOf extracts the day");
 check(R.dayOf(null) === "", "dayOf handles null input");
 check(R.dayOf("") === "", "dayOf handles empty input");
+check(R.dayOf(new Date(2026, 8, 18, 21, 0, 0).toISOString()) === "2026-09-18",
+  "dayOf is the learner's local day -- an evening is not tomorrow");
 
 // --- same word with both wrong and ok row -----------------------------------
 const bothRows = [row("苹果", "2026-09-01", false), row("苹果", "2026-09-01", true, "other")];
@@ -74,7 +77,13 @@ const validate = t => HSK.validate(t, lex).length === 0;
 
 const TODAY = "2026-09-12";
 const YDAY = "2026-09-11";
-const at = day => day + "T09:00:00Z";
+/* Nine in the morning LOCAL on that day, as the ISO stamp a message carries.
+ * dayOf() reads the learner's local day, so appending a Z here would put every
+ * fixture on the following day east of Greenwich. */
+const at = day => {
+  const p = day.split("-").map(Number);
+  return new Date(p[0], p[1] - 1, p[2], 9, 0, 0).toISOString();
+};
 
 const partner = (text, day) => ({
   role: "assistant", text: text, created_at: at(day || YDAY), conversation_id: "c1"

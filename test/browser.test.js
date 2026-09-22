@@ -31,12 +31,20 @@ const ROOT = path.join(__dirname, "..");
  * than written into the file: a date literal here passes on the day it is
  * written and fails silently every day after. */
 const TODAY = new Date().toLocaleDateString("en-CA");
-/* UTC, matching HSKRetrieval.dayOf()/ghostDayKey() (both slice an ISO string,
- * not a local calendar day) -- computed per run for the same reason as TODAY. */
-const GAP_YDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-/* Today in the same UTC day the ghost credit counts in, for seeding a credit
- * that has to read as "banked today" rather than "banked at some point". */
-const GHOST_TODAY = new Date().toISOString().slice(0, 10);
+/* All three are the LOCAL calendar day, which is what every day key in the app
+ * became in v122: HSKTime.dayKey() always was, and HSKMistakes.dayKey() and
+ * HSKRetrieval.dayOf() stopped slicing the UTC ISO string. These two were UTC
+ * to match the old behaviour, and west of Greenwich that is the same string as
+ * the local one until late afternoon -- so leaving them would have passed all
+ * morning and started failing after dinner, which is the exact trap the note on
+ * TODAY above warns about. */
+const GAP_YDAY = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+/* A stamp inside the day the ghost credit counts in, for seeding a credit that
+ * has to read as "banked today" rather than "banked at some point". The whole
+ * timestamp, not a bare date with a Z hour appended: ten in the morning UTC is
+ * already tomorrow at UTC+14, which is how this seeded a credit the app then
+ * correctly refused to call today's. */
+const GHOST_TODAY_AT = new Date().toISOString();
 let pass = 0, fail = 0;
 const bad = [];
 const check = (ok, label, detail) => ok ? pass++ :
@@ -1070,9 +1078,9 @@ return true;
     check(upShown === (stillToGo === 0),
       "Move up and the words-to-threshold count agree with each other",
       `Move up ${upShown ? "shown" : "hidden"}, ${stillToGo} words to go`);
-    /* And it is still a reachable number, not the whole remaining list: 741
-     * would mean every word left, and the frequency-weighted answer is a few
-     * hundred at most. That difference is the point of the arithmetic. */
+    /* And it is still a reachable number, not the whole remaining list: 197
+     * would mean every word left at HSK 1 -> 2, and the frequency-weighted
+     * answer is 58. That difference is the point of the arithmetic. */
     check(stillToGo > 0 && stillToGo < 500,
       "and the count is frequency-weighted, not the whole list",
       String(stillToGo));
@@ -1938,6 +1946,15 @@ check(usedGroups && usedGroups.first === "\u7684",
      * browser test can have. Graded clean and on three separate days: the
      * fallback rule, which is all that exists until the verdict lands in the
      * next task. */
+    /* Local wall-clock, converted to the ISO stamp a message actually carries.
+     * A literal "...T10:00:00Z" is a different calendar day either side of
+     * Greenwich, and the ghost counter now asks about the learner's local day
+     * -- so a fixture meaning "twice on one day" has to be built from local
+     * components or it means "twice on two days" in Auckland. Caught by running
+     * this suite under TZ=Pacific/Auckland, which is worth doing after touching
+     * anything that counts days. */
+    const at = (day, hour) => new Date(2026, 8, day, hour, 0, 0).toISOString();
+
     const seedGhost = async (days) => {
       await exec(
         "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
@@ -1949,7 +1966,7 @@ check(usedGroups && usedGroups.first === "\u7684",
       await go(base);
     };
 
-    await seedGhost(["2026-09-01T10:00:00Z"]);
+    await seedGhost([at(1, 10)]);
     let gn = await exec(
       "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
     check(gn === 1, "one clean message is one ghost credit", String(gn));
@@ -1968,13 +1985,12 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the banner shows how far along a ghost word is, not just its name",
       banner.slice(0, 400));
 
-    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-01T18:00:00Z"]);
+    await seedGhost([at(1, 10), at(1, 18)]);
     gn = await exec(
       "return (window.ghostProgressMap()['\\u82f9\\u679c'] || {}).n || 0;");
     check(gn === 1, "two messages on one day are still one credit", String(gn));
 
-    await seedGhost(["2026-09-01T10:00:00Z", "2026-09-02T10:00:00Z",
-                     "2026-09-03T10:00:00Z"]);
+    await seedGhost([at(1, 10), at(2, 10), at(3, 10)]);
     const gone = await exec(
       "return window.readiness().unused.map(function (e) { return e.w; })" +
       ".indexOf('\\u82f9\\u679c') === -1;");
@@ -2016,7 +2032,7 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec(
       "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
       "m.ghostkeep = [{role:'user', id:'gk0', text:" + JSON.stringify(head) +
-      ", created_at:" + JSON.stringify(GHOST_TODAY + "T10:00:00Z") +
+      ", created_at:" + JSON.stringify(GHOST_TODAY_AT) +
       ", grade:{ok:true, errors:[]}}];" +
       "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
     await go(base);
@@ -4726,6 +4742,219 @@ check(usedGroups && usedGroups.first === "\u7684",
 
     // Restore the default so nothing later in the file inherits trad.
     await exec(`localStorage.setItem("hsk1chat.script", JSON.stringify("simp")); return true;`);
+
+    /* --------------------------------------------------- flashcard chat */
+    /* Phase 1's chooser reads the whole history: an old chat where the
+     * assistant used six words the learner never wrote back, and the
+     * learner's own message uses two common words correctly. Those six
+     * are candidates ("read, never written"); the two the learner already
+     * produced are not. Grader on, since the chooser refuses to build a
+     * list without it (finding 1). */
+    await exec(`
+      var cid = "99999999-5555-4555-8555-999999999999";
+      localStorage.setItem("hsk1chat.level", "2");
+      localStorage.setItem("hsk1chat.key", "sk-test");
+      localStorage.setItem("hsk1chat.grader", JSON.stringify(true));
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "old", activity: "chat", level: 2,
+          created_at: "2026-09-17T00:00:00.000Z",
+          updated_at: "2026-09-17T00:00:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ [cid]: [
+        { id: "44444444-5555-4555-8555-444444444441", role: "assistant",
+          text: "医生说你要去机场。" +
+                "颜色很好看，苹果、" +
+                "鸡蛋和面包都在这里。",
+          attempts: 1, created_at: "2026-09-17T00:00:00.000Z" },
+        { id: "44444444-5555-4555-8555-444444444442", role: "user",
+          text: "我今天很好，谢谢你。",
+          attempts: 1, created_at: "2026-09-17T00:01:00.000Z",
+          grade: { ok: true, cats: { word: true, grammar: true, order: true,
+                                      natural: true }, errors: [] } }
+      ] }));
+      return true;`);
+    await go(base);
+    await exec(`
+      window.callModel = function () { return Promise.resolve("你好！"); };
+      window.startActivity("flashcard");
+      return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the flashcard chooser to appear");
+    check(await exec(`return document.querySelector('#input').disabled;`) === true,
+      "the composer is closed until a set is chosen");
+    const fcCandidates = await exec(
+      `return window.flashcardCandidates().map(function (e) { return e.w; });`);
+    check(["医生", "机场", "颜色", "苹果",
+           "鸡蛋", "面包"].every(w => fcCandidates.indexOf(w) !== -1),
+      "candidates are words the partner used and the learner never wrote back",
+      JSON.stringify(fcCandidates));
+    check(fcCandidates.indexOf("今天") === -1 &&
+          fcCandidates.indexOf("谢谢") === -1,
+      "and not a word the learner already produced correctly",
+      JSON.stringify(fcCandidates));
+
+    /* Pressing the button writes the marker and opens the composer. Same
+     * withholding as every other activity: nothing is stored, and nothing
+     * generated, until this click. */
+    await exec(`document.querySelectorAll('#starters button')[0].click(); return true;`);
+    await waitFor(`window.flashcardWords().length > 0`, "the flashcards marker to be written");
+    const fcSet = await exec(`return window.flashcardWords();`);
+    check(fcSet.length === (await exec(`return window.HSKPace.SET_SIZE;`)),
+      "the stored set has SET_SIZE words", JSON.stringify(fcSet));
+    check(fcSet.every(w => fcCandidates.indexOf(w) !== -1),
+      "every stored word came from the candidate list", JSON.stringify(fcSet));
+    await waitFor(`document.querySelector('#input').disabled === false`,
+      "choosing a set to open the composer");
+
+    /* The marker is a pseudo-message in the transcript, not a chat turn --
+     * mistakes.js's drill markers work the same way, and the drill test
+     * above asserts the same thing about theirs. */
+    const fcRoles = await exec(`
+      var m = JSON.parse(localStorage.getItem("hsk1chat.chatMsgs") || "{}"), out = [];
+      Object.keys(m).forEach(function (k) {
+        m[k].forEach(function (t) { out.push(t.role); }); });
+      return out;`);
+    check(fcRoles.indexOf("flashcards") !== -1,
+      "the flashcards marker is persisted", JSON.stringify(fcRoles));
+    const fcBubbles = await exec(`
+      return Array.prototype.map.call(document.querySelectorAll('#log .bubble'),
+        function (b) { return b.textContent; });`);
+    check(!fcBubbles.some(t => t === fcSet.join(",")),
+      "the marker itself is never rendered as a chat bubble", JSON.stringify(fcBubbles));
+
+    /* reuseFor() is what the partner-steering and per-word grading read --
+     * it has to hand back exactly the stored set, in the shape carrying
+     * ghostN, or Flashcard Chat is not actually wired to the ghost counter. */
+    const fcReuse = await exec(`return window.reuseFor("flashcard").map(function (e) { return e.w; });`);
+    check(JSON.stringify(fcReuse) === JSON.stringify(fcSet),
+      "reuseFor('flashcard') returns the chosen set", JSON.stringify(fcReuse));
+
+    /* The layout the learner asked for: the export lives in the banner at the
+     * top of the log, the per-word counts live on the strip above the composer.
+     * Both are asserted by position, not merely by existing, because the whole
+     * complaint was where they were -- having to scroll to the top of the chat
+     * to read a number needed on every turn. */
+    const fcStrip = await exec(
+      `return document.querySelector('#starters .fcstatus').textContent;`);
+    check(fcSet.every(w => fcStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcStrip),
+      "the word counts are on the strip above the composer", fcStrip);
+    const fcExports = await exec(
+      `return Array.prototype.map.call(document.querySelectorAll('#log .hint button.fcx'),
+         function (b) { return b.textContent; });`);
+    check(fcExports.length === 2 && fcExports.join("|").indexOf("Anki") !== -1,
+      "both exports are in the banner at the top of the log", JSON.stringify(fcExports));
+    /* The banner is an innerHTML string, so its handlers are inline attributes.
+     * A typo in one is not a syntax error anywhere -- the button simply renders
+     * and does nothing -- so what is checked is that the browser compiled the
+     * attribute into a handler, and that what it calls exists. Not clicked:
+     * that would start a real download. */
+    check(await exec(
+      `return Array.prototype.every.call(document.querySelectorAll('#log .hint button.fcx'),
+         function (b) { return typeof b.onclick === "function"; });`),
+      "each inline export handler compiled");
+    check(await exec(`return typeof window.exportCards === "function" &&
+                             typeof window.flashcardTargets === "function";`),
+      "and the functions they call are reachable from the page");
+
+    /* The set is what tells one Flashcard Chat apart from the next in the list;
+     * the partner's opening sentence does not. */
+    const fcTitle = await exec(`return window.currentChat().title;`);
+    check(fcSet.every(w => fcTitle.indexOf(w) !== -1),
+      "the conversation is titled with its words, not its first sentence", fcTitle);
+
+    /* Every word in the set credited today, which is the day's natural stopping
+     * point: nothing the learner writes now can move a counter, because a word
+     * earns at most one credit a day. The activity has to SAY so -- without it
+     * the learner keeps writing into an activity that has silently stopped
+     * responding, which is indistinguishable from it being broken.
+     *
+     * Seeded rather than played out: three days of real conversation is not
+     * something a browser test can have, the same reason seedGhost() exists
+     * above. Stamped with the moment the run is happening, so "today" is
+     * whatever today is wherever this runs. */
+    const fcChatId = await exec(`return window.currentChat().id;`);
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "m.fcday = " + JSON.stringify(fcSet) +
+      ".map(function (w, i) { return { role: 'user', id: 'fcd' + i, text: w," +
+      " created_at: new Date().toISOString(), grade: { ok: true, errors: [] } }; });" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the day's credits");
+    await exec(`window.openChat(${JSON.stringify(fcChatId)}); return true;`);
+    const fcDayDone = await exec(`return window.flashcardDayDone();`);
+    check(fcDayDone === true,
+      "one credit on every word is the day done",
+      JSON.stringify(await exec(`return window.flashcardTargets();`)));
+    check((await exec(`return document.querySelector('#starters .fcstatus').textContent;`))
+            .indexOf("come back tomorrow") !== -1,
+      "the strip above the composer says so");
+    const fcDayBanner = await exec(`return document.querySelector('#log .hint').textContent;`);
+    check(/Day 1 done/.test(fcDayBanner) && /Day 2 of 3 opens tomorrow/.test(fcDayBanner),
+      "and the banner says which day just closed and which one opens next",
+      fcDayBanner.slice(0, 300));
+    /* The conversation is not over and must not read as over: the learner comes
+     * back to this same chat tomorrow, so the composer stays open. */
+    check(await exec(`return document.querySelector('#input').disabled === false;`),
+      "the composer stays open -- the conversation continues tomorrow");
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "delete m.fcday; localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m));");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after clearing the credits");
+
+    /* The counts stay on the strip through a turn that is still running, which
+     * is when the grader's verdict actually lands: gradeTurn() repaints the
+     * strip as soon as it has a grade, and that repaint used to be skipped
+     * because the strip blanked itself whenever S.busy -- so a credit earned on
+     * send stayed invisible until the partner had finished writing.
+     *
+     * S.busy is not reachable from here, so the only way to observe the busy
+     * state is to be in it: a stub that never resolves holds the app there
+     * until the test lets it go, the same trick the story-time section uses.
+     * The held turn's own messages are rolled back afterwards -- the sections
+     * below read this conversation's history. */
+    await exec(`window.openChat(${JSON.stringify(fcChatId)}); return true;`);
+    const fcSaved = await exec("return localStorage.getItem('hsk1chat.chatMsgs');");
+    await exec(
+      "window.__rej = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (_, rej) { window.__rej = rej; });" +
+      "};" +
+      "document.querySelector('#input').value = '\u6211\u5f88\u597d';" +
+      "window.send(); return true;");
+    await waitFor("document.querySelector('#send').textContent === '\\u505c'",
+      "a flashcard turn to be in flight");
+    const fcBusyStrip = await exec(
+      "window.renderStarters();" +
+      "var el = document.querySelector('#starters .fcstatus');" +
+      "return el ? el.textContent : '';");
+    check(fcSet.every(w => fcBusyStrip.indexOf(w) !== -1) && /\d+\/\d+/.test(fcBusyStrip),
+      "the word counts stay on the strip mid-turn, so a credit shows when it is earned",
+      fcBusyStrip);
+    /* Wound up by reloading rather than by stopping: the stub holds both calls
+     * send() makes -- the grader's and the turn's -- and only one of them can
+     * be released through `window.__rej`. The reload drops both, and the
+     * history is put back first so the sections below see the conversation
+     * exactly as they left it. */
+    await exec("localStorage.setItem('hsk1chat.chatMsgs', " +
+      JSON.stringify(fcSaved) + "); return true;");
+    await go(base);
+    await waitFor("document.querySelector('#activity')", "app ready after the held turn");
+
+    /* A second Flashcard Chat, started while the first is unfinished, must
+     * not be handed back a word the first still holds (the reservation
+     * rule). startActivity() opens a new conversation, so this is a fresh
+     * chooser over the same history plus the first set's own chat. */
+    await exec(`window.startActivity("flashcard"); return true;`);
+    await waitFor(`document.querySelectorAll('#starters button').length > 0`,
+      "the second flashcard chooser to appear");
+    const fcCandidates2 = await exec(
+      `return window.flashcardCandidates().map(function (e) { return e.w; });`);
+    check(fcSet.every(w => fcCandidates2.indexOf(w) === -1),
+      "a second Flashcard Chat does not re-offer a word the first still holds",
+      JSON.stringify(fcSet) + " vs " + JSON.stringify(fcCandidates2));
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));

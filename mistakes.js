@@ -22,10 +22,31 @@
   var RECENT_SHOWN = 3;      // examples of a category offered as drill targets
   var DAY = 86400000;
 
-  /* UTC, not local. Two devices in two timezones have to agree on whether a
-   * pass fell on the same day as another, and the stored timestamp is already
-   * UTC ISO. Local dates would let a flight change a learner's numbers. */
-  function dayKey(iso) { return String(iso || "").slice(0, 10); }
+  /* The learner's LOCAL day, not UTC.
+   *
+   * This was UTC, on the argument that two devices in two timezones have to
+   * agree and that local dates would let a flight change a learner's numbers.
+   * Both are true and both are rare. What is not rare: west of Greenwich every
+   * evening session already falls on tomorrow's UTC key, so the credit lands on
+   * a day that has not happened, the word reads as "banked today" all the next
+   * morning, and the flashcard export is stamped with tomorrow's date. That is
+   * every evening for a whole hemisphere, against a flight now and then.
+   *
+   * So the day boundary is the one the learner is actually living in, which is
+   * what time.js's own dayKey() already decided for the same word. A device
+   * that moves timezones can shift a past session by one day; the counts are
+   * derived by scanning and never stored, so nothing is corrupted by that --
+   * one credit may move, which is the price of the common case being right.
+   *
+   * "" for a missing or unparseable stamp, never a garbage prefix: the callers
+   * use this as a map key and an empty one is at least obviously empty. */
+  function dayKey(iso) {
+    var d = new Date(String(iso || ""));
+    if (!iso || isNaN(d.getTime())) return "";
+    var m = String(d.getMonth() + 1), day = String(d.getDate());
+    return d.getFullYear() + "-" + (m.length < 2 ? "0" + m : m) +
+           "-" + (day.length < 2 ? "0" + day : day);
+  }
 
   /* The category this conversation drills, or "" for an ordinary chat. Stored
    * as a pseudo-message the way story time stores its topic, so it needs no
@@ -131,7 +152,30 @@
     var v = grade.ghost && grade.ghost[word];
     if (v && typeof v === "object") {
       if (v.used !== true) return "none";
-      return v.ok === true ? "ok" : "wrong";
+      if (v.ok === true) return "ok";
+      /* A WRONG verdict on a word the grader's own correction KEPT costs
+       * nothing. The correction is the grader saying what the sentence should
+       * have been; a word still standing in it is a word the repair did not
+       * touch, so it cannot be the thing that was wrong -- whatever the
+       * per-word call said.
+       *
+       * Found in real use, 2026-09-20, on one flashcard set. Four sentences
+       * around 再: 昨天我再找不到这本书, 我希望明天我不再找这本书, the grader's
+       * OWN better for that one (不要再), and 不用再. The first three came back
+       * wrong on 再 and the corrections were 再找这本书, 不要再找, 不用再找 --
+       * 再 survives all three. What moved each time was the modal beside it,
+       * 不 to 不要 to 不用, and the per-word question kept blaming the target
+       * for its neighbour. RESEARCH.md, "Retiring a ghost word".
+       *
+       * Deliberately one-sided. Credit is untouched, so this can never invent
+       * progress; the worst it can do is leave a real misuse uncharged, which
+       * slows a counter's fall. Being penalised for a word the app itself put
+       * back in your mouth is the failure worth removing.
+       *
+       * ponytail: a plain substring test, so a learner writing traditional
+       * against a simplified correction falls back to demoting as before.
+       * Fold both scripts in if that ever reads as wrong. */
+      return String(grade.better || "").indexOf(word) !== -1 ? "none" : "wrong";
     }
     return grade.ok === true ? "ok" : "none";
   }

@@ -59,6 +59,13 @@ activity.
    then **retranslation**, which is the only productive retrieval available and the
    only production task in the app with a reference answer to mark against.
 
+**Out of band, because real use found it.** The grader rejecting its own
+correction (2026-09-20) is not ranked among the features below: it is a
+correctness fault in the one component every other item on this list is
+measured through. Its first step is a free measurement and sits in the cheap
+list further down; the prompt work, if the number says there is any, is a
+project of its own and is not costed here.
+
 **The expensive one, and it is still worth it.**
 
 6. **The grader's `used` array (transfer).** The learner's own earmark for the spare
@@ -78,6 +85,15 @@ something silently.
   **Still open**, and the first thing to fix before any A/B is re-run.
 - 为什么 at HSK 1 — burns repairs at the level where pacing is most fragile.
   **Still open**; needs a counted run, so it was out of the trust pass.
+- **Does the grader pass its own corrections?** Found in real use on 2026-09-20,
+  not in a harness: it marked its own `better` wrong one turn later, on the turn
+  where the learner is writing its words back at it. The measurement is the
+  cheap part and needs no labels — feed every stored `better` back in as a fresh
+  sentence and count the ✗s. **Do that before touching the prompt**, which is
+  the string `test/prompt.test.js` pins and every tag number in RESEARCH.md
+  describes. **Still open**, and now the highest-value unknown about the grader,
+  because a repair turn is exactly where a learner is most likely to be told
+  they are wrong for doing as they were told.
 
 **After that.** Quality and polish, in rough order: word rescue (a game built on
 parts that exist — fun, but the research says it teaches little that Ghost Words and
@@ -92,7 +108,13 @@ covered by workarounds that hold. The app's own chrome in Chinese is the largest
 project in this file and the least certain to help.
 
 **Considered and not wanted.** An in-app spaced-repetition flashcard system — the
-Anki export already exists and rebuilding Anki is not a feature. Handwriting or
+Anki export already exists and rebuilding Anki is not a feature. This survives
+Flashcard Chat (designed 2026-09-18,
+`docs/superpowers/specs/2026-09-18-flashcard-chat-design.md`), which deliberately
+does *not* schedule anything: it chooses five to seven words out of the learner's
+own history, exports them, and lets Pleco or Anki do the spacing. The app's
+contribution is the choosing, which neither tool can do because neither has seen
+the conversations, and the chat that follows the study. Handwriting or
 stroke input — large, and the comparison research says IME typing trains the
 sound-to-character mapping that actually matters for reading here. Speech recognition
 scoring — not dependable enough in a browser for Chinese, and the tone drill is the
@@ -523,6 +545,126 @@ held this time; it is the same class of dependency that just failed.
 **What would settle it:** a marker message for Ghost Words and one for
 20 Questions, of the kind story and drill already carry, so the transcript is
 sufficient for every activity rather than four of five.
+
+---
+
+## Ghost Words should be Flashcard Chat with a different pool
+
+**Asked for:** Todd, 2026-09-19, after two weeks of using both.
+
+**Planned:** `docs/superpowers/plans/2026-09-20-ghost-words-as-sets.md`. It
+answers the two open questions at the foot of this entry — five words and the
+live six deleted, reservation shared across both activities — and adds a third
+decision this entry did not raise: a distinct `role: "focus"` marker rather than
+a second use of `"flashcards"`, so `activityOf()` can still tell the two apart.
+Seven tasks, and the diff is mostly deletion.
+
+The verdict on the pair after living with them: Flashcard Chat is the shape that
+works, and Ghost Words should be the same activity drawing from a different pool.
+Concretely, Ghost Words would take a chosen set of five words, offer them for
+export, and run the same three days of practice, instead of what it does now.
+
+The two are closer than they look and the differences are all in one direction.
+Flashcard Chat pins a set of `SET_SIZE` words into the transcript as a
+`role: "flashcards"` marker the moment the learner presses the button, and every
+consumer reads that marker: the banner, `reuseFor()`, the export, the day strip,
+the completion state and — since v122 — the conversation's title. Ghost Words
+pins nothing. Its targets are the first six of `readiness().unused` recomputed
+on every render, so the set drifts as words are credited, there is nothing to
+export, there is no notion of a round or a day or a finish, and an old
+conversation cannot be titled with the words it practised because nothing
+records what they were.
+
+Everything downstream of the marker already generalises: `flashcardTargets()`
+hands back the same shape `readiness().unused` does, `ghostProgress()` is shared,
+`HSKPace.setRounds()` derives the day from `min(ghostN)` across the set, and
+`reservedWords()` already holds a word back while another set is working on it.
+So this is mostly deletion — Ghost Words stops computing a live list and starts
+reading a marker — plus a chooser it does not have.
+
+**What it would take.** A `role: "focus"` marker written when the conversation
+starts, carrying the chosen words, and `reuseFor("focused")` reading it instead
+of recomputing. A chooser for the set, which is `renderFlashcardControl()`'s
+phase 1 over `readiness().unused` rather than `flashcardPool()`. Then the banner,
+strip, export, day count, completion message and title fall out of the code
+Flashcard Chat already has, and the two activities differ in exactly one
+function: which pool the chooser draws from.
+
+**What to decide first.** Whether an in-flight Ghost Words set reserves its words
+against Flashcard Chat and vice versa — `reservedWords()` takes `sets`, so the
+mechanism exists, but the two pools overlap and a word held by one activity
+being unofferable in the other is a product decision, not a technical one. Also
+whether the existing six-at-a-time behaviour is worth keeping anywhere, since the
+set size is what makes a day countable.
+
+**Two other entries close with it.** "Ghost Words and 20 Questions have no marker
+in their own transcript" above is solved outright for Ghost Words by the marker
+this needs. And the chat-browser title for Ghost Words, deferred out of the
+v122 work for exactly this reason, comes for free once there is a set to name.
+
+**And one deletion is worth more than the feature.** `reuseFor()`'s
+`reuse: "unused"` branch carries a comment about a live list reordering itself
+at the moment a word earns its credit — the word vanished from the banner before
+the learner saw the tick, and stopped getting its own per-word verdict on the
+next message. That class of bug needs a list that can change under you. A chosen
+set cannot.
+
+---
+
+## The grader marks its own correction wrong, one turn later
+
+**Found:** 2026-09-20, in real use, from one Flashcard Chat set working the word
+再. Four consecutive learner sentences and their stored verdicts, straight out of
+`messages.grade`:
+
+| written | verdict | error named | `better` offered |
+|---|---|---|---|
+| 昨天我再找不到这本书 | ✗ | wrong-word, 再 | 昨天我再找这本书，找不到 |
+| 我希望明天我不再找这本书 | ✗ | aspect-le, note about a 了 that is not in the sentence | 我希望明天我不要再找这本书 |
+| 我希望明天我不要再找这本书 (**the line above, copied**) | ✗ | wrong-word, 再 | 我希望明天我不用再找这本书 |
+| 我希望明天我不用再找这本书 | ✓ | — | — |
+
+Three faults, in ascending order of how much they cost:
+
+- **It rejected its own correction.** Row three is row two's `better`, written
+  back verbatim, and it came back wrong with a fresh correction. A learner who
+  does exactly what the app told them to do is marked down for it, and there is
+  no way for them to read that as anything but the app being broken.
+- **The tag is invented.** Row two is filed under aspect-le with a note about
+  the placement of 了. There is no 了 in the sentence. That verdict is in the
+  mistake ledger now, aging out over ninety days like a real one.
+- **The blame lands on the wrong word.** Every correction keeps 再 and changes
+  the modal beside it, 不 → 不要 → 不用, yet the per-word call said 再 was wrong
+  three times. The credit half of that is fixed in v124 (a wrong verdict on a
+  word the correction KEPT no longer demotes, RESEARCH.md, "Retiring a ghost
+  word") — but the ledger entry and the ✗ on the message are untouched, and the
+  underlying misattribution is still there.
+
+**Why this is not a quick prompt edit.** It is the grader's own string, the one
+`test/prompt.test.js` pins character for character and every tag number in
+RESEARCH.md describes, and four prompt fixes in this study have moved the number
+the wrong way. `tools/grade-audit.js` scores it at 85% on 208 of Todd's real
+sentences and this is what some of the other 15% looks like.
+
+**What would settle it:** these four rows are a fixture, not an anecdote —
+`grade-audit` already holds them. Two things worth measuring, in order:
+
+1. **Stability.** `tools/grader-stability.js`, to be written, on the model of
+   `tools/grade-audit.js`: across the stored corpus take every verdict carrying
+   a `better`, feed that `better` back in as a fresh sentence, and count how
+   many come back ✗ — with the disagreeing pairs printed, because the pairs are
+   the fixture any prompt work would be measured on. A grader that will not pass
+   its own output has a number, and nobody has taken it. Cheap (a few hundred
+   calls at ~$0.0001) and it needs no labels: the grader is scored against
+   itself, so there is nothing to hand-mark and nothing to blind.
+2. **Whether showing it the exchange helps.** The check is one-shot and has no
+   idea it wrote the sentence it is judging. `contextBlock()` already exists.
+   Measure before believing it: telling a model it is looking at its own work is
+   exactly the shape of change that has backfired here before.
+
+Until then the honest reading is that the ✓/✗ on a repair turn is noisier than
+the 85% headline suggests, because a repair turn is where the learner is
+writing the grader's words back at it.
 
 ---
 
