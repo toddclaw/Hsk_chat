@@ -67,6 +67,11 @@ header button{padding:8px 10px; flex:0 0 auto}
   font-size:var(--msg); line-height:2.1; letter-spacing:.02em;
 }
 .msg.user .bubble{background:#233246; border-bottom-right-radius:6px}
+/* What you wrote, once the grader has offered a better version of it. Faded
+ * rather than hidden: the mistake is still yours to compare against, but the
+ * eye lands on the correction below it when you scroll back. */
+.bubble.corrected{opacity:.5}
+.bubble.fix{margin-top:4px}
 .msg.bot .bubble{border-bottom-left-radius:6px}
 .meta{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px; font-size:12px; color:var(--dim)}
 .msg.user .meta{justify-content:flex-end}
@@ -1195,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v125 — 2026-09-20";
+const VERSION   = "v126 — 2026-09-21";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2637,6 +2642,29 @@ function renderMessage(turnObj, shownExtra) {
   const toks = HSK.segment(turnObj.text, lex);
   bubble.innerHTML = toks.map(t => tokenSpan(t, turnObj.needs, turnObj.role !== "user", shownExtra)).join("");
   el.appendChild(bubble);
+
+  /* The grader's correction, under your own sentence and not greyed, so a scroll
+   * back through the conversation reads as correct Chinese rather than as a
+   * catalogue of your mistakes. Render-only: `better` is already on the message
+   * and already synced, so every grade you have ever been given shows one.
+   *
+   * parseGrade() blanks `better` when the correction is the sentence it corrects,
+   * so a non-empty one always has a real edit in it. Marking stays off -- the
+   * third argument to tokenSpan() is false on your own messages -- because the
+   * grader is only asked to stay inside the level WHERE POSSIBLE, and painting
+   * its correction red would read as a second mistake rather than the fix.
+   *
+   * The partner is untouched by this and still answers what you actually said;
+   * so do speak, copy and the translation, which are about your sentence. */
+  if (turnObj.role === "user" && turnObj.grade && turnObj.grade.better) {
+    bubble.classList.add("corrected");
+    const fix = document.createElement("div");
+    fix.className = "bubble fix pinyin-" + S.pinyin;
+    fix.dataset.src = turnObj.grade.better;
+    fix.innerHTML = HSK.segment(turnObj.grade.better, lex)
+      .map(t => tokenSpan(t, turnObj.needs, false, shownExtra)).join("");
+    el.appendChild(fix);
+  }
 
   // Below the Chinese, not above it: hidden until asked for either way.
   const transBox = document.createElement("div");
