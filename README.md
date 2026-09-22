@@ -764,7 +764,7 @@ The header's first control is what kind of session this is:
 | | What it is | Who speaks first |
 |---|---|---|
 | **Chat** | open conversation, the app as it always was | you |
-| **Ghost Words** | the partner steers toward words you were taught and have not yet used enough times to own | the partner |
+| **Ghost Words** | five words you were taught and have never written, studied away from the app, then a conversation steered at them | the partner |
 | **Flashcard Chat** | five words pulled from your own history to study away from the app, then a conversation steered at them until you own them | the partner |
 | **Story time** | a five-part story at your level, then questions about it | the partner |
 | **20 Questions** | one of you thinks of something, the other guesses | either |
@@ -779,15 +779,29 @@ Conversation starters only appear in **Chat**. They are openers for the *learner
 others open with the partner speaking first — offering one there would invite you to talk
 over a story that has not started.
 
-**Ghost Words** draws its words from the same list the progress panel calls *not yet yours*:
-words the app introduced through pacing that you have not yet used correctly enough times.
-*Enough* is **Correct uses to retire a ghost word** in Settings, three by default, and at most
-one counts per day — a wrong use gives one back. The banner shows each word's `n/N` and ticks
-the ones already banked today. That list
-already existed, already sorted commonest-first, so the activity is one extra rule and a
-different reuse list. There is no topic picker — a hand-authored topic taxonomy would need
-maintaining per level and would fight the word goal whenever the two disagreed. The words pull
-the conversation somewhere on their own.
+**Ghost Words** is Flashcard Chat drawing from a different shelf. Press **Choose 5 words**
+and the set comes from the list the progress panel calls *not yet yours*: words the app
+introduced through pacing that you have never written. Export them to Pleco or Anki with the
+same buttons, study them, and come back to a conversation steered at exactly those five until
+you own them — the same day strip, the same completion, the same everything below.
+
+*Own* is **Correct uses to retire a ghost word** in Settings, three by default, and at most
+one counts per day — a wrong use gives one back, unless the grader's own correction kept the
+word, in which case the mistake was somewhere else in the sentence and costs you nothing. The
+strip above the composer shows each word's `n/N` and ticks the ones already banked today.
+
+The set is fixed once chosen, and that is the point of it. Until v125 the activity targeted a
+live list recomputed as you wrote, so a word could leave the screen at the exact moment it
+earned a credit — you saw `把 0/3`, used 把, and watched it disappear instead of ticking to
+`1/3`. A set written down cannot do that.
+
+There is no topic picker — a hand-authored topic taxonomy would need maintaining per level and
+would fight the word goal whenever the two disagreed. The words pull the conversation
+somewhere on their own.
+
+Conversations started before v125 have no set recorded, because that version is what started
+recording one. They keep their transcript and stay open to chat in; start a new Ghost Words
+to pick a set.
 
 **Flashcard Chat** is two steps, because the reported problem was retrieval, not
 recognition: *"Once I'm reminded of the words I realize I can actually express my
@@ -807,10 +821,11 @@ takes before the set is done. At most one credit per word per day, so a round ca
 in under a day. When every word reaches that count the strip reads **Activity Complete!**
 and phase one — the button — comes back for the next set.
 
-Starting a second Flashcard Chat while a first is still unfinished never hands back a word
-the first is still working on; an in-progress set's words are held out of the candidate pool
-until it finishes, or until its conversation has gone quiet for a month, whichever comes
-first.
+Starting a second set while a first is still unfinished never hands back a word the first is
+still working on; an in-progress set's words are held out of the candidate pool until it
+finishes, or until its conversation has gone quiet for a month, whichever comes first. That
+holds **across the two activities**, so a word Ghost Words is working on is not offered to
+Flashcard Chat either.
 
 **Drills** works one mistake at a time. The chooser lists the categories you are actually
 accruing, with your own most recent sentence in each; picking one asks a second question —
