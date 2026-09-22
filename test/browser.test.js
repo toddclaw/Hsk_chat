@@ -273,7 +273,13 @@ return true;
            * is the shape a real answer arrives in: Markdown nobody asked for. */
           explainChat: [{ role: "assistant",
             text: "1. **Is it correct?** Yes.\\n- a bullet\\n### A heading" }],
-          grade: { ok: true, cats: { word: true, grammar: true, order: true, natural: true }, errors: [] } },
+          /* Failed, with a correction: the only seeded turn that has one, so the
+           * second-bubble checks below have both states to compare. errors is
+           * empty on purpose -- this turn feeds the mistake ledger too, and a
+           * tag here would move counts the drill checks assert on. */
+          grade: { ok: false, better: "\u4f60\u597d\u5417",
+                   cats: { word: true, grammar: true, order: true, natural: false },
+                   errors: [] } },
         /* A real learner's worth of typing, not two short turns. The progress
          * panel measures production by segmenting these, and a two-word
          * history cannot reach the states where the reading and production
@@ -361,6 +367,30 @@ return true;
       "a user message offers a translation button", JSON.stringify(ownBtns));
     check(!!ownBtns && ownBtns.indexOf("Check my grammar") !== -1,
       "a user message offers the grammar-check button", JSON.stringify(ownBtns));
+
+    /* A grader correction renders as a second bubble under your own sentence,
+     * with yours faded. The first seeded user turn failed and carries one; the
+     * last passed and does not, which is the pair that makes this mean
+     * something -- a rule that added a bubble to every message, or to none,
+     * would sail through either check alone. */
+    const fixed = await exec(`
+      function shape(m) {
+        return { bubbles: m.querySelectorAll('.bubble').length,
+                 first: m.querySelector('.bubble').className,
+                 fix: (m.querySelector('.bubble.fix') || {}).textContent,
+                 src: (m.querySelector('.bubble.fix') || { dataset: {} }).dataset.src };
+      }
+      var msgs = document.querySelectorAll('#log .msg.user');
+      return { bad: shape(msgs[0]), good: shape(msgs[msgs.length - 1]) };`);
+    check(fixed.bad.bubbles === 2, "a correction renders as a second bubble",
+      JSON.stringify(fixed.bad));
+    check(/\bcorrected\b/.test(fixed.bad.first || ""),
+      "and fades the sentence it corrects", JSON.stringify(fixed.bad));
+    check(fixed.bad.fix === "\u4f60\u597d\u5417" && fixed.bad.src === "\u4f60\u597d\u5417",
+      "the second bubble holds the correction, and is tappable",
+      JSON.stringify(fixed.bad));
+    check(fixed.good.bubbles === 1, "a sentence the grader passed gets no second bubble",
+      JSON.stringify(fixed.good));
 
     /* Yellow means "already answered -- pressing this is free and instant".
      * The seed gives both states from one render: the first user turn has a
@@ -1290,7 +1320,10 @@ check(usedGroups && usedGroups.first === "\u7684",
       document.querySelector('#input').value = "\u6211\u6628\u5929\u5f88\u9ad8\u5174\u4e86\u3002";
       document.querySelector('#send').click();
       return true;`);
-    await waitFor(`document.querySelectorAll('#log .msg.user .grade.bad').length > 0`,
+    /* Two, not one: the seeded first turn already carries a failed grade, so
+       waiting for "any cross on screen" would return before this send was
+       graded at all. */
+    await waitFor(`document.querySelectorAll('#log .msg.user .grade.bad').length > 1`,
       "the grade badge landing on the message");
     check(true, "a graded message shows a cross rather than a tick");
 
@@ -1304,7 +1337,9 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(!!sentGrade && /The student wrote:/.test(sentGrade.messages[0].content),
       "and is given the sentence it is grading");
 
-    await exec(`document.querySelector('#log .msg.user .grade.bad').click(); return true;`);
+    await exec(`
+      var bad = document.querySelectorAll('#log .msg.user .grade.bad');
+      bad[bad.length - 1].click(); return true;`);
     await waitFor("document.querySelector('#gradeSheet').classList.contains('open')",
       "the grade detail sheet");
     const detail = await exec(`
