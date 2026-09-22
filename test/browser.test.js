@@ -1721,11 +1721,12 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec("return window.currentActivity();") === "focused",
       "choosing an activity opens a conversation in it");
 
-    /* The activity change above started an opening turn against the seeded
-     * key, and everything below is about the busy state, so wait for that one
-     * to finish first or it is the turn being observed. */
+    /* Ghost Words starts on its chooser and generates nothing (v126), so
+     * there is no opening turn to wait out here. Kept as a guard anyway:
+     * everything below is about the busy state, so anything still in flight
+     * would be the turn being observed. */
     await waitFor("document.querySelector('#send').textContent === '\\u9001'",
-      "the focused-chat opening turn to settle", 30000);
+      "no turn in flight after choosing Ghost Words", 30000);
 
     /* S.busy is not reachable from here, so the only way to observe the busy
      * state is to be in it: a stub that never resolves on its own holds the app
@@ -1871,6 +1872,34 @@ check(usedGroups && usedGroups.first === "\u7684",
       "return Array.prototype.some.call(document.querySelectorAll('#starters button')," +
       "  function (b) { return /make something up/i.test(b.textContent); });") === true,
       "and a make-something-up button");
+
+    /* Ghost Words, same rule, and it did NOT hold between v125 and v126: the
+     * partner opened the moment the activity was picked, the chooser was
+     * hidden while that ran, and the assistant turn it left behind made
+     * legacySetChat() read the conversation as one that can never get a set.
+     * Both chosen-set activities are asked, so the next one cannot regress.
+     *
+     * Read off the send button rather than the chooser: openingTurn() sets
+     * the busy flag and renders it SYNCHRONOUSLY, so \u505c here means a turn
+     * started no matter how fast the stub resolves -- and an empty candidate
+     * pool renders a note with no button, so "is there a chooser button" is
+     * not a question this state can answer. \u9001 is send, \u505c stop. */
+    for (const act of ["focused", "flashcard"]) {
+      const busy = await exec(
+        "window.__calls = 0; window.startActivity(arguments[0]);" +
+        "return document.querySelector('#send').textContent;", [act]);
+      check(busy === "\u9001", "picking " + act + " starts no partner turn", busy);
+      check(await exec("return window.__calls;") === 0,
+        "and spends nothing until the words are chosen",
+        String(await exec("return window.__calls;")));
+      check(await exec("return window.currentActivity();") === act,
+        "and the conversation is in " + act);
+      check(await exec("return document.querySelector('#input').disabled;") === true,
+        "and the composer is closed until a set exists");
+    }
+    await exec("window.startActivity('story');");
+    await waitFor("document.querySelector('#storyTopicInput')",
+      "back on the story chooser");
 
     /* The curated ideas are a sample, not a fixed slice -- HSK 1's pool has
      * five and the chooser shows four, drawn through sampleOf() rather than
