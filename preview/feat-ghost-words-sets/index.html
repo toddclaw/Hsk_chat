@@ -1200,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v126 — 2026-09-21";
+const VERSION   = "v127 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3287,9 +3287,16 @@ function startActivity(id) {
    * the partner speaking. */
   /* Same withholding as story time, for the same reason: nothing is
    * generated until the learner has chosen a role, since the role decides
-   * what the model is even allowed to say. */
-  if (act.gen !== "segments" && id !== "chat" && id !== "twenty" &&
-      id !== "drill" && id !== "flashcard") openingTurn();
+   * what the model is even allowed to say.
+   *
+   * A chosen-set activity withholds for the same reason and is asked as a
+   * PROPERTY, not by name: startFlashcardsWith() writes the set marker and
+   * then opens, so an opening turn fired here has no set to steer at -- and
+   * once it lands, the transcript has a non-marker turn in it and
+   * legacySetChat() reads the conversation as a pre-v125 one that can never
+   * pick a set. That is what Ghost Words did between v125 and v126. */
+  if (act.gen !== "segments" && act.reuse !== "chosen" &&
+      id !== "chat" && id !== "twenty" && id !== "drill") openingTurn();
   return c;
 }
 
