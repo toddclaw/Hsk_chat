@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v134 — 2026-09-22";
+const VERSION   = "v135 — 2026-09-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2948,29 +2948,52 @@ function renderConversation() {
     const actLabel = HSKPrompt.activityFor(currentActivity()).label;
     const targets = flashcardTargets();
     if (!targets.length) return "";
-    const rounds = flashcardRounds(targets), goal = S.ghostUses;
-    const strip = [];
-    for (let i = 1; i <= goal; i++) {
-      if (i <= rounds) {
-        strip.push('<span style="margin-right:12px">Day ' + i + ' ✓</span>');
-      } else if (i === rounds + 1) {
-        const got = targets.filter(e => (e.ghostN || 0) >= i).length;
-        /* "words" spelled out because the two live fractions on screen have
-         * different denominators -- this one is words-out-of-the-set, the
-         * chips below are days-out-of-S.ghostUses -- and a bare 4/5 above a
-         * row of 3/3 reads as the same kind of number. */
-        strip.push('<span style="margin-right:12px;color:var(--accent)">Day ' + i +
-          " · " + got + "/" + targets.length + " words</span>");
-      } else {
-        strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
-      }
-    }
-    /* The words themselves are NOT here any more: they live on the strip above
-     * the composer, which is pinned, because "how am I doing" is a question
-     * asked on every turn and this banner scrolls away after two of them. What
-     * stays here is what you ask for once a day at most -- the export, and
-     * where you are in the set. */
+    const goal = S.ghostUses;
+    /* Per word, not per set, and it says where the credit came from.
+     *
+     * The Day N strip that used to be here counted min(ghostN) across the set
+     * as "rounds" and drew a tick for each one. Reported 2026-09-23: a brand
+     * new Ghost Words set opened on "Day 1 ✓ · Day 2 · 1/5 words" before a
+     * word had been written. It was telling the truth and the truth was
+     * unreadable -- ghostProgress() scans the WHOLE history and has no notion
+     * of when a set was made, and a ghost candidate is an above-level word the
+     * app taught, so it has usually been used in ordinary chat for weeks. With
+     * no per-word verdict outside a set activity, ghostVerdict() falls back to
+     * grade.ok, so every clean sentence containing the word banked a day for
+     * it. All five arrived with credit; 其他/比赛/担心/先 at 1 and 行 at 2.
+     *
+     * Flashcard Chat has the same arithmetic and looked right only by luck --
+     * three of its five were at 0, so the minimum was 0 and it said Day 1.
+     *
+     * Counting only days earned since the set was chosen was the other
+     * candidate and was rejected with the learner: a word at 2 of 3 retires
+     * after one more day, so set-relative rounds would tick its chip as done
+     * while the banner demanded two more. Whole-history credit is what
+     * actually drives retirement, so it is what gets shown -- labelled. */
+    const settledN = targets.filter(e => (e.ghostN || 0) >= goal).length;
+    const carried = targets.filter(e => (e.ghostN || 0) > 0).length;
+    const lead = settledN === targets.length
+      ? "All " + targets.length + " words are banked on " + goal + " separate days."
+      : "Every word needs a correct use on " + goal + " separate days. " +
+        (carried
+          ? carried + " of " + targets.length + " already carry days banked in " +
+            "earlier conversations, so they start part-way."
+          : "None of them has a banked day yet.");
+    const strip = targets.map(e => {
+      const n = Math.min(e.ghostN || 0, goal), done = n >= goal;
+      return '<span style="margin-right:12px' +
+        (done ? "" : e.ghostToday ? ";color:var(--accent)" : ";opacity:.75") + '">' +
+        escapeHtml(e.w) + " " + n + "/" + goal + (done ? " ✓" : "") + "</span>";
+    });
+    /* The per-word DAY counts live here and the pinned strip above the composer
+     * still carries none. That split is v130's and it survives: the strip
+     * answers "which words do I still owe today" in two states, and this
+     * answers "how far along is each word" once. What made the old pairing
+     * unreadable was two fractions with different denominators side by side --
+     * words-out-of-the-set here, days-out-of-goal there. There is now only one
+     * denominator on screen, and it is days. */
     return '<div class="hint"><b>' + escapeHtml(actLabel) + "</b><br>" +
+      '<span style="color:var(--dim)">' + escapeHtml(lead) + "</span><br>" +
       '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
       '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
       '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +

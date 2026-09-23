@@ -281,6 +281,56 @@ advancement. Nothing in the literature suggests a learner is harmed by moving up
 the failure mode is self-correcting — the retry counters and the validator make too-hard
 immediately visible.
 
+## What the gate actually does in production, as opposed to on a corpus
+
+**Measured 2026-09-22 from `debug_log`**, and it is the first time any gate number
+has come from real use rather than a replay. The headline the rest of this
+document and `CLAUDE.md` quote — `nativeFrame` OR `softBar`/glm-5.3-flash,
+"catches every outright error and 73% of the merely-stilted at 80%
+specificity" — is a property of the PAIR, and the pair is not what runs.
+
+Over 240 hours: the fast arm made 237 calls and failed once; the slow arm made
+134 and failed **45 times, 34%**. Thirty-nine were 25-second timeouts and all 24
+`[empty completion]` records in the window were glm with `finish_reason:
+"length"`, spread across five providers. So a third of the time the gate is
+`nativeFrame` alone — 86% strict, 61% loose, 87% specificity — and nothing
+anywhere says so, because failing open is the correct behaviour and it is silent.
+
+**The cause is not flakiness and not a bad provider.** Probed directly with the
+shipped prompt: the default route spends ~2.1k tokens thinking and answers in a
+median of 19s against a 25s deadline. The timeout sits in the middle of the
+latency distribution, so losing a third of the races is the expected outcome, not
+an anomaly. Eight routings were tried — default, `sort: "latency"`, `sort:
+"throughput"`, and five pinned providers including Z.AI's own first-party
+endpoint — and the best honest median was 19s; two providers returned errors on
+every repeat call and three, Z.AI's own among them, ran at 50–60s.
+Generating that much reasoning is slow wherever it happens.
+
+**`reasoning: {enabled: false}` returns nothing at all**, ten times in ten. The
+model cannot answer this prompt without thinking, so the budget cannot simply be
+removed.
+
+**`reasoning: {effort: "low"}` is not a faster grader, it is a different one.** It
+fixes the latency completely — 2.3s median, 60 reasoning tokens, no empties — and
+re-graded over the same 222 real partner turns it moves the union from 100/73 at
+80% specificity to 95/81 at **62%**. It catches more stilted Chinese and fires on
+every other turn with half its objections wrong, which in a union means retrying
+replies that were fine. Recorded as a real operating point and rejected as a
+default.
+
+**The lesson that generalises.** Every number in "Measurements we ran" is a
+corpus number, and a corpus has no deadline. This arm scores exactly as measured
+on the 34% of occasions it answers, and scores nothing at all the rest of the
+time; no benchmark in this study can see that distinction, because none of them
+can time out. **An arm slightly worse on paper that always answers may beat one
+that is better on paper and absent a third of the time**, and nothing here has
+ever made that comparison. `BACKLOG.md`, "The gate's second arm is down a third
+of the time", has what would settle it.
+
+This is also the fifth silent failure in the study, and it presented the way the
+other four did: as plausible numbers nobody had a reason to doubt. It was visible
+only because `debug_log` records the raw outcome of every call.
+
 ## Telling the planner which word the turn owes — measured, rejected
 
 **The fifth prompt fix in this study to move the number the wrong way**, and the
