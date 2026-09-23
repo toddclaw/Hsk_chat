@@ -602,12 +602,12 @@ footer{
 
     <label for="ghostUses">Correct uses to retire a ghost word</label>
       <select id="ghostUses"></select>
-      <div class="note">How many times you have to use a <b>Ghost Words</b> target
-      correctly before it leaves the list. At most one counts per day, however often you
-      write it — spacing is what makes a new word stick, and a day of practice is one
-      day of practice. Getting it wrong costs you one back — also at most one a day. Only the word itself is
-      judged: a mistake elsewhere in the sentence still lands in your mistakes, but it
-      does not withhold the credit.</div>
+      <div class="note">How many separate <b>days</b> you have to use a <b>Ghost Words</b>
+      target correctly before it leaves the list. At most one counts per day, however often
+      you write it — spacing is what makes a new word stick, and a day of practice is one
+      day of practice. Within a day the <b>last</b> use decides: get it wrong and that day
+      is lost, get it right again later and you win the day back. Days you have already
+      banked are safe either way. See <b>How your writing is judged</b> below.</div>
 
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
@@ -722,6 +722,46 @@ footer{
       <div class="note">Switches the allowlist, the starters and the prompt. Words you added
       keep the form you added them in. About 3% of entries list several traditional variants
       (岸/㟁, 幫/幇/幚); the one belonging to the word's main reading is used.</div>
+  </details>
+
+  <!-- Asked for after a Ghost Words counter appeared stuck: the rules were all
+       real and none of them were anywhere the learner could read. Plain
+       language on purpose -- no field names, no model names. -->
+  <details class="sec">
+    <summary>How your writing is judged</summary>
+
+    <div class="note">Every sentence you write gets <b>two</b> separate looks, and they
+    answer different questions. Knowing which is which explains most surprises.</div>
+
+    <label>1. The whole sentence</label>
+      <div class="note">A checker reads what you wrote and decides whether it reads as
+      natural Chinese. That is the ✓ or ✗ on your message. If it has a fix to offer, the
+      corrected sentence appears under yours — and if it shows no correction, it had no
+      edit to make.</div>
+
+    <label>2. The word you were practising</label>
+      <div class="note">In <b>Ghost Words</b> and <b>Flashcard Chat</b> a second, separate
+      question is asked about each target word in your sentence: was <i>this word</i> used
+      correctly, ignoring everything else? That is the one that moves the counters.</div>
+
+    <label>How a word earns its day</label>
+      <div class="note"><b>The word has to be right. The sentence around it does not.</b>
+      If the word check passes, the day counts even when the sentence as a whole was
+      marked wrong — most of your credits are earned this way. A mistake elsewhere still
+      goes in your mistakes list; it just does not take the word down with it.</div>
+
+    <label>When the two disagree</label>
+      <div class="note">If the word check says a word is wrong but the correction still
+      <b>contains</b> that word, the correction wins: the fix was clearly about something
+      else, so the sentence neither earns the day nor costs it. If the sentence was marked
+      correct with no fix at all, the word counts. Either way a note under your sentence
+      says what happened, so a counter never stalls without telling you why.</div>
+
+    <label>Where it can be wrong</label>
+      <div class="note">Both checks are language models and both make mistakes. The word
+      check is the harsher of the two and sometimes blames a target for the word standing
+      next to it. That is why a correction that keeps your word can overrule it, and why
+      nothing is ever taken away from a day you already banked.</div>
   </details>
 
   <details class="sec">
@@ -1200,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v133 — 2026-09-22";
+const VERSION   = "v134 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
