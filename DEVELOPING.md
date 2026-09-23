@@ -834,6 +834,8 @@ order they happen in is the design. `turn()` in `index.html` is the whole of it.
   GATE          is it correct, and worth copying?             1-2 calls
     |           nativeFrame on the teaching model, then softBar on
     |           glm-5.3-flash only if the first passed
+    |           (the second arm times out on 34% of real calls --
+    |            the turn then passes on the first arm alone)
     |                                    fails -> repair + a STRATEGY, retry
     v
   SOFT CHECKS   echo? required word missing?  keep the best answer, ask again
@@ -850,6 +852,14 @@ Four things about that order, each of which was arrived at the hard way:
 - **The gate is spent only on replies that already passed vocabulary**, like the
   sense check, because grading a reply that is about to be repaired anyway is a
   wasted call.
+- **The second arm is missing a third of the time, and that is invisible.**
+  Measured in production 2026-09-22: `softBar` on glm-5.3-flash fails 34% of
+  calls, because it thinks for ~2.1k tokens and its median answer takes 19s
+  against a 25s `GATE_TIMEOUT_MS`. The turn then passes on `nativeFrame` alone.
+  Failing open is the right behaviour and nothing on screen or in the transcript
+  records it — only `debug_log` does. Read that before quoting the pair's
+  numbers as a description of what ships. `BACKLOG.md`, "The gate's second arm
+  is down a third of the time".
 - **The gate is above the soft checks**, because those keep their best answer and
   show it when the tries run out. Below them, that kept answer reaches the
   screen ungraded.

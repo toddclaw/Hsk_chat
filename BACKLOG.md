@@ -169,6 +169,116 @@ corrections, not categories) and the partner's own distribution, which is fluent
 model Chinese with occasional structural oddity rather than learner error. Both
 would need hand-labelling.
 
+## The gate's second arm is down a third of the time — needs a different model
+
+**Found:** 2026-09-22, reading `debug_log` after the learner was marked wrong for
+copying a partner sentence the gate had passed. This is the first measurement of
+the shipped gate against production traffic rather than a replay.
+
+**The number.** Over 240 hours of real use:
+
+| arm | calls | failures |
+|---|---|---|
+| `nativeFrame` on the teaching model | 237 | 1 |
+| `softBar` on `z-ai/glm-5.3-flash` | 134 | **45 (34%)** |
+
+39 of the 45 are 25-second timeouts; all 24 `[empty completion]` records in the
+window are glm, `finish_reason: "length"`, across five different providers
+(StreamLake, Parasail, Relace, Together, and one unnamed).
+
+**Why it matters more than a third of calls sounds.** `CLAUDE.md` quotes the gate
+as the PAIR — "catches every outright error and 73% of the merely-stilted at 80%
+specificity". A third of the time production is running one arm, `nativeFrame`
+alone, which is 86% strict / 61% loose at 87% specificity. The gate fails open by
+design, which is right, and says nothing when it does, which is the problem: the
+measured number does not describe what ships. During the reported session all
+four calls timed out and the session was single-armed end to end.
+
+**It is not flakiness, it is arithmetic.** Probed directly with the shipped
+`softBar` prompt, 10 calls: the default route spends ~2.1k tokens thinking and
+answers in a MEDIAN of 19s against `GATE_TIMEOUT_MS = 25000`, with 2 empties in
+10. The deadline sits in the middle of the latency distribution, so a third of
+calls losing the race is exactly what should be expected. Note also that
+`gateFault()` asks the fast arm first and only reaches glm when the fast one
+found nothing, which is most turns — so this latency is what most partner turns
+already pay on top of generation, not only a failure mode.
+
+### What has been ruled out, and on what evidence
+
+**Turning reasoning off — dead.** `reasoning: {enabled: false}` returns empty
+content 10 times in 10, in 116ms. The model cannot answer this prompt without
+thinking.
+
+**Reasoning `effort: "low"` — works, and is a different grader.** 0 empties,
+median 2264ms, 60 reasoning tokens: an 8x speedup that fixes the timeout
+outright. Re-graded over the same 222 real partner turns
+(`partner-corpus-graded-softBarLow-glm-5.3-flash-real-qwen.json`, kept):
+
+| | strict | loose | specificity | fires |
+|---|---|---|---|---|
+| `nativeFrame` alone | 86% | 61% | 87% | 29% |
+| `nativeFrame OR softBar` (shipped) | 100% | 73% | **80%** | 37% |
+| `nativeFrame OR softBar` at `effort: low` | 95% | 81% | **62%** | 52% |
+
+It catches more stiltedness and fires on every other turn with half its
+objections wrong. In a union that is retries on a third of clean turns, more
+spend, and the repair ladder churning on replies that were fine. Rejected.
+
+**Provider pinning — no route is fast enough.** The model, prompt and reasoning
+budget would all have stayed exactly as measured, so this was the preferred fix
+and it does not exist. 5–8 calls each:
+
+| route | median | max | empty |
+|---|---|---|---|
+| default (landed on Together) | 23754ms | 26741ms | 0/5 |
+| `sort: "throughput"` | 19026ms | 54300ms | 0/5 |
+| `sort: "latency"` | 25946ms | 50283ms | 0/5 |
+| Fireworks pinned | 311ms | 7545ms | **7/8, provider error** |
+| Parasail pinned | **50898ms** | 115599ms | 2/8 |
+| DeepInfra pinned | 225ms | 337ms | **8/8, provider error** |
+| Novita pinned | **59662ms** | 148665ms | 1/8 |
+| Z.AI pinned (first party) | **59710ms** | 143329ms | 1/8 |
+
+One early Fireworks sample came back at 8611ms with 0/5 empty and did not
+reproduce; five calls was too few to have quoted it. Generating ~2.1k reasoning
+tokens takes 19–60s wherever it runs.
+
+### What would settle it
+
+**Price a cheap NON-REASONING model as the second arm.** The whole failure is the
+reasoning budget; an arm that does not have one cannot lose this race. The
+constraint to respect is `CLAUDE.md`'s: a union needs two graders that disagree
+*productively*, and two prompts on the same model do not — so this has to be a
+different model, not another prompt on qwen.
+
+The work is mechanical and the harness exists:
+
+1. `node tools/partner-corpus.js --grade --arm softBar --model <candidate> \
+   --corpus ../../real-qwen.json --labels ../../real-qwen-labels.json`
+   — writes another `partner-corpus-graded-*-real-qwen.json`.
+2. `node tools/partner-pairs.js` then scores every pair against
+   `nativeFrame` for free, because both arms' verdicts are already on disk.
+3. Probe the candidate's latency the way glm was probed before trusting it:
+   median, max and empty rate over ~10 calls with the real prompt.
+
+The bar to beat is the shipped pair at 100% strict / 73% loose / 80%
+specificity for $0.0004 a turn, *while actually answering*. An arm slightly worse
+on paper that runs every time may well beat one that is better on paper and
+absent a third of the time — which is the real comparison and the one nothing has
+made yet.
+
+**Also worth deciding while in here:** whether a timed-out arm should be visible.
+It fails open silently today, so a single-armed session looks identical to a
+gated one. `debug_log` records it and nothing else does.
+
+**Interim, if the model hunt stalls:** `reasoning: {effort: "low"}` behind the
+existing Settings switch as a "strict gate" option is coherent — it is a real
+grader, just a trigger-happy one — but it should not become the default on these
+numbers.
+
+`tools/grader-bench.js` now takes `--reasoning <effort>`, defaulting to off so
+every number already recorded keeps its meaning.
+
 ## Whether a migration has actually been run is unanswerable from the client — checked
 
 **Found:** 2026-09-14, auditing v101 against the v100 failure. **Answered** the same day:
