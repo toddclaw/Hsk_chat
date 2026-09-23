@@ -5063,6 +5063,25 @@ check(usedGroups && usedGroups.first === "\u7684",
          function (b) { return b.textContent; });`);
     check(fcExports.length === 2 && fcExports.join("|").indexOf("Anki") !== -1,
       "both exports are in the banner at the top of the log", JSON.stringify(fcExports));
+
+    /* The banner says where each word stands, and never claims a day the
+     * learner did not do. v134 drew "Day 1 ✓ · Day 2 · 1/5 words" on a set
+     * opened seconds earlier, because min(ghostN) counts credit banked in
+     * ordinary chat weeks before the set existed. The counts are still
+     * whole-history -- that is what retires a word -- so what had to change was
+     * the claim: per word, out of the goal, with the carried credit named.
+     *
+     * The seeded set has never been used, so the honest reading is zero. Both
+     * halves are asserted: the wording that says none is banked, and the
+     * absence of any Day tick to contradict it. */
+    const fcBanner = await exec(
+      `var h = document.querySelector('#log .hint'); return h ? h.textContent : "";`);
+    check(/None of them has a banked day yet/.test(fcBanner),
+      "an unused set says so rather than claiming a day", fcBanner.slice(0, 160));
+    check(!/Day \d/.test(fcBanner),
+      "and no Day counter survives to contradict it", fcBanner.slice(0, 160));
+    check(fcSet.every(w => fcBanner.indexOf(w + " 0/") !== -1),
+      "every word carries its own days-banked fraction", fcBanner.slice(0, 200));
     /* The banner is an innerHTML string, so its handlers are inline attributes.
      * A typo in one is not a syntax error anywhere -- the button simply renders
      * and does nothing -- so what is checked is that the browser compiled the
