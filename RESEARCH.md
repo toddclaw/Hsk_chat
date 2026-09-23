@@ -359,6 +359,41 @@ one of them.** What moved each time was the modal beside it, 不 → 不要 → 
 The learner lost a day for a word the app itself kept putting back in his mouth,
 including on the sentence it had just told him to write.
 
+**And a missing correction is not a correction that dropped the word** (v132).
+The v124 rule reads `better` to decide whether a wrong verdict survives, and an
+empty `better` fell through to "the correction removed it" -- the opposite of
+what it means. `parseGrade()` produces an empty `better` two ways and both mean
+the grader had no edit to make: nothing was wrong, or the correction came back
+character-for-character identical to the sentence and was blanked as no edit.
+
+Found 2026-09-22 on 而且. Across 97 stored per-word verdicts there are 35 wrong
+ones: 27 already rescued because the correction kept the word, 3 real demotions
+where it dropped it, and **5 charged on no evidence at all**. Every one of the 5
+was a sentence the whole-sentence grader had CLEARED -- a green tick on screen,
+no correction to render under it, and a day quietly gone. One of them cost the
+last use of a session, which under the day rule above forfeits the whole day.
+
+The consistency argument is what settles it rather than any judgement about
+which grader was right. A message whose per-word call *fails* carries no verdict
+and is credited on the whole-sentence rule; charging this one demotes the
+learner for the extra call having succeeded. The same sentence must not be worth
+less because a check answered.
+
+It does **not** extend to a faulted sentence with no correction. There the
+missing text is a missing artefact rather than evidence: the sentence was
+independently marked wrong and the per-word call named this word, and nothing
+contradicts either. That stays a demotion, which is what keeps the day rule able
+to fall at all.
+
+What this gives up: the narrow per-word lens is right about some of those 5 --
+而且 in 我们快去找老师，而且老师会帮我们 is an additive connective on a causal
+relation. The answer is not to bill for it silently. v126 renders the grader's
+correction under the sentence, so a demotion with a correction is one the
+learner can see and learn from; a demotion with an empty `better` has nothing to
+render and can never be explained. Show the disagreement or do not charge for
+it. If that signal is wanted back, it belongs on screen, not in a counter that
+stalls without saying why.
+
 So a wrong verdict demotes only when the grader's own `better` no longer
 contains the word. A repair that leaves the word standing is not a repair *of*
 that word, whatever the per-word call answered. The rule is deliberately
