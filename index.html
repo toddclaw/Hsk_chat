@@ -1200,7 +1200,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v132 — 2026-09-22";
+const VERSION   = "v133 — 2026-09-22";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2671,6 +2671,43 @@ function renderMessage(turnObj, shownExtra) {
     fix.innerHTML = HSK.segment(turnObj.grade.better, lex)
       .map(t => tokenSpan(t, turnObj.needs, false, shownExtra)).join("");
     el.appendChild(fix);
+  }
+
+  /* Why a word you just used did not move its counter.
+   *
+   * The per-word checks are otherwise invisible. A sentence can pass the
+   * whole-sentence grader, show a green tick, and still not credit its target,
+   * which reads as a counter that is broken -- reported exactly that way on
+   * 2026-09-22 after 而且 was written three times in a session and the number
+   * stayed put. Two of those three were the v132 bug and credit now; the third
+   * was a real rescue and still does not count, and nothing said so.
+   *
+   * Asks HSKMistakes.ghostVerdict() rather than restating the rule, so the note
+   * cannot drift from the number it is explaining.
+   *
+   * Only when the check CHANGED the outcome. A word that credited needs no
+   * note: the counter moving is its own explanation, and a line saying "the
+   * checker disagreed but you got it anyway" invites doubt about a tick that is
+   * correct. `grade.ghost` only exists on turns graded inside a set activity,
+   * so its presence is the whole gate -- no activity check needed, and an old
+   * transcript without one is silent as before. */
+  if (turnObj.role === "user" && turnObj.grade && turnObj.grade.ghost) {
+    const lines = Object.keys(turnObj.grade.ghost).map(w => {
+      const v = HSKMistakes.ghostVerdict(turnObj.grade, w);
+      if (v === "wrong")
+        return "「" + w + "」 reads wrong here, so today's credit for it is gone " +
+               "until you use it correctly again.";
+      if (v === "none" && turnObj.grade.ghost[w].used === true)
+        return "The fix above was not about 「" + w + "」, so this sentence " +
+               "does not count towards it either way.";
+      return "";
+    }).filter(Boolean);
+    if (lines.length) {
+      const why = document.createElement("div");
+      why.className = "note";
+      why.textContent = lines.join(" ");
+      el.appendChild(why);
+    }
   }
 
   // Below the Chinese, not above it: hidden until asked for either way.
