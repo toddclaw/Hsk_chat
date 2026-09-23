@@ -281,6 +281,62 @@ advancement. Nothing in the literature suggests a learner is harmed by moving up
 the failure mode is self-correcting — the retry counters and the validator make too-hard
 immediately visible.
 
+## Telling the planner which word the turn owes — measured, rejected
+
+**The fifth prompt fix in this study to move the number the wrong way**, and the
+second to be rescued by asking whether the mechanism it blamed was doing any
+damage. `tools/plan-require-ab.js`, 65 real learner turns, qwen, one draw,
+judged by `nativeFrame`.
+
+The motivating incident is real. On 2026-09-23T01:03Z the partner planned and
+wrote 我们快去找老师。老师会帮我们找到手机。— clean, idiomatic, gate-passing, no
+而且 in it. `turn()`'s require check threw it away and sent 请一定要用「而且」…再
+说一次, and attempt 2 came back 我们快去找老师，而且老师会帮我们: an additive
+connective on a causal relation. Todd copied that sentence verbatim and the
+per-word grader marked him wrong for it.
+
+The obvious reading — the retry writes bad Chinese, so tell the planner instead
+— is the one RESEARCH.md keeps rewarding elsewhere ("move the constraint to the
+front"). It is wrong here, and the data says so twice.
+
+| | require retry fires | reads as Chinese | no affordable plan |
+|---|---|---|---|
+| shipped (planner blind) | 45% | **85%** | 11% |
+| planner told the word | **6%** | 74% | 17% |
+
+The mechanical effect is enormous and real: 29 turns against 4, p = 1.1e-5. The
+quality effect points the other way — 13 turns where the shipped arm passed and
+the candidate faulted against 6 the other way, p = 0.17, so not significant, but
+there is no version of this result in which the candidate is better.
+
+**The premise does not survive its own control.** Inside the shipped arm, turns
+that went through the wedge retry were graded clean 86% of the time and turns
+that never triggered it 83%. Wedging does not hurt. The mechanism the change was
+built to eliminate was not costing anything, so eliminating it bought a number
+that was never a problem and paid for it in the one that was.
+
+What the candidate's failures actually look like is the second half of the
+lesson. They are not wedges, they are structures built around the word:
+你为了什么每天学习中文？for 为什么, 她会带新的水给你 for 她会给你带新的水,
+我觉得她能来 missing its 要是. A planner told to use a word plans a sentence
+whose shape is chosen to need it, and that shape is often the awkward one. The
+free planner writes better Chinese and then has the word pushed in, which turns
+out to disturb it very little.
+
+The 01:03 turn was therefore bad luck rather than a systematic fault, and the
+answer to it is the learner-side work of v132–v134: do not charge a learner for
+a word the app required, and say on screen what the per-word check did.
+
+Two harness bugs were caught before they produced numbers, both of the kind this
+document keeps recording. A lexicon built from `data/hsk<N>.json` alone cannot
+segment a ghost word — ghost words are above the level by definition, 而且 is
+HSK 3 against HSK 2 — so `spot()` scored a flat 0% for both arms and `validate()`
+rejected every compliant plan; the fix is to pass the targets and the export's
+117 `introduced` words as `extra`, which is what `S.lex` is in the browser. And
+the first comparison graded the shipped arm's attempt 1, which production never
+shows: what ships is the wedged retry, so the retry has to run in both arms
+before anything is judged.
+
 ## Retiring a ghost word
 
 **Informed by the literature; the numbers themselves are not measured.**
