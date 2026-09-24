@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v135 — 2026-09-23";
+const VERSION   = "v136 — 2026-09-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2035,6 +2035,22 @@ function stopTurn() {
   if (inflight) inflight.abort();
 }
 
+/* How long one phase of a turn took, in the log the phone can send back.
+ *
+ * The gate has had timings since v110 and nothing else ever has, so the only
+ * phase anybody could point at was the one already known to be slow --
+ * checkSenseViolations() is a serial loop of model calls and has never been
+ * timed at all. Every optimisation in this plan is chosen from these numbers,
+ * so they go in before any of them.
+ *
+ * finally, not after the await: a phase that throws still took time, and the
+ * vocabulary repair path throws routinely. */
+async function timed(name, fn) {
+  const t0 = Date.now();
+  try { return await fn(); }
+  finally { console.log("[phase] " + name + " " + (Date.now() - t0) + "ms"); }
+}
+
 async function callModel(messages, maxTokens, model) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
@@ -2339,7 +2355,7 @@ async function turn(ctx) {
    * something the level cannot say. */
   if (S.plan && PLANNED[activity] && !(ctx && ctx.storySegment)) {
     status("想一想…");
-    const plan = await planReply(S.history.slice(-4), S.lex);
+    const plan = await timed("plan", () => planReply(S.history.slice(-4), S.lex));
     if (plan) scratch.push({ role: "user", content: HSKPrompt.planInstruction(plan) });
   }
 
@@ -2367,14 +2383,15 @@ async function turn(ctx) {
      * to end a story mid-narrative on an error card. Retried once, here rather
      * than inside callModel, so translation and the explain sheet keep failing
      * loudly instead of silently doubling their cost. */
-    let raw;
-    try {
-      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
-    } catch (err) {
-      if (err.kind !== "empty") throw err;
-      console.warn("[empty completion] retrying once");
-      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
-    }
+    const raw = await timed("generate", async () => {
+      try {
+        return await callModel(scratch, ctx && ctx.maxTokens, model);
+      } catch (err) {
+        if (err.kind !== "empty") throw err;
+        console.warn("[empty completion] retrying once");
+        return await callModel(scratch, ctx && ctx.maxTokens, model);
+      }
+    });
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
     /* Read here, not at the return. `callModel.lastFinish` is one global that
@@ -2405,7 +2422,8 @@ async function turn(ctx) {
     /* The sense check is spent only once vocabulary already passes -- an
      * ambiguous word inside a reply that is already going to be repaired for
      * something else is not worth a second model call this attempt. */
-    const senseViols = hardViolations.length ? [] : await checkSenseViolations(ex.text, lex, S.level);
+    const senseViols = hardViolations.length ? []
+      : await timed("sense", () => checkSenseViolations(ex.text, lex, S.level));
     const violations = hardViolations.concat(senseViols);
     console.log("[attempt " + attempt + "]", raw,
       violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
@@ -2440,7 +2458,7 @@ async function turn(ctx) {
          * having finished and lost the answer. The wait is one wait; it says
          * so once. */
         status("检查中… " + attempt + "/" + tries);
-        const fault = await gateFault(ex.text, lex);
+        const fault = await timed("gate", () => gateFault(ex.text, lex));
         if (fault) {
           gateFails++;
           /* At most one introduced word per turn, and none at all if pacing has
