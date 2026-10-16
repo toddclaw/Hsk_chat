@@ -1346,14 +1346,30 @@ This is a one-time setup an app owner does, not something each user repeats:
    in `index.html`, and RLS is the real access boundary) into the `SUPABASE_URL` /
    `SUPABASE_ANON_KEY` constants near the top of `index.html`'s script.
 
-**Keeping the free project awake.** Supabase pauses a free-tier project after 7 days with no
-database *activity* (dashboard visits and cached reads don't count), which would otherwise
-leave sync silently stopped until someone clicks "resume" in the dashboard. `db/schema.sql`'s
-`_keepalive` table and `.github/workflows/keepalive.yml` handle this: a scheduled job, every
-3 days, writes a timestamp using a **secret key** (Project Settings → API — this is the
-powerful one, formerly called the "service_role key"; it bypasses RLS entirely and must
-never appear in the app itself). Add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as
-repository secrets (Settings → Secrets and variables → Actions) for the workflow to use.
+**The free project pauses, and the keepalive does not stop it.** Supabase pauses a free-tier
+project after 7 days with no database *activity* (dashboard visits and cached reads don't
+count), which leaves sync silently stopped until someone clicks "resume" in the dashboard.
+`db/schema.sql`'s `_keepalive` table and `.github/workflows/keepalive.yml` were built to
+prevent that and **do not** — measured 2026-10-07. The workflow's upsert is a real row write
+and not an HTTP ping, and it succeeded on 10-01 and 10-04 against a live project; the project
+was paused anyway within nine hours of 7 days after the last write the *app* made
+(2026-09-30 03:48Z), and the 10-07 run failed with `curl: (6) Could not resolve host`,
+because a paused project loses its DNS record. Whatever resets Supabase's inactivity clock, a
+secret-key write through PostgREST is not it — and Supabase documents no criterion. No
+dashboard reason and no Supabase email accompanied the pause.
+
+What the workflow is good for is **noticing**. It runs every 3 days, so a pause costs one
+failed run, and GitHub emails the repository owner when a scheduled workflow fails — that
+email is the notification that sync is down and the dashboard needs a "resume" click. Add
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as repository secrets (Settings → Secrets and
+variables → Actions) for it to use; the latter is the **secret key** (Project Settings → API —
+the powerful one, formerly called the "service_role key"; it bypasses RLS entirely and must
+never appear in the app itself).
+
+Do not iterate on the write without budgeting for the test. This workflow ran green for five
+weeks before the pause and proved nothing, because the app was in daily use and the app's own
+writes were what kept the project awake. Confirming any replacement costs eight days of not
+touching the app. The Pro plan is the only fix that needs no measuring.
 
 Supabase's newer secret keys (`sb_secret_...`) must be sent only in the `apikey` header —
 unlike the legacy `service_role` JWT they replace, adding the same value to an
