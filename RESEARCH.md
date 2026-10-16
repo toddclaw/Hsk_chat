@@ -281,6 +281,112 @@ advancement. Nothing in the literature suggests a learner is harmed by moving up
 the failure mode is self-correcting — the retry counters and the validator make too-hard
 immediately visible.
 
+## What the gate actually does in production, as opposed to on a corpus
+
+**Measured 2026-09-22 from `debug_log`**, and it is the first time any gate number
+has come from real use rather than a replay. The headline the rest of this
+document and `CLAUDE.md` quote — `nativeFrame` OR `softBar`/glm-5.3-flash,
+"catches every outright error and 73% of the merely-stilted at 80%
+specificity" — is a property of the PAIR, and the pair is not what runs.
+
+Over 240 hours: the fast arm made 237 calls and failed once; the slow arm made
+134 and failed **45 times, 34%**. Thirty-nine were 25-second timeouts and all 24
+`[empty completion]` records in the window were glm with `finish_reason:
+"length"`, spread across five providers. So a third of the time the gate is
+`nativeFrame` alone — 86% strict, 61% loose, 87% specificity — and nothing
+anywhere says so, because failing open is the correct behaviour and it is silent.
+
+**The cause is not flakiness and not a bad provider.** Probed directly with the
+shipped prompt: the default route spends ~2.1k tokens thinking and answers in a
+median of 19s against a 25s deadline. The timeout sits in the middle of the
+latency distribution, so losing a third of the races is the expected outcome, not
+an anomaly. Eight routings were tried — default, `sort: "latency"`, `sort:
+"throughput"`, and five pinned providers including Z.AI's own first-party
+endpoint — and the best honest median was 19s; two providers returned errors on
+every repeat call and three, Z.AI's own among them, ran at 50–60s.
+Generating that much reasoning is slow wherever it happens.
+
+**`reasoning: {enabled: false}` returns nothing at all**, ten times in ten. The
+model cannot answer this prompt without thinking, so the budget cannot simply be
+removed.
+
+**`reasoning: {effort: "low"}` is not a faster grader, it is a different one.** It
+fixes the latency completely — 2.3s median, 60 reasoning tokens, no empties — and
+re-graded over the same 222 real partner turns it moves the union from 100/73 at
+80% specificity to 95/81 at **62%**. It catches more stilted Chinese and fires on
+every other turn with half its objections wrong, which in a union means retrying
+replies that were fine. Recorded as a real operating point and rejected as a
+default.
+
+**The lesson that generalises.** Every number in "Measurements we ran" is a
+corpus number, and a corpus has no deadline. This arm scores exactly as measured
+on the 34% of occasions it answers, and scores nothing at all the rest of the
+time; no benchmark in this study can see that distinction, because none of them
+can time out. **An arm slightly worse on paper that always answers may beat one
+that is better on paper and absent a third of the time**, and nothing here has
+ever made that comparison. `BACKLOG.md`, "The gate's second arm is down a third
+of the time", has what would settle it.
+
+This is also the fifth silent failure in the study, and it presented the way the
+other four did: as plausible numbers nobody had a reason to doubt. It was visible
+only because `debug_log` records the raw outcome of every call.
+
+## Telling the planner which word the turn owes — measured, rejected
+
+**The fifth prompt fix in this study to move the number the wrong way**, and the
+second to be rescued by asking whether the mechanism it blamed was doing any
+damage. `tools/plan-require-ab.js`, 65 real learner turns, qwen, one draw,
+judged by `nativeFrame`.
+
+The motivating incident is real. On 2026-09-23T01:03Z the partner planned and
+wrote 我们快去找老师。老师会帮我们找到手机。— clean, idiomatic, gate-passing, no
+而且 in it. `turn()`'s require check threw it away and sent 请一定要用「而且」…再
+说一次, and attempt 2 came back 我们快去找老师，而且老师会帮我们: an additive
+connective on a causal relation. Todd copied that sentence verbatim and the
+per-word grader marked him wrong for it.
+
+The obvious reading — the retry writes bad Chinese, so tell the planner instead
+— is the one RESEARCH.md keeps rewarding elsewhere ("move the constraint to the
+front"). It is wrong here, and the data says so twice.
+
+| | require retry fires | reads as Chinese | no affordable plan |
+|---|---|---|---|
+| shipped (planner blind) | 45% | **85%** | 11% |
+| planner told the word | **6%** | 74% | 17% |
+
+The mechanical effect is enormous and real: 29 turns against 4, p = 1.1e-5. The
+quality effect points the other way — 13 turns where the shipped arm passed and
+the candidate faulted against 6 the other way, p = 0.17, so not significant, but
+there is no version of this result in which the candidate is better.
+
+**The premise does not survive its own control.** Inside the shipped arm, turns
+that went through the wedge retry were graded clean 86% of the time and turns
+that never triggered it 83%. Wedging does not hurt. The mechanism the change was
+built to eliminate was not costing anything, so eliminating it bought a number
+that was never a problem and paid for it in the one that was.
+
+What the candidate's failures actually look like is the second half of the
+lesson. They are not wedges, they are structures built around the word:
+你为了什么每天学习中文？for 为什么, 她会带新的水给你 for 她会给你带新的水,
+我觉得她能来 missing its 要是. A planner told to use a word plans a sentence
+whose shape is chosen to need it, and that shape is often the awkward one. The
+free planner writes better Chinese and then has the word pushed in, which turns
+out to disturb it very little.
+
+The 01:03 turn was therefore bad luck rather than a systematic fault, and the
+answer to it is the learner-side work of v132–v134: do not charge a learner for
+a word the app required, and say on screen what the per-word check did.
+
+Two harness bugs were caught before they produced numbers, both of the kind this
+document keeps recording. A lexicon built from `data/hsk<N>.json` alone cannot
+segment a ghost word — ghost words are above the level by definition, 而且 is
+HSK 3 against HSK 2 — so `spot()` scored a flat 0% for both arms and `validate()`
+rejected every compliant plan; the fix is to pass the targets and the export's
+117 `introduced` words as `extra`, which is what `S.lex` is in the browser. And
+the first comparison graded the shipped arm's attempt 1, which production never
+shows: what ships is the wedged retry, so the retry has to run in both arms
+before anything is judged.
+
 ## Retiring a ghost word
 
 **Informed by the literature; the numbers themselves are not measured.**
@@ -358,6 +464,41 @@ and the three corrections were 再找这本书, 不要再找, 不用再找: **�
 one of them.** What moved each time was the modal beside it, 不 → 不要 → 不用.
 The learner lost a day for a word the app itself kept putting back in his mouth,
 including on the sentence it had just told him to write.
+
+**And a missing correction is not a correction that dropped the word** (v132).
+The v124 rule reads `better` to decide whether a wrong verdict survives, and an
+empty `better` fell through to "the correction removed it" -- the opposite of
+what it means. `parseGrade()` produces an empty `better` two ways and both mean
+the grader had no edit to make: nothing was wrong, or the correction came back
+character-for-character identical to the sentence and was blanked as no edit.
+
+Found 2026-09-22 on 而且. Across 97 stored per-word verdicts there are 35 wrong
+ones: 27 already rescued because the correction kept the word, 3 real demotions
+where it dropped it, and **5 charged on no evidence at all**. Every one of the 5
+was a sentence the whole-sentence grader had CLEARED -- a green tick on screen,
+no correction to render under it, and a day quietly gone. One of them cost the
+last use of a session, which under the day rule above forfeits the whole day.
+
+The consistency argument is what settles it rather than any judgement about
+which grader was right. A message whose per-word call *fails* carries no verdict
+and is credited on the whole-sentence rule; charging this one demotes the
+learner for the extra call having succeeded. The same sentence must not be worth
+less because a check answered.
+
+It does **not** extend to a faulted sentence with no correction. There the
+missing text is a missing artefact rather than evidence: the sentence was
+independently marked wrong and the per-word call named this word, and nothing
+contradicts either. That stays a demotion, which is what keeps the day rule able
+to fall at all.
+
+What this gives up: the narrow per-word lens is right about some of those 5 --
+而且 in 我们快去找老师，而且老师会帮我们 is an additive connective on a causal
+relation. The answer is not to bill for it silently. v126 renders the grader's
+correction under the sentence, so a demotion with a correction is one the
+learner can see and learn from; a demotion with an empty `better` has nothing to
+render and can never be explained. Show the disagreement or do not charge for
+it. If that signal is wanted back, it belongs on screen, not in a counter that
+stalls without saying why.
 
 So a wrong verdict demotes only when the grader's own `better` no longer
 contains the word. A repair that leaves the word standing is not a repair *of*
@@ -764,6 +905,91 @@ Two smaller findings:
   guarantee.
 - **Name the rule, not the edit.** Told to tag what was *fixed*, a missing measure word reads
   as a word being added. The instruction says to tag the rule that was broken.
+
+### The grader is 27 points harsher without the conversation
+
+**Measured, and it retires a standing puzzle.** `grade()` takes a `context` block — the
+previous four turns — and production has always passed it. A re-grade benchmark that omits it
+is measuring a grader the app does not ship.
+
+`tools/grade-order-ab.js`, 208 blind-labelled real sentences, three passes, `qwen3-235b`, the
+shipped prompt both times. The only difference is the context block.
+
+| | recall | specificity |
+| --- | --- | --- |
+| no context | 86% | **61%** |
+| with context | 83% | **88%** |
+| stored production verdicts | 83% | 86% |
+
+Specificity moves 27 points, p < 0.001. Recall does not move. With context the fresh run is
+indistinguishable from production's own stored verdicts (88% against 86%, p = 0.75), so the
+context arm is a faithful reproduction and the no-context arm is not.
+
+**This explains why `grader-bench.js` leans harsh.** That benchmark scores 66% specificity on
+MuCGEC and the discrepancy against real traffic has been recorded here as a property of the
+corpus — advanced learner essay prose, minimally repaired. It is simpler than that: MuCGEC
+sentences are standalone, so there is no context to pass, and no-context grading measures 61%
+on *our own* sentences. 66 and 61 are the same number.
+
+| benchmark | context | specificity |
+| --- | --- | --- |
+| grader-bench, MuCGEC | none available | 66% |
+| this study, real sentences | withheld | 61% |
+| this study, real sentences | passed | 88% |
+| production, stored | passed | 86% |
+
+The harshness is the missing context, not the corpus. It does not reproduce on real sentences
+because on real sentences the grader is given the conversation.
+
+The rule this leaves: **a fresh re-grade of learner sentences must pass context or it is not
+the shipped grader.** grader-bench cannot, which is a real ceiling on what that benchmark can
+say about specificity — quote its recall, and take its false-alarm rate as an upper bound.
+
+### Tags that name a character the sentence does not contain
+
+**Measured on stored verdicts, no API calls.** Nine of the seventeen tags ARE a character —
+了, 过, 着, 在, 不/没, 的/地/得, 比, 把, 被 — so the rule they name cannot have been broken
+unless that character is in the sentence or in the correction. Across 299 real production
+verdicts, **8 of 44 marker-tag firings named a character present in neither**. Five were 了.
+
+Reported from real use, and the complaint was that it undermines confidence in the whole
+verdict:
+
+| the learner wrote | the grader's own correction | what it said |
+| --- | --- | --- |
+| 你能带水**吧**？ | 你能带水**吗**？ | "The aspect particle 了…" |
+| 我一定**想**去 | 我一定**要**去 | "了 is missing after 要" |
+| 我们前天很忙，**不会**去公园 | **没有**去公园 | tagged `aspect-guo`, note never mentions 过 |
+
+In every one the grader found a real fault and fixed it correctly, then filed it under a
+heading with no basis in either sentence. **The taxonomy was not missing a code**: 不会→没有 is
+`negation-bu-mei` and 把/被 confusion is `bei-construction`, both already in the list. This is
+misfiling, not a gap, so making the list longer or shorter does not address it.
+
+Two candidate causes were measured and neither survived:
+
+| hypothesis | test | result |
+| --- | --- | --- |
+| the label is committed before its justification exists — `{"tag":"","note":""}` emits the tag first | flip to `{"note":"","tag":""}`, 208 sentences x 3 passes x 2 arms | 10% vs 7% ghosts, **p = 0.56**; recall and specificity unmoved |
+| the marker is being read out of the conversation context | compare ghost and legitimate firings for the marker's presence in context | 6/8 ghosts **and 32/36 legitimate** firings have it; 了 is in nearly every exchange and the test cannot discriminate |
+
+The rate is stable but small — 9% of marker firings in a faithful reproduction, ~2% of
+sentences written, matching the 2.7% in stored history. Every ghost-rate comparison came back
+non-significant (p ≥ 0.09), so this is not a defect prompt work can move at any sample size
+worth buying.
+
+What shipped is a parser guard, `HSKPrompt.markerMissing()`, next to the self-consistency
+checks `parseGrade()` already runs — `noEdit`, the recomputed `ok`, the unknown-tag drop. A
+verdict that contradicts itself does not reach the screen. Replayed over all 299 stored
+verdicts it drops exactly those 8 headings, flips **no** verdict to a green tick, and costs
+**zero** drill material: the dropped entries carried no extracted drill word in any of the 8
+cases, while the correct diagnosis was already sitting beside them. All three sentences the
+learner complained about already carried the right drill word on their `unnatural` entry —
+我, 想, 吧 — under a 了 heading that was hiding it.
+
+The rule this leaves: **when a model must choose a label from a closed list, check the label
+against the text rather than arguing with the model about it.** The check is free and the
+argument is not.
 
 ### A response shape in the system role governs the whole conversation
 
@@ -1721,6 +1947,26 @@ the shipped prompt answers in English **109 times in 110**, so the failure is a 
 tail and the rule has nothing to improve. Not shipped: a rule that cannot be shown to
 do anything is a line that has to win against the model's habit on every later call,
 for no measured benefit.
+
+### Reordering the grader's JSON so the reason precedes the label
+
+**Measured, and a null result.** The grader emits `{"tag":"","note":""}` per error, so the
+label is produced before the sentence justifying it — a plausible mechanism for the misfiled
+headings above, and the kind of ordering problem this study has found real elsewhere (the
+partner's reply is planned before it is written for exactly this reason). Flipping the pair to
+`{"note":"","tag":""}` changes nothing else.
+
+| arm | ghost firings | recall | specificity |
+| --- | --- | --- | --- |
+| shipped | 8/77 (10%) | 83% | 88% |
+| note first | 5/75 (7%) | 82% | 88% |
+
+208 sentences, three passes, two arms, with context. p = 0.56 on the ghost rate and no movement
+anywhere else. Run once more without context, both arms tie exactly at 4/83.
+
+Not shipped. The move-the-constraint-forward result is real where the model's *choice* is the
+failure; here the choice is already made from a closed list and reordering two fields does not
+revisit it.
 
 ### Sharpening a prompt rule by naming the failure
 
