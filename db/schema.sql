@@ -226,11 +226,15 @@ drop policy if exists "own rows" on public.prefs;
 create policy "own rows" on public.prefs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- Keepalive target for the scheduled GitHub Actions ping
+-- Write target for the scheduled GitHub Actions workflow
 -- (.github/workflows/keepalive.yml). A free-tier Supabase project pauses
 -- after 7 days with no database ACTIVITY (not just dashboard visits or
--- cached reads), so the workflow writes to this table every few days to
--- keep it alive. RLS is enabled with no policies at all -- default-deny for
+-- cached reads), and writing this row every 3 days does NOT prevent that --
+-- measured 2026-10-07, when the project paused despite successful writes on
+-- 10-01 and 10-04. The row stays because the workflow's FAILURE is how a
+-- pause gets noticed: a paused project loses its DNS record, curl cannot
+-- resolve the host, and GitHub emails the repository owner.
+-- RLS is enabled with no policies at all -- default-deny for
 -- both anon and authenticated -- so the publishable key embedded in the app
 -- can never read or write it; only the secret key (formerly "service_role
 -- key" -- used exclusively by the GitHub Actions workflow, stored as a repo

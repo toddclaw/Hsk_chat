@@ -806,10 +806,16 @@ Project setup lives in README.md. What is easy to get wrong:
   and looks like it lost everything. Safari additionally keeps private-mode `localStorage`
   in memory and discards it when the session ends, so a private window is not a safe only
   copy. Nothing to fix in code; the Sync section says so.
-- **Free-tier projects pause after 7 days without database *activity*.** Dashboard
-  visits and cached reads do not count. `.github/workflows/keepalive.yml` writes a
-  real row every 3 days; it needs the `SUPABASE_URL` and
-  `SUPABASE_SERVICE_ROLE_KEY` repository secrets.
+- **Free-tier projects pause after 7 days without database *activity*, and
+  `keepalive.yml` does not prevent it.** Measured 2026-10-07: the workflow's write is
+  a real row upsert, it succeeded on 10-01 and 10-04, and the project was paused
+  anyway within nine hours of 7 days after the last write the *app* made. Keep the
+  job as the pause *detector* — a paused project loses its DNS record, so curl exits
+  6 and GitHub emails the owner about the failed run. It needs the `SUPABASE_URL` and
+  `SUPABASE_SERVICE_ROLE_KEY` repository secrets. The five green weeks before the
+  pause proved nothing: the app was in daily use and its own writes were doing the
+  work, so the job was never actually tested. Any replacement costs eight idle days
+  to test. README.md, "Cloud sync".
 
 ## What a partner turn goes through
 

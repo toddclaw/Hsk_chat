@@ -1,8 +1,22 @@
-# Supabase's free tier pauses a project after 7 days with no database
-# activity (dashboard visits and cached reads don't count) -- a quiet week
-# would otherwise leave sync silently stopped until someone clicks "resume"
-# in the dashboard. This pings a dedicated table every few days, well inside
-# that window, using a real write so it counts as activity.
+# Detects that a free-tier Supabase project has paused. It does NOT prevent
+# the pause -- that was the original intent, and it does not work.
+#
+# Measured 2026-10-07: the upsert below is a real row write, and it succeeded
+# on 10-01 and 10-04 against a live project. The project was paused anyway,
+# within nine hours of 7 days after the last write the APP made. Whatever
+# resets Supabase's inactivity clock, a secret-key write through PostgREST is
+# not it, and Supabase documents no criterion. The five green weeks before
+# that proved nothing: the app was in daily use, and the app's own writes were
+# what kept the project awake.
+#
+# What this job does do is fail loudly. A paused project loses its
+# <ref>.supabase.co DNS record, so curl exits 6 ("Could not resolve host") and
+# GitHub emails the repository owner about the failed scheduled run. That email
+# is the signal that sync is down and the dashboard needs a "resume" click.
+#
+# Do not iterate on the write without budgeting for the test: confirming any
+# replacement costs eight days of not touching the app, since the app's own
+# traffic is enough to hide a broken keepalive. The Pro plan does not pause.
 #
 # One-time setup (see README.md's "Cloud sync" section):
 #   1. Run db/schema.sql in the Supabase project -- it creates the
@@ -14,21 +28,21 @@
 #      *secret* key (sb_secret_...; this was called the "service_role key"
 #      before Supabase's 2026 key rename), NOT the publishable key; this one
 #      bypasses RLS and must never appear in the app's client-side code).
-name: Keep Supabase awake
+name: Supabase pause check
 
 on:
   schedule:
-    - cron: "0 6 */3 * *"   # every 3 days, comfortably inside the 7-day pause window
+    - cron: "0 6 */3 * *"   # every 3 days, so a pause is reported within three of it
   workflow_dispatch:         # manual "Run workflow" button, for testing this setup
 
 jobs:
-  ping:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - name: Upsert a keepalive row
+      - name: Write a row, and fail if the project has paused
         run: |
           if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY secrets are not set yet -- skipping." >&2
+            echo "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY secrets are not set yet." >&2
             echo "See README.md's Cloud sync section to finish setup." >&2
             exit 1
           fi
