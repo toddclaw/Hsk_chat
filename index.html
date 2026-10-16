@@ -602,12 +602,12 @@ footer{
 
     <label for="ghostUses">Correct uses to retire a ghost word</label>
       <select id="ghostUses"></select>
-      <div class="note">How many times you have to use a <b>Ghost Words</b> target
-      correctly before it leaves the list. At most one counts per day, however often you
-      write it — spacing is what makes a new word stick, and a day of practice is one
-      day of practice. Getting it wrong costs you one back — also at most one a day. Only the word itself is
-      judged: a mistake elsewhere in the sentence still lands in your mistakes, but it
-      does not withhold the credit.</div>
+      <div class="note">How many separate <b>days</b> you have to use a <b>Ghost Words</b>
+      target correctly before it leaves the list. At most one counts per day, however often
+      you write it — spacing is what makes a new word stick, and a day of practice is one
+      day of practice. Within a day the <b>last</b> use decides: get it wrong and that day
+      is lost, get it right again later and you win the day back. Days you have already
+      banked are safe either way. See <b>How your writing is judged</b> below.</div>
 
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
@@ -722,6 +722,46 @@ footer{
       <div class="note">Switches the allowlist, the starters and the prompt. Words you added
       keep the form you added them in. About 3% of entries list several traditional variants
       (岸/㟁, 幫/幇/幚); the one belonging to the word's main reading is used.</div>
+  </details>
+
+  <!-- Asked for after a Ghost Words counter appeared stuck: the rules were all
+       real and none of them were anywhere the learner could read. Plain
+       language on purpose -- no field names, no model names. -->
+  <details class="sec">
+    <summary>How your writing is judged</summary>
+
+    <div class="note">Every sentence you write gets <b>two</b> separate looks, and they
+    answer different questions. Knowing which is which explains most surprises.</div>
+
+    <label>1. The whole sentence</label>
+      <div class="note">A checker reads what you wrote and decides whether it reads as
+      natural Chinese. That is the ✓ or ✗ on your message. If it has a fix to offer, the
+      corrected sentence appears under yours — and if it shows no correction, it had no
+      edit to make.</div>
+
+    <label>2. The word you were practising</label>
+      <div class="note">In <b>Ghost Words</b> and <b>Flashcard Chat</b> a second, separate
+      question is asked about each target word in your sentence: was <i>this word</i> used
+      correctly, ignoring everything else? That is the one that moves the counters.</div>
+
+    <label>How a word earns its day</label>
+      <div class="note"><b>The word has to be right. The sentence around it does not.</b>
+      If the word check passes, the day counts even when the sentence as a whole was
+      marked wrong — most of your credits are earned this way. A mistake elsewhere still
+      goes in your mistakes list; it just does not take the word down with it.</div>
+
+    <label>When the two disagree</label>
+      <div class="note">If the word check says a word is wrong but the correction still
+      <b>contains</b> that word, the correction wins: the fix was clearly about something
+      else, so the sentence neither earns the day nor costs it. If the sentence was marked
+      correct with no fix at all, the word counts. Either way a note under your sentence
+      says what happened, so a counter never stalls without telling you why.</div>
+
+    <label>Where it can be wrong</label>
+      <div class="note">Both checks are language models and both make mistakes. The word
+      check is the harsher of the two and sometimes blames a target for the word standing
+      next to it. That is why a correction that keeps your word can overrule it, and why
+      nothing is ever taken away from a day you already banked.</div>
   </details>
 
   <details class="sec">
@@ -1200,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v130 — 2026-09-22";
+const VERSION   = "v136 — 2026-09-23";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1995,6 +2035,22 @@ function stopTurn() {
   if (inflight) inflight.abort();
 }
 
+/* How long one phase of a turn took, in the log the phone can send back.
+ *
+ * The gate has had timings since v110 and nothing else ever has, so the only
+ * phase anybody could point at was the one already known to be slow --
+ * checkSenseViolations() is a serial loop of model calls and has never been
+ * timed at all. Every optimisation in this plan is chosen from these numbers,
+ * so they go in before any of them.
+ *
+ * finally, not after the await: a phase that throws still took time, and the
+ * vocabulary repair path throws routinely. */
+async function timed(name, fn) {
+  const t0 = Date.now();
+  try { return await fn(); }
+  finally { console.log("[phase] " + name + " " + (Date.now() - t0) + "ms"); }
+}
+
 async function callModel(messages, maxTokens, model) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
@@ -2299,7 +2355,7 @@ async function turn(ctx) {
    * something the level cannot say. */
   if (S.plan && PLANNED[activity] && !(ctx && ctx.storySegment)) {
     status("想一想…");
-    const plan = await planReply(S.history.slice(-4), S.lex);
+    const plan = await timed("plan", () => planReply(S.history.slice(-4), S.lex));
     if (plan) scratch.push({ role: "user", content: HSKPrompt.planInstruction(plan) });
   }
 
@@ -2327,14 +2383,15 @@ async function turn(ctx) {
      * to end a story mid-narrative on an error card. Retried once, here rather
      * than inside callModel, so translation and the explain sheet keep failing
      * loudly instead of silently doubling their cost. */
-    let raw;
-    try {
-      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
-    } catch (err) {
-      if (err.kind !== "empty") throw err;
-      console.warn("[empty completion] retrying once");
-      raw = await callModel(scratch, ctx && ctx.maxTokens, model);
-    }
+    const raw = await timed("generate", async () => {
+      try {
+        return await callModel(scratch, ctx && ctx.maxTokens, model);
+      } catch (err) {
+        if (err.kind !== "empty") throw err;
+        console.warn("[empty completion] retrying once");
+        return await callModel(scratch, ctx && ctx.maxTokens, model);
+      }
+    });
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
     /* Read here, not at the return. `callModel.lastFinish` is one global that
@@ -2365,7 +2422,8 @@ async function turn(ctx) {
     /* The sense check is spent only once vocabulary already passes -- an
      * ambiguous word inside a reply that is already going to be repaired for
      * something else is not worth a second model call this attempt. */
-    const senseViols = hardViolations.length ? [] : await checkSenseViolations(ex.text, lex, S.level);
+    const senseViols = hardViolations.length ? []
+      : await timed("sense", () => checkSenseViolations(ex.text, lex, S.level));
     const violations = hardViolations.concat(senseViols);
     console.log("[attempt " + attempt + "]", raw,
       violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
@@ -2400,7 +2458,7 @@ async function turn(ctx) {
          * having finished and lost the answer. The wait is one wait; it says
          * so once. */
         status("检查中… " + attempt + "/" + tries);
-        const fault = await gateFault(ex.text, lex);
+        const fault = await timed("gate", () => gateFault(ex.text, lex));
         if (fault) {
           gateFails++;
           /* At most one introduced word per turn, and none at all if pacing has
@@ -2673,6 +2731,43 @@ function renderMessage(turnObj, shownExtra) {
     el.appendChild(fix);
   }
 
+  /* Why a word you just used did not move its counter.
+   *
+   * The per-word checks are otherwise invisible. A sentence can pass the
+   * whole-sentence grader, show a green tick, and still not credit its target,
+   * which reads as a counter that is broken -- reported exactly that way on
+   * 2026-09-22 after 而且 was written three times in a session and the number
+   * stayed put. Two of those three were the v132 bug and credit now; the third
+   * was a real rescue and still does not count, and nothing said so.
+   *
+   * Asks HSKMistakes.ghostVerdict() rather than restating the rule, so the note
+   * cannot drift from the number it is explaining.
+   *
+   * Only when the check CHANGED the outcome. A word that credited needs no
+   * note: the counter moving is its own explanation, and a line saying "the
+   * checker disagreed but you got it anyway" invites doubt about a tick that is
+   * correct. `grade.ghost` only exists on turns graded inside a set activity,
+   * so its presence is the whole gate -- no activity check needed, and an old
+   * transcript without one is silent as before. */
+  if (turnObj.role === "user" && turnObj.grade && turnObj.grade.ghost) {
+    const lines = Object.keys(turnObj.grade.ghost).map(w => {
+      const v = HSKMistakes.ghostVerdict(turnObj.grade, w);
+      if (v === "wrong")
+        return "「" + w + "」 reads wrong here, so today's credit for it is gone " +
+               "until you use it correctly again.";
+      if (v === "none" && turnObj.grade.ghost[w].used === true)
+        return "The fix above was not about 「" + w + "」, so this sentence " +
+               "does not count towards it either way.";
+      return "";
+    }).filter(Boolean);
+    if (lines.length) {
+      const why = document.createElement("div");
+      why.className = "note";
+      why.textContent = lines.join(" ");
+      el.appendChild(why);
+    }
+  }
+
   // Below the Chinese, not above it: hidden until asked for either way.
   const transBox = document.createElement("div");
   transBox.className = "translation";
@@ -2871,29 +2966,52 @@ function renderConversation() {
     const actLabel = HSKPrompt.activityFor(currentActivity()).label;
     const targets = flashcardTargets();
     if (!targets.length) return "";
-    const rounds = flashcardRounds(targets), goal = S.ghostUses;
-    const strip = [];
-    for (let i = 1; i <= goal; i++) {
-      if (i <= rounds) {
-        strip.push('<span style="margin-right:12px">Day ' + i + ' ✓</span>');
-      } else if (i === rounds + 1) {
-        const got = targets.filter(e => (e.ghostN || 0) >= i).length;
-        /* "words" spelled out because the two live fractions on screen have
-         * different denominators -- this one is words-out-of-the-set, the
-         * chips below are days-out-of-S.ghostUses -- and a bare 4/5 above a
-         * row of 3/3 reads as the same kind of number. */
-        strip.push('<span style="margin-right:12px;color:var(--accent)">Day ' + i +
-          " · " + got + "/" + targets.length + " words</span>");
-      } else {
-        strip.push('<span style="margin-right:12px;opacity:.45">Day ' + i + "</span>");
-      }
-    }
-    /* The words themselves are NOT here any more: they live on the strip above
-     * the composer, which is pinned, because "how am I doing" is a question
-     * asked on every turn and this banner scrolls away after two of them. What
-     * stays here is what you ask for once a day at most -- the export, and
-     * where you are in the set. */
+    const goal = S.ghostUses;
+    /* Per word, not per set, and it says where the credit came from.
+     *
+     * The Day N strip that used to be here counted min(ghostN) across the set
+     * as "rounds" and drew a tick for each one. Reported 2026-09-23: a brand
+     * new Ghost Words set opened on "Day 1 ✓ · Day 2 · 1/5 words" before a
+     * word had been written. It was telling the truth and the truth was
+     * unreadable -- ghostProgress() scans the WHOLE history and has no notion
+     * of when a set was made, and a ghost candidate is an above-level word the
+     * app taught, so it has usually been used in ordinary chat for weeks. With
+     * no per-word verdict outside a set activity, ghostVerdict() falls back to
+     * grade.ok, so every clean sentence containing the word banked a day for
+     * it. All five arrived with credit; 其他/比赛/担心/先 at 1 and 行 at 2.
+     *
+     * Flashcard Chat has the same arithmetic and looked right only by luck --
+     * three of its five were at 0, so the minimum was 0 and it said Day 1.
+     *
+     * Counting only days earned since the set was chosen was the other
+     * candidate and was rejected with the learner: a word at 2 of 3 retires
+     * after one more day, so set-relative rounds would tick its chip as done
+     * while the banner demanded two more. Whole-history credit is what
+     * actually drives retirement, so it is what gets shown -- labelled. */
+    const settledN = targets.filter(e => (e.ghostN || 0) >= goal).length;
+    const carried = targets.filter(e => (e.ghostN || 0) > 0).length;
+    const lead = settledN === targets.length
+      ? "All " + targets.length + " words are banked on " + goal + " separate days."
+      : "Every word needs a correct use on " + goal + " separate days. " +
+        (carried
+          ? carried + " of " + targets.length + " already carry days banked in " +
+            "earlier conversations, so they start part-way."
+          : "None of them has a banked day yet.");
+    const strip = targets.map(e => {
+      const n = Math.min(e.ghostN || 0, goal), done = n >= goal;
+      return '<span style="margin-right:12px' +
+        (done ? "" : e.ghostToday ? ";color:var(--accent)" : ";opacity:.75") + '">' +
+        escapeHtml(e.w) + " " + n + "/" + goal + (done ? " ✓" : "") + "</span>";
+    });
+    /* The per-word DAY counts live here and the pinned strip above the composer
+     * still carries none. That split is v130's and it survives: the strip
+     * answers "which words do I still owe today" in two states, and this
+     * answers "how far along is each word" once. What made the old pairing
+     * unreadable was two fractions with different denominators side by side --
+     * words-out-of-the-set here, days-out-of-goal there. There is now only one
+     * denominator on screen, and it is days. */
     return '<div class="hint"><b>' + escapeHtml(actLabel) + "</b><br>" +
+      '<span style="color:var(--dim)">' + escapeHtml(lead) + "</span><br>" +
       '<span style="color:var(--dim)">' + strip.join("") + "</span><br>" +
       '<button class="fcx" onclick="exportCards(\'anki\', flashcardTargets())">Export for Anki</button> ' +
       '<button class="fcx" onclick="exportCards(\'pleco\', flashcardTargets())">Export for Pleco</button><br>' +
@@ -3940,6 +4058,11 @@ function parseGrade(raw, text) {
   });
   const errors = noEdit ? [] : (Array.isArray(g.errors) ? g.errors : [])
     .filter(e => e && KNOWN_TAGS.has(e.tag))
+    /* And a tag whose own character is in neither the sentence nor the fix.
+     * Same reason as noEdit above: a verdict that contradicts itself must not
+     * reach the screen. See TAG_MARK in prompt.js for what it is worth on real
+     * traffic. The correction still shows -- only the misfiled heading goes. */
+    .filter(e => !HSKPrompt.markerMissing(e.tag, text, g.better))
     .map(e => ({ tag: e.tag, note: String(e.note || "") }));
   /* ok is recomputed rather than trusted. A model that lists errors and still
    * says ok:true would show a green tick over a red detail sheet. */

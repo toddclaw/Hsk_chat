@@ -448,8 +448,8 @@ check(M.ghostVerdict({ ok: false, ghost: { "说话": { used: true, ok: true } } 
   "说话") === "ok",
   "a correct word in a failing sentence credits: the verdict beats grade.ok");
 check(M.ghostVerdict({ ok: true, ghost: { "说话": { used: true, ok: false } } },
-  "说话") === "wrong",
-  "a wrong word in a passing sentence is a failure: the verdict beats grade.ok");
+  "说话") === "ok",
+  "a wrong verdict with no correction behind it does not beat a clean sentence");
 check(M.ghostVerdict({ ok: true, ghost: { "说话": { used: false, ok: false } } },
   "说话") === "none",
   "a sentence that never reached for the word is neither credit nor failure");
@@ -475,6 +475,25 @@ check(M.ghostVerdict({ ok: false, better: "我希望明天我不用找这本书�
 check(M.ghostVerdict({ ok: false, better: "",
   ghost: { "再": { used: true, ok: false } } }, "再") === "wrong",
   "a failed sentence with no correction offered demotes as it always did");
+
+/* The case the v124 rule missed, found in real use 2026-09-22 on 而且.
+ *
+ * An empty `better` on a sentence the grader CLEARED is not a correction that
+ * dropped the word -- it is the grader having no edit to make, which
+ * parseGrade() produces two ways: nothing was wrong, or the "correction" came
+ * back identical to the sentence and was blanked. Either way the sentence
+ * stands as written and every word in it was kept. Charged as a demotion it
+ * took a day away with a green tick on screen and nothing to show the learner.
+ *
+ * The pair matters, not either line alone: had the per-word call simply failed,
+ * there would be no verdict and the sentence would credit. A check that answers
+ * must not be worth less than one that never came back. The faulted-sentence
+ * case three lines up is the boundary -- it still demotes. */
+check(M.ghostVerdict({ ok: true, better: "",
+  ghost: { "而且": { used: true, ok: false } } }, "而且") === "ok",
+  "a clean sentence with no correction credits, whatever the per-word call said");
+check(M.ghostVerdict({ ok: true, better: "" }, "而且") === "ok",
+  "and credits identically when the per-word call never answered");
 check(M.ghostVerdict({ ok: false, better: "我不要再找这本书。",
   ghost: { "再": { used: true, ok: true } } }, "再") === "ok",
   "and the rule is one-sided: a kept word that was used correctly still credits");

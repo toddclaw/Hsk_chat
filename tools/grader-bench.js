@@ -61,6 +61,7 @@ const arg = (name, dflt) => {
   return i === -1 ? dflt : args[i + 1];
 };
 const MODEL = arg("model", "qwen/qwen3-235b-a22b-2507");   // TEACH_MODEL
+const REASONING = arg("reasoning", "");            // "" = provider default
 const CONCURRENCY = Number(arg("concurrency", 6));
 const MAX_LEVEL = Number(arg("level", 4));
 const ARM = arg("arm", "shipped");
@@ -696,6 +697,20 @@ async function callModel(content, maxTokens, KEY, temperature) {
     body: JSON.stringify({
       model: MODEL, messages: [{ role: "user", content: content }],
       max_tokens: maxTokens,
+      /* Reasoning effort, off by default so every number already recorded in
+       * this study keeps meaning what it meant -- absent, the provider's own
+       * default applies, which is what all of them were measured under.
+       *
+       * It exists because the default is what breaks the shipped gate. Probed
+       * 2026-09-22 on glm-5.3-flash with the softBar prompt: the default spends
+       * ~2.1k tokens thinking for a MEDIAN of 19s against the app's 25s timeout
+       * and returns empty 2 times in 10, which is the 34% production failure
+       * rate. `effort: "low"` spends 60 and answers in 2.3s with no empties.
+       * Turning reasoning OFF entirely returns nothing at all, 10 times in 10.
+       *
+       * Whether a fast verdict is still a good verdict is the question the flag
+       * is here to answer, and it is not assumed anywhere. */
+      ...(REASONING ? { reasoning: { effort: REASONING } } : {}),
       /* 0.7 is the default every arm before the cascade was measured at, and it
        * stays that way so those numbers keep meaning what they meant. Detection
        * is not a task that wants sampling: the diagnostic pass caught P126, P163

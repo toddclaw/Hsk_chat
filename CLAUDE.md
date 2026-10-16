@@ -86,8 +86,15 @@ The grader has three benchmarks, and the one that counts is real traffic.
   turns from the database, qwen activities only. `nativeFrame` scores **86%
   strict recall at 87% specificity for $0.0001 a turn**, and is the arm to use.
 - `tools/grader-bench.js` — MuCGEC learner error, human ground truth. 90%
-  recall, 66% specificity. Leans harsh, and that harshness does not reproduce on
-  real sentences.
+  recall, 66% specificity. **The harshness is the missing context, not the
+  corpus** — MuCGEC sentences are standalone, and withholding the context block
+  from real sentences reproduces it at 61%. Quote its recall; treat its
+  false-alarm rate as an upper bound. RESEARCH.md, "The grader is 27 points
+  harsher without the conversation".
+- `tools/grade-order-ab.js` — re-grades the 208 blind-labelled real sentences,
+  two prompt arms, scoring a mechanical ghost-tag rate as well as recall and
+  specificity. **Passes `context`, and anything that re-grades learner sentences
+  must**: without it specificity is 61% against production's 86%.
 - `tools/replay-partner.js` — fresh partner turns of the RIGHT kind, made by
   replaying Todd's own learner turns in context through the app's prompt. 282
   turns for $0.016, and it confirms the real-corpus numbers within a few points.
@@ -129,9 +136,24 @@ for $0.0004 a turn, confirmed on a second corpus at 100% / 71% / 86%, and `tools
 verdicts for free. A union needs two graders that disagree productively: two
 prompts on the same model do not.
 
-**Four prompt fixes in this study have moved the number the wrong way**, the
-latest being the native frame applied to the four-lens design — worth +14 points
-to one broad call and -10 to four narrow ones. Measure, do not reason.
+**That pair is not what runs.** Measured from `debug_log` over 240 hours of real
+use, the slow arm fails **34% of calls** — 39 timeouts at `GATE_TIMEOUT_MS`
+(25s) and 24 empty completions — because it spends ~2.1k tokens thinking and its
+MEDIAN answer takes 19s. A third of the time the gate is `nativeFrame` alone,
+86% / 61% at 87%, and it says nothing, because failing open is correct and
+silent. Eight routings and two reasoning settings were tried and none fixes it;
+`effort: "low"` is fast but drops union specificity 80% → 62%. **A corpus has no
+deadline, so no benchmark here can see this.** `BACKLOG.md`, "The gate's second
+arm is down a third of the time", and `RESEARCH.md`, "What the gate actually
+does in production".
+
+**Five prompt fixes in this study have moved the number the wrong way.** The
+latest: telling the planner which word the turn owes cut the require retry from
+45% to 6% and made the reply read WORSE, 85% → 74% — and its premise failed its
+own control, since wedged turns grade clean 86% against un-wedged 83%. Before
+that, the native frame applied to the four-lens design, worth +14 points to one
+broad call and -10 to four narrow ones. Measure, do not reason — and measure
+whether the thing you are fixing was costing anything.
 
 **Read the benchmark before you read the number.** Three times now a confident
 result came from a population nobody had asked about. Story turns are Sonnet's

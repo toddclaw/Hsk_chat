@@ -175,7 +175,35 @@
        * ponytail: a plain substring test, so a learner writing traditional
        * against a simplified correction falls back to demoting as before.
        * Fold both scripts in if that ever reads as wrong. */
-      return String(grade.better || "").indexOf(word) !== -1 ? "none" : "wrong";
+      var better = String(grade.better || "");
+      /* A wrong verdict on a word in a sentence the grader CLEARED, with no
+       * correction to read, costs nothing either -- and for a sharper reason
+       * than the rule above.
+       *
+       * An empty `better` is not a correction that dropped the word. It is the
+       * grader having no edit to make, which parseGrade() produces two ways and
+       * both mean the sentence stands as written: nothing was wrong, or the
+       * "correction" came back character-for-character identical and was
+       * blanked. When ok is true as well, the whole-sentence call has
+       * affirmatively said the sentence is fine, so every word in it was kept,
+       * including this one. `"".indexOf(word)` read that as a correction that
+       * removed the word -- the exact opposite of what it means.
+       *
+       * The consistency argument is what settles it. A message whose per-word
+       * call FAILED carries no verdict and is credited on grade.ok by the line
+       * below; charging this one demotes the learner for the extra call having
+       * succeeded. Found 2026-09-22 on 而且: five times across 97 stored
+       * verdicts, every one a sentence the app had already drawn a green tick
+       * on, none with a correction to show for it.
+       *
+       * Deliberately NOT extended to a FAULTED sentence with no correction.
+       * There the missing text is a missing artefact, not evidence: the
+       * sentence was independently marked wrong and the per-word call named
+       * this word, and nothing contradicts either. That stays a demotion, which
+       * is what keeps v129's day rule able to fall.
+       * RESEARCH.md, "Retiring a ghost word". */
+      if (!better && grade.ok === true) return "ok";
+      return better.indexOf(word) !== -1 ? "none" : "wrong";
     }
     return grade.ok === true ? "ok" : "none";
   }

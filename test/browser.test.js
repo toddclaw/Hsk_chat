@@ -277,7 +277,13 @@ return true;
            * second-bubble checks below have both states to compare. errors is
            * empty on purpose -- this turn feeds the mistake ledger too, and a
            * tag here would move counts the drill checks assert on. */
+          /* A per-word ghost verdict the correction CONTRADICTS: it says \u4f60\u597d
+           * was wrong, and the correction \u4f60\u597d\u5417 keeps \u4f60\u597d whole, so
+           * ghostVerdict() rescues it to "none". Inert for every other check --
+           * without the map this turn already scored "none" off grade.ok, so no
+           * counter moves -- and it is the only turn that renders the note. */
           grade: { ok: false, better: "\u4f60\u597d\u5417",
+                   ghost: { "\u4f60\u597d": { used: true, ok: false } },
                    cats: { word: true, grammar: true, order: true, natural: false },
                    errors: [] } },
         /* A real learner's worth of typing, not two short turns. The progress
@@ -391,6 +397,23 @@ return true;
       JSON.stringify(fixed.bad));
     check(fixed.good.bubbles === 1, "a sentence the grader passed gets no second bubble",
       JSON.stringify(fixed.good));
+
+    /* And when a per-word check fired but the correction cleared the word, a
+     * note says so. Without it the counter simply does not move and there is
+     * nothing on screen to explain why -- which is how 而且 was read as broken
+     * on 2026-09-22. Same pair as the bubbles above: the failed turn carries a
+     * verdict and a note, the clean one carries neither, so a rule that noted
+     * every message or none would pass neither check. */
+    const notes = await exec(`
+      var msgs = document.querySelectorAll('#log .msg.user');
+      function note(m) { return (m.querySelector('.note') || {}).textContent || ""; }
+      return { bad: note(msgs[0]), good: note(msgs[msgs.length - 1]) };`);
+    check(notes.bad.indexOf("你好") !== -1 &&
+          /does not count/.test(notes.bad),
+      "a word the correction cleared is explained, not silently skipped",
+      JSON.stringify(notes.bad));
+    check(notes.good === "",
+      "and a turn with no per-word verdict says nothing", JSON.stringify(notes.good));
 
     /* Yellow means "already answered -- pressing this is free and instant".
      * The seed gives both states from one render: the first user turn has a
@@ -5040,6 +5063,25 @@ check(usedGroups && usedGroups.first === "\u7684",
          function (b) { return b.textContent; });`);
     check(fcExports.length === 2 && fcExports.join("|").indexOf("Anki") !== -1,
       "both exports are in the banner at the top of the log", JSON.stringify(fcExports));
+
+    /* The banner says where each word stands, and never claims a day the
+     * learner did not do. v134 drew "Day 1 ✓ · Day 2 · 1/5 words" on a set
+     * opened seconds earlier, because min(ghostN) counts credit banked in
+     * ordinary chat weeks before the set existed. The counts are still
+     * whole-history -- that is what retires a word -- so what had to change was
+     * the claim: per word, out of the goal, with the carried credit named.
+     *
+     * The seeded set has never been used, so the honest reading is zero. Both
+     * halves are asserted: the wording that says none is banked, and the
+     * absence of any Day tick to contradict it. */
+    const fcBanner = await exec(
+      `var h = document.querySelector('#log .hint'); return h ? h.textContent : "";`);
+    check(/None of them has a banked day yet/.test(fcBanner),
+      "an unused set says so rather than claiming a day", fcBanner.slice(0, 160));
+    check(!/Day \d/.test(fcBanner),
+      "and no Day counter survives to contradict it", fcBanner.slice(0, 160));
+    check(fcSet.every(w => fcBanner.indexOf(w + " 0/") !== -1),
+      "every word carries its own days-banked fraction", fcBanner.slice(0, 200));
     /* The banner is an innerHTML string, so its handlers are inline attributes.
      * A typo in one is not a syntax error anywhere -- the button simply renders
      * and does nothing -- so what is checked is that the browser compiled the

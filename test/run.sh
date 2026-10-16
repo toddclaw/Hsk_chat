@@ -22,6 +22,9 @@ else
   echo "no python3 -- skipped"
 fi
 
+printf '\n=== tools/turn-latency.js --selftest ===\n'
+node tools/turn-latency.js --selftest
+
 # browser.test.js drives a real, mocked-network Firefox session and is fully
 # idempotent -- a retry is a fresh run, not a masked bug. On GitHub's shared
 # runners its heaviest path (a story segment's validate-and-render round trip)
