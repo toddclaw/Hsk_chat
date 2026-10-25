@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v136 — 2026-09-23";
+const VERSION   = "v137 — 2026-10-25";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2359,6 +2359,15 @@ async function turn(ctx) {
     if (plan) scratch.push({ role: "user", content: HSKPrompt.planInstruction(plan) });
   }
 
+  /* What the partner has already said, snapshotted BEFORE the loop.
+   *
+   * Deliberately not read off `scratch`: the repair ladder pushes each rejected
+   * attempt into it as an assistant message, so a second attempt at the same
+   * paragraph -- the normal, working case -- would match itself and be thrown
+   * away. Only text that actually reached the learner counts as already said. */
+  const saidBefore = S.history
+    .filter(t => t.role === "assistant" && t.text).map(t => t.text);
+
   let attempt = 0, last = null, missed = null, echoed = null;
   /* The turn's own memory, for the repair ladder. `gateFails` is counted apart
    * from `attempt` because vocabulary repairs converge -- the validator names
@@ -2399,7 +2408,19 @@ async function turn(ctx) {
      * calls after this one -- so a reply cut off at the token ceiling was being
      * reported as whole because the grader that judged it stopped cleanly. */
     const genFinish = callModel.lastFinish;
-    const ex = extractNeeds(HSK.stripScaffold(raw));
+    /* Stale paragraphs out BEFORE extractNeeds, because `ex.needs` carries
+     * start/end offsets into the cleaned text and the "new words" panel
+     * glosses by them -- trimming a prefix afterwards would slide every one of
+     * them off its word. The raw reply still goes into `scratch` untrimmed on a
+     * repair, so the model is always shown what it actually said, and the
+     * `[attempt]` log line keeps printing `raw` for the same reason. */
+    const deduped = HSK.dropRepeated(HSK.stripScaffold(raw), saidBefore);
+    if (deduped.dropped.length) {
+      console.log("[repeat] dropped " + deduped.dropped.length +
+                  " paragraph(s) already said: " +
+                  deduped.dropped.map(p => p.slice(0, 20) + "…").join(" | "));
+    }
+    const ex = extractNeeds(deduped.text);
     /* Validate against a lexicon that includes this reply's own [[NEED:]]
      * words (`ex.needs`) plus every [[NEED:]] word the CONVERSATION has
      * already announced (`needsSoFar(null)`, every turn, not just this one).

@@ -266,5 +266,58 @@ check(conj.some(v => v.name) && conj.some(v => !v.name),
   "documented limitation: in 杭州和北京 only the first place is excused",
   JSON.stringify(conj.map(x => ({ t: x.text, name: !!x.name }))));
 
+/* The partner re-telling the story it has already told. Fixtures are real
+ * segments out of the app's own database; `dropped` is how many paragraphs of
+ * each reply the learner had already read. */
+for (const c of fx.repeats.cases) {
+  const got = HSK.dropRepeated(c.text, c.prior);
+  check(got.dropped.length === c.dropped, `repeat: ${c.why}`,
+    `want ${c.dropped} dropped, got ${got.dropped.length}`);
+  // What survives must be intact paragraphs of the original, never a splice.
+  const paras = c.text.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  check(got.text.split(/\n\s*\n/).every(k => paras.includes(k.trim())),
+    `repeat: what is kept is whole paragraphs (${c.why})`);
+}
+
+/* The threshold is set from these two populations and is worth pinning: the
+ * repeats were REWORDED, so equality misses them, and the story's own distinct
+ * paragraphs share a cast and a setting, so a loose threshold eats them. On the
+ * measured story they land at 0.88-1.00 and 0.07-0.15 respectively. */
+{
+  const oct = fx.repeats.cases[2];                       // the four-paragraph re-tell
+  const paras = oct.text.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  /* Not an equality test: the paragraph that gets dropped from the October
+   * re-tell is NOT byte-identical to the one already read -- 经过了很多商店 had
+   * become 路上看到了很多商店 in passing. Equality would have missed it. */
+  const reworded = fx.repeats.cases[1];                  // M0801 against M0800
+  const gone = HSK.dropRepeated(reworded.text, reworded.prior).dropped[0];
+  check(gone && gone !== reworded.prior[0].trim(),
+    "repeat: the caught paragraph is reworded, not identical -- so equality would miss it",
+    gone ? "identical to prior" : "nothing dropped");
+  // Distinct paragraphs of one story must survive each other pairwise.
+  let eaten = 0;
+  paras.forEach((a, i) => paras.forEach((b, j) => {
+    if (i !== j && HSK.dropRepeated(a, [b]).dropped.length) eaten++;
+  }));
+  check(eaten === 0,
+    "repeat: distinct paragraphs of the same story do not match each other",
+    `${eaten} pair(s) crossed REPEAT_SIM = ${HSK.REPEAT_SIM}`);
+}
+
+/* Two things keep an ordinary chat turn safe, and neither is a length cutoff.
+ *
+ * A one-paragraph reply can never be trimmed at all: with nothing left over the
+ * drop fails open. Only a reply that is part stale and part new is touched,
+ * which is the story shape and not the chat shape. */
+check(HSK.dropRepeated("我也喜欢喝茶。", ["我也喜欢喝茶。"]).dropped.length === 0,
+  "repeat: a one-paragraph reply is never trimmed, even word for word");
+check(HSK.dropRepeated("我也喜欢喝茶。\n\n你喝咖啡吗？", ["我也喜欢喝茶。"]).dropped.length === 1,
+  "repeat: a stale paragraph beside a new one does go, at any length");
+/* And a short reply does not reach the threshold on rewording alone. The worry
+ * was that few bigrams would collide by accident; 我也喜欢喝茶 against
+ * 我也很喜欢喝茶 scores 0.57, under the bar, so the accident does not happen. */
+check(HSK.dropRepeated("我也很喜欢喝茶。\n\n你喝咖啡吗？", ["我也喜欢喝茶。"]).dropped.length === 0,
+  "repeat: a reworded SHORT reply stays below the threshold, so chat is untouched");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }
