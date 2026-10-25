@@ -984,6 +984,54 @@ arm by a wide margin.
 
 ---
 
+## The repair loop asks the story to start over, and only the symptom is fixed
+
+Found 2026-10-25 from the diagnostic log, after Todd reported a story that
+"repeated itself quite extensively". It did: **39% of the Chinese that story put
+on screen had already been read** — 526 of 1358 characters. Two of the five
+segments came back as the whole story so far, lightly reworded, instead of the
+one paragraph that had been asked for. The same thing is in the log for
+2026-08-28, so it is at least two months old and nobody noticed; a re-told
+paragraph breaks no rule the app checks.
+
+The cause is the last line of every repair instruction:
+「请用别的说法，再说一次」 — *say it a different way, say it again*. It does not say
+which part to say again, and a story segment is generated with the earlier
+segments sitting in the context as assistant turns, so "again" is ambiguous and
+twice the model resolved it as the whole story. Nothing downstream could see it:
+the vocabulary and sense checks ask whether the words are allowed, and recycled
+text was already legal the first time; the gate does not run on story;
+`echoesQuestion` compares against the LEARNER'S last turn, which a story segment
+does not have.
+
+**v137 fixes the symptom, deliberately.** `HSK.dropRepeated()` trims paragraphs
+the conversation has already been told, which costs no model call and cannot make
+a turn worse. Replayed over the October story it removes exactly the 526
+characters and leaves all 832 of the real ones.
+
+**What is left is the cause.** The repair prompt should scope itself — "rewrite
+only this paragraph" — and that would stop the model wasting a generation on
+text that is about to be thrown away. It is not in v137 because CLAUDE.md
+requires an A/B against a real model with counted outcomes before a prompt edit
+ships, and five prompt fixes in this study have moved the number the wrong way.
+The measurement to run: `tools/story-ab.js`, two arms, scoring attempts per
+segment and characters-dropped per story. The symptom fix makes this cheap to
+wait for rather than urgent.
+
+Two smaller things in the same log, unfixed:
+
+- **The manager is called 老师.** 经理 and 老板 are both above HSK 2, so the
+  repair loop substituted until it landed on an in-level word for a person in
+  authority, and got "teacher" — "公司的大老师". The topic card had explicitly
+  asked for 王经理 and the story never used it. This is the `[[NEED:]]` channel's
+  exact job and the repair prompt talks the model out of it: attempt 1 of segment
+  5 contained `[[NEED:同意|tóng yì|agree]]` and the repair dropped it. See
+  "The cast declares people, not content".
+- **Duplicate sense explanations are concatenated verbatim.** Two
+  `得/de_complement` violations in one segment produced the same paragraph of
+  explanation twice in one repair prompt (23:52:03). `HSKSenses.repairPrompt()`
+  should unique by sense.
+
 ## Eight seeds is the weak point of every prompt measurement so far
 
 **Found:** across all four prompt-mode runs.
