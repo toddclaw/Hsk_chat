@@ -196,6 +196,76 @@
     return asked.every(function (w) { return said.has(w); });
   }
 
+  /* Paragraphs of a reply the conversation has already been told.
+
+   * The repair loop ends every instruction with 「请用别的说法，再说一次」 -- "say
+   * it a different way, say it again" -- and says nothing about WHICH part to
+   * say again. A story segment is generated with the earlier segments sitting
+   * in the context as assistant turns, so twice in one measured story the model
+   * read "again" as the whole story: a rejected paragraph 4 came back as
+   * paragraphs 1 through 4, lightly reworded, and every check passed it,
+   * because text that was legal the first time is still legal the second.
+   * 39% of the characters that story put on screen had already been read.
+   *
+   * Nothing upstream can see this. The vocabulary and sense checks ask whether
+   * the words are allowed, the gate asks whether the sentence is correct, and
+   * the echo check compares against the LEARNER'S last turn -- which a story
+   * segment does not have. So it is caught here, on the way out, by comparing
+   * against what the partner itself has already said.
+   *
+   * Dropped rather than retried. The new paragraph is in there and it is fine;
+   * only the prefix is stale, so trimming costs no model call and cannot make
+   * the turn worse. A reply that is NOTHING but repetition is left alone --
+   * returning an empty segment reads as a broken app, and every failure path
+   * here fails open.
+   *
+   * Han-character bigram overlap, not equality: the repeats were reworded in
+   * passing (经过了很多商店 became 路上看到了很多商店). On the measured story the
+   * two populations do not come close to touching -- repeated paragraphs score
+   * 0.88 to 1.00 and distinct ones 0.07 to 0.15, so 0.6 sits in the middle of
+   * an empty band five times wider than either side. */
+  var REPEAT_SIM = 0.6;
+
+  function hanBigrams(text) {
+    var han = (String(text || "").match(/[\u4e00-\u9fff]/g) || []).join("");
+    var out = new Set();
+    for (var i = 0; i + 1 < han.length; i++) out.add(han.slice(i, i + 2));
+    return out;
+  }
+
+  function similar(a, b) {
+    var A = hanBigrams(a), B = hanBigrams(b);
+    if (!A.size || !B.size) return 0;
+    var hit = 0;
+    A.forEach(function (g) { if (B.has(g)) hit++; });
+    return hit / (A.size + B.size - hit);
+  }
+
+  /* text: the reply, scaffold already stripped.  prior: what the partner has
+   * said earlier in this conversation, newest or oldest first, either way.
+   * Returns { text, dropped } -- dropped being the stale paragraphs, for the
+   * diagnostic log. */
+  function dropRepeated(text, prior) {
+    var paras = String(text || "").split(/\n\s*\n/);
+    var seen = [];
+    (prior || []).forEach(function (t) {
+      String(t || "").split(/\n\s*\n/).forEach(function (p) {
+        if (p.trim()) seen.push(p);
+      });
+    });
+    if (!seen.length || paras.length < 1) return { text: text, dropped: [] };
+    var kept = [], dropped = [];
+    paras.forEach(function (p) {
+      if (!p.trim()) return;
+      var stale = seen.some(function (q) { return similar(p, q) >= REPEAT_SIM; });
+      if (stale) dropped.push(p.trim());
+      else { kept.push(p.trim()); seen.push(p); }
+    });
+    // Nothing new at all: fail open rather than hand back an empty turn.
+    if (!kept.length) return { text: text, dropped: [] };
+    return { text: kept.join("\n\n"), dropped: dropped };
+  }
+
   /* Split a run of unmatchable characters using a reference lexicon, keeping
    * anything it does not recognise together: a name is better stored whole than
    * filed as separate characters. */
@@ -380,6 +450,8 @@
     splitRun: splitRun,
     wordsAt: wordsAt,
     echoesQuestion: echoesQuestion,
+    dropRepeated: dropRepeated,
+    REPEAT_SIM: REPEAT_SIM,
     isAscii: function (t) { return /^[\x00-\x7F]*$/.test(t); }
   };
 
