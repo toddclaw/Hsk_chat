@@ -1667,6 +1667,31 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(JSON.parse(await exec("return localStorage.getItem('hsk1chat.chats');"))[0].activity
       === "story", "and it is persisted, not only held in memory");
 
+    /* The repair loop's closing line, character for character, in both shapes.
+     *
+     * The scoped one is what two A/B runs on the story model actually scored
+     * (re-telling on repair turns 5% -> 0, p = 0.016); the plain one is what
+     * chat and drill were measured with. A paraphrase of either would make the
+     * measurement worthless, which is why these are pinned the same way
+     * prompt.test.js pins the gate's prompts. The third wording tried in that
+     * run -- 再说一次 left alone with 前面已经讲过的话不要再讲 appended after it --
+     * tripled the out-of-level rate and must not appear here at all. */
+    {
+      const viol = "[{kind:'bad',text:'\u7ecf\u7406'}]";
+      const plain = await exec("return window.repairPrompt(" + viol + ", 2, false);");
+      const scoped = await exec("return window.repairPrompt(" + viol + ", 2, true);");
+      check(plain.endsWith("\u8bf7\u7528\u522b\u7684\u8bf4\u6cd5\uff0c\u518d\u8bf4\u4e00\u6b21\u3002\u53ea\u8bf4\u4e2d\u6587\uff0c\u4e0d\u8981\u89e3\u91ca\u3002"),
+        "repair prompt: the unscoped closing line is unchanged for chat and drill", plain);
+      check(scoped.endsWith("\u8bf7\u7528\u522b\u7684\u8bf4\u6cd5\uff0c\u628a\u8fd9\u4e00\u6bb5\u518d\u8bf4\u4e00\u6b21\u3002\u524d\u9762\u5df2\u7ecf\u8bb2\u8fc7\u7684\u8bdd\u4e0d\u8981\u518d\u8bb2\u3002\u53ea\u8bf4\u4e2d\u6587\uff0c\u4e0d\u8981\u89e3\u91ca\u3002"),
+        "repair prompt: the scoped closing line is the string the A/B scored", scoped);
+      check(!scoped.includes("\u8bf4\u6cd5\uff0c\u518d\u8bf4\u4e00\u6b21"),
+        "repair prompt: NOT the rejected arm, which left 说法，再说一次 bare and only appended",
+        scoped);
+      check(plain.indexOf("\u300c\u7ecf\u7406\u300d") !== -1 &&
+            scoped.indexOf("\u300c\u7ecf\u7406\u300d") !== -1,
+        "repair prompt: both shapes still name the offending word");
+    }
+
     await exec("window.newChat();");
     check(await exec("return window.currentActivity();") === "chat",
       "newChat with no argument is a chat");

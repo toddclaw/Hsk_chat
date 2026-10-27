@@ -1028,14 +1028,52 @@ front is the failure, while a unit recurring mid-reply is ordinary conversation.
 Audited over the whole corpus: 621 assistant units, 11 messages trimmed, every
 one a genuine repeat-then-append, and all four false positives gone.
 
-**What is left is the cause.** The repair prompt should scope itself — "rewrite
-only this paragraph" — and that would stop the model wasting a generation on
-text that is about to be thrown away. It is not in v137 because CLAUDE.md
-requires an A/B against a real model with counted outcomes before a prompt edit
-ships, and five prompt fixes in this study have moved the number the wrong way.
-The measurement to run: `tools/story-ab.js`, two arms, scoring attempts per
-segment and characters-dropped per story. The symptom fix makes this cheap to
-wait for rather than urgent.
+**The cause is fixed too, in v139, and the A/B is why it looks like this.**
+Two runs on `claude-sonnet-4.5` at HSK 2, 8 stories an arm each, via
+`tools/story-ab.js --arms positioned,scoped,scoped-min`. Re-tellings are counted
+with the app's own `HSK.dropRepeated()` rather than a second definition of the
+word, so a hit is exactly what v138 would have trimmed in production.
+
+| arm | re-told on repair turns | han re-told/story | out-of-level | viol/100 han | mean chars | usable |
+|---|---|---|---|---|---|---|
+| shipped | 6/117 (5%) | 24-82 | 38% | 3.8 | 100 | 25/40 |
+| **scoped** | **0/113 (0%)** | **0** | 38% | 3.7 | 91 | 25/40 |
+| scoped-min | 0/59 (0%) | 0 | **65%** | **11.6** | **51** | **14/40** |
+
+p = 0.016 pooled. The segments also came clean in fewer tries and the arm cost
+6% less. Run one showed out-of-level drifting 4.1 to 4.9 violations per 100 Han
+and run two showed 3.8 to 3.7, so that was noise -- which is the reason for the
+second run and not an argument against the first.
+
+**The negative result is the one worth keeping.** `scoped-min` was supposed to be
+the safe version: leave 再说一次 alone and append only the activity-neutral
+「前面已经讲过的话不要再讲」, since 「这一段」 is story language and `repairPrompt()`
+is shared by every activity. It was by far the worst arm on every quality axis --
+out-of-level nearly doubled, violations per 100 Han tripled, segments halved in
+length, usable segments fell by 44%. Told both to say it again AND not to say
+what it already said, the model writes something tiny and strays out of level
+reaching for new words. The phrasing is load-bearing, not incidental.
+
+So v139 ships the scoped line for **story only**, which is the population that
+was measured; chat and drill keep the prompt that was measured for them.
+`test/browser.test.js` pins both strings character for character, and pins that
+the rejected wording is not what shipped.
+
+**Still open, and deliberately not extrapolated:**
+
+- **The story question turn.** What Todd actually hit (M0808) was a discuss/question
+  turn, not a segment, and the A/B scored segments. Same activity, same model,
+  same mechanism, so v139 applies the line to the whole story activity -- but that
+  last step is inference, not measurement. `tools/story-ab.js` has a questions
+  mode that does not currently exercise the repair loop against prior context.
+- **`gateRepairPrompt()`** closes with 「请用这个意思重新说一次」 -- the same unscoped
+  "say it again". The gate never runs on story, so it is not implicated in what
+  was reported, and after what `scoped-min` did, copying a wording across
+  populations is exactly the mistake to avoid. It needs its own run.
+- **Drill.** The same repeat-then-append shows up on half the drill turns in the
+  corpus (qwen, not Sonnet). v138 trims it; the prompt side is unmeasured there,
+  and the qwen pilot for this run produced zero re-tellings at all, so the story
+  harness cannot answer it.
 
 Two smaller things in the same log, unfixed:
 
