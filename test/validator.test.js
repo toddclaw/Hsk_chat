@@ -273,11 +273,34 @@ for (const c of fx.repeats.cases) {
   const got = HSK.dropRepeated(c.text, c.prior);
   check(got.dropped.length === c.dropped, `repeat: ${c.why}`,
     `want ${c.dropped} dropped, got ${got.dropped.length}`);
-  // What survives must be intact paragraphs of the original, never a splice.
-  const paras = c.text.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
-  check(got.text.split(/\n\s*\n/).every(k => paras.includes(k.trim())),
-    `repeat: what is kept is whole paragraphs (${c.why})`);
+  // What survives must be intact units of the original, never a splice.
+  const parts = c.text.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  check(got.text.split(/\n+/).every(k => parts.includes(k.trim())),
+    `repeat: what is kept is whole units (${c.why})`);
+  if (c.keeps) {
+    check(got.text.trim() === c.keeps, `repeat: keeps exactly the new text (${c.why})`,
+      JSON.stringify(got.text.trim()));
+  }
 }
+
+/* The leading-run rule, which is what makes this safe to apply outside story
+ * time. Stale text at the FRONT is the failure; a unit that recurs in the
+ * middle of a reply is ordinary conversation. Both directions are pinned
+ * because getting the second one wrong deletes the partner's answer. */
+{
+  /* Units need a few characters each: the comparison is on Han BIGRAMS, so a
+   * one-character line has none and can never match anything. */
+  const stale = "我喜欢喝茶。", fresh = "你今天去哪儿？", tail = "明天见面吧。";
+  const got = HSK.dropRepeated(stale + "\n" + fresh + "\n" + tail, [stale, tail]);
+  check(got.dropped.length === 1,
+    "repeat: drops the stale FRONT and stops at the first new unit",
+    JSON.stringify(got.dropped));
+  check(got.text === fresh + "\n\n" + tail,
+    "repeat: a repeated unit AFTER the first new one is kept, not spliced out",
+    JSON.stringify(got.text));
+}
+check(HSK.dropRepeated("新的话。\n旧的话。", ["旧的话。"]).dropped.length === 0,
+  "repeat: a reply whose first unit is new is never trimmed at all");
 
 /* The threshold is set from these two populations and is worth pinning: the
  * repeats were REWORDED, so equality misses them, and the story's own distinct
@@ -285,7 +308,7 @@ for (const c of fx.repeats.cases) {
  * measured story they land at 0.88-1.00 and 0.07-0.15 respectively. */
 {
   const oct = fx.repeats.cases[2];                       // the four-paragraph re-tell
-  const paras = oct.text.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  const paras = oct.text.split(/\n+/).map(x => x.trim()).filter(Boolean);
   /* Not an equality test: the paragraph that gets dropped from the October
    * re-tell is NOT byte-identical to the one already read -- 经过了很多商店 had
    * become 路上看到了很多商店 in passing. Equality would have missed it. */
@@ -318,6 +341,9 @@ check(HSK.dropRepeated("我也喜欢喝茶。\n\n你喝咖啡吗？", ["我也�
  * 我也很喜欢喝茶 scores 0.57, under the bar, so the accident does not happen. */
 check(HSK.dropRepeated("我也很喜欢喝茶。\n\n你喝咖啡吗？", ["我也喜欢喝茶。"]).dropped.length === 0,
   "repeat: a reworded SHORT reply stays below the threshold, so chat is untouched");
+/* Same text, single newline: the separator must not decide the outcome. */
+check(HSK.dropRepeated("我也喜欢喝茶。\n你喝咖啡吗？", ["我也喜欢喝茶。"]).dropped.length === 1,
+  "repeat: a single newline separates units just as a blank line does");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

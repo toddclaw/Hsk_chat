@@ -1004,10 +1004,29 @@ text was already legal the first time; the gate does not run on story;
 `echoesQuestion` compares against the LEARNER'S last turn, which a story segment
 does not have.
 
-**v137 fixes the symptom, deliberately.** `HSK.dropRepeated()` trims paragraphs
-the conversation has already been told, which costs no model call and cannot make
-a turn worse. Replayed over the October story it removes exactly the 526
-characters and leaves all 832 of the real ones.
+**v137 fixed the symptom, deliberately, and v138 fixed the fix.**
+`HSK.dropRepeated()` trims stale text the conversation has already been told,
+which costs no model call and cannot make a turn worse.
+
+v137 split units on a BLANK line and so missed the next instance the same day it
+shipped: asked for a discussion question, the partner repeated its previous
+message word for word and put the question after a SINGLE newline. One line meant
+one unit, and a reply of one unit is never trimmed. v138 splits on any run of
+newlines -- and that turned up the same fault in the **drill** activity on half
+its turns, where the partner had been re-sending its opening two lines and
+changing only the third, against a prompt that says 一次只问一个问题.
+
+The wider split then needed a tighter rule, and this is the part worth
+remembering: **finer units made the threshold unsafe.** At unit granularity the
+0.60-0.85 band is mixed, holding a new 20-questions opener against the last
+game's (0.72) and a fresh 把 acknowledgement against the sentence it echoes
+(0.60); and worse, in the focused activity 明天会好 and 手机一定能找到 each come
+back WORD FOR WORD in a later four-line turn whose other three lines are new, so
+score alone cannot separate them at any threshold. Two changes answer it: the
+bar went to **0.9**, and only a **leading run** is dropped -- stale text at the
+front is the failure, while a unit recurring mid-reply is ordinary conversation.
+Audited over the whole corpus: 621 assistant units, 11 messages trimmed, every
+one a genuine repeat-then-append, and all four false positives gone.
 
 **What is left is the cause.** The repair prompt should scope itself — "rewrite
 only this paragraph" — and that would stop the model wasting a generation on

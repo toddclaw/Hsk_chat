@@ -196,35 +196,63 @@
     return asked.every(function (w) { return said.has(w); });
   }
 
-  /* Paragraphs of a reply the conversation has already been told.
+  /* The opening of a reply the conversation has already been told.
 
    * The repair loop ends every instruction with 「请用别的说法，再说一次」 -- "say
    * it a different way, say it again" -- and says nothing about WHICH part to
-   * say again. A story segment is generated with the earlier segments sitting
-   * in the context as assistant turns, so twice in one measured story the model
-   * read "again" as the whole story: a rejected paragraph 4 came back as
-   * paragraphs 1 through 4, lightly reworded, and every check passed it,
-   * because text that was legal the first time is still legal the second.
-   * 39% of the characters that story put on screen had already been read.
+   * say again. The earlier turns sit in the context as assistant messages, so
+   * the model can read "again" as "the whole thing again", and three times in
+   * the real log it did: a rejected story paragraph came back as every
+   * paragraph so far, and a request for a discussion question came back as the
+   * previous message word for word with the question appended. 39% of the
+   * characters one story put on screen had already been read.
    *
-   * Nothing upstream can see this. The vocabulary and sense checks ask whether
-   * the words are allowed, the gate asks whether the sentence is correct, and
-   * the echo check compares against the LEARNER'S last turn -- which a story
-   * segment does not have. So it is caught here, on the way out, by comparing
-   * against what the partner itself has already said.
+   * Nothing upstream can see it. The vocabulary and sense checks ask whether
+   * the words are allowed, and text that was legal the first time is still
+   * legal the second; the gate does not run on story; the echo check compares
+   * against the LEARNER'S last turn, which a story segment does not have.
    *
-   * Dropped rather than retried. The new paragraph is in there and it is fine;
-   * only the prefix is stale, so trimming costs no model call and cannot make
-   * the turn worse. A reply that is NOTHING but repetition is left alone --
-   * returning an empty segment reads as a broken app, and every failure path
-   * here fails open.
+   * ONLY A LEADING RUN, and that is the whole of what makes this safe.
    *
-   * Han-character bigram overlap, not equality: the repeats were reworded in
-   * passing (经过了很多商店 became 路上看到了很多商店). On the measured story the
-   * two populations do not come close to touching -- repeated paragraphs score
-   * 0.88 to 1.00 and distinct ones 0.07 to 0.15, so 0.6 sits in the middle of
-   * an empty band five times wider than either side. */
-  var REPEAT_SIM = 0.6;
+   * The failure is always "it said its last message again and then added the
+   * new bit", so the stale text is always at the FRONT: drop units from the
+   * start while they are stale, stop at the first new one, keep the rest
+   * whatever it contains. A line that recurs in the MIDDLE of a reply is
+   * ordinary conversation and must survive -- measured, not assumed. In the
+   * focused activity, which drills one pattern, 明天会好 and 手机一定能找到 each
+   * come back word for word in a later four-line turn whose other three lines
+   * are new, and in a 把 drill 你每天把水放在书包里 recurs because that is the
+   * structure being practised. A rule that dropped any repeated unit would
+   * delete all three. A leading-run rule cannot: their first lines are new.
+   *
+   * Dropped rather than retried. The new text is in there and it is fine, so
+   * trimming costs no model call and cannot make the turn worse. A reply with
+   * nothing left over is returned untouched -- an empty turn reads as a broken
+   * app, and every failure path here fails open, which also means a reply of a
+   * single unit is never trimmed, so an ordinary chat turn cannot be touched.
+   *
+   * Han-character bigram overlap, not equality: the repeats get reworded in
+   * passing (经过了很多商店 became 路上看到了很多商店). The threshold is set from
+   * the real corpus, where the two populations do not overlap at the front of a
+   * reply -- genuine re-tellings score 0.91 to 1.00, while 0.60 to 0.85 is a
+   * mixed band holding a new 20-questions opener against the last game's
+   * (0.72) and a fresh 把 acknowledgement against the sentence it echoes
+   * (0.60). 0.9 keeps every re-telling in the log and gives up four partial
+   * ones, which is the right side to err on: a missed repeat is a paragraph
+   * read twice, a false one is the partner's answer deleted. */
+  var REPEAT_SIM = 0.9;
+
+  /* ANY run of newlines, not a blank line.
+   *
+   * The first cut of this split on /\n\s*\n/ and missed the next instance the
+   * same day it shipped: asked for a discussion question, the partner repeated
+   * its previous message word for word and put the question after a single
+   * newline ("...比他想的还要好。 \n你第一天去新学校的时候，觉得怎么样？"). One line
+   * meant one unit, and one unit can never be trimmed. The separator the model
+   * picks is not a contract, so it is not worth assuming -- and the drill
+   * activity, which separates its lines the same way, turned out to be doing
+   * the same thing on every turn. */
+  var PARA_SPLIT = /\n+/;
 
   function hanBigrams(text) {
     var han = (String(text || "").match(/[\u4e00-\u9fff]/g) || []).join("");
@@ -241,29 +269,31 @@
     return hit / (A.size + B.size - hit);
   }
 
+  function units(text) {
+    return String(text || "").split(PARA_SPLIT)
+      .map(function (p) { return p.trim(); })
+      .filter(Boolean);
+  }
+
   /* text: the reply, scaffold already stripped.  prior: what the partner has
-   * said earlier in this conversation, newest or oldest first, either way.
-   * Returns { text, dropped } -- dropped being the stale paragraphs, for the
+   * said earlier in this conversation, in any order.
+   * Returns { text, dropped } -- dropped being the stale leading units, for the
    * diagnostic log. */
   function dropRepeated(text, prior) {
-    var paras = String(text || "").split(/\n\s*\n/);
+    var parts = units(text);
     var seen = [];
     (prior || []).forEach(function (t) {
-      String(t || "").split(/\n\s*\n/).forEach(function (p) {
-        if (p.trim()) seen.push(p);
-      });
+      units(t).forEach(function (p) { seen.push(p); });
     });
-    if (!seen.length || paras.length < 1) return { text: text, dropped: [] };
-    var kept = [], dropped = [];
-    paras.forEach(function (p) {
-      if (!p.trim()) return;
-      var stale = seen.some(function (q) { return similar(p, q) >= REPEAT_SIM; });
-      if (stale) dropped.push(p.trim());
-      else { kept.push(p.trim()); seen.push(p); }
-    });
-    // Nothing new at all: fail open rather than hand back an empty turn.
-    if (!kept.length) return { text: text, dropped: [] };
-    return { text: kept.join("\n\n"), dropped: dropped };
+    if (!seen.length || parts.length < 2) return { text: text, dropped: [] };
+
+    var cut = 0;
+    while (cut < parts.length && seen.some(function (q) {
+      return similar(parts[cut], q) >= REPEAT_SIM;
+    })) cut++;
+
+    if (!cut || cut === parts.length) return { text: text, dropped: [] };
+    return { text: parts.slice(cut).join("\n\n"), dropped: parts.slice(0, cut) };
   }
 
   /* Split a run of unmatchable characters using a reference lexicon, keeping
