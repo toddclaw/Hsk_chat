@@ -1277,9 +1277,8 @@ Still open, in rough descending order of how much they would annoy someone:
   of the conversation, so a free-form learner turn mid-story is met with the discussing framing
   学生在回答你刚才的问题 — wrong for turns that are not answers. It matches the spec's Talking
   state and it is on the cheap model, so it is a wording problem, not a cost one.
-- **`renderChats()`'s message count includes the topic message**, so a story reports one more
-  message than it shows; a make-something-up story with nothing generated reads "1 message"
-  over an empty log.
+- ~~**`renderChats()`'s message count includes the topic message**~~ — **fixed, v138**: the
+  count skips every `MARKER_ROLES` row, so drills and set activities stopped over-counting too.
 - **A question that exhausted its repair attempts is still stored `kind: "question"`**, so
   `anyStoryQuestion()` opens the composer for a question the partner never really managed to
   ask.

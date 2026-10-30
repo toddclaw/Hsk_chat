@@ -1787,6 +1787,13 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(/Story time/.test(meta),
       "the chat list says which activity a conversation was", meta);
     check(/message/.test(meta), "and still says how many messages", meta);
+    /* The topic is a marker, not a message: a story with nothing told yet
+     * must not count it, or the list reads "1 message" over an empty log. */
+    await exec("window.setStoryTopic('', []); window.renderChats();");
+    const metaTopic = await exec(
+      "var m = document.querySelector('#chatList .cmeta'); return m ? m.textContent : '';");
+    check(/\b0 messages\b/.test(metaTopic),
+      "and does not count the story's topic marker as a message", metaTopic);
 
     /* And which level it was held at. The level decides what the partner was
      * allowed to say, so it is part of what a saved transcript IS -- and it is

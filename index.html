@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v137 — 2026-10-25";
+const VERSION   = "v138 — 2026-10-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -8243,7 +8243,10 @@ function renderChats() {
     return;
   }
   list.forEach(c => {
-    const turns = (S.chatMsgs[c.id] || []).filter(t => t.role !== "notice");
+    // MARKER_ROLES too: a story's topic is not a message, and counting it made
+    // a story read "1 message" over an empty log.
+    const turns = (S.chatMsgs[c.id] || [])
+      .filter(t => t.role !== "notice" && !MARKER_ROLES.has(t.role));
     const row = document.createElement("div");
     row.className = "chatrow" + (c.id === S.chatId ? " on" : "");
 
