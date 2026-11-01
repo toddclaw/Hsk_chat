@@ -636,7 +636,7 @@ not nothing. The UI follows from that answer.
 
 ---
 
-## 20 Questions has no marker in its own transcript — half closed
+## ~~20 Questions has no marker in its own transcript~~ — closed, v140
 
 **Found:** the v100 sync repair, 2026-09-12 (`fde8095`).
 
@@ -659,9 +659,25 @@ is why that work kept the two set roles distinct instead of reusing
 name. The chat-browser title for a Ghost Words conversation, deferred out of the
 v122 work, came with it.
 
-**What would settle the rest:** a marker message for 20 Questions, of the kind
-story, drill and both set activities now carry, so the transcript is sufficient
-for every activity rather than four of five.
+**Closed 2026-11-01 (v140).** `chooseTwentySide()` writes a `role: "twenty"`
+marker when the side is chosen, `activityOf()` reads it, and the transcript is now
+sufficient for all five activities rather than four. The marker carries the SIDE and
+not the secret: design D3 keeps the secret where only `systemPrompt()` sees it, and
+the transcript syncs and is read by tools.
+
+Two things worth keeping from the build:
+
+- **The marker cannot reach the model, by construction.** `windowed()` keeps
+  `user` and `assistant` and nothing else, so an unrendered role is excluded
+  because it is not on the allowlist rather than because someone remembered to
+  deny it. `MARKER_ROLES` governs rendering and the is-the-log-empty check, not
+  the model context — two separate mechanisms that are easy to confuse, and the
+  test now pins the model-context half.
+- **No backfill, and none is possible.** A round started before v140 either has
+  its row intact, in which case nothing is wrong, or has already lost it, in
+  which case there is no side left to write a marker from. `side` is still read
+  from the column everywhere; recovering it from the marker would be a second
+  change and is not in this one.
 
 ---
 

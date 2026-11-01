@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v138 — 2026-10-27";
+const VERSION   = "v140 — 2026-11-01";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2706,7 +2706,7 @@ function renderNotice(turnObj) {
  * check in renderAll(). */
 const MARKER_ROLES = new Set(["topic", "drill", "drillEg", "drillWord",
                               "drillTip", "drillEnd",
-                              "flashcards", "focus"]);
+                              "flashcards", "focus", "twenty"]);
 
 function renderMessage(turnObj, shownExtra) {
   if (turnObj.role === "notice") return renderNotice(turnObj);
@@ -3346,9 +3346,14 @@ function touchChat() {
  * drillTag() have always used, for the same reason.
  *
  * So it heals with no migration, no server repair, and no ordering between the
- * two. Story, drill and both set activities leave a marker; 20 Questions' side
- * is a column of its own, so that one still depends on the row, and on
- * mergeConversations() not letting a lost value overwrite a real one.
+ * two. EVERY activity leaves a marker as of v140: story, drill, both set
+ * activities, and now 20 Questions, whose `side` and `secret` are columns --
+ * which is the very thing that went missing -- so its marker carries the side
+ * in the transcript instead. Rounds started before v140 have no marker and
+ * still depend on the row, and on mergeConversations() not letting a lost
+ * value overwrite a real one. There is no backfill: an old round's row is
+ * either intact, in which case nothing is wrong, or already lost, in which
+ * case there is nothing left to write a marker from.
  *
  * A specific row still wins outright -- a chat transcript cannot contain a topic
  * or drill marker, so the inference only ever fires where the row lost. */
@@ -3361,6 +3366,10 @@ function activityOf(c) {
   /* Ghost Words has a marker of its own since v125, which is why the two set
    * roles stay distinct: one shared role would read as a flashcard chat here. */
   if (HSKPace.focusOf(msgs).length) return "focused";
+  /* Last of the five. Order is free here: a 20 Questions transcript cannot
+   * hold a topic marker, a drill tag or a set, so no earlier branch can claim
+   * it and it cannot claim theirs. */
+  if (msgs.some(m => m.role === "twenty")) return "twenty";
   return (c && c.activity) || "chat";
 }
 function currentActivity() { return activityOf(chatById(S.chatId)); }
@@ -6671,7 +6680,20 @@ function chooseTwentySide(side) {
   if (!c || c.side) return;
   c.side = side;
   if (side === "guesser") c.secret = HSKPrompt.pickSecret(S.base);
-  saveChats();
+  /* The marker, written here because this is the moment the round exists at
+   * all. It carries the SIDE and never the secret: markers are not rendered,
+   * but the transcript syncs and is read by tools, and design D3 keeps the
+   * secret somewhere only systemPrompt() looks. Nothing reads the side back
+   * yet -- activityOf() needs only the role -- but recording it costs a field
+   * that the message shape already has, and a later reader cannot add it
+   * retroactively.
+   *
+   * It cannot reach the model: windowed() builds the context from `user` and
+   * `assistant` roles alone, an allowlist, so an unknown role is skipped by
+   * construction rather than by remembering to exclude it. */
+  S.history.push({ role: "twenty", text: side,
+                   id: newMessageId(), created_at: new Date().toISOString() });
+  persist();
   queueSync("conversations");
   renderStarters();
   openingTurn();
