@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v138 — 2026-10-27";
+const VERSION   = "v141 — 2026-11-02";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3106,7 +3106,7 @@ function renderConversation() {
      * story" button is back on screen, same as before this hint existed). */
     let hintText;
     if (currentActivity() === "story") {
-      hintText = (storyTopic() ? 'Tap <b>Start the story</b> below.'
+      hintText = (hasStoryTopic() ? 'Tap <b>Start the story</b> below.'
                                 : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
@@ -4732,6 +4732,10 @@ function storyTopic() {
   const t = S.history.find(m => m.role === "topic");
   return (t && t.text) || "";
 }
+
+/* Whether a topic has been CHOSEN, which storyTopic() cannot say: "Make
+ * something up" stores an empty one, and "" also means nothing chosen yet. */
+function hasStoryTopic() { return S.history.some(m => m.role === "topic"); }
 
 /* The category tapped in the chooser, before a specific sentence has been
  * picked. Deliberately NOT stored: a half-made choice is not a drill, and
@@ -6638,7 +6642,7 @@ function pastStoryTopics() {
  * starters preference below: this is a control, not an opener. */
 function renderStoryControl(box) {
   if (S.busy) return;
-  if (!storyTopic() && !S.history.length) return renderStoryChooser(box);
+  if (!hasStoryTopic() && !S.history.length) return renderStoryChooser(box);
   const told = storyTold();
   if (told < STORY_SEGMENTS) {
     const on = document.createElement("button");

@@ -1267,12 +1267,9 @@ through `validate()` — the first Chinese in the UI ever to do so.
 
 Still open, in rough descending order of how much they would annoy someone:
 
-- **`storyTopic()` answers for two different states.** It returns `""` both when there is no
-  topic message at all (Choosing) and when "make something up" stored an empty topic (Telling).
-  `renderStoryControl()` disambiguates with an extra `!S.history.length` clause;
-  `renderAll()` does not. Stop the first segment of a make-something-up story and the log hint
-  reads "Pick what the story is about below" under a strip reading "Start the story". A
-  `hasStoryTopic()` that tests for the message rather than its text removes the whole class.
+- ~~**`storyTopic()` answers for two different states.**~~ — **fixed, v141**: `hasStoryTopic()`
+  tests for the message rather than its text, and both the log hint and the story strip use
+  it, so a stopped make-something-up story says "Start the story" in both places.
 - **`send()`'s `answering` never turns off.** Once any question exists it is true for the rest
   of the conversation, so a free-form learner turn mid-story is met with the discussing framing
   学生在回答你刚才的问题 — wrong for turns that are not answers. It matches the spec's Talking

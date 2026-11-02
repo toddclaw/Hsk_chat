@@ -1961,6 +1961,16 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec("return document.querySelectorAll('#log .hint').length;") === 1,
       "a topic picked but nothing generated yet still shows the empty-state hint, not a blank log");
 
+    /* "Make something up" stores an EMPTY topic, and storyTopic() returns ""
+     * for that and for no topic at all alike. The hint has to follow the
+     * strip, which offers "Start the story", not send them to a chooser that
+     * is no longer there. */
+    await exec("window.newChat('story'); window.setStoryTopic('', []); window.renderAll();");
+    const madeUpHint = await exec("var h = document.querySelector('#log .hint'); return h ? h.textContent : '';");
+    check(/Start the story/.test(madeUpHint) && !/Pick what the story is about/.test(madeUpHint),
+      "a make-something-up story stopped before its first part says to tap Start the story, not to pick a topic",
+      madeUpHint);
+
     /* pastStoryTopics() reads S.chats and S.chatMsgs directly, so it has to
      * survive a deleted conversation and a conversation with no messages (an
      * empty array's find() is undefined, not a throw). Marking `.deleted`
