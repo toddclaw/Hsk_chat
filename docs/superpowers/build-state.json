@@ -1,0 +1,37 @@
+{
+  "_what": "Fallback copy of the Test Queue page's build/current, committed so the daily routine can read the build state when ArtifactData is unavailable in its environment (it was absent 2026-10-30, 11-01, 11-02 and 11-03, and three mornings of build work were lost to it).",
+  "_precedence": "The PAGE is authoritative when it can be read, because Todd's Approve and Send-back buttons write there. This file is the fallback, read only when the page cannot be reached. A run that can reach both must write both. If they disagree and both are readable, believe the page.",
+  "_discovery": "No extra channel is needed to find this. STEP 1 already lists unmerged branches; any origin/build/* branch IS the active build, and this file sits at this path on it: git show origin/build/<slug>:docs/superpowers/build-state.json",
+
+  "slug": "tone-id",
+  "title": "Tone ID.",
+  "phase": "awaiting-approval",
+  "approval": "pending",
+  "branch": "build/tone-id",
+  "specPath": "docs/superpowers/specs/2026-11-03-tone-id-design.md",
+  "planPath": "docs/superpowers/plans/2026-11-03-tone-id.md",
+
+  "summary": "Play a word, ask which tone each syllable was, cycling every installed Chinese voice. Best transfer evidence on the ranked list: perception-only training moved learners' actual production 18%. A fifth face of the v101 retrieval engine. No model call, no network, no new table.",
+
+  "decisions": [],
+  "decisionsSettledAt": "2026-11-03",
+  "settled": [
+    "An item is a whole word and the learner answers EVERY syllable's tone (not single-syllable-only).",
+    "Neutral is a real answer on every syllable: the answer set is five. 20% of HSK 1 words contain a neutral syllable, against 3% affected by sandhi.",
+    "Sandhi is taught, not excluded: 你好 is answered 2-3. Todd verified iOS voices apply it, by listening. Evidence is iOS only, so the rule must degrade and never punish a learner who hears a citation tone.",
+    "A round is 20 items by default and ships as a SETTING, not a constant.",
+    "Credit goes in its own counter under face \"toneid\" and touches neither GHOST_USES nor the pacing arithmetic.",
+    "Audio is the device's own voices. OpenRouter audio models and Pleco were both examined and ruled out; do not re-raise either."
+  ],
+
+  "tasks": [
+    { "title": "pinyin.js — split unspaced pinyin into syllables and tones", "done": false, "demoable": false },
+    { "title": "The sheet, thin — play a word, answer every syllable", "done": false, "demoable": true },
+    { "title": "Every installed voice, and no voice at all", "done": false, "demoable": true },
+    { "title": "Sandhi — teach it, and accept both forms", "done": false, "demoable": true },
+    { "title": "Make the retrievals day cap face-aware", "done": false, "demoable": false },
+    { "title": "Credit, the round summary, and the round-size setting", "done": false, "demoable": true }
+  ],
+
+  "updatedAt": "2026-11-03T00:00:00Z"
+}
