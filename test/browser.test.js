@@ -2614,8 +2614,13 @@ check(usedGroups && usedGroups.first === "\u7684",
     await waitFor("window.storyTold() === 5", "the story runs out at five segments and a question");
     await exec("window.renderStarters();");
     check(await exec(
-      "return document.querySelectorAll('#starters button.story').length;") === 0,
+      "return Array.prototype.filter.call(document.querySelectorAll('#starters button')," +
+      "function (b) { return /^Read on/.test(b.textContent); }).length;") === 0,
       "a finished, asked story offers nothing to read on to");
+    check(await exec(
+      "var b = document.querySelector('#starters button.story'); return b ? b.textContent : '';")
+      === "Ask me another",
+      "and \"Ask me another\" takes the accent, being the only control left");
     check(await exec("return document.querySelector('#input').disabled;") === false,
       "and the composer reopens now that a question has been asked");
     check(await exec("return document.querySelector('#input').placeholder;") ===
