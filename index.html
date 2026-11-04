@@ -8271,7 +8271,10 @@ function renderChats() {
     return;
   }
   list.forEach(c => {
-    const turns = (S.chatMsgs[c.id] || []).filter(t => t.role !== "notice");
+    // MARKER_ROLES too: a story's topic is not a message, and counting it made
+    // a story read "1 message" over an empty log.
+    const turns = (S.chatMsgs[c.id] || [])
+      .filter(t => t.role !== "notice" && !MARKER_ROLES.has(t.role));
     const row = document.createElement("div");
     row.className = "chatrow" + (c.id === S.chatId ? " on" : "");
 
