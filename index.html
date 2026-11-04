@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v138 — 2026-10-27";
+const VERSION   = "v139 — 2026-10-27";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1772,7 +1772,31 @@ function extractNeeds(text) {
 
 /* -------------------------------------------------------------- repair loop */
 
-function repairPrompt(violations, attempt) {
+/* `scoped` adds one sentence, and it is measured, not reasoned.
+ *
+ * The closing 「请用别的说法，再说一次」 never says WHICH part to say again, and with
+ * the earlier turns in the context as assistant messages the story model reads
+ * it as the whole story: it re-sends everything it has already said with the new
+ * paragraph appended. Two A/B runs on claude-sonnet-4.5 at HSK 2, 16 stories an
+ * arm, counted re-tellings with HSK.dropRepeated() so a hit is exactly what
+ * v138 would have trimmed in production. Re-telling on repair turns went
+ * 6/117 (5%) to 0/113, p = 0.016, at 24-82 wasted Han characters a story; the
+ * segments also came clean in fewer tries and the arm cost 6% less. Out-of-level
+ * rate was unchanged (38% vs 38%, 3.7 vs 3.8 violations per 100 Han in the run
+ * that settled it; run one's 4.1 to 4.9 was noise).
+ *
+ * STORY ONLY, and that is the measurement's doing rather than caution. The
+ * obvious safer wording -- keeping 再说一次 untouched and appending only the
+ * activity-neutral 「前面已经讲过的话不要再讲」 -- was tested as a third arm because
+ * 「这一段」 is story language that a chat turn has no use for. It was a disaster:
+ * out-of-level 38% to 65%, violations per 100 Han 3.8 to 11.6, mean segment 100
+ * characters to 51, usable segments 25/40 to 14/40. Told both to say it again
+ * and not to say what it already said, the model writes something tiny and
+ * strays out of level reaching for new words. So the phrasing is load-bearing,
+ * the neutral version cannot ship, and chat and drill keep the prompt that was
+ * measured for them. BACKLOG.md, "The repair loop asks the story to start
+ * over". */
+function repairPrompt(violations, attempt, scoped) {
   const latin = violations.filter(v => v.kind === "latin");
   const words = violations.filter(v => v.kind === "bad");
   const senses = violations.filter(v => v.kind === "sense");
@@ -1793,7 +1817,11 @@ function repairPrompt(violations, attempt) {
   // senses.js explains the disallowed grammatical function; it never adds
   // its own closing line, so this one covers vocabulary and sense repairs alike.
   if (senses.length) parts.push(HSKSenses.repairPrompt(senses));
-  parts.push("请用别的说法，再说一次。只说中文，不要解释。");
+  /* Character for character what the A/B scored. A paraphrase here would make
+   * the measurement above worth nothing; test/browser.test.js pins both. */
+  parts.push(scoped
+    ? "请用别的说法，把这一段再说一次。前面已经讲过的话不要再讲。只说中文，不要解释。"
+    : "请用别的说法，再说一次。只说中文，不要解释。");
   return parts.join("");
 }
 
@@ -2560,7 +2588,7 @@ async function turn(ctx) {
     prevText = ex.text;
     prevBad = badNow;
     scratch.push({ role: "assistant", content: raw });
-    const rp = repairPrompt(violations, attempt + 1);
+    const rp = repairPrompt(violations, attempt + 1, currentActivity() === "story");
     console.log("[repair]", rp);
     scratch.push({ role: "user", content: rp });
   }
