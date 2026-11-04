@@ -1667,6 +1667,31 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(JSON.parse(await exec("return localStorage.getItem('hsk1chat.chats');"))[0].activity
       === "story", "and it is persisted, not only held in memory");
 
+    /* The repair loop's closing line, character for character, in both shapes.
+     *
+     * The scoped one is what two A/B runs on the story model actually scored
+     * (re-telling on repair turns 5% -> 0, p = 0.016); the plain one is what
+     * chat and drill were measured with. A paraphrase of either would make the
+     * measurement worthless, which is why these are pinned the same way
+     * prompt.test.js pins the gate's prompts. The third wording tried in that
+     * run -- 再说一次 left alone with 前面已经讲过的话不要再讲 appended after it --
+     * tripled the out-of-level rate and must not appear here at all. */
+    {
+      const viol = "[{kind:'bad',text:'\u7ecf\u7406'}]";
+      const plain = await exec("return window.repairPrompt(" + viol + ", 2, false);");
+      const scoped = await exec("return window.repairPrompt(" + viol + ", 2, true);");
+      check(plain.endsWith("\u8bf7\u7528\u522b\u7684\u8bf4\u6cd5\uff0c\u518d\u8bf4\u4e00\u6b21\u3002\u53ea\u8bf4\u4e2d\u6587\uff0c\u4e0d\u8981\u89e3\u91ca\u3002"),
+        "repair prompt: the unscoped closing line is unchanged for chat and drill", plain);
+      check(scoped.endsWith("\u8bf7\u7528\u522b\u7684\u8bf4\u6cd5\uff0c\u628a\u8fd9\u4e00\u6bb5\u518d\u8bf4\u4e00\u6b21\u3002\u524d\u9762\u5df2\u7ecf\u8bb2\u8fc7\u7684\u8bdd\u4e0d\u8981\u518d\u8bb2\u3002\u53ea\u8bf4\u4e2d\u6587\uff0c\u4e0d\u8981\u89e3\u91ca\u3002"),
+        "repair prompt: the scoped closing line is the string the A/B scored", scoped);
+      check(!scoped.includes("\u8bf4\u6cd5\uff0c\u518d\u8bf4\u4e00\u6b21"),
+        "repair prompt: NOT the rejected arm, which left 说法，再说一次 bare and only appended",
+        scoped);
+      check(plain.indexOf("\u300c\u7ecf\u7406\u300d") !== -1 &&
+            scoped.indexOf("\u300c\u7ecf\u7406\u300d") !== -1,
+        "repair prompt: both shapes still name the offending word");
+    }
+
     await exec("window.newChat();");
     check(await exec("return window.currentActivity();") === "chat",
       "newChat with no argument is a chat");
@@ -2732,6 +2757,54 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec("return window.currentActivity();") === "chat",
       "a conversation with no marker is still a chat -- the inference only fires where the row lost",
       await exec("return window.currentActivity();"));
+
+    /* -------------- 20 Questions was the fifth activity, and the only one left
+
+     * whose row was its sole record. `side` and `secret` are COLUMNS, and a
+     * missing column is exactly what dropped `activity` off every push in v99 --
+     * so the one activity that could not be recovered from its transcript was
+     * also the one whose own state rode the same fragile path. v140 gives it a
+     * `role: "twenty"` marker carrying the side.
+     *
+     * Seeded the way the server would hand it back after that failure: activity
+     * "chat", no side, no level, the marker and one exchange intact. */
+    await exec(`
+      var cid = "7c7c7c7c-4444-4444-8444-7c7c7c7c7c7c";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "\u82f9\u679c", activity: "chat",
+          created_at: "2026-11-01T09:00:00.000Z", updated_at: "2026-11-01T09:04:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.history", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "7c7c7c7c-4444-4444-8444-7c7c7c7c7c7c": [
+        { id: "f1f1f1f1-4444-4444-8444-f1f1f1f1f1f1", role: "twenty",
+          text: "guesser", created_at: "2026-11-01T09:00:01.000Z" },
+        { id: "f2f2f2f2-4444-4444-8444-f2f2f2f2f2f2", role: "user",
+          text: "\u662f\u6c34\u679c\u5417\uff1f", created_at: "2026-11-01T09:00:30.000Z" },
+        { id: "f3f3f3f3-4444-4444-8444-f3f3f3f3f3f3", role: "assistant",
+          text: "\u662f\u3002", attempts: 1, created_at: "2026-11-01T09:00:40.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.currentActivity", "the app to boot");
+    check(await exec("return window.currentActivity();") === "twenty",
+      "a 20 Questions round whose row lost its activity is read back as 20 Questions",
+      await exec("return window.currentActivity();"));
+    /* The payoff the learner actually sees: the chat list naming it correctly
+     * instead of calling it Chat. */
+    check(await exec(
+        "return HSKPrompt.activityFor(window.currentActivity()).label;") === "20 Questions",
+      "so the chat list labels it 20 Questions, not Chat");
+    /* The marker must stay out of the model context. windowed() keeps `user`
+     * and `assistant` only, so this holds by construction rather than by
+     * anyone remembering to exclude a new role -- which is the property worth
+     * pinning, because the next marker will be added by someone else. */
+    check(!JSON.stringify(await exec("return window.windowed();")).includes("guesser"),
+      "and the marker never reaches the model context");
+    /* And it is not drawn. A side leaking into the transcript would also be a
+     * step toward the secret leaking, which design D3 forbids. */
+    check(!(await exec("return document.querySelector('#log').textContent;")).includes("guesser"),
+      "and it is not rendered in the transcript");
 
     /* Finding 1 (task 10 review, round 3): a v67 story already in phase two,
      * written before `kind` existed -- so anyStoryQuestion() finds nothing on
