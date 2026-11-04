@@ -2758,6 +2758,54 @@ check(usedGroups && usedGroups.first === "\u7684",
       "a conversation with no marker is still a chat -- the inference only fires where the row lost",
       await exec("return window.currentActivity();"));
 
+    /* -------------- 20 Questions was the fifth activity, and the only one left
+
+     * whose row was its sole record. `side` and `secret` are COLUMNS, and a
+     * missing column is exactly what dropped `activity` off every push in v99 --
+     * so the one activity that could not be recovered from its transcript was
+     * also the one whose own state rode the same fragile path. v140 gives it a
+     * `role: "twenty"` marker carrying the side.
+     *
+     * Seeded the way the server would hand it back after that failure: activity
+     * "chat", no side, no level, the marker and one exchange intact. */
+    await exec(`
+      var cid = "7c7c7c7c-4444-4444-8444-7c7c7c7c7c7c";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([
+        { id: cid, title: "\u82f9\u679c", activity: "chat",
+          created_at: "2026-11-01T09:00:00.000Z", updated_at: "2026-11-01T09:04:00.000Z" }
+      ]));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(cid));
+      localStorage.setItem("hsk1chat.history", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify({ "7c7c7c7c-4444-4444-8444-7c7c7c7c7c7c": [
+        { id: "f1f1f1f1-4444-4444-8444-f1f1f1f1f1f1", role: "twenty",
+          text: "guesser", created_at: "2026-11-01T09:00:01.000Z" },
+        { id: "f2f2f2f2-4444-4444-8444-f2f2f2f2f2f2", role: "user",
+          text: "\u662f\u6c34\u679c\u5417\uff1f", created_at: "2026-11-01T09:00:30.000Z" },
+        { id: "f3f3f3f3-4444-4444-8444-f3f3f3f3f3f3", role: "assistant",
+          text: "\u662f\u3002", attempts: 1, created_at: "2026-11-01T09:00:40.000Z" }
+      ] }));
+      return true;`);
+    await go(base);
+    await waitFor("window.currentActivity", "the app to boot");
+    check(await exec("return window.currentActivity();") === "twenty",
+      "a 20 Questions round whose row lost its activity is read back as 20 Questions",
+      await exec("return window.currentActivity();"));
+    /* The payoff the learner actually sees: the chat list naming it correctly
+     * instead of calling it Chat. */
+    check(await exec(
+        "return HSKPrompt.activityFor(window.currentActivity()).label;") === "20 Questions",
+      "so the chat list labels it 20 Questions, not Chat");
+    /* The marker must stay out of the model context. windowed() keeps `user`
+     * and `assistant` only, so this holds by construction rather than by
+     * anyone remembering to exclude a new role -- which is the property worth
+     * pinning, because the next marker will be added by someone else. */
+    check(!JSON.stringify(await exec("return window.windowed();")).includes("guesser"),
+      "and the marker never reaches the model context");
+    /* And it is not drawn. A side leaking into the transcript would also be a
+     * step toward the secret leaking, which design D3 forbids. */
+    check(!(await exec("return document.querySelector('#log').textContent;")).includes("guesser"),
+      "and it is not rendered in the transcript");
+
     /* Finding 1 (task 10 review, round 3): a v67 story already in phase two,
      * written before `kind` existed -- so anyStoryQuestion() finds nothing on
      * it -- must not have the new gate shut its composer forever. The learner
