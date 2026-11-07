@@ -23,7 +23,7 @@
   "tasks": [
     {
       "title": "pinyin.js — split unspaced pinyin into syllables and tones",
-      "done": false,
+      "done": true,
       "demoable": false
     },
     {
@@ -52,9 +52,9 @@
       "demoable": true
     }
   ],
-  "updatedAt": "2026-11-05T14:00:00Z",
+  "updatedAt": "2026-11-07T08:00:00Z",
   "approvedAt": "2026-11-03",
   "approvedBy": "Todd, in conversation. Recorded here by hand because the routine cannot read the page from its environment, so an Approve pressed on the page would never reach it.",
   "baseNote": "main (v140) merged into this branch 2026-11-03, before task 1, so the implementation sits on top of v139's story-repair scoping and v140's 20 Questions marker rather than a v138-era base.",
-  "lastRunNote": "2026-11-05 03:43 run DIED after 79s: 'API Error: Output blocked by content filtering policy', mid-Task-1 while probing pinyin unicode. Nothing was built and nothing was pushed; $0.66 spent. It also left a /tmp/hsk-build-tone-id worktree behind holding this branch, which would have failed the next run's `git worktree add` twice over — removed by hand 2026-11-05. Task 1 and Task 4 now write their raw lists to files instead of printing them, which is the likeliest cause removed. Task 1 is still unstarted."
+  "lastRunNote": "2026-11-07: Task 1 done (pinyin.js). The 2026-11-06 run also died before pushing; it left an untracked test/pinyin.test.js in a stale /tmp/hsk-build-tone-id worktree, which this run reused after correcting one wrong fixture (kěnéng is 3-2, not 3-4). It printed no bulk pinyin. $0 spent. Next: Task 2, the first demoable slice."
 }
