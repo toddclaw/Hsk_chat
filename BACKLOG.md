@@ -1360,8 +1360,8 @@ Still open, in rough descending order of how much they would annoy someone:
 - **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand
   during the round trip can still be clobbered. Narrow, and accepted in the function's own
   comment.
-- **In the Told state the "Ask me another" button renders as a plain chip**, because `.story`
-  is what carries the accent colour and only the "Read on" button has it.
+- ~~**In the Told state the "Ask me another" button renders as a plain chip**~~ — **fixed,
+  v142**: once every segment is told it is the only control left, and takes the accent.
 - **`persist()` always touches `currentChat()`**, so a background write from a conversation the
   learner has left bumps `updated_at` on whichever chat is on screen instead, reordering the
   chat list. Pre-existing, shared with `storyStep()`'s own background push.
