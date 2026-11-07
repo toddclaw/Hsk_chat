@@ -1362,9 +1362,9 @@ Still open, in rough descending order of how much they would annoy someone:
   comment.
 - **In the Told state the "Ask me another" button renders as a plain chip**, because `.story`
   is what carries the accent colour and only the "Read on" button has it.
-- **`persist()` always touches `currentChat()`**, so a background write from a conversation the
-  learner has left bumps `updated_at` on whichever chat is on screen instead, reordering the
-  chat list. Pre-existing, shared with `storyStep()`'s own background push.
+- ~~**`persist()` always touches `currentChat()`**~~ — **fixed, v143**: `persist(id)` and
+  `touchChat(id)` take the chat the write is for, and the story and reply paths pass the `cid`
+  they already captured, so a segment landing after a switch bumps its own story.
 - **`opts.storyPhase` wins in `build()` even when `activity !== "story"`.** No caller can do
   that today — all three are gated on `currentActivity() === "story"` — but nothing enforces it.
 - **`questionTypesFor(-1)` returns no types at all.** Unreachable; levels come from a fixed list.

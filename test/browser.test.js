@@ -3731,6 +3731,16 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(placed.indexOf("story:1") !== -1 && placed.indexOf("chat:0") !== -1,
       "a segment lands in the story it was asked for, not the chat navigated to",
       JSON.stringify(placed));
+    /* And it is the story that moves up the chat list. persist() used to touch
+     * whichever chat was on screen, so the conversation the learner had moved
+     * to jumped to the top and the story that had just grown stayed put. */
+    const bumped = await exec(`
+      var chats = JSON.parse(localStorage["hsk1chat.chats"] || "[]");
+      var at = function (a) { return chats.find(function (c) { return c.activity === a; }).updated_at; };
+      return [at("story"), at("chat")];`);
+    check(bumped[0] > bumped[1],
+      "a segment landing in the background bumps its own story, not the chat on screen",
+      JSON.stringify(bumped));
 
     /* "try again" on a failed segment used to pop every message looking for a
      * user turn a story does not have, then return before persist() and

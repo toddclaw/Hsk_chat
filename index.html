@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v140 — 2026-11-01";
+const VERSION   = "v143 — 2026-11-07";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -3350,12 +3350,17 @@ function currentChat() {
   return chatById(S.chatId);
 }
 
-// Called whenever the open chat changes, so the list order and title follow it.
-function touchChat() {
-  const c = currentChat();
+/* Called whenever a chat's messages change, so the list order and title follow
+ * it. `id` names the chat when the write is for one the learner may have left --
+ * a story segment or reply landing after a switch -- and defaults to the open
+ * one. Touching the open chat for a background write used to bump whichever
+ * conversation was on screen to the top of the list and leave the one that
+ * actually changed where it was. */
+function touchChat(id) {
+  const c = id ? chatById(id) : currentChat();
   if (!c) return;
   c.updated_at = new Date().toISOString();
-  if (!c.renamed) c.title = titleFrom(S.history);
+  if (!c.renamed) c.title = titleFrom(S.chatMsgs[c.id] || S.history);
   queueSync("conversations");
 }
 
@@ -3516,10 +3521,10 @@ function deleteChat(id) {
   renderChats();
 }
 
-function persist() {
+function persist(id) {
   // Covers every reassignment of S.history -- each one calls through here.
   if (S.chatId) S.chatMsgs[S.chatId] = S.history;
-  touchChat();
+  touchChat(id);
   /* K.history is not written any more. It held the same turns as
    * K.chatMsgs[S.chatId], so every message was stored twice -- doubling the
    * quota needed by the one feature here that grows without bound. It is still
@@ -4902,10 +4907,10 @@ function startDrillWith(tag, eg, word) {
  * make-something-up path, every browser-test seed) but startStoryWith()
  * passes its own captured target explicitly -- see that function's comment on
  * why reading S.history here is not safe after an `await`. */
-function setStoryTopic(text, cast, hist) {
+function setStoryTopic(text, cast, hist, cid) {
   (hist || S.history).push({ role: "topic", text: text || "", needs: cast || [],
                    id: newMessageId(), created_at: new Date().toISOString() });
-  persist();
+  persist(cid);
 }
 
 /* Retitle a finished story. Best-effort and cheap -- the teaching model, one
@@ -5058,7 +5063,7 @@ async function startStoryWith(topic) {
     bubble.remove(); S.busy = false; storyGenChatId = null; renderBusy(); renderStarters();
   }
   if (!chatById(cid)) return;   // gone by the time the cast call landed
-  setStoryTopic(topic, cast, hist);
+  setStoryTopic(topic, cast, hist, cid);
   renderAll(); renderStarters();
   if (cid === S.chatId) return storyStep(false);
 }
@@ -5109,7 +5114,7 @@ async function storyStep(asking) {
       if (introduced.length) hist[hist.length - 1].introduced = introduced;
     }
     recordTurn(res.attempts, res.failed);
-    persist();
+    persist(cid);
     /* The story is complete: give it a name worth reading in the chat list.
      * Not awaited -- see titleStory()'s own comment on why that is safe.
      * Passed `cid`, not read off currentChat(): the learner may already have
@@ -5122,7 +5127,7 @@ async function storyStep(asking) {
       // reads to ask the same phase again instead of guessing "segment".
       hist.push({ role: "notice", kind: err.kind || "http",
                   detail: (err && err.message) || "", model: S.model, asking: asking });
-      persist();
+      persist(cid);
     }
   } finally {
     bubble.remove();
@@ -5174,6 +5179,7 @@ function thinkingBubble(label) {
 async function runTurn(toGloss, text, ctx) {
 
   const thinking = thinkingBubble("");
+  const cid = S.chatId;
   const hist = S.history;
 
   const bubble = thinking.querySelector(".bubble");
@@ -5199,7 +5205,7 @@ async function runTurn(toGloss, text, ctx) {
     const introduced = settlePace(res);
     if (introduced.length) hist[hist.length - 1].introduced = introduced;
     recordTurn(res.attempts, res.failed);
-    persist();
+    persist(cid);
   } catch (err) {
     // A stop is the learner's decision; retryLast() is how they resume.
     if (err.kind !== "stopped") {
@@ -5208,7 +5214,7 @@ async function runTurn(toGloss, text, ctx) {
       // that into the word "Error", which reads as a detail and is not one.
       hist.push({ role: "notice", kind: err.kind || "http",
                   detail: (err && err.message) || "", model: S.model });
-      persist();
+      persist(cid);
     }
   } finally {
     // The bubble is about to be gone; a later turn() writing into it would
