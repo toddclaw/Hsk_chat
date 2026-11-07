@@ -4869,6 +4869,77 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec(`return document.querySelectorAll('.gapchoice').length;`) === 4,
       "one target and three distractors");
 
+    /* ---------------------------------------------------- tone ID, thin slice
+
+     * The fifth face of the retrieval engine. The suite cannot know which word
+     * was drawn, so every assertion reads the drawn item back through
+     * toneItem() rather than hard-coding a word -- which also means these
+     * checks keep working when the pool changes under them.
+     *
+     * No audio is asserted. speak() needs a Chinese voice installed and the
+     * runner has none; what matters here is that a missing voice does not stop
+     * the drill rendering, which is what the first check covers. */
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__toneid";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
+      "the tone ID sheet to open");
+    check(await exec(`return document.querySelector('#activity').value;`) !== "__toneid",
+      "tone ID: the dropdown snaps back to the real activity, like gap-fill's");
+
+    const tIt = JSON.parse(await exec(`return JSON.stringify(window.toneItem());`));
+    check(!!tIt && !!tIt.w && Array.isArray(tIt.syls) && tIt.syls.length > 0,
+      "tone ID: a word was drawn and split into syllables", JSON.stringify(tIt));
+    check(await exec(`return document.querySelectorAll('.tonechoice[data-t]').length;`) === 5,
+      "tone ID: five answers -- four tones and neutral, which is a real answer here");
+    check(await exec(`return document.querySelectorAll('.toneslot').length;`) === tIt.syls.length,
+      "tone ID: one slot per syllable, so a two-syllable word asks twice");
+    check(await exec(`return document.querySelector('.toneword').textContent;`) === tIt.w,
+      "tone ID: the word is shown");
+    /* The pinyin IS the answer, so it must not be reachable before answering --
+     * not in the text, and not through a data-py the global pinyin toggle would
+     * render over the top. This is the same trap the gap blank avoids. */
+    check(await exec(`return document.querySelector('#toneBody').innerHTML.indexOf('data-py');`) === -1,
+      "tone ID: the word carries no data-py, so the pinyin toggle cannot print the answer");
+    check(!(await exec(`return document.querySelector('#toneBody').textContent;`)).includes(tIt.p),
+      "tone ID: and the pinyin is not on screen before the answer", tIt.p);
+
+    /* Answer every syllable correctly, reading the tones off the drawn item. */
+    for (let i = 0; i < tIt.syls.length; i++) {
+      await exec(`
+        var b = document.querySelector('.tonechoice[data-t="' + ${JSON.stringify(tIt.tones)}[${i}] + '"]');
+        b.click();
+        return true;`);
+    }
+    check((await exec(`return document.querySelector('#toneBody').textContent;`)).includes(tIt.p),
+      "tone ID: once every syllable is answered the pinyin is revealed");
+    check(await exec(`return document.querySelectorAll('.toneslot.ok').length;`) === tIt.syls.length,
+      "tone ID: and every slot reads as correct");
+    check(await exec(`return !!document.querySelector('#toneNext');`) === true,
+      "tone ID: with a control to go on to the next word");
+
+    /* Sandhi is task 4. Until it lands, a word whose spoken tones differ from
+     * its stored ones must not be in the pool at all -- scoring it against the
+     * citation form would mark the learner wrong for hearing correctly. */
+    check(await exec(`
+      var r = [];
+      for (var i = 0; i < 400; i++) {
+        var round = window.toneItems();
+        for (var j = 0; j < round.length; j++) {
+          var it = round[j];
+          if (window.toneSandhiRisk(it.tones, it.w)) r.push(it.w);
+        }
+        if (r.length) break;
+      }
+      return r.length;`) === 0,
+      "tone ID: no sandhi-affected word reaches the pool while it cannot be scored");
+
+    await exec(`document.querySelector('#toneX').click(); return true;`);
+    check(await exec(`return document.querySelector('#toneSheet').classList.contains('open');`) === false,
+      "tone ID: the X closes the sheet");
+
     /* The leak check: #gapBlank is a plain span, never a .w token, so it has
      * no data-py attribute at all to annotate -- while the sentence around it
      * is built from the app's own tokenSpan() and does. Attribute presence
