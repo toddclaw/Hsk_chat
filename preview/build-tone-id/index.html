@@ -399,6 +399,20 @@ footer{
 .gapchoice{min-height:var(--tap); padding:8px 16px; font-size:18px}
 .gapchoice.ok{border-color:var(--ok); color:var(--ok)}
 .gapchoice.bad{border-color:var(--bad); color:var(--bad)}
+/* Tone ID. The word is shown WITHOUT pinyin -- no tokenSpan, no data-py -- for
+   the same reason the gap blank is not a token span: the pinyin is the answer. */
+.toneword{font-size:40px; text-align:center; margin:8px 0 4px; letter-spacing:4px}
+.toneslots{display:flex; justify-content:center; gap:8px; margin:12px 0}
+.toneslot{min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--line); border-radius:10px; font-size:20px; color:var(--dim)}
+.toneslot.now{border-color:var(--accent); color:var(--ink)}
+.toneslot.ok{border-color:var(--ok); color:var(--ok)}
+.toneslot.bad{border-color:var(--bad); color:var(--bad)}
+.tonechoices{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:16px}
+.tonechoice{min-height:var(--tap); min-width:56px; padding:8px 14px; font-size:20px}
+.tonereveal{text-align:center; margin-top:14px; font-size:20px}
+.tonereveal.bad{color:var(--bad)}
+.tonereveal.ok{color:var(--ok)}
 /* Issue submission form */
 #issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
 #issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
@@ -1103,9 +1117,18 @@ footer{
   <div id="gapBody"></div>
 </div></div>
 
+<div class="sheet" id="toneSheet"><div class="card">
+  <div class="sheethead">
+    <b>Tone ID</b><span id="toneProgress" class="secnote"></span>
+    <button id="toneX" class="sheetx" type="button" aria-label="Close tone ID" title="Close">✕</button>
+  </div>
+  <div id="toneBody"></div>
+</div></div>
+
 <div id="pop"></div>
 
 <script src="validator.js"></script>
+<script src="pinyin.js"></script>
 <script src="prompt.js"></script>
 <script src="md.js"></script>
 <script src="time.js"></script>
@@ -1240,7 +1263,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v140 — 2026-11-01";
+const VERSION   = "v144 — 2026-11-07";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -5301,7 +5324,8 @@ function fillActivities() {
    * against a prompt that does not exist. This is a menu item that behaves like
    * a button: it opens the sheet and puts the select back where it was. */
   $("#activity").insertAdjacentHTML("beforeend",
-    '<option value="__gapfill">Gap-fill</option>');
+    '<option value="__gapfill">Gap-fill</option>' +
+    '<option value="__toneid">Tone ID</option>');
   const act = HSKPrompt.ACTIVITIES[cur];
   /* The set activities show their standing description here and nothing live.
    * Ghost Words used to repeat its word list; Flashcard Chat dropped the same
@@ -6028,6 +6052,139 @@ function openGapFill() {
 function closeGapFill() {
   clearTimeout(gapTimer);
   closeSheet("#gapSheet");
+}
+
+/* ------------------------------------------------------------------ tone ID
+ *
+ * Play a word, ask which tone each syllable was. The fifth face of the v101
+ * retrieval engine: the right answer is known before the question is asked,
+ * so there is no model call, no network and no new data -- the pinyin with
+ * tone marks is already in every wordlist entry.
+ *
+ * Spec: docs/superpowers/specs/2026-11-03-tone-id-design.md. Five decisions
+ * are settled there and this is the thin first slice of them: a whole word,
+ * one answer per syllable, neutral as a real fifth answer.
+ *
+ * NOT YET, and each has its own task: cycling every installed voice (task 3),
+ * sandhi (task 4), and credit plus a round-length setting (task 6). Until
+ * task 4 lands, sandhi-affected words are kept OUT of the pool rather than
+ * marked against a citation form the speaker will not say. */
+const TONE_ROUND = 20;          // task 6 makes this a setting; the default stays 20
+const TONE_LABELS = ["\u00b7", "\u0304", "\u0301", "\u030c", "\u0300"];
+
+let toneRound = null, toneAt = 0, toneSyl = 0, toneGot = [], toneRight = 0;
+
+/* Until task 4 teaches sandhi, a word whose spoken tones differ from its
+ * stored ones cannot be scored, so it is excluded. Third tone before third
+ * shifts, and 不 and 一 shift before certain tones -- in every case only
+ * when a syllable follows, which is why a single-syllable word is always safe. */
+function toneSandhiRisk(tones, w) {
+  if (tones.length < 2) return false;
+  for (let i = 0; i + 1 < tones.length; i++) if (tones[i] === 3 && tones[i + 1] === 3) return true;
+  return w[0] === "\u4e0d" || w[0] === "\u4e00";
+}
+
+/* The level's own list, shuffled, minus what cannot be scored yet. */
+function toneItems() {
+  const out = [];
+  (S.base || []).forEach(e => {
+    if (!e || !e.w || !e.p) return;
+    const syls = HSKPinyin.split(e.p);
+    if (!syls) return;                       // the parser would be guessing
+    const tones = HSKPinyin.tones(e.p);
+    if (!tones || tones.length !== syls.length) return;
+    if (toneSandhiRisk(tones, e.w)) return;
+    out.push({ w: e.w, p: e.p, syls: syls, tones: tones });
+  });
+  return sampleOf(out, TONE_ROUND);
+}
+
+function openToneId() {
+  toneRound = toneItems(); toneAt = 0; toneSyl = 0; toneGot = []; toneRight = 0;
+  renderToneId();
+  openSheet("#toneSheet");
+  if (toneRound.length) toneSpeak();
+}
+
+function closeToneId() {
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  closeSheet("#toneSheet");
+}
+
+/* Exposed for the browser suite, which cannot know which word was drawn. */
+function toneItem() { return toneRound && toneRound[toneAt] ? toneRound[toneAt] : null; }
+
+function toneSpeak() {
+  const it = toneItem();
+  if (it) speak(it.w, null);
+}
+
+function renderToneId() {
+  const body = $("#toneBody"), prog = $("#toneProgress");
+  if (!toneRound) return;
+  if (!toneRound.length) {
+    prog.textContent = "";
+    body.innerHTML = '<div class="hint">Nothing to play yet. Tone ID draws on your level\u2019s '
+      + 'own word list, and needs a Chinese voice installed on this device.</div>';
+    return;
+  }
+  if (toneAt >= toneRound.length) {
+    prog.textContent = "";
+    body.innerHTML = '<div class="hint"><b>' + toneRight + " / " + toneRound.length
+      + "</b><br>words with every tone right.</div>";
+    return;
+  }
+  const it = toneRound[toneAt];
+  prog.textContent = (toneAt + 1) + " / " + toneRound.length;
+  const done = toneGot.length === it.syls.length;
+
+  /* Plain characters, never tokenSpan: a data-py attribute would let the
+   * global pinyin toggle print the answer over the question. */
+  let h = '<div class="toneword">' + escapeHtml(it.w) + "</div>";
+  h += '<div class="toneslots">' + it.syls.map((sy, i) => {
+    let cls = "toneslot";
+    if (done) cls += toneGot[i] === it.tones[i] ? " ok" : " bad";
+    else if (i === toneGot.length) cls += " now";
+    const got = toneGot[i];
+    return '<span class="' + cls + '">'
+      + (got === undefined ? "?" : (got === 0 ? "\u00b7" : String(got))) + "</span>";
+  }).join("") + "</div>";
+  h += '<div class="tonechoices">'
+    + '<button class="tonechoice" id="toneAgain" type="button" aria-label="Play it again">\u21bb</button>';
+  if (!done) {
+    h += [1, 2, 3, 4, 0].map(t =>
+      '<button class="tonechoice" data-t="' + t + '" type="button">'
+      + (t === 0 ? "\u00b7" : String(t)) + "</button>").join("");
+  }
+  h += "</div>";
+  if (done) {
+    const ok = it.syls.every((sy, i) => toneGot[i] === it.tones[i]);
+    h += '<div class="tonereveal ' + (ok ? "ok" : "bad") + '">' + escapeHtml(it.p) + "</div>"
+      + '<div class="tonechoices"><button class="tonechoice" id="toneNext" type="button">Next</button></div>';
+  }
+  body.innerHTML = h;
+
+  $("#toneAgain").onclick = () => toneSpeak();
+  Array.from(body.querySelectorAll(".tonechoice[data-t]")).forEach(b => {
+    b.onclick = () => answerTone(Number(b.dataset.t));
+  });
+  const nx = $("#toneNext");
+  if (nx) nx.onclick = () => nextTone();
+}
+
+function answerTone(t) {
+  const it = toneItem();
+  if (!it || toneGot.length >= it.syls.length) return;
+  toneGot.push(t);
+  if (toneGot.length === it.syls.length
+      && it.syls.every((sy, i) => toneGot[i] === it.tones[i])) toneRight++;
+  renderToneId();
+}
+
+function nextTone() {
+  toneAt++; toneGot = [];
+  renderToneId();
+  if (toneAt < toneRound.length) toneSpeak();
 }
 
 /* The blank is fixed-width whatever the target's length, so character count
@@ -7461,6 +7618,7 @@ $("#goalLevel").onchange = async e => {
 };
 $("#activity").onchange = e => {
   if (e.target.value === "__gapfill") { fillActivities(); openGapFill(); return; }
+  if (e.target.value === "__toneid") { fillActivities(); openToneId(); return; }
   startActivity(e.target.value); fillActivities();
 };
 $("#levelChip").onclick = () => openSheet("#setSheet");
@@ -7526,6 +7684,7 @@ $("#poolSearch").addEventListener("input", () => { poolShownBy = {}; renderPool(
 $("#poolClose").onclick = () => closeSheet("#poolSheet");
 $("#poolX").onclick = () => closeSheet("#poolSheet");
 $("#gapX").onclick = () => closeGapFill();
+$("#toneX").onclick = () => closeToneId();
 
 /* Moving up. Never automatic: the level decides what the validator enforces and
  * what the partner is allowed to say, so it changing itself mid-conversation
@@ -7551,6 +7710,7 @@ $("#moveUp").onclick = async () => {
 };
 $("#poolSheet").addEventListener("click", e => { if (e.target === $("#poolSheet")) closeSheet("#poolSheet"); });
 $("#gapSheet").addEventListener("click", e => { if (e.target === $("#gapSheet")) closeGapFill(); });
+$("#toneSheet").addEventListener("click", e => { if (e.target === $("#toneSheet")) closeToneId(); });
 
 function sendExplainQuestion() {
   const text = $("#explainInput").value.trim();
