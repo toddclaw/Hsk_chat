@@ -1032,6 +1032,40 @@ Two smaller things in the same log, unfixed:
   explanation twice in one repair prompt (23:52:03). `HSKSenses.repairPrompt()`
   should unique by sense.
 
+## ~~Stopping a reply was reported as the model sending nothing~~ — fixed, v145
+
+**Found:** real use, 2026-11-08, stopping a story segment with the 停 button.
+Todd's own report: *"Am I getting an error with the model or did I intentionally
+stop it? I tried several times and I think the message is wrong."*
+
+He was right. `callModel()` tags the REQUEST's abort as `kind: "stopped"`, and
+every caller already stays quiet for it — `storyStep()`, `startStoryWith()` and
+`runTurn()` all test `err.kind !== "stopped"` before filing a notice. But once
+the response headers have arrived the fetch has already resolved, so a later
+abort landed in `const body = await r.json().catch(() => ({}))`, which swallowed
+it to an empty object. Execution then carried on: status 200, so `r.ok` is true,
+`body.choices` undefined, `txt` undefined — straight into the empty-completion
+branch. The learner was told *"That model sent back an empty reply"* and offered
+another model, for a cancellation they had just asked for.
+
+**It was the common case, not an edge one.** Nothing streams, so on a long
+generation the body read is most of the wait — exactly when a learner reaches
+for stop. Todd hit it on every attempt.
+
+**The worse half is the evidence.** The same branch files
+`callModel.lastEmpty` with the finish reason and the provider, which is the
+breadcrumb the "empty completion" work reads when it asks whether empties
+concentrate in one route. Every cancellation was entering that record as a
+fake empty against a model that had answered fine. **A fourth instance of the
+silent-failure pattern CLAUDE.md counts three of** — and like the others it
+looked entirely plausible from the outside.
+
+Fixed by re-throwing the stop from the body read. `testKey()` has the identical
+line and keeps it: nothing sets an `AbortController` for that call, so
+`stopTurn()` cannot reach it.
+
+---
+
 ## Eight seeds is the weak point of every prompt measurement so far
 
 **Found:** across all four prompt-mode runs.

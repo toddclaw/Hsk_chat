@@ -895,6 +895,39 @@ return true;
       "and falls back to 'key saved' when the balance is unknown");
     await exec(`window.fetch = window.__realFetch2; return true;`);
 
+    /* ------------------- stopping a reply is not the model returning nothing
+
+     * callModel tags the REQUEST's abort as "stopped" and every caller stays
+     * quiet for it. But once the headers arrive the fetch has resolved, so an
+     * abort during the BODY read used to land in r.json().catch(), which
+     * swallowed it to {} -- and execution carried on into the
+     * empty-completion branch. The learner got "That model sent back an empty
+     * reply" and an offer to switch models, for a stop they had just asked
+     * for. Reported from real use 2026-11-08, stopping a story segment.
+     *
+     * The second assertion matters more than the first: no fake empty may be
+     * filed in callModel.lastEmpty, which is evidence BACKLOG.md reasons about
+     * when it asks whether empty completions concentrate in one provider. */
+    const stopKind = await exec(`
+      window.__realFetch3 = window.fetch;
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("sk-test"));
+      delete window.callModel.lastEmpty;
+      window.fetch = function () {
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          var e = new Error("aborted"); e.name = "AbortError";
+          return Promise.reject(e);
+        } });
+      };
+      return window.callModel([{ role: "user", content: "hi" }], 10)
+        .then(function () { return "resolved"; })
+        .catch(function (e) { return (e && e.kind) || "no-kind"; });`);
+    check(stopKind === "stopped",
+      "a stop during the body read reaches the caller as a stop, not as an empty reply",
+      stopKind);
+    check(await exec(`return window.callModel.lastEmpty === undefined;`) === true,
+      "and files no empty-completion breadcrumb against a model that did answer");
+    await exec(`window.fetch = window.__realFetch3; localStorage.removeItem("hsk1chat.apiKey"); return true;`);
+
     /* Both prices in the picker. The seeded catalogue has one free model and one
      * paid, so this also covers the free case. */
     const opts = await exec(`
