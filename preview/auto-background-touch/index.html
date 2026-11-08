@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v149 — 2026-11-08";
+const VERSION   = "v150 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3030,6 +3030,10 @@ let thinkingEl = null;
 
 function renderAll() {
   renderConversation();
+  /* Switching conversations goes through here, and the send button's meaning
+   * depends on which one is open now -- openChat() and newChat() render but
+   * never touched it, so a stale 停 survived the switch. */
+  renderBusy();
   /* Put it back. renderAll() has several early returns and the restore has to
    * happen after every one of them, so it wraps rather than joins. */
   if (thinkingEl && thinkingEl.dataset.cid === (S.chatId || "")) {
@@ -5411,10 +5415,33 @@ function renderLevelChip() {
  * it has something to do. It becomes the stop button, which is where every
  * other chat app puts one, and is the only control on screen that is guaranteed
  * to be under the learner's thumb already. */
+/* Whose generation S.busy is for, or null. Derived here rather than passed by
+ * each of the nine S.busy sites, for the reason thinkingBubble() hangs its own
+ * lifetime on the element: every one of them already calls renderBusy() in the
+ * same statement, so inferring it once is self-maintaining and remembering it
+ * nine times is not.
+ *
+ * Not storyGenChatId: that one means "do not tombstone this chat, a push is
+ * mid-air" and dropIfEmpty() depends on it staying story-only. */
+let busyChatId = null;
+
 function renderBusy() {
+  if (!S.busy) busyChatId = null;
+  else if (busyChatId === null) busyChatId = S.chatId || null;
+  /* 停 stops the running call, so it may only appear in the conversation that
+   * call belongs to. A story segment takes most of a minute, and the learner
+   * who switches away in that window used to find the send button turned to 停
+   * in a chat with nothing running -- one tap from killing a story they could
+   * no longer see. It says 送 there instead, disabled, because send() refuses
+   * while anything is generating and a live-looking button that silently does
+   * nothing is the worse of the two lies. */
+  const mine = !S.busy || busyChatId === S.chatId;
   const b = $("#send");
-  b.textContent = S.busy ? "\u505c" : "\u9001";
-  b.title = S.busy ? "Stop generating" : "Send";
+  b.textContent = S.busy && mine ? "\u505c" : "\u9001";
+  b.title = S.busy
+    ? (mine ? "Stop generating" : "Waiting for a reply in another conversation")
+    : "Send";
+  b.disabled = S.busy && !mine;
   $("#activity").disabled = S.busy;
 }
 
