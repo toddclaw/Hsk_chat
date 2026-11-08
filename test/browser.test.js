@@ -4924,9 +4924,24 @@ check(usedGroups && usedGroups.first === "\u7684",
      * toneItem() rather than hard-coding a word -- which also means these
      * checks keep working when the pool changes under them.
      *
-     * No audio is asserted. speak() needs a Chinese voice installed and the
-     * runner has none; what matters here is that a missing voice does not stop
-     * the drill rendering, which is what the first check covers. */
+     * The runner has no Chinese voice and the sheet refuses to run without
+     * one, so speech is stubbed and each utterance recorded. The constructor
+     * goes too: a real one throws on a voice that is not a real voice. */
+    await exec(`
+      window.__ttsDesc = Object.getOwnPropertyDescriptor(window, "speechSynthesis");
+      window.__ttsU = window.SpeechSynthesisUtterance;
+      window.__spoken = [];
+      window.__voices = [{ name: "A", lang: "zh-CN" }, { name: "Canto", lang: "zh-HK" },
+                         { name: "B", lang: "zh_TW" }, { name: "Eng", lang: "en-US" }];
+      Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
+        getVoices: function () { return window.__voices; },
+        speak: function (u) { window.__spoken.push({ text: u.text, voice: u.voice && u.voice.name, rate: u.rate }); },
+        cancel: function () {}, addEventListener: function () {} } });
+      window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+      window.__zhCalls = 0;
+      window.__zhVoice = window.zhVoice;
+      window.zhVoice = function () { window.__zhCalls++; return window.__zhVoice.apply(this, arguments); };
+      return true;`);
     await exec(`
       var sel = document.querySelector('#activity');
       sel.value = "__toneid";
@@ -4984,9 +4999,54 @@ check(usedGroups && usedGroups.first === "\u7684",
       return r.length;`) === 0,
       "tone ID: no sandhi-affected word reaches the pool while it cannot be scored");
 
+    /* Talker variability: what the learner hears across a run of words. */
+    await exec(`document.querySelector('#toneNext').click(); return true;`);
+    const toneHeard = JSON.parse(await exec(`
+      document.querySelector('#toneAgain').click();
+      window.nextTone(); window.nextTone(); window.nextTone();
+      return JSON.stringify(window.__spoken);`));
+    check(toneHeard.length === 6 && toneHeard[0].voice !== toneHeard[1].voice,
+      "tone ID: the next word is spoken by a different voice", JSON.stringify(toneHeard));
+    check(toneHeard[1].voice === toneHeard[2].voice && toneHeard[1].rate === toneHeard[2].rate,
+      "tone ID: replaying a word repeats the same voice and speed", JSON.stringify(toneHeard));
+    check([...new Set(toneHeard.map(u => u.voice))].sort().join() === "A,B",
+      "tone ID: every Mandarin voice is used and Cantonese and English never are", JSON.stringify(toneHeard));
+    check(new Set(toneHeard.map(u => u.rate)).size > 1
+      && toneHeard.every(u => u.rate >= 0.5 && u.rate <= 1.15),
+      "tone ID: the speed varies, within a sane band", JSON.stringify(toneHeard));
+    check(await exec(`return window.__zhCalls;`) === 0,
+      "tone ID: the drill does not fall back to the single default voice");
+
     await exec(`document.querySelector('#toneX').click(); return true;`);
     check(await exec(`return document.querySelector('#toneSheet').classList.contains('open');`) === false,
       "tone ID: the X closes the sheet");
+
+    /* No Mandarin voice: says so in the menu and the sheet, and stays silent. */
+    await exec(`
+      window.__spoken = [];
+      window.__voices = [{ name: "Canto", lang: "zh-HK" }, { name: "Eng", lang: "en-US" }];
+      window.fillActivities();
+      var sel = document.querySelector('#activity');
+      sel.value = "__toneid";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
+      "the tone ID sheet to open without a voice");
+    check((await exec(`return document.querySelector('#activity option[value="__toneid"]').textContent;`)).includes("needs a Chinese voice"),
+      "tone ID: with no Mandarin voice the menu entry says so");
+    const toneNoVoice = await exec(`return document.querySelector('#toneBody').textContent;`);
+    check(toneNoVoice.includes("Spoken Content"),
+      "tone ID: and the sheet gives the iOS path to install one", toneNoVoice);
+    check(await exec(`return window.__spoken.length + document.querySelectorAll('.tonechoice').length;`) === 0,
+      "tone ID: and nothing is played or asked");
+    await exec(`
+      document.querySelector('#toneX').click();
+      window.zhVoice = window.__zhVoice;
+      window.SpeechSynthesisUtterance = window.__ttsU;
+      if (window.__ttsDesc) Object.defineProperty(window, "speechSynthesis", window.__ttsDesc);
+      else delete window.speechSynthesis;
+      window.fillActivities();
+      return true;`);
 
     /* The leak check: #gapBlank is a plain span, never a .w token, so it has
      * no data-py attribute at all to annotate -- while the sentence around it

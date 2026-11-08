@@ -33,7 +33,7 @@
     },
     {
       "title": "Every installed voice, and no voice at all",
-      "done": false,
+      "done": true,
       "demoable": true
     },
     {
@@ -52,9 +52,9 @@
       "demoable": true
     }
   ],
-  "updatedAt": "2026-11-07T00:00:00Z",
+  "updatedAt": "2026-11-08T00:00:00Z",
   "approvedAt": "2026-11-03",
   "approvedBy": "Todd, in conversation. Recorded here by hand because the routine cannot read the page from its environment, so an Approve pressed on the page would never reach it.",
   "baseNote": "main (v140) merged into this branch 2026-11-03, before task 1, so the implementation sits on top of v139's story-repair scoping and v140's 20 Questions marker rather than a v138-era base.",
-  "lastRunNote": "Task 2 done by hand 2026-11-07 at Todd's request, not by a run. Tone ID is now playable: it appears in the activity menu, plays a word and takes one answer per syllable with five choices including neutral. Ships as v144 -- v143 was already claimed by auto/background-touch, which is why the plan says to re-count rather than trust a written number. Sandhi-affected words are held OUT of the pool until task 4, so nothing is scored against a form the speaker will not say. Still single-voice: task 3 adds the voice cycling that the training evidence actually credits, so this is not yet finished as a learning tool."
+  "lastRunNote": "Task 3 done 2026-11-08 as v154. Tone ID now cycles every Mandarin voice on the device, one per word, and steps the speed each full pass through the voices. Cantonese (zh-HK) voices are deliberately excluded: they read the same characters with different tones, so the learner would be marked wrong for hearing correctly. With no Mandarin voice the menu entry and sheet say so and nothing plays. Next is task 4, sandhi. The page was unreachable again, so this file is the only record."
 }
