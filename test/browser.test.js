@@ -190,6 +190,8 @@ window.supabase = {
       q.upsert = function (rows) { q._op = "upsert"; q._rows = rows; return q; };
       q.eq = function () { return q; };
       q.gt = function () { return q; };
+      q.order = function () { return q; };
+      q.range = function () { return q; };
       q.maybeSingle = function () { q._single = true; return q; };
       // Thenable, so "await client.from(t).delete().eq(...)" resolves.
       q.then = function (resolve) {
@@ -200,7 +202,8 @@ window.supabase = {
           // The ordering this feature turns on, recorded as the call is made.
           syncOnAtCall: !!(box && box.checked)
         });
-        resolve({ data: q._single ? null : [], error: null });
+        resolve({ data: q._single ? null : [],
+                  error: q._op === "upsert" && window.__t.failUpsert ? { message: "offline" } : null });
         return Promise.resolve();
       };
       return q;
@@ -1582,12 +1585,33 @@ check(usedGroups && usedGroups.first === "\u7684",
      * that line from scratch and blank it, so a sync that had in fact just
      * succeeded reported nothing at all, and pressing "Sync now" was the only
      * way to see the app confirm anything. Asserted after the re-render, which
-     * is the whole point: during the pull it was never blank. */
+     * is the whole point: during the pull it was never blank. The wait is the
+     * push that follows the pull, which is what "synced" now waits for too. */
+    await waitFor("/synced/i.test(document.querySelector('#syncStatus').textContent)",
+      "the first sync to finish");
     check(/synced/i.test(await exec(`
       return document.querySelector('#syncStatus').textContent;`)),
       "the first pull's outcome survives the re-render that follows it",
       JSON.stringify(await exec(`
         return document.querySelector('#syncStatus').textContent;`)));
+
+    /* Issue #59: a pull that has come down is half a sync. "Synced" appeared
+     * before the push that always follows it, which on a poor connection then
+     * failed. Read off the status line, at each stage the learner would see. */
+    await exec(`window.__t.failUpsert = true; window.pullAndMerge(); return true;`);
+    await waitFor("document.querySelector('#syncStatus').textContent === 'Sending your changes\u2026'",
+      "the pull to report that it is still sending");
+    check(!/synced/i.test(await exec(`return document.querySelector('#syncStatus').textContent;`)),
+      "after a pull, with the push still to come, the status does not say synced");
+    await waitFor("document.querySelector('#syncStatus').textContent === 'Sync failed \u2014 will retry'",
+      "the failing push to say so");
+    check(!/synced/i.test(await exec(`return document.querySelector('#syncStatus').textContent;`)),
+      "when that push fails the status says it failed, with no synced before it");
+    await exec(`window.__t.failUpsert = false; window.flushSync(); return true;`);
+    await waitFor("/^synced/i.test(document.querySelector('#syncStatus').textContent)",
+      "the retried push to report synced");
+    check(/^synced/i.test(await exec(`return document.querySelector('#syncStatus').textContent;`)),
+      "only once the push lands does the status say synced");
 
     /* prefsPushedAt has to reach disk, not just memory. In memory it is
      * undefined on every load, so every load takes the "I have never pushed"

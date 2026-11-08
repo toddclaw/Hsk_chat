@@ -492,10 +492,27 @@
       throw r.error;
     }
   }
-  async function pullMessages(userId, sinceISO) {
-    var q = client.from("messages").select("*").eq("user_id", userId);
-    if (sinceISO) q = q.gt("created_at", sinceISO);
-    var r = await q;
+  /* PostgREST answers at most 1000 rows and reports no error for the rest, so
+   * an unpaged select of a table past that size silently loses rows. Which ones
+   * was arbitrary, with no order given: a chat could stay stale forever while
+   * the status line said it had synced. A failed page fails the whole pull.
+   * ponytail: assumes the server's limit is at least PAGE_ROWS; a project that
+   * lowered max_rows would stop after its first short page. */
+  var PAGE_ROWS = 1000;
+  async function pullAll(table, userId, key) {
+    var out = [], from = 0, r;
+    do {
+      r = await client.from(table).select("*").eq("user_id", userId)
+        .order(key).range(from, from + PAGE_ROWS - 1);
+      if (r.error) return r;
+      out = out.concat(r.data || []);
+      from += PAGE_ROWS;
+    } while ((r.data || []).length === PAGE_ROWS);
+    return { data: out, error: null };
+  }
+
+  async function pullMessages(userId) {
+    var r = await pullAll("messages", userId, "id");
     if (r.error) throw r.error;
     return r.data || [];
   }
@@ -534,7 +551,7 @@
     if (r.error) throw r.error;
   }
   async function pullVocab(table, userId) {
-    var r = await client.from(table).select("*").eq("user_id", userId);
+    var r = await pullAll(table, userId, "word");
     if (r.error) throw r.error;
     return r.data || [];
   }
@@ -652,7 +669,7 @@
   }
 
   async function pullConversations(userId) {
-    var r = await client.from("conversations").select("*").eq("user_id", userId);
+    var r = await pullAll("conversations", userId, "id");
     if (r.error) {
       if (isMissingSchema(r.error)) { schemaHasConversations = false; return []; }
       throw r.error;
@@ -728,7 +745,7 @@
    * flag standing for two facts cost: a failed push switched off conversation
    * syncing for a whole session while the status line still said "Synced". */
   async function pullRetrievals(userId) {
-    var r = await client.from("retrievals").select("*").eq("user_id", userId);
+    var r = await pullAll("retrievals", userId, "id");
     if (r.error) {
       if (isMissingSchema(r.error)) { schemaHasRetrievals = false; return []; }
       throw r.error;

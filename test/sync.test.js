@@ -497,6 +497,8 @@ function mockSupabase(missingCols, seen, missingTables) {
           q.select = function (col) { q._selectCol = col; return q; };
           q.eq = function () { return q; };
           q.limit = function () { return q; };
+          q.order = function () { return q; };
+          q.range = function () { return q; };
           // Thenable, so `await client.from(t).upsert(rows)` resolves.
           q.then = function (resolve) {
             let error = null;
@@ -727,6 +729,34 @@ function freshSync() {
    * URL that needs no token, so asking for public_repo -- write access to every
    * public repo the user owns -- would be scope the app cannot justify. */
   await (async () => {
+    /* Issue #59. PostgREST caps a response at 1000 rows and says nothing about
+     * the rest, so the stub does the same: a pull only gets past row 1000 by
+     * asking for the next page. */
+    var server = [];
+    for (var n = 0; n < 2500; n++) server.push({ id: "m" + n });
+    var pager = { createClient: function () { return {
+      from: function () {
+        var q = { lo: 0, hi: 1e9 };
+        q.select = q.eq = q.order = function () { return q; };
+        q.range = function (a, b) { q.lo = a; q.hi = b; return q; };
+        q.then = function (resolve) {
+          var end = Math.min(q.hi + 1, q.lo + 1000);
+          resolve({ data: server.slice(q.lo, end), error: null });
+          return Promise.resolve();
+        };
+        return q;
+      }
+    }; } };
+    var pagerWindow = global.window;
+    global.window = { supabase: pager };
+    var PagedSync = freshSync();
+    PagedSync.configure("https://example.invalid", "publishable");
+    var pulled = await PagedSync.pullMessages("u");
+    global.window = pagerWindow;
+    check(pulled.length === 2500 && new Set(pulled.map(function (r) { return r.id; })).size === 2500,
+      "a pull past the server's 1000-row limit gets every message",
+      "got " + pulled.length);
+
     var captured = null;
     var fakeClient = {
       auth: {

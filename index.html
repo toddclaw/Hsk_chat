@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v155 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3890,10 +3890,10 @@ async function pullAndMerge() {
     if ($("#setSheet").classList.contains("open")) fillSyncUI();
 
     syncLastError = "";
-    renderSyncStatus(syncedMessage());
     // Whatever the merge added locally that the server did not have yet.
     queueSync("conversations"); queueSync("messages");
     queueSync("vocab_extra"); queueSync("vocab_learning"); queueSync("vocab_known");
+    renderSyncStatus(syncedMessage());
   } catch (e) {
     console.warn("sync pull failed", e);
     syncLastError = syncErrText(e);
@@ -3952,6 +3952,9 @@ const TABLE_LOSS = {
  * accessors -- those answer "not known to be broken", and would accuse a
  * database nothing had checked yet. */
 function syncedMessage() {
+  /* A pull always queues a push, so saying "Synced" here announced the upload
+   * before it had been tried, and on a bad connection it then failed. */
+  if (Object.values(syncQueue).some(Boolean)) return "Sending your changes\u2026";
   const missing = (window.HSKSync && HSKSync.missingTables) ? HSKSync.missingTables() : [];
   if (!missing.length) return "Synced just now";
   /* One missing table names what it costs; more than one does not bother,
