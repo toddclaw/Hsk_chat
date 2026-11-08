@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v150 — 2026-11-08";
+const VERSION   = "v151 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -1451,7 +1451,6 @@ const S = {
   // The next level's whole wordlist, unfiltered -- S.pool strips out what you
   // already know, which is exactly what readiness needs in the denominator.
   nextList: [],
-  busy:    false,
   // Whether cloud sync is turned on. Off by default; this alone does not
   // mean signed in -- see syncUser below, tracked separately since it is
   // session state, not a setting to persist.
@@ -1861,7 +1860,7 @@ function repairPrompt(violations, attempt, scoped) {
  * registered ambiguous word actually turns up standalone in this reply,
  * never on every turn. Failure here fails open: a classify call that
  * cannot be reached should not turn an unrelated reply into a rejection. */
-async function checkSenseViolations(text, lex, level) {
+async function checkSenseViolations(text, lex, level, signal) {
   const tokens = HSK.segment(text, lex);
   const words = HSKSenses.wordsPresent(tokens);
   if (!words.length) return [];
@@ -1869,7 +1868,7 @@ async function checkSenseViolations(text, lex, level) {
   for (const w of words) {
     const count = HSKSenses.standaloneHits(tokens, w).length;
     try {
-      const raw = await callModel([{ role: "user", content: HSKSenses.classifyPrompt(w, text, count) }], 60);
+      const raw = await callModel([{ role: "user", content: HSKSenses.classifyPrompt(w, text, count) }], 60, null, signal);
       const classified = HSKSenses.parseClassification(raw, count);
       if (classified) out.push(...HSKSenses.checkSenses(w, classified, level));
     } catch (e) {
@@ -1955,14 +1954,15 @@ async function flushLog() {
  * failure, and the behaviour the app had before this existed. In measurement a
  * plan was reached on 69 of 95 turns; the other 26 are the hardest ones and are
  * the next thing to work on, not a reason to block a turn. */
-async function planReply(turns, lex) {
+async function planReply(turns, lex, signal) {
   let banned = [];
   for (let round = 0; round < 3; round++) {
     let text;
     try {
       text = HSK.stripScaffold(await withTimeout(callModel(
         [{ role: "user", content: HSKPrompt.planPrompt(
-          { turns: turns, label: levelLabel(), banned: banned }) }], 200),
+          { turns: turns, label: levelLabel(), banned: banned }) }], 200,
+        null, signal),
         GATE_TIMEOUT_MS, "planner"));
     } catch (e) {
       console.warn("[plan] failed, generating unplanned:", e);
@@ -2017,7 +2017,7 @@ function withTimeout(p, ms, what) {
  * A FAILED CALL PASSES THE TURN. A gate that blocked on API trouble would take
  * the conversation down with it, and an ungraded turn is the behaviour the app
  * had for its whole life until now. */
-async function gateFault(text, lex) {
+async function gateFault(text, lex, signal) {
   for (const [model, opts] of [[null, { partner: true }],
                                [GATE_MODEL, { partner: true, bar: "soft" }]]) {
     let g;
@@ -2025,7 +2025,8 @@ async function gateFault(text, lex) {
     try {
       const raw = await withTimeout(callModel(
         [{ role: "user", content: HSKPrompt.grade(Object.assign({ text: text }, opts)) }],
-        GATE_MAX_TOKENS, model), GATE_TIMEOUT_MS, (model || "teach") + " grader");
+        GATE_MAX_TOKENS, model, signal), GATE_TIMEOUT_MS,
+        (model || "teach") + " grader");
       g = parseGrade(raw, text);
     } catch (e) {
       console.warn("[gate] " + (model || "teach") + " failed after " +
@@ -2080,17 +2081,40 @@ function callError(kind, message) {
   return e;
 }
 
-/* The controller behind the model call that is running right now, so a
- * generation the learner has given up on can be stopped instead of waited out.
- * ponytail: one controller for the whole app -- a translation started while a
- * turn is in flight would be the thing a stop aborts. Give each call its own if
- * that ever bites. */
-let inflight = null;
+/* Which conversations have a turn in flight, and what to abort to stop each
+ * one. Two globals used to do this job -- S.busy, one boolean for the whole
+ * app, and `inflight`, one controller reassigned by every callModel() -- so a
+ * story being written locked the composer in every other conversation, and a
+ * stop aborted whichever call had started most recently rather than the one the
+ * learner was looking at. The grader, translation and the explain sheet have
+ * always run alongside a turn; it was only these two globals that made a turn
+ * look exclusive. Keyed by conversation, because that is the thing a learner
+ * points at when they say "stop this one".
+ *
+ * Side calls stay deliberately absent from this map: a grader verdict or a
+ * translation is not what 停 means, and aborting one by accident is what the
+ * old single controller actually did. They are bounded by their own timeouts. */
+const busyChats = new Map();          // cid -> AbortController
+const busy = id => busyChats.has(id === undefined ? S.chatId : id);
 
-/* Abort the running call. The fetch is cancelled rather than merely ignored, so
- * a story segment that is going nowhere also stops costing money. */
-function stopTurn() {
-  if (inflight) inflight.abort();
+function beginTurn(cid) {
+  const ctl = new AbortController();
+  busyChats.set(cid, ctl);
+  renderBusy();
+  return ctl;
+}
+
+function endTurn(cid) {
+  busyChats.delete(cid);
+  renderBusy();
+}
+
+/* Abort the call belonging to one conversation -- the open one unless told
+ * otherwise. The fetch is cancelled rather than merely ignored, so a story
+ * segment that is going nowhere also stops costing money. */
+function stopTurn(id) {
+  const ctl = busyChats.get(id === undefined ? S.chatId : id);
+  if (ctl) ctl.abort();
 }
 
 /* How long one phase of a turn took, in the log the phone can send back.
@@ -2109,13 +2133,17 @@ async function timed(name, fn) {
   finally { console.log("[phase] " + name + " " + (Date.now() - t0) + "ms"); }
 }
 
-async function callModel(messages, maxTokens, model) {
+/* `signal` is the turn's own, so a stop cancels the conversation it was tapped
+ * in and nothing else. `out` carries per-call detail back to THIS caller --
+ * finish_reason used to be parked on callModel.lastFinish, one property every
+ * concurrent call overwrote, which already misreported a truncated reply as
+ * whole when the gate's three calls landed after the generation. */
+async function callModel(messages, maxTokens, model, signal, out) {
   const key = store.get(K.key, "");
   if (!key) throw callError("nokey", "No API key yet.");
-  inflight = new AbortController();
   const r = await fetch(API_URL, {
     method: "POST",
-    signal: inflight.signal,
+    signal: signal || undefined,
     headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model || S.model, messages: messages,
@@ -2190,7 +2218,7 @@ async function callModel(messages, maxTokens, model) {
   }
   // finish_reason "length" means the ceiling cut the reply off mid-sentence,
   // which is a different problem from the model choosing to stop.
-  callModel.lastFinish = choice.finish_reason || "";
+  if (out) out.finish = choice.finish_reason || "";
   recordCost(body.usage && body.usage.cost);
   return txt.trim();
 }
@@ -2320,10 +2348,11 @@ function explainSystemPrompt(turnObj, own, followUp) {
       context: own ? contextFor(turnObj) : [], followUp: !!followUp });
 }
 
-function windowed(excludeKind) {
+function windowed(excludeKind, hist) {
   // Notices are UI, not conversation: sending them would teach the model that
   // English error text belongs in the chat.
-  var msgs = S.history.filter(t => t.role === "user" || t.role === "assistant");
+  var msgs = (hist || S.history)
+    .filter(t => t.role === "user" || t.role === "assistant");
   if (excludeKind) msgs = msgs.filter(function (t) { return t.kind !== excludeKind; });
   return msgs.slice(-WINDOW).map(function (t) { return { role: t.role, content: t.text }; });
 }
@@ -2374,9 +2403,17 @@ function ghostRequired(reuse) {
  * has a bubble on screen to write into. The gate can add ten seconds to a turn
  * -- reasoning model -- and ten silent seconds reads as a hang, so the wait has
  * to say that it is a wait. */
-let status = () => {};
 
 async function turn(ctx) {
+  /* The conversation this turn is for, its abort signal, and where to write
+   * progress -- all explicit, because a turn no longer has the app to itself.
+   * Reading S.history here was safe only while one turn could exist: with a
+   * story and a chat in flight together it would build one conversation's
+   * context out of the other's messages. */
+  const hist = (ctx && ctx.hist) || S.history;
+  const signal = (ctx && ctx.signal) || undefined;
+  const say = (ctx && ctx.status) || (() => {});
+  const meta = {};
   /* Offer next-level words only when a credit has been earned — and not at all
    * in an activity that practises what the learner already has. Ghost Words and
    * Drills both say so on their own row (`newWords: false`) rather than being
@@ -2426,15 +2463,15 @@ async function turn(ctx) {
   const model = (ctx && ctx.model) || (currentActivity() === "twenty" ? twentyModel() : null);
 
   const scratch = [{ role: "system", content: systemPrompt(offer, steerable, required, ctx) }]
-    .concat(windowed(ctx && ctx.storySegment ? "discuss" : null));
+    .concat(windowed(ctx && ctx.storySegment ? "discuss" : null, hist));
   // What the learner just said, for the echo check below.
-  const saidNow = (S.history.filter(t => t.role === "user").pop() || {}).text || "";
+  const saidNow = (hist.filter(t => t.role === "user").pop() || {}).text || "";
   /* Before the first generation, not after the first failure. The whole point
    * is that repair is too late: by then the model has already committed to
    * something the level cannot say. */
   if (S.plan && PLANNED[activity] && !(ctx && ctx.storySegment)) {
-    status("想一想…");
-    const plan = await timed("plan", () => planReply(S.history.slice(-4), S.lex));
+    say("想一想…");
+    const plan = await timed("plan", () => planReply(hist.slice(-4), S.lex, signal));
     if (plan) scratch.push({ role: "user", content: HSKPrompt.planInstruction(plan) });
   }
 
@@ -2444,7 +2481,7 @@ async function turn(ctx) {
    * attempt into it as an assistant message, so a second attempt at the same
    * paragraph -- the normal, working case -- would match itself and be thrown
    * away. Only text that actually reached the learner counts as already said. */
-  const saidBefore = S.history
+  const saidBefore = hist
     .filter(t => t.role === "assistant" && t.text).map(t => t.text);
 
   let attempt = 0, last = null, missed = null, echoed = null;
@@ -2465,7 +2502,7 @@ async function turn(ctx) {
      * minutes -- and an unchanging "..." through all of it reads as a hang
      * rather than as work. The first try says nothing: the common case is fast
      * and does not need a counter to explain itself. */
-    if (attempt > 1) status("再写… " + attempt + "/" + tries);
+    if (attempt > 1) say("再写… " + attempt + "/" + tries);
     /* An empty completion is about one call in eight on some routes and is not
      * a vocabulary problem, so it must not spend a repair attempt -- and it used
      * to end a story mid-narrative on an error card. Retried once, here rather
@@ -2473,20 +2510,21 @@ async function turn(ctx) {
      * loudly instead of silently doubling their cost. */
     const raw = await timed("generate", async () => {
       try {
-        return await callModel(scratch, ctx && ctx.maxTokens, model);
+        return await callModel(scratch, ctx && ctx.maxTokens, model, signal, meta);
       } catch (err) {
         if (err.kind !== "empty") throw err;
         console.warn("[empty completion] retrying once");
-        return await callModel(scratch, ctx && ctx.maxTokens, model);
+        return await callModel(scratch, ctx && ctx.maxTokens, model, signal, meta);
       }
     });
     // Formatting the model wrapped around its answer is not a vocabulary
     // mistake; strip it rather than spending a repair attempt on it.
-    /* Read here, not at the return. `callModel.lastFinish` is one global that
-     * every call overwrites, and since the gate this turn makes up to three
-     * calls after this one -- so a reply cut off at the token ceiling was being
-     * reported as whole because the grader that judged it stopped cleanly. */
-    const genFinish = callModel.lastFinish;
+    /* Read from this turn's own `meta`, not a shared property: the gate makes
+     * up to three more calls after this one, and a concurrent turn makes its
+     * own, so the generation's finish_reason has to come back to the caller
+     * that asked for it. A reply cut off at the token ceiling used to be
+     * reported as whole because a later grader call stopped cleanly. */
+    const genFinish = meta.finish;
     /* Stale paragraphs out BEFORE extractNeeds, because `ex.needs` carries
      * start/end offsets into the cleaned text and the "new words" panel
      * glosses by them -- trimming a prefix afterwards would slide every one of
@@ -2523,7 +2561,7 @@ async function turn(ctx) {
      * ambiguous word inside a reply that is already going to be repaired for
      * something else is not worth a second model call this attempt. */
     const senseViols = hardViolations.length ? []
-      : await timed("sense", () => checkSenseViolations(ex.text, lex, S.level));
+      : await timed("sense", () => checkSenseViolations(ex.text, lex, S.level, signal));
     const violations = hardViolations.concat(senseViols);
     console.log("[attempt " + attempt + "]", raw,
       violations.map(v => v.kind === "sense" ? "sense:" + v.word + "/" + v.sense : v.kind + ":" + v.text));
@@ -2557,8 +2595,8 @@ async function turn(ctx) {
          * vanish, and then nothing for ten seconds, which reads as the app
          * having finished and lost the answer. The wait is one wait; it says
          * so once. */
-        status("检查中… " + attempt + "/" + tries);
-        const fault = await timed("gate", () => gateFault(ex.text, lex));
+        say("检查中… " + attempt + "/" + tries);
+        const fault = await timed("gate", () => gateFault(ex.text, lex, signal));
         if (fault) {
           gateFails++;
           /* At most one introduced word per turn, and none at all if pacing has
@@ -3004,7 +3042,7 @@ function renderMessage(turnObj, shownExtra) {
       n.state = "rejected";
       persist();
       box.remove();
-      if (!S.busy && S.history[S.history.length - 1] === turnObj) retryLast();
+      if (!busy() && S.history[S.history.length - 1] === turnObj) retryLast();
       else renderAll();
     };
     row.append(yes, no);
@@ -3475,10 +3513,13 @@ function activityOf(c) {
 function currentActivity() { return activityOf(chatById(S.chatId)); }
 
 /* The chat id storyStep() is generating a reply for right now, or null. Not
- * S.busy: that is one flag for the whole app, and can't tell "this specific
- * chat has a reply on the way" from "some unrelated chat is busy, this one
- * really has been abandoned" -- which would block dropIfEmpty() from ever
- * dropping anything while any generation, anywhere, was in flight. */
+ * busyChats: this one is about a push that is mid-air, not about a call. It
+ * stays story-only on purpose.
+ *
+ * ponytail: busy(id) could now answer the same question -- endTurn() runs in a
+ * finally, after the push -- which would make this redundant. Left alone
+ * because dropIfEmpty() tombstones conversations and this is not the change to
+ * find that out in. Collapse it if it ever needs a second reader. */
 let storyGenChatId = null;
 
 /* An activity is a new conversation, and the chooser now creates one before
@@ -4356,7 +4397,7 @@ async function gradeTurn(turnObj) {
      * Unconditional now, including mid-turn. The grade lands while the partner
      * is still writing, which is exactly when the learner is looking at the
      * counters, and this used to skip it because renderStarters() blanked the
-     * strip whenever S.busy. The two controls it reaches now draw their status
+     * strip whenever a turn was running. The two controls it reaches now draw their status
      * either way and withhold only what can be pressed, so the credit shows
      * when it is earned rather than whenever the reply happens to arrive. */
     renderStarters();
@@ -4660,8 +4701,8 @@ function newMessageId() {
 
 async function send() {
   const text = input.value.trim();
-  if (!text || S.busy) return;
-  S.busy = true; renderBusy();
+  if (!text || busy()) return;
+  beginTurn(S.chatId);
   input.value = ""; updateMirror(); autosize();
 
   S.history.push({ role: "user", text: text, id: newMessageId(), created_at: new Date().toISOString() });
@@ -4695,7 +4736,7 @@ async function send() {
  * down to level this time -- and retyping the message to try again is silly.
  * The failed reply or error card is dropped first so history stays honest. */
 async function retryLast() {
-  if (S.busy) return;
+  if (busy()) return;
   /* A story's segments have no user turn behind them, so popping back to one
    * emptied the whole story -- silently, because the early return below skipped
    * both persist() and renderAll(): the screen still showed a story the app had
@@ -4734,7 +4775,7 @@ async function retryLast() {
     if (failedAnswer) {
       const text = prev.text;
       S.history.pop();
-      S.busy = true; renderBusy();
+      beginTurn(S.chatId);
       persist(); renderAll();
       return runTurn([], text, { storyPhase: "discussing", model: teachingModel() });
     }
@@ -4760,7 +4801,7 @@ async function retryLast() {
   }
   S.history.length = i + 1;
   const text = S.history[i].text;
-  S.busy = true; renderBusy();
+  beginTurn(S.chatId);
   persist(); renderAll();
   return runTurn([], text);
 }
@@ -5115,10 +5156,10 @@ async function declareCast(topic) {
  * story" button, exactly what it already shows for a topic with nothing told
  * yet. */
 async function startStoryWith(topic) {
-  if (S.busy) return;
+  if (busy()) return;
   const cid = S.chatId;
   const hist = S.history;
-  S.busy = true; storyGenChatId = cid; renderBusy(); renderStarters();
+  beginTurn(cid); storyGenChatId = cid; renderStarters();
   const bubble = thinkingBubble(topic
     ? "Working out who is in this story…" : "…");
   let cast = [];
@@ -5131,7 +5172,7 @@ async function startStoryWith(topic) {
     if (err.kind !== "stopped") throw err;
     return;
   } finally {
-    bubble.remove(); S.busy = false; storyGenChatId = null; renderBusy(); renderStarters();
+    bubble.remove(); endTurn(cid); storyGenChatId = null; renderStarters();
   }
   if (!chatById(cid)) return;   // gone by the time the cast call landed
   setStoryTopic(topic, cast, hist, cid);
@@ -5140,7 +5181,7 @@ async function startStoryWith(topic) {
 }
 
 async function storyStep(asking) {
-  if (S.busy) return;
+  if (busy()) return;
   /* Captured now, before anything below can await: `cid`/`hist` name the
    * conversation this call is for regardless of what S.chatId/S.history
    * point at once the reply lands, exactly like every other turn-runner in
@@ -5153,7 +5194,7 @@ async function storyStep(asking) {
   /* Asking is always available, at any pause, and can be repeated ("Ask me
    * another"); telling stops once every segment is out. */
   if (!asking && told >= STORY_SEGMENTS) return;
-  S.busy = true; storyGenChatId = cid; renderBusy(); renderStarters();
+  beginTurn(cid); storyGenChatId = cid; renderStarters();
   const bubble = thinkingBubble(asking
     ? "Thinking of a question about the story\u2026"
     : "Writing part " + (told + 1) + " of " + STORY_SEGMENTS + "\u2026 this takes a moment.");
@@ -5163,10 +5204,14 @@ async function storyStep(asking) {
      * are graded by the grader that already runs on every message. Asking runs
      * on the teaching model: a question about a story already written is a far
      * easier job than writing graded narrative, and ~37x cheaper. */
-    const res = await turn(asking
+    const res = await turn(Object.assign(asking
       ? { storyPhase: "asking", model: teachingModel() }
       : { storySegment: { index: told, of: STORY_SEGMENTS },
-          maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() });
+          maxTokens: STORY_MAX_TOKENS, attempts: STORY_ATTEMPTS, model: storyModel() },
+      /* No status writer: the label on a segment's bubble is fixed, which is
+       * what it already was -- turn()'s progress lines went to a module-level
+       * writer that any finished runTurn() had reset to a no-op. */
+      { hist: hist, signal: (busyChats.get(cid) || {}).signal }));
     /* Pushed into the conversation this was asked for, not into whichever one
      * S.history points at when the reply lands: a segment takes most of a
      * minute, and switching chats in that window used to drop it into the
@@ -5202,7 +5247,7 @@ async function storyStep(asking) {
     }
   } finally {
     bubble.remove();
-    S.busy = false; storyGenChatId = null; renderBusy();
+    endTurn(cid); storyGenChatId = null;
     renderAll(); renderStarters();
     /* This call may have ended (finished, stopped, or failed) leaving `cid`
      * still empty -- e.g. a stop before the first segment lands. dropIfEmpty()
@@ -5219,8 +5264,8 @@ async function storyStep(asking) {
  * returns [] here and the echo check compares against "", both harmless, but
  * neither had ever happened. */
 async function openingTurn() {
-  if (S.busy) return;
-  S.busy = true; renderBusy();
+  if (busy()) return;
+  beginTurn(S.chatId);
   return runTurn([], "");
 }
 
@@ -5260,13 +5305,19 @@ async function runTurn(toGloss, text, ctx) {
   const hist = S.history;
 
   const bubble = thinking.querySelector(".bubble");
-  status = label => {
+  /* This turn's own writer, not a module-level one. Two turns in flight shared
+   * it: the second overwrote the first, so one conversation's "再写… 2/6"
+   * appeared in the other's bubble, and whichever finished first pointed it at
+   * a no-op and silenced the one still running. */
+  const say = label => {
     bubble.textContent = label || "\u2026";
     bubble.style.fontSize = label ? "15px" : "18px";
   };
 
   try {
-    const res = await turn(ctx || undefined);
+    const res = await turn(Object.assign({}, ctx, {
+      hist: hist, status: say, signal: (busyChats.get(cid) || {}).signal
+    }));
     /* Pushed into the conversation this was asked for, not into whichever one
      * S.history points at when the reply lands: a segment takes most of a
      * minute, and switching chats in that window used to drop it into the
@@ -5297,9 +5348,8 @@ async function runTurn(toGloss, text, ctx) {
     // The bubble is about to be gone; a later turn() writing into it would
     // throw into a detached node and lose the reason it was reporting, and
     // renderAll() would keep putting it back.
-    status = () => {};
     thinking.remove();
-    S.busy = false; renderBusy();
+    endTurn(cid);
     renderAll();
     /* Paired with renderAll() for the same reason gradeTurn() pairs them: the
      * strip holds a drill's counter and its End button, and a turn changes
@@ -5408,41 +5458,26 @@ function renderLevelChip() {
   chip.setAttribute("aria-label", "Level: " + levelLabel() + ", open settings");
 }
 
-/* One place that knows what "a turn is running" changes. Not syncBusy: that
- * name is taken, by the flag saying a cloud pull or push is in flight.
+/* One place that knows what "a turn is running" changes, and it asks only about
+ * the conversation on screen. Not syncBusy: that name is taken, by the flag
+ * saying a cloud pull or push is in flight.
  *
- * The send button is not disabled while busy any more -- busy is precisely when
- * it has something to do. It becomes the stop button, which is where every
- * other chat app puts one, and is the only control on screen that is guaranteed
- * to be under the learner's thumb already. */
-/* Whose generation S.busy is for, or null. Derived here rather than passed by
- * each of the nine S.busy sites, for the reason thinkingBubble() hangs its own
- * lifetime on the element: every one of them already calls renderBusy() in the
- * same statement, so inferring it once is self-maintaining and remembering it
- * nine times is not.
+ * The send button is never disabled -- busy is precisely when it has something
+ * to do. It becomes the stop button, which is where every other chat app puts
+ * one, and is the only control on screen guaranteed to be under the learner's
+ * thumb already. In another conversation it stays 送 and works: a story being
+ * written no longer silences the rest of the app, which is what v150's owner
+ * gate was working around.
  *
- * Not storyGenChatId: that one means "do not tombstone this chat, a push is
- * mid-air" and dropIfEmpty() depends on it staying story-only. */
-let busyChatId = null;
-
+ * The activity picker is the one thing that still goes dead, and only for the
+ * conversation generating: changing what an activity IS mid-reply is what
+ * cannot be allowed to interleave. */
 function renderBusy() {
-  if (!S.busy) busyChatId = null;
-  else if (busyChatId === null) busyChatId = S.chatId || null;
-  /* 停 stops the running call, so it may only appear in the conversation that
-   * call belongs to. A story segment takes most of a minute, and the learner
-   * who switches away in that window used to find the send button turned to 停
-   * in a chat with nothing running -- one tap from killing a story they could
-   * no longer see. It says 送 there instead, disabled, because send() refuses
-   * while anything is generating and a live-looking button that silently does
-   * nothing is the worse of the two lies. */
-  const mine = !S.busy || busyChatId === S.chatId;
+  const mine = busy();
   const b = $("#send");
-  b.textContent = S.busy && mine ? "\u505c" : "\u9001";
-  b.title = S.busy
-    ? (mine ? "Stop generating" : "Waiting for a reply in another conversation")
-    : "Send";
-  b.disabled = S.busy && !mine;
-  $("#activity").disabled = S.busy;
+  b.textContent = mine ? "\u505c" : "\u9001";
+  b.title = mine ? "Stop generating" : "Send";
+  $("#activity").disabled = mine;
 }
 
 function fillLevels() {
@@ -6608,7 +6643,7 @@ function renderDrillControl(box) {
   /* Same split as the flashcard strip above: the progress line is status and
    * renders mid-turn so a credit shows as soon as it is earned; the chooser and
    * the stop button are controls and stay hidden while the partner writes. */
-  if (!drillTag()) { if (!S.busy) renderDrillChooser(box); return; }
+  if (!drillTag()) { if (!busy()) renderDrillChooser(box); return; }
   const note = document.createElement("div");
   note.className = "note";
   const label = HSKPrompt.TAG_LABEL[drillTag()] || drillTag();
@@ -6622,7 +6657,7 @@ function renderDrillControl(box) {
       (drillTold() ? " \u00b7 attempt " + (drillTold() + 1) : "") +
       (why ? " \u00b7 " + why : "");
   box.appendChild(note);
-  if (drillDone() || S.busy) return;
+  if (drillDone() || busy()) return;
   const stop = document.createElement("button");
   stop.textContent = "End drill";
   stop.onclick = endDrill;
@@ -6645,7 +6680,7 @@ function renderFlashcardControl(box) {
    * partner is still writing, and hiding the strip until the reply arrived was
    * the only reason the learner had to wait for it. */
   if (flashcardWords().length) return renderFlashcardSetControl(box);
-  if (S.busy) return;
+  if (busy()) return;
   if (legacySetChat()) {
     box.innerHTML = '<div class="note">This conversation was started before ' +
       HSKPrompt.activityFor(currentActivity()).label + ' worked in sets, so it ' +
@@ -6782,7 +6817,7 @@ function pastStoryTopics() {
  * has got to -- five bubbles in the log all look alike. Not gated on the
  * starters preference below: this is a control, not an opener. */
 function renderStoryControl(box) {
-  if (S.busy) return;
+  if (busy()) return;
   if (!hasStoryTopic() && !S.history.length) return renderStoryChooser(box);
   const told = storyTold();
   if (told < STORY_SEGMENTS) {
@@ -7544,7 +7579,7 @@ function closeSheet(id) { $(id).classList.remove("open"); }
 
 /* --------------------------------------------------------------- listeners */
 
-$("#send").onclick = () => (S.busy ? stopTurn() : send());
+$("#send").onclick = () => (busy() ? stopTurn() : send());
 input.addEventListener("input", () => { updateMirror(); autosize(); });
 input.addEventListener("scroll", () => { mirror.scrollTop = input.scrollTop; });
 input.addEventListener("keydown", e => {
