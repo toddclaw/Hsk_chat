@@ -3770,6 +3770,13 @@ check(usedGroups && usedGroups.first === "\u7684",
       "  return new Promise(function (r) { window.__resolve = r; }); };" +
       "window.newChat('story'); window.storyStep(false);");
     await waitFor("window.__resolve", "a segment request in flight");
+    // The conversation generating keeps the stop, or a story becomes unstoppable.
+    const owner = await exec(`
+      var b = document.querySelector("#send");
+      return { text: b.textContent, off: b.disabled };`);
+    check(owner.text === "\u505c" && owner.off === false,
+      "the chat a generation belongs to offers stop while it runs",
+      JSON.stringify(owner));
     // The learner navigates away while the segment is still being written.
     await exec("window.newChat('chat');");
     /* The status line belongs to the story too. thinkingEl is one global and
@@ -3780,6 +3787,15 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(strayed.indexOf("this takes a moment") === -1,
       "a story's status line stays with the story, not the chat switched to",
       JSON.stringify(strayed.slice(0, 80)));
+    /* Nor does the stop button follow. renderBusy() read the one global
+     * S.busy, so the chat switched to showed 停 -- one tap from aborting a
+     * story that was no longer on screen. */
+    const btn = await exec(`
+      var b = document.querySelector("#send");
+      return { text: b.textContent, off: b.disabled, title: b.title };`);
+    check(btn.text === "\u9001" && btn.off === true,
+      "the send button does not offer to stop a generation in another chat",
+      JSON.stringify(btn));
     await exec("window.__resolve('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
     await waitFor(
       "Object.keys(JSON.parse(localStorage['hsk1chat.chatMsgs'] || '{}'))" +
