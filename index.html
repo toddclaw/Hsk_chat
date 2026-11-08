@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v149 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3032,7 +3032,9 @@ function renderAll() {
   renderConversation();
   /* Put it back. renderAll() has several early returns and the restore has to
    * happen after every one of them, so it wraps rather than joins. */
-  if (thinkingEl) { log.appendChild(thinkingEl); log.scrollTop = log.scrollHeight; }
+  if (thinkingEl && thinkingEl.dataset.cid === (S.chatId || "")) {
+    log.appendChild(thinkingEl); log.scrollTop = log.scrollHeight;
+  }
 }
 
 function renderConversation() {
@@ -3412,6 +3414,16 @@ function touchChat(id) {
   if (!c) return;
   c.updated_at = new Date().toISOString();
   if (!c.renamed) c.title = titleFrom(S.chatMsgs[c.id] || S.history);
+  /* S.chats IS the display order -- renderChats() walks it as it stands, and
+   * three callers read visibleConversations(S.chats)[0] as "the most recent".
+   * Nothing re-sorted it locally: the array was newest-updated-first only
+   * because of unshift() on creation and mergeConversations()'s sort on a sync
+   * merge, so stamping updated_at here moved nothing and the list kept its old
+   * order until a sync happened to reshuffle it. That is why v143 looked right
+   * in storage and wrong on screen. Same comparator as the merge, since the
+   * invariant is the same one. */
+  S.chats.sort((a, b) =>
+    String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
   queueSync("conversations");
 }
 
@@ -5217,6 +5229,12 @@ function thinkingBubble(label) {
   el.className = "msg bot";
   el.innerHTML = '<div class="bubble" style="font-size:' + (label ? "15px" : "18px") +
     ';color:var(--dim)">' + escapeHtml(label || "\u2026") + "</div>";
+  /* Whose bubble this is. renderAll() restores thinkingEl into whatever is on
+   * screen, so a story segment's "this takes a moment" followed the learner
+   * into the conversation they switched to -- the status line of one chat
+   * reading as a message in another. Switching back restores it, because the
+   * reference is kept and only the append is gated. */
+  el.dataset.cid = S.chatId || "";
   log.appendChild(el); log.scrollTop = log.scrollHeight;
   /* Registered for renderAll() to put back, and DE-registered by its own
    * removal rather than by each of the three callers remembering to.

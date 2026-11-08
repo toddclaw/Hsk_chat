@@ -3772,6 +3772,14 @@ check(usedGroups && usedGroups.first === "\u7684",
     await waitFor("window.__resolve", "a segment request in flight");
     // The learner navigates away while the segment is still being written.
     await exec("window.newChat('chat');");
+    /* The status line belongs to the story too. thinkingEl is one global and
+     * renderAll() put it back into whatever was on screen, so "this takes a
+     * moment" appeared in the chat the learner had moved to. */
+    const strayed = await exec(
+      "return document.querySelector('#log').textContent;");
+    check(strayed.indexOf("this takes a moment") === -1,
+      "a story's status line stays with the story, not the chat switched to",
+      JSON.stringify(strayed.slice(0, 80)));
     await exec("window.__resolve('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
     await waitFor(
       "Object.keys(JSON.parse(localStorage['hsk1chat.chatMsgs'] || '{}'))" +
@@ -3794,6 +3802,18 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(bumped[0] > bumped[1],
       "a segment landing in the background bumps its own story, not the chat on screen",
       JSON.stringify(bumped));
+    /* The LIST, not the timestamp. v143 bumped updated_at and shipped green on
+     * the check above while the chat list did not move at all: S.chats is the
+     * display order and nothing re-sorted it locally. Assert the row order a
+     * learner actually sees. */
+    const listOrder = await exec(`
+      window.renderChats();
+      return Array.prototype.map.call(
+        document.querySelectorAll("#chatList .chatrow .cmeta"),
+        function (m) { return m.textContent.split(" \u00b7 ")[0]; });`);
+    check(listOrder.indexOf("Story time") === 0 && listOrder.indexOf("Chat") === 1,
+      "the chat list puts the story that just grew above the chat on screen",
+      JSON.stringify(listOrder));
 
     /* "try again" on a failed segment used to pop every message looking for a
      * user turn a story does not have, then return before persist() and
