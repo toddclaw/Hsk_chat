@@ -3915,6 +3915,60 @@ check(usedGroups && usedGroups.first === "\u7684",
       "neither story is tombstoned by switching away before its first segment",
       JSON.stringify(alive));
 
+    /* A WORD TIP belongs to the drill that asked for it. drillTipBusy was one
+     * boolean, so one drill loading a tip disabled the button in every other,
+     * and askWordTip() pushed into live S.history -- so asking and then
+     * switching filed the answer under the drill the learner had moved to and
+     * left the asking one still showing its button. */
+    await exec(`
+      var mk = function (cid, word) {
+        return { id: cid, title: word, activity: "drill", level: 1,
+                 created_at: "2026-01-01T00:00:00.000Z",
+                 updated_at: "2026-01-01T00:00:00.000Z", deleted: false };
+      };
+      var marks = function (word) {
+        return [{ id: "m-" + word, role: "drill", text: "word",
+                  created_at: "2026-01-01T00:00:01.000Z" },
+                { id: "w-" + word, role: "drillWord", text: word,
+                  created_at: "2026-01-01T00:00:02.000Z" }];
+      };
+      var a = "dddddddd-1111-4111-8111-aaaaaaaaaaaa";
+      var b = "dddddddd-1111-4111-8111-bbbbbbbbbbbb";
+      localStorage.setItem("hsk1chat.chats", JSON.stringify([mk(a, "\u8fd8"), mk(b, "\u5c31")]));
+      localStorage.setItem("hsk1chat.chatMsgs",
+        JSON.stringify({ "dddddddd-1111-4111-8111-aaaaaaaaaaaa": marks("\u8fd8"),
+                         "dddddddd-1111-4111-8111-bbbbbbbbbbbb": marks("\u5c31") }));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(a));
+      return true;`);
+    await go(base);
+    await exec(
+      "window.__tip = null;" +
+      "window.callModel = function () {" +
+      "  return new Promise(function (r) { window.__tip = r; }); };" +
+      "window.askWordTip();");
+    await waitFor("window.__tip", "the tip call");
+    const tipBtn = await exec(`
+      window.openChat("dddddddd-1111-4111-8111-bbbbbbbbbbbb");
+      var b = document.querySelector("#drillTipBtn");
+      return { there: !!b, off: b ? b.disabled : null };`);
+    check(tipBtn.there === true && tipBtn.off === false,
+      "one drill loading a word tip leaves the other drill's button live",
+      JSON.stringify(tipBtn));
+    await exec("window.__tip('\u8fd8 means still.');");
+    await waitFor(
+      "JSON.stringify(JSON.parse(localStorage['hsk1chat.chatMsgs']))" +
+      ".indexOf('drillTip') !== -1", "the tip to be stored");
+    const landed = await exec(`
+      var msgs = JSON.parse(localStorage["hsk1chat.chatMsgs"] || "{}");
+      var has = function (cid) {
+        return (msgs[cid] || []).some(function (m) { return m.role === "drillTip"; });
+      };
+      return { asked: has("dddddddd-1111-4111-8111-aaaaaaaaaaaa"),
+               other: has("dddddddd-1111-4111-8111-bbbbbbbbbbbb") };`);
+    check(landed.asked === true && landed.other === false,
+      "a word tip lands in the drill that asked for it, not the one on screen",
+      JSON.stringify(landed));
+
     /* The lexicon a reply is validated against comes from the conversation it
      * is for. needsSoFar() walked the LIVE S.history, so a turn running while
      * the learner stood somewhere else would build its allowlist out of the

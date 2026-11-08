@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v152 — 2026-11-08";
+const VERSION   = "v153 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3213,8 +3213,9 @@ function renderConversation() {
      * Once fetched it stays for the whole drill, like everything else here. */
     const tip = !word ? ""
       : drillTip() ? '<div class="tip">' + HSKMd.render(drillTip()) + '</div>'
-      : '<button class="quiet" id="drillTipBtn"' + (drillTipBusy ? " disabled" : "") +
-        '>' + (drillTipBusy ? "\u2026" : "How do I use " + escapeHtml(word) + "?") +
+      : '<button class="quiet" id="drillTipBtn"' +
+        (drillTipBusy.has(S.chatId) ? " disabled" : "") + '>' +
+        (drillTipBusy.has(S.chatId) ? "\u2026" : "How do I use " + escapeHtml(word) + "?") +
         '</button>';
     /* Every one of the learner's own mistakes with this word, wrong then right.
      * Shown and never sent: the wrong version stays in the UI (D9). */
@@ -4926,21 +4927,33 @@ function drillTip() {
  * Stored as a marker, so it survives a reload and a sync and the call is never
  * spent twice on the same drill. A failure stores nothing, which puts the
  * button back -- the same bargain gradeTurn() makes with its target check. */
-let drillTipBusy = false;
+/* Which conversations are fetching a tip. A single boolean disabled the button
+ * in every other drill while one was loading -- the last of the ownerless
+ * globals the v152 audit turned up. Not busyChats: a tip is not a turn, and
+ * putting it there would turn the send button into 停 and refuse the
+ * conversation's next message over a side call. */
+const drillTipBusy = new Set();
 async function askWordTip() {
   const word = drillWord();
-  if (!word || drillTip() || drillTipBusy) return;
-  drillTipBusy = true; renderAll();
+  /* Captured before the await, like every other async writer here: the tip
+   * belongs to the drill it was asked about. It used to push into live
+   * S.history and persist() the open chat, so asking and then switching
+   * conversations filed the answer under whichever drill the learner had moved
+   * to -- and left the one that asked still showing its button. */
+  const cid = S.chatId;
+  const hist = S.history;
+  if (!word || drillTip() || drillTipBusy.has(cid)) return;
+  drillTipBusy.add(cid); renderAll();
   try {
     const text = await callModel([{ role: "user", content: HSKPrompt.wordTip({
       word: word, label: levelLabel() }) }], 400, teachingModel());
     if (String(text || "").trim()) {
-      S.history.push({ role: "drillTip", text: String(text).trim(),
-                       id: newMessageId(), created_at: new Date().toISOString() });
-      persist();
+      hist.push({ role: "drillTip", text: String(text).trim(),
+                  id: newMessageId(), created_at: new Date().toISOString() });
+      persist(cid);
     }
   } catch (e) { console.warn("[word tip] " + ((e && e.message) || e)); }
-  finally { drillTipBusy = false; renderAll(); }
+  finally { drillTipBusy.delete(cid); renderAll(); }
 }
 
 /* Attempts made, and how many of them landed the structure being drilled.

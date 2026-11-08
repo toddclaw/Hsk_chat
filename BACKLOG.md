@@ -144,11 +144,16 @@ so the second of two stories erased the first's status line), `storyGenChatId`
 and `needsSoFar()` reading live `S.history` (so a turn could validate against
 another conversation's announced words and admit an out-of-level one).
 
-**Still open: `drillTipBusy`.** Same shape as `S.busy` was, and the last of the
-family. While a "How do I use X?" tip is loading in one drill, the button is
-disabled and shows "…" in every other drill conversation too. Cosmetic only —
-the `finally` always clears it and nothing is aborted — which is why it is here
-and not fixed. Settle it the same way: key it by conversation, or ask `busy(id)`.
+**`drillTipBusy` — fixed in v153, and it was not cosmetic.** The audit called it
+appearance-only on the strength of the flag alone: one boolean, so a tip loading
+in one drill disabled the button in every other. True, and not the whole story —
+`askWordTip()` also pushed into live `S.history` and `persist()`ed the open chat,
+so asking for a tip and then switching conversations filed the answer under
+whichever drill the learner had moved to and left the one that asked still
+showing its button. Same class as v143's segment landing in the wrong chat, and
+the audit missed it by reading the flag and not the write beneath it. **Audit the
+writes, not just the reads:** a global with no owner is usually sitting next to
+an `await` with an unowned write after it.
 
 **Checked and correct, with the reason, so the next sweep can skip them:**
 `gradeTurnObj` and `explainTurnObj` are set by `openGrade()`/`openExplain()` on a
