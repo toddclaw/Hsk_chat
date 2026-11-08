@@ -895,6 +895,39 @@ return true;
       "and falls back to 'key saved' when the balance is unknown");
     await exec(`window.fetch = window.__realFetch2; return true;`);
 
+    /* ------------------- stopping a reply is not the model returning nothing
+
+     * callModel tags the REQUEST's abort as "stopped" and every caller stays
+     * quiet for it. But once the headers arrive the fetch has resolved, so an
+     * abort during the BODY read used to land in r.json().catch(), which
+     * swallowed it to {} -- and execution carried on into the
+     * empty-completion branch. The learner got "That model sent back an empty
+     * reply" and an offer to switch models, for a stop they had just asked
+     * for. Reported from real use 2026-11-08, stopping a story segment.
+     *
+     * The second assertion matters more than the first: no fake empty may be
+     * filed in callModel.lastEmpty, which is evidence BACKLOG.md reasons about
+     * when it asks whether empty completions concentrate in one provider. */
+    const stopKind = await exec(`
+      window.__realFetch3 = window.fetch;
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("sk-test"));
+      delete window.callModel.lastEmpty;
+      window.fetch = function () {
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          var e = new Error("aborted"); e.name = "AbortError";
+          return Promise.reject(e);
+        } });
+      };
+      return window.callModel([{ role: "user", content: "hi" }], 10)
+        .then(function () { return "resolved"; })
+        .catch(function (e) { return (e && e.kind) || "no-kind"; });`);
+    check(stopKind === "stopped",
+      "a stop during the body read reaches the caller as a stop, not as an empty reply",
+      stopKind);
+    check(await exec(`return window.callModel.lastEmpty === undefined;`) === true,
+      "and files no empty-completion breadcrumb against a model that did answer");
+    await exec(`window.fetch = window.__realFetch3; localStorage.removeItem("hsk1chat.apiKey"); return true;`);
+
     /* Both prices in the picker. The seeded catalogue has one free model and one
      * paid, so this also covers the free case. */
     const opts = await exec(`
@@ -1985,6 +2018,16 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec("window.setStoryTopic('a topic with no segment yet', []); window.renderAll();");
     check(await exec("return document.querySelectorAll('#log .hint').length;") === 1,
       "a topic picked but nothing generated yet still shows the empty-state hint, not a blank log");
+
+    /* "Make something up" stores an EMPTY topic, and storyTopic() returns ""
+     * for that and for no topic at all alike. The hint has to follow the
+     * strip, which offers "Start the story", not send them to a chooser that
+     * is no longer there. */
+    await exec("window.newChat('story'); window.setStoryTopic('', []); window.renderAll();");
+    const madeUpHint = await exec("var h = document.querySelector('#log .hint'); return h ? h.textContent : '';");
+    check(/Start the story/.test(madeUpHint) && !/Pick what the story is about/.test(madeUpHint),
+      "a make-something-up story stopped before its first part says to tap Start the story, not to pick a topic",
+      madeUpHint);
 
     /* pastStoryTopics() reads S.chats and S.chatMsgs directly, so it has to
      * survive a deleted conversation and a conversation with no messages (an

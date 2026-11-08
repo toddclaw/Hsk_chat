@@ -1240,7 +1240,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v141 — 2026-11-07";
+const VERSION   = "v145 — 2026-11-08";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -2103,7 +2103,28 @@ async function callModel(messages, maxTokens, model) {
     if (err && err.name === "AbortError") throw callError("stopped", "");
     throw err;
   });
-  const body = await r.json().catch(() => ({}));
+  /* A STOP DURING THE BODY READ IS STILL A STOP. The request's own abort is
+   * tagged just above, but once the response headers have arrived the fetch
+   * has already resolved, so a later abort lands here instead. Swallowing it
+   * to {} sent execution on into the empty-completion branch below, which
+   * told the learner "That model sent back an empty reply" about a
+   * cancellation they had just asked for, offered them another model for a
+   * fault that model had not committed, and filed a fake empty against it in
+   * callModel.lastEmpty -- the breadcrumb BACKLOG.md reasons about when it
+   * asks whether empties concentrate in one provider. A cancellation must
+   * never enter that evidence.
+   *
+   * Reported from real use 2026-11-08, stopping a story segment. Without
+   * streaming the body read is most of the wait on a long generation, which
+   * is exactly when a learner reaches for the stop button -- so this was the
+   * common case, not an edge one.
+   *
+   * testKey() has the same line and deliberately keeps it: nothing sets an
+   * AbortController for that call, so stopTurn() cannot reach it. */
+  const body = await r.json().catch(err => {
+    if (err && err.name === "AbortError") throw callError("stopped", "");
+    return {};
+  });
   const detail = (body.error && body.error.message) || "";
   if (!r.ok) {
     if (r.status === 401 || r.status === 403) throw callError("auth", detail || "Key rejected.");
@@ -3134,7 +3155,7 @@ function renderConversation() {
      * story" button is back on screen, same as before this hint existed). */
     let hintText;
     if (currentActivity() === "story") {
-      hintText = (storyTopic() ? 'Tap <b>Start the story</b> below.'
+      hintText = (hasStoryTopic() ? 'Tap <b>Start the story</b> below.'
                                 : 'Pick what the story is about below.') +
         '<br>' + STORY_SEGMENTS +
         ' short parts, one tap each \u2014<br>then the partner asks you about it.';
@@ -4769,6 +4790,10 @@ function storyTopic() {
   const t = S.history.find(m => m.role === "topic");
   return (t && t.text) || "";
 }
+
+/* Whether a topic has been CHOSEN, which storyTopic() cannot say: "Make
+ * something up" stores an empty one, and "" also means nothing chosen yet. */
+function hasStoryTopic() { return S.history.some(m => m.role === "topic"); }
 
 /* The category tapped in the chooser, before a specific sentence has been
  * picked. Deliberately NOT stored: a half-made choice is not a drill, and
@@ -6675,7 +6700,7 @@ function pastStoryTopics() {
  * starters preference below: this is a control, not an opener. */
 function renderStoryControl(box) {
   if (S.busy) return;
-  if (!storyTopic() && !S.history.length) return renderStoryChooser(box);
+  if (!hasStoryTopic() && !S.history.length) return renderStoryChooser(box);
   const told = storyTold();
   if (told < STORY_SEGMENTS) {
     const on = document.createElement("button");
