@@ -48,6 +48,16 @@ Two things the suite catches that a diff never shows: a version bump applied to
 one file and not the other, and a file the page loads that the service worker
 does not pre-cache.
 
+**Prove a new check can fail.** Stash the fix, run the suite, confirm the new
+check fails and nothing else moves, then unstash. Twice in one session a new
+check passed against the unfixed code — it was asserting something the bug did
+not touch, and would have shipped as proof of a fix it never tested.
+
+**Assert what the learner sees, not what the code changed.** v143 bumped a
+conversation's `updated_at` and its check compared two timestamps; the chat list
+never moved and the check was green for a month. Read the rendered DOM — row
+order in `#chatList`, the text in `#log`, the character on `#send`.
+
 ## Releasing
 
 `VERSION` in `index.html` and `CACHE` in `sw.js` **must move together** on every
@@ -186,6 +196,35 @@ something.
 parsed as a sentence, `content` empty while `reasoning` filled the budget, and a
 swallowed exception that made a dead grader look clean. Every one looked
 plausible. Print the raw thing and count what did not come back.
+
+## State that belongs to one conversation
+
+Six globals in this app named something owned by ONE conversation and were read
+from whatever was on screen: `S.busy`, `inflight`, `status`, `thinkingEl`,
+`storyGenChatId`, `drillTipBusy`, plus `needsSoFar()` walking live `S.history`.
+They cost four rounds of testing in one day, found one at a time, every one
+visible from the first. Two were not cosmetic: a stop button aborting a story
+the learner could not see, and a lexicon built from the wrong conversation,
+which can admit an out-of-level word and that guarantee is the product.
+
+**The test.** A mutable global is a bug when BOTH halves hold: it describes
+something owned by one conversation or one in-flight call, AND it is read after
+an `await` or by a later render. Only the first half condemns state that is
+correctly app-wide; only the second misses the ones that bite.
+
+**Read the write, not just the flag.** The v152 audit called `drillTipBusy`
+cosmetic from the boolean alone and missed `askWordTip()` pushing into live
+`S.history` beneath it. A global with no owner usually sits beside an `await`
+with an unowned write after it.
+
+**When one needs an owner, sweep its siblings before shipping.** Fixing them one
+per bug report is how a day goes.
+
+Since v151 two turns can run at once, so anything new in the turn path takes its
+conversation explicitly: `turn(ctx)` reads `ctx.hist`, `ctx.signal` and
+`ctx.status`, and `needsSoFar(upTo, hist)` the same way. `BACKLOG.md`, "Globals
+with no owner", lists every binding already checked and why it is fine, so the
+next sweep can skip them.
 
 ## The diagnostic log
 
