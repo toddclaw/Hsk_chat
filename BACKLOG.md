@@ -1105,6 +1105,40 @@ Two smaller things in the same log, unfixed:
   explanation twice in one repair prompt (23:52:03). `HSKSenses.repairPrompt()`
   should unique by sense.
 
+## ~~Stopping a reply was reported as the model sending nothing~~ — fixed, v145
+
+**Found:** real use, 2026-11-08, stopping a story segment with the 停 button.
+Todd's own report: *"Am I getting an error with the model or did I intentionally
+stop it? I tried several times and I think the message is wrong."*
+
+He was right. `callModel()` tags the REQUEST's abort as `kind: "stopped"`, and
+every caller already stays quiet for it — `storyStep()`, `startStoryWith()` and
+`runTurn()` all test `err.kind !== "stopped"` before filing a notice. But once
+the response headers have arrived the fetch has already resolved, so a later
+abort landed in `const body = await r.json().catch(() => ({}))`, which swallowed
+it to an empty object. Execution then carried on: status 200, so `r.ok` is true,
+`body.choices` undefined, `txt` undefined — straight into the empty-completion
+branch. The learner was told *"That model sent back an empty reply"* and offered
+another model, for a cancellation they had just asked for.
+
+**It was the common case, not an edge one.** Nothing streams, so on a long
+generation the body read is most of the wait — exactly when a learner reaches
+for stop. Todd hit it on every attempt.
+
+**The worse half is the evidence.** The same branch files
+`callModel.lastEmpty` with the finish reason and the provider, which is the
+breadcrumb the "empty completion" work reads when it asks whether empties
+concentrate in one route. Every cancellation was entering that record as a
+fake empty against a model that had answered fine. **A fourth instance of the
+silent-failure pattern CLAUDE.md counts three of** — and like the others it
+looked entirely plausible from the outside.
+
+Fixed by re-throwing the stop from the body read. `testKey()` has the identical
+line and keeps it: nothing sets an `AbortController` for that call, so
+`stopTurn()` cannot reach it.
+
+---
+
 ## Eight seeds is the weak point of every prompt measurement so far
 
 **Found:** across all four prompt-mode runs.
@@ -1340,12 +1374,9 @@ through `validate()` — the first Chinese in the UI ever to do so.
 
 Still open, in rough descending order of how much they would annoy someone:
 
-- **`storyTopic()` answers for two different states.** It returns `""` both when there is no
-  topic message at all (Choosing) and when "make something up" stored an empty topic (Telling).
-  `renderStoryControl()` disambiguates with an extra `!S.history.length` clause;
-  `renderAll()` does not. Stop the first segment of a make-something-up story and the log hint
-  reads "Pick what the story is about below" under a strip reading "Start the story". A
-  `hasStoryTopic()` that tests for the message rather than its text removes the whole class.
+- ~~**`storyTopic()` answers for two different states.**~~ — **fixed, v141**: `hasStoryTopic()`
+  tests for the message rather than its text, and both the log hint and the story strip use
+  it, so a stopped make-something-up story says "Start the story" in both places.
 - **`send()`'s `answering` never turns off.** Once any question exists it is true for the rest
   of the conversation, so a free-form learner turn mid-story is met with the discussing framing
   学生在回答你刚才的问题 — wrong for turns that are not answers. It matches the spec's Talking
@@ -1360,11 +1391,19 @@ Still open, in rough descending order of how much they would annoy someone:
 - **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand
   during the round trip can still be clobbered. Narrow, and accepted in the function's own
   comment.
+<<<<<<< HEAD
 - **In the Told state the "Ask me another" button renders as a plain chip**, because `.story`
   is what carries the accent colour and only the "Read on" button has it.
 - ~~**`persist()` always touches `currentChat()`**~~ — **fixed, v143**: `persist(id)` and
   `touchChat(id)` take the chat the write is for, and the story and reply paths pass the `cid`
   they already captured, so a segment landing after a switch bumps its own story.
+=======
+- ~~**In the Told state the "Ask me another" button renders as a plain chip**~~ — **fixed,
+  v142**: once every segment is told it is the only control left, and takes the accent.
+- **`persist()` always touches `currentChat()`**, so a background write from a conversation the
+  learner has left bumps `updated_at` on whichever chat is on screen instead, reordering the
+  chat list. Pre-existing, shared with `storyStep()`'s own background push.
+>>>>>>> origin/main
 - **`opts.storyPhase` wins in `build()` even when `activity !== "story"`.** No caller can do
   that today — all three are gated on `currentActivity() === "story"` — but nothing enforces it.
 - **`questionTypesFor(-1)` returns no types at all.** Unreachable; levels come from a fixed list.
