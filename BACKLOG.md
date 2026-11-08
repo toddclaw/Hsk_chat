@@ -123,6 +123,50 @@ string, one `ACTIVITIES` row if it is ever wanted, not a project.
 
 ---
 
+## Globals with no owner — audited 2026-11-08, one left
+
+Five of these were found one at a time by Todd testing a single branch, each
+looking like a cosmetic report and three of them not being one. The audit below
+is the sweep that should have happened after the first.
+
+**The test that catches them.** A mutable global is a bug when BOTH hold: it
+describes something owned by one conversation or one in-flight call, AND it is
+read after an `await` or by a later render. Neither half is enough on its own —
+the app has plenty of app-wide mutable state that is perfectly correct.
+
+**Fixed (v149–v152, all on `auto/background-touch`).** `S.busy` (one boolean
+gating every conversation's composer), `inflight` (one AbortController, so a
+stop hit whichever call started last), `status` (one progress writer, so two
+turns fought over one bubble), `callModel.lastFinish` (one property, already
+misreporting truncation with a single turn), `thinkingEl` (one element reference,
+so the second of two stories erased the first's status line), `storyGenChatId`
+(one sweep guard, so leaving the first of two generating stories tombstoned it),
+and `needsSoFar()` reading live `S.history` (so a turn could validate against
+another conversation's announced words and admit an out-of-level one).
+
+**Still open: `drillTipBusy`.** Same shape as `S.busy` was, and the last of the
+family. While a "How do I use X?" tip is loading in one drill, the button is
+disabled and shows "…" in every other drill conversation too. Cosmetic only —
+the `finally` always clears it and nothing is aborted — which is why it is here
+and not fixed. Settle it the same way: key it by conversation, or ask `busy(id)`.
+
+**Checked and correct, with the reason, so the next sweep can skip them:**
+`gradeTurnObj` and `explainTurnObj` are set by `openGrade()`/`openExplain()` on a
+tap, not by the async call, and only one sheet is open at a time (`explainTurnObj`
+even carries an identity guard). `starterCache` is built from every level and
+both scripts, and keyed on `S.script`, its only input. `drillPick` is already
+cleared on a chat switch. `gapRound`/`gapAt`/`gapRight`, the `pool*` trio,
+`promptShown`, `teachShown` and `modelPickFor` each belong to one sheet, and one
+sheet is open at a time. `callModel.lastEmpty` is written and logged in the same
+synchronous step, and is documented as a console breadcrumb rather than state.
+`sync*`, `logBuf`/`logTimer`, `migrate*`, `costSinceSync`, `lastActivity`,
+`sinceTimeSync`, `storageFailed` and `supabaseLoad` are genuinely app-wide. The
+`issue*` vars are DOM handles.
+
+**The seven extracted modules hold no mutable module state at all** — constants
+and pure functions only. Every instance of this bug was in `index.html`, and all
+but one in the turn path.
+
 ## The partner's Chinese is never checked for correctness
 
 Every reply is validated word by word against the level's allowlist and graded
