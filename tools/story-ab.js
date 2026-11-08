@@ -263,7 +263,13 @@ function redirectPrompt(violations) {
  * repair loop is worth depends entirely on what it says, so an approximation
  * here would measure a loop the app does not run. The one divergence is the
  * sense check, which costs a model call per attempt and which tools/prompt-ab.js
- * omits for the same reason. */
+ * omits for the same reason.
+ *
+ * SINCE v139 THIS IS NO LONGER WHAT A STORY SENDS. The scoped arm below won and
+ * ships for story time, so this is now the CHAT and DRILL prompt, kept here as
+ * the control the A/B was scored against -- re-running `positioned` re-runs the
+ * old story behaviour on purpose, and `scoped` is production. index.html's
+ * repairPrompt() carries the numbers and the rejected third arm. */
 function repairPrompt(violations, attempt, lex) {
   const latin = violations.filter(v => v.kind === "latin");
   const words = violations.filter(v => v.kind === "bad");
@@ -282,6 +288,39 @@ function repairPrompt(violations, attempt, lex) {
   }
   parts.push("请用别的说法，再说一次。只说中文，不要解释。");
   return parts.join("");
+}
+
+/* The scope line, and the whole point of this run.
+ *
+ * repairPrompt() closes with 「请用别的说法，再说一次」 -- "say it a different way,
+ * say it again" -- and never says WHICH part to say again. The earlier segments
+ * are in the context as assistant turns, so three times in the real log the
+ * model read "again" as the whole story and re-sent everything it had already
+ * said with the new paragraph appended. v137/v138 trim that on the way out;
+ * this asks whether the prompt can stop it being generated at all.
+ *
+ * Exactly one line differs from repairPrompt(): the closing sentence. Every
+ * other part -- the named words, the suggestions at attempt 3, the sense
+ * explanation, 只说中文，不要解释 -- is held identical, so a difference between
+ * the arms is this sentence and nothing else. */
+function scopedPrompt(violations, attempt, lex) {
+  return repairPrompt(violations, attempt, lex).replace(
+    "请用别的说法，再说一次。",
+    "请用别的说法，把这一段再说一次。前面已经讲过的话不要再讲。");
+}
+
+/* The same intent as a PURE ADDITION, and the one that could actually ship.
+ *
+ * repairPrompt() is shared by every activity, and 「把这一段」 is story language:
+ * a chat turn is a sentence, not a 段, so telling a chat repair to redo "this
+ * paragraph" is a second change riding along unmeasured. This arm leaves
+ * 再说一次 exactly as it is and adds one activity-neutral sentence after it, so
+ * if it matches `scoped` then the sentence is doing the work and the story-only
+ * phrasing can be dropped. */
+function scopedMinPrompt(violations, attempt, lex) {
+  return repairPrompt(violations, attempt, lex).replace(
+    "请用别的说法，再说一次。",
+    "请用别的说法，再说一次。前面已经讲过的话不要再讲。");
 }
 
 /* Character trigrams. Word segmentation would beg the question -- an HSK 1
@@ -318,6 +357,10 @@ async function runStory(arm) {
   const def = ARM_DEFS[arm];
   const segs = [];
   let cost = 0, emptyRetries = 0;
+  /* Re-telling counters for this story. withPrior is the denominator: an
+   * attempt on segment 0 has nothing to re-tell and is not a trial. */
+  const probe = { withPrior: 0, repairTurns: 0, repeats: 0,
+                  repeatsOnRepair: 0, repeatHan: 0 };
   // index.html: S.budget[level], and S.learning as it grows during the story.
   const budget = { chars: 0, credits: 0, declines: 0 };
   const learning = [];
@@ -411,6 +454,25 @@ async function runStory(arm) {
       if (!res) break;
       cost += res.cost;
       const ex = extractNeeds(HSK.stripScaffold(res.text));
+      /* THE METRIC THIS RUN EXISTS FOR, counted on the RAW attempt.
+       *
+       * Measured with the app's own HSK.dropRepeated() rather than a second
+       * definition of "repeated": if it fires here, v138 would have trimmed
+       * this attempt in production, so the count is exactly the number of
+       * re-tellings the prompt failed to prevent. Counted on every attempt and
+       * attributed to repairs separately, because only a repair turn has been
+       * TOLD to say something again -- a first draft that repeats is a
+       * different fault with a different cause. */
+      if (segs.length) {
+        const rep = HSK.dropRepeated(ex.text, segs.map(g => g.text));
+        probe.withPrior++;
+        if (attempt > 1) probe.repairTurns++;
+        if (rep.dropped.length) {
+          probe.repeats++;
+          probe.repeatHan += countHan(ex.text) - countHan(rep.text);
+          if (attempt > 1) probe.repeatsOnRepair++;
+        }
+      }
       /* The cast and the offered words join the per-turn lexicon the way turn()
        * adds them: legal because the prompt asked for them. Score them as
        * violations and the arm is measuring its own premise away. */
@@ -428,7 +490,9 @@ async function runStory(arm) {
         const useRedirect = def.repair === "redirect" ||
                             (def.repair === "redirect-last" && last);
         const ask = useRedirect ? redirectPrompt(viols)
-                                : repairPrompt(viols, attempt + 1, lex);
+          : def.repair === "scoped" ? scopedPrompt(viols, attempt + 1, lex)
+          : def.repair === "scoped-min" ? scopedMinPrompt(viols, attempt + 1, lex)
+          : repairPrompt(viols, attempt + 1, lex);
         if (def.fresh) {
           /* Rebuild from the system prompt and the accepted segments only. The
            * rejected draft never enters context, so attempt 3 is not reading
@@ -479,7 +543,7 @@ async function runStory(arm) {
     });
     emptyRetries += empties;
   }
-  return { arm: arm, segs: segs, cost: cost, emptyRetries: emptyRetries,
+  return { arm: arm, segs: segs, cost: cost, emptyRetries: emptyRetries, probe: probe,
            introduced: segs.reduce((a, s) => a + s.introduced.length, 0) };
 }
 
@@ -601,6 +665,8 @@ const ARM_DEFS = {
   "chars30":      { index: i => i, chars: "三十" },
   "chars50":      { index: i => i, chars: "五十" },
   "chars30-fresh":{ index: i => i, chars: "三十", fresh: true },
+  "scoped":        { index: i => i, repair: "scoped" },
+  "scoped-min":    { index: i => i, repair: "scoped-min" },
   "redirect":      { index: i => i, repair: "redirect" },
   "redirect-last": { index: i => i, repair: "redirect-last" },
   "fresh":         { index: i => i, fresh: true },
@@ -927,6 +993,14 @@ async function main() {
       allSegs: mine.flatMap(s => s.segs).length,
       truncated: mine.flatMap(s => s.segs).filter(s => s.truncated).length,
       emptyRetries: mine.reduce((a, s) => a + (s.emptyRetries || 0), 0),
+      probe: mine.reduce(function (a, s) {
+        const q = s.probe || {};
+        return { withPrior: a.withPrior + (q.withPrior || 0),
+                 repairTurns: a.repairTurns + (q.repairTurns || 0),
+                 repeats: a.repeats + (q.repeats || 0),
+                 repeatsOnRepair: a.repeatsOnRepair + (q.repeatsOnRepair || 0),
+                 repeatHan: a.repeatHan + (q.repeatHan || 0) };
+      }, { withPrior: 0, repairTurns: 0, repeats: 0, repeatsOnRepair: 0, repeatHan: 0 }),
       /* The probe this run exists for: what the repair loop is worth. A segment
        * that never comes clean shows the learner a canned fallback in the middle
        * of a story, which is the failure that actually matters. */
@@ -979,6 +1053,25 @@ async function main() {
       pad(r.cleanStories + "/" + r.stories, 15) +
       pad(r.dup.toFixed(3), 10) + pad(r.dupHigh, 10) +
       pad(r.clear + "/" + (r.clear + r.confusing), 10));
+  });
+
+  /* The re-telling table. `repeats/withPrior` is every attempt that re-told
+   * something, over every attempt that had anything to re-tell;
+   * `onRepair/repairTurns` is the same restricted to turns that were actually
+   * told to say it again, which is the population the scope line addresses.
+   * `han/story` is what a learner would have re-read without v138's trim. */
+  console.log("");
+  console.log(pad("", 14) + pad("re-told", 14) + pad("on repairs", 16) +
+    pad("han re-told/story", 19) + "repair turns");
+  ARMS.forEach(arm => {
+    const r = rows[arm], q = r.probe;
+    const pct = (n, d) => d ? " (" + (n / d * 100).toFixed(0) + "%)" : "";
+    console.log(pad(arm, 14) +
+      pad(q.repeats + "/" + q.withPrior + pct(q.repeats, q.withPrior), 14) +
+      pad(q.repeatsOnRepair + "/" + q.repairTurns +
+          pct(q.repeatsOnRepair, q.repairTurns), 16) +
+      pad(r.stories ? (q.repeatHan / r.stories).toFixed(0) : "0", 19) +
+      q.repairTurns);
   });
 
   console.log("");

@@ -636,7 +636,7 @@ not nothing. The UI follows from that answer.
 
 ---
 
-## 20 Questions has no marker in its own transcript — half closed
+## ~~20 Questions has no marker in its own transcript~~ — closed, v140
 
 **Found:** the v100 sync repair, 2026-09-12 (`fde8095`).
 
@@ -659,9 +659,25 @@ is why that work kept the two set roles distinct instead of reusing
 name. The chat-browser title for a Ghost Words conversation, deferred out of the
 v122 work, came with it.
 
-**What would settle the rest:** a marker message for 20 Questions, of the kind
-story, drill and both set activities now carry, so the transcript is sufficient
-for every activity rather than four of five.
+**Closed 2026-11-01 (v140).** `chooseTwentySide()` writes a `role: "twenty"`
+marker when the side is chosen, `activityOf()` reads it, and the transcript is now
+sufficient for all five activities rather than four. The marker carries the SIDE and
+not the secret: design D3 keeps the secret where only `systemPrompt()` sees it, and
+the transcript syncs and is read by tools.
+
+Two things worth keeping from the build:
+
+- **The marker cannot reach the model, by construction.** `windowed()` keeps
+  `user` and `assistant` and nothing else, so an unrendered role is excluded
+  because it is not on the allowlist rather than because someone remembered to
+  deny it. `MARKER_ROLES` governs rendering and the is-the-log-empty check, not
+  the model context — two separate mechanisms that are easy to confuse, and the
+  test now pins the model-context half.
+- **No backfill, and none is possible.** A round started before v140 either has
+  its row intact, in which case nothing is wrong, or has already lost it, in
+  which case there is no side left to write a marker from. `side` is still read
+  from the column everywhere; recovering it from the marker would be a second
+  change and is not in this one.
 
 ---
 
@@ -1004,19 +1020,76 @@ text was already legal the first time; the gate does not run on story;
 `echoesQuestion` compares against the LEARNER'S last turn, which a story segment
 does not have.
 
-**v137 fixes the symptom, deliberately.** `HSK.dropRepeated()` trims paragraphs
-the conversation has already been told, which costs no model call and cannot make
-a turn worse. Replayed over the October story it removes exactly the 526
-characters and leaves all 832 of the real ones.
+**v137 fixed the symptom, deliberately, and v138 fixed the fix.**
+`HSK.dropRepeated()` trims stale text the conversation has already been told,
+which costs no model call and cannot make a turn worse.
 
-**What is left is the cause.** The repair prompt should scope itself — "rewrite
-only this paragraph" — and that would stop the model wasting a generation on
-text that is about to be thrown away. It is not in v137 because CLAUDE.md
-requires an A/B against a real model with counted outcomes before a prompt edit
-ships, and five prompt fixes in this study have moved the number the wrong way.
-The measurement to run: `tools/story-ab.js`, two arms, scoring attempts per
-segment and characters-dropped per story. The symptom fix makes this cheap to
-wait for rather than urgent.
+v137 split units on a BLANK line and so missed the next instance the same day it
+shipped: asked for a discussion question, the partner repeated its previous
+message word for word and put the question after a SINGLE newline. One line meant
+one unit, and a reply of one unit is never trimmed. v138 splits on any run of
+newlines -- and that turned up the same fault in the **drill** activity on half
+its turns, where the partner had been re-sending its opening two lines and
+changing only the third, against a prompt that says 一次只问一个问题.
+
+The wider split then needed a tighter rule, and this is the part worth
+remembering: **finer units made the threshold unsafe.** At unit granularity the
+0.60-0.85 band is mixed, holding a new 20-questions opener against the last
+game's (0.72) and a fresh 把 acknowledgement against the sentence it echoes
+(0.60); and worse, in the focused activity 明天会好 and 手机一定能找到 each come
+back WORD FOR WORD in a later four-line turn whose other three lines are new, so
+score alone cannot separate them at any threshold. Two changes answer it: the
+bar went to **0.9**, and only a **leading run** is dropped -- stale text at the
+front is the failure, while a unit recurring mid-reply is ordinary conversation.
+Audited over the whole corpus: 621 assistant units, 11 messages trimmed, every
+one a genuine repeat-then-append, and all four false positives gone.
+
+**The cause is fixed too, in v139, and the A/B is why it looks like this.**
+Two runs on `claude-sonnet-4.5` at HSK 2, 8 stories an arm each, via
+`tools/story-ab.js --arms positioned,scoped,scoped-min`. Re-tellings are counted
+with the app's own `HSK.dropRepeated()` rather than a second definition of the
+word, so a hit is exactly what v138 would have trimmed in production.
+
+| arm | re-told on repair turns | han re-told/story | out-of-level | viol/100 han | mean chars | usable |
+|---|---|---|---|---|---|---|
+| shipped | 6/117 (5%) | 24-82 | 38% | 3.8 | 100 | 25/40 |
+| **scoped** | **0/113 (0%)** | **0** | 38% | 3.7 | 91 | 25/40 |
+| scoped-min | 0/59 (0%) | 0 | **65%** | **11.6** | **51** | **14/40** |
+
+p = 0.016 pooled. The segments also came clean in fewer tries and the arm cost
+6% less. Run one showed out-of-level drifting 4.1 to 4.9 violations per 100 Han
+and run two showed 3.8 to 3.7, so that was noise -- which is the reason for the
+second run and not an argument against the first.
+
+**The negative result is the one worth keeping.** `scoped-min` was supposed to be
+the safe version: leave 再说一次 alone and append only the activity-neutral
+「前面已经讲过的话不要再讲」, since 「这一段」 is story language and `repairPrompt()`
+is shared by every activity. It was by far the worst arm on every quality axis --
+out-of-level nearly doubled, violations per 100 Han tripled, segments halved in
+length, usable segments fell by 44%. Told both to say it again AND not to say
+what it already said, the model writes something tiny and strays out of level
+reaching for new words. The phrasing is load-bearing, not incidental.
+
+So v139 ships the scoped line for **story only**, which is the population that
+was measured; chat and drill keep the prompt that was measured for them.
+`test/browser.test.js` pins both strings character for character, and pins that
+the rejected wording is not what shipped.
+
+**Still open, and deliberately not extrapolated:**
+
+- **The story question turn.** What Todd actually hit (M0808) was a discuss/question
+  turn, not a segment, and the A/B scored segments. Same activity, same model,
+  same mechanism, so v139 applies the line to the whole story activity -- but that
+  last step is inference, not measurement. `tools/story-ab.js` has a questions
+  mode that does not currently exercise the repair loop against prior context.
+- **`gateRepairPrompt()`** closes with 「请用这个意思重新说一次」 -- the same unscoped
+  "say it again". The gate never runs on story, so it is not implicated in what
+  was reported, and after what `scoped-min` did, copying a wording across
+  populations is exactly the mistake to avoid. It needs its own run.
+- **Drill.** The same repeat-then-append shows up on half the drill turns in the
+  corpus (qwen, not Sonnet). v138 trims it; the prompt side is unmeasured there,
+  and the qwen pilot for this run produced zero re-tellings at all, so the story
+  harness cannot answer it.
 
 Two smaller things in the same log, unfixed:
 
@@ -1318,8 +1391,8 @@ Still open, in rough descending order of how much they would annoy someone:
 - **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand
   during the round trip can still be clobbered. Narrow, and accepted in the function's own
   comment.
-- **In the Told state the "Ask me another" button renders as a plain chip**, because `.story`
-  is what carries the accent colour and only the "Read on" button has it.
+- ~~**In the Told state the "Ask me another" button renders as a plain chip**~~ — **fixed,
+  v142**: once every segment is told it is the only control left, and takes the accent.
 - **`persist()` always touches `currentChat()`**, so a background write from a conversation the
   learner has left bumps `updated_at` on whichever chat is on screen instead, reordering the
   chat list. Pre-existing, shared with `storyStep()`'s own background push.
