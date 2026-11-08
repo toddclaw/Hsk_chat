@@ -3872,6 +3872,65 @@ check(usedGroups && usedGroups.first === "\u7684",
       "stop aborts the call in the conversation it was tapped in, and no other",
       JSON.stringify(aborted));
 
+    /* TWO STORIES, each with its own status line. thinkingEl was one global, so
+     * the second bubble overwrote the first's reference and switching back to
+     * the first found nothing to restore -- its "this takes a moment" was
+     * simply gone until the segment landed. Reported from real use. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(
+      "window.__calls = [];" +
+      "window.callModel = function (m, mx, model, signal) {" +
+      "  return new Promise(function (r) {" +
+      "    window.__calls.push({ signal: signal, resolve: r }); }); };" +
+      "window.__a = window.newChat('story').id; window.storyStep(false);");
+    await waitFor("window.__calls.length >= 1", "the first story's call");
+    await exec("window.__b = window.newChat('story').id; window.storyStep(false);");
+    await waitFor("window.__calls.length >= 2", "the second story's call");
+    const bubbles = await exec(`
+      var read = function (id) {
+        window.openChat(id);
+        return document.querySelector("#log").textContent
+          .indexOf("this takes a moment") !== -1;
+      };
+      return { b: read(window.__b), a: read(window.__a) };`);
+    check(bubbles.a === true && bubbles.b === true,
+      "two stories being written each keep their own status line",
+      JSON.stringify(bubbles));
+    /* And neither is swept while its reply is mid-air. dropIfEmpty() keyed off
+     * one storyGenChatId, which named whichever story started LAST, so leaving
+     * the other while it was still empty tombstoned it. */
+    const alive = await exec(`
+      /* Leaving the FIRST story once the second has started is the sequence
+       * that bit: one storyGenChatId named the second, so the first lost its
+       * guard while still empty and still generating. */
+      window.openChat(window.__b);
+      var chats = JSON.parse(localStorage["hsk1chat.chats"] || "[]");
+      var live = chats.filter(function (c) { return !c.deleted; }).length;
+      return { live: live, total: chats.length };`);
+    check(alive.live === 2,
+      "neither story is tombstoned by switching away before its first segment",
+      JSON.stringify(alive));
+
+    /* The lexicon a reply is validated against comes from the conversation it
+     * is for. needsSoFar() walked the LIVE S.history, so a turn running while
+     * the learner stood somewhere else would build its allowlist out of the
+     * other conversation's announced words -- and admit one this story had
+     * never announced. The out-of-level guarantee cannot depend on which
+     * conversation is on screen. */
+    const lex = await exec(`
+      var mine = [{ role: "assistant", text: "x",
+                    needs: [{ w: "\u6c99\u6f20", p: "sh\u0101m\u00f2", d: "desert" }] }];
+      return { given: window.needsSoFar(null, mine).map(function (n) { return n.w; }),
+               open: window.needsSoFar(null).map(function (n) { return n.w; }) };`);
+    check(lex.given.length === 1 && lex.given[0] === "\u6c99\u6f20" &&
+          lex.open.length === 0,
+      "needsSoFar reads the conversation it is given, not the one on screen",
+      JSON.stringify(lex));
+
     /* "try again" on a failed segment used to pop every message looking for a
      * user turn a story does not have, then return before persist() and
      * renderAll() -- so the button looked dead and the story was gone. */
