@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v151 — 2026-11-08";
+const VERSION   = "v152 — 2026-11-08";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -1545,9 +1545,14 @@ function castNames() {
  * repair attempts on a word the app had already glossed. Scoped rather than
  * global: a word first needed in segment 2 must still be flagged in segment 1,
  * or rendering would once again disagree with what validation allowed. */
-function needsSoFar(upTo) {
+/* `hist` is the conversation to read, defaulting to the open one. It is not
+ * optional in the turn pipeline: this list feeds the lexicon turn() VALIDATES
+ * against, so reading the wrong conversation here could admit an out-of-level
+ * word that was announced somewhere else and never announced in this story.
+ * The guarantee is the product; it cannot depend on which tab is on screen. */
+function needsSoFar(upTo, hist) {
   const out = [];
-  for (const t of S.history) {
+  for (const t of (hist || S.history)) {
     (t.needs || []).forEach(n => {
       /* A word the learner said No to is not legal here, and this is the only
        * place that can enforce it: this list feeds BOTH the lexicon turn()
@@ -2550,7 +2555,7 @@ async function turn(ctx) {
     /* The offered words are legal this turn, exactly like a [[NEED:]] request,
      * and so is the activity's cast: the prompt named them, so rejecting them
      * would be the app failing its own instruction. */
-    const lex = lexWith(needsSoFar(null).concat(ex.needs, inScript(offer), castNames()));
+    const lex = lexWith(needsSoFar(null, hist).concat(ex.needs, inScript(offer), castNames()));
     /* Names are marked but not repaired. Every name is above HSK 1 -- 张 is the
      * first one any list carries, at HSK 3 -- so asking for a different one just
      * spends the attempts and lands on the fallback, which is what the app's own
@@ -3064,7 +3069,13 @@ function renderMessage(turnObj, shownExtra) {
  *
  * It was always broken. It only became visible when the correctness gate made
  * turns long enough that the grade reliably lands in the middle of one. */
-let thinkingEl = null;
+/* One bubble per conversation, not one for the app. v150 tagged the single
+ * element with its chat so it could not be restored into the wrong one, which
+ * was right as far as it went: with two stories being written the second
+ * bubble overwrote the first's reference, so switching back to the first found
+ * nothing to put back and its status line was simply gone until the segment
+ * landed. Keyed by conversation, like everything else a turn owns. */
+const thinkingEls = new Map();
 
 function renderAll() {
   renderConversation();
@@ -3072,11 +3083,11 @@ function renderAll() {
    * depends on which one is open now -- openChat() and newChat() render but
    * never touched it, so a stale 停 survived the switch. */
   renderBusy();
-  /* Put it back. renderAll() has several early returns and the restore has to
-   * happen after every one of them, so it wraps rather than joins. */
-  if (thinkingEl && thinkingEl.dataset.cid === (S.chatId || "")) {
-    log.appendChild(thinkingEl); log.scrollTop = log.scrollHeight;
-  }
+  /* Put this conversation's own back. renderAll() has several early returns and
+   * the restore has to happen after every one of them, so it wraps rather than
+   * joins. */
+  const think = thinkingEls.get(S.chatId || "");
+  if (think) { log.appendChild(think); log.scrollTop = log.scrollHeight; }
 }
 
 function renderConversation() {
@@ -3512,16 +3523,6 @@ function activityOf(c) {
 }
 function currentActivity() { return activityOf(chatById(S.chatId)); }
 
-/* The chat id storyStep() is generating a reply for right now, or null. Not
- * busyChats: this one is about a push that is mid-air, not about a call. It
- * stays story-only on purpose.
- *
- * ponytail: busy(id) could now answer the same question -- endTurn() runs in a
- * finally, after the push -- which would make this redundant. Left alone
- * because dropIfEmpty() tombstones conversations and this is not the change to
- * find that out in. Collapse it if it ever needs a second reader. */
-let storyGenChatId = null;
-
 /* An activity is a new conversation, and the chooser now creates one before
  * anything is generated -- so backing out of story time, or switching activity
  * twice, leaves empty shells behind. Dropped on the way out rather than swept
@@ -3531,14 +3532,18 @@ let storyGenChatId = null;
  * may already have been pushed, and deletion has to be expressible as a
  * tombstone or the next device to sync brings it back. */
 function dropIfEmpty(id) {
-  /* Skipped only for the one conversation actually generating right now: it
-   * lands by pushing into a captured S.history reference rather than by
-   * going through this function again -- see `hist` in storyStep() -- so it
-   * reads as empty here even though a reply is on the way. Deleting it out
-   * from under that push would tombstone the chat while the reply is still
-   * mid-air. storyStep()'s own finally re-checks it once that call ends, in
-   * case it is still empty and no longer the conversation on screen. */
-  if (!id || id === storyGenChatId) return;
+  /* Skipped for any conversation with a turn in flight: the reply lands by
+   * pushing into a captured history array rather than by going through this
+   * function again -- see `hist` in storyStep() -- so it reads as empty here
+   * even though a reply is on the way. Deleting it out from under that push
+   * would tombstone the chat mid-air.
+   *
+   * busy(id), not a single storyGenChatId, since v151 let two conversations
+   * generate at once: that one flag named whichever story had started LAST, so
+   * leaving the other one while it was still empty tombstoned it. endTurn()
+   * runs in a finally, after the push, and storyStep()'s own finally re-checks
+   * this once the call is over in case it is still empty. */
+  if (!id || busy(id)) return;
   const c = chatById(id);
   if (!c || c.deleted) return;
   if ((S.chatMsgs[id] || []).length) return;
@@ -5136,30 +5141,34 @@ async function declareCast(topic) {
  * the await instead, same bug class as titleStory()'s own history (see its
  * comment). Neither #btnChats nor #newChat is disabled by renderBusy() (only
  * #activity is), so switching conversations while declareCast() is in flight
- * is reachable from ordinary UI. storyGenChatId = cid for the duration of the
- * call so dropIfEmpty() -- reachable from both those buttons -- does not read
- * this conversation as abandoned and tombstone it while it still looks empty.
+ * is reachable from ordinary UI. beginTurn(cid) is what keeps dropIfEmpty() --
+ * reachable from both those buttons -- from reading this conversation as
+ * abandoned and tombstoning it while it still looks empty.
  *
  * Once the call resolves, chatById(cid) may be gone anyway (an explicit
- * delete bypasses the storyGenChatId guard, same as it does for storyStep()),
+ * delete bypasses the busy() guard, same as it does for storyStep()),
  * so that is checked before writing anything. setStoryTopic() takes `hist`
  * explicitly rather than reading S.history, so the topic lands in the
  * conversation it was chosen for even if the learner has moved on.
  *
  * storyStep() is a different matter: it (and turn() beneath it) build the
- * prompt and validate against the LIVE S.history/S.chatId, not an explicit
- * target -- lexWith()/needsSoFar() have no parameter for "some other
- * conversation". There is no correct way to generate into a conversation that
- * is not the one on screen, so the first segment is only told automatically
- * when the learner is still looking at it (cid === S.chatId); otherwise the
- * topic and cast are recorded and left for renderStoryControl()'s "Start the
- * story" button, exactly what it already shows for a topic with nothing told
- * yet. */
+ * prompt and validate against an explicit conversation as of v151: turn()
+ * takes `hist`, and needsSoFar(upTo, hist) reads it rather than whatever is on
+ * screen -- which it had to, since the lexicon it builds is the one the reply
+ * is VALIDATED against, and reading another conversation's announced words
+ * there could admit a word this story never announced.
+ *
+ * The first segment is still only told automatically while the learner is
+ * looking (cid === S.chatId), which is now a choice about attention rather
+ * than a limit: a story that starts writing itself after you have walked away
+ * is a surprise, and the topic and cast are recorded and left for
+ * renderStoryControl()'s "Start the story" button, exactly what it already
+ * shows for a topic with nothing told yet. */
 async function startStoryWith(topic) {
   if (busy()) return;
   const cid = S.chatId;
   const hist = S.history;
-  beginTurn(cid); storyGenChatId = cid; renderStarters();
+  beginTurn(cid); renderStarters();
   const bubble = thinkingBubble(topic
     ? "Working out who is in this story…" : "…");
   let cast = [];
@@ -5172,7 +5181,7 @@ async function startStoryWith(topic) {
     if (err.kind !== "stopped") throw err;
     return;
   } finally {
-    bubble.remove(); endTurn(cid); storyGenChatId = null; renderStarters();
+    bubble.remove(); endTurn(cid); renderStarters();
   }
   if (!chatById(cid)) return;   // gone by the time the cast call landed
   setStoryTopic(topic, cast, hist, cid);
@@ -5194,7 +5203,7 @@ async function storyStep(asking) {
   /* Asking is always available, at any pause, and can be repeated ("Ask me
    * another"); telling stops once every segment is out. */
   if (!asking && told >= STORY_SEGMENTS) return;
-  beginTurn(cid); storyGenChatId = cid; renderStarters();
+  beginTurn(cid); renderStarters();
   const bubble = thinkingBubble(asking
     ? "Thinking of a question about the story\u2026"
     : "Writing part " + (told + 1) + " of " + STORY_SEGMENTS + "\u2026 this takes a moment.");
@@ -5247,7 +5256,7 @@ async function storyStep(asking) {
     }
   } finally {
     bubble.remove();
-    endTurn(cid); storyGenChatId = null;
+    endTurn(cid);
     renderAll(); renderStarters();
     /* This call may have ended (finished, stopped, or failed) leaving `cid`
      * still empty -- e.g. a stop before the first segment lands. dropIfEmpty()
@@ -5278,12 +5287,12 @@ function thinkingBubble(label) {
   el.className = "msg bot";
   el.innerHTML = '<div class="bubble" style="font-size:' + (label ? "15px" : "18px") +
     ';color:var(--dim)">' + escapeHtml(label || "\u2026") + "</div>";
-  /* Whose bubble this is. renderAll() restores thinkingEl into whatever is on
-   * screen, so a story segment's "this takes a moment" followed the learner
-   * into the conversation they switched to -- the status line of one chat
-   * reading as a message in another. Switching back restores it, because the
-   * reference is kept and only the append is gated. */
-  el.dataset.cid = S.chatId || "";
+  /* Whose bubble this is, so renderAll() restores it to the conversation that
+   * raised it and not to whatever is on screen -- a story segment's "this takes
+   * a moment" used to follow the learner into the chat they switched to, and
+   * read there as a message. Switching away only detaches it; switching back
+   * puts it back. */
+  const cid = S.chatId || "";
   log.appendChild(el); log.scrollTop = log.scrollHeight;
   /* Registered for renderAll() to put back, and DE-registered by its own
    * removal rather than by each of the three callers remembering to.
@@ -5293,8 +5302,8 @@ function thinkingBubble(label) {
    * "Thinking of a question…" that every later render faithfully restored. The
    * lifetime belongs to the element, so it is the element that carries it. */
   const drop = el.remove.bind(el);
-  el.remove = () => { if (thinkingEl === el) thinkingEl = null; drop(); };
-  thinkingEl = el;
+  el.remove = () => { if (thinkingEls.get(cid) === el) thinkingEls.delete(cid); drop(); };
+  thinkingEls.set(cid, el);
   return el;
 }
 
