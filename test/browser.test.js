@@ -3787,14 +3787,15 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(strayed.indexOf("this takes a moment") === -1,
       "a story's status line stays with the story, not the chat switched to",
       JSON.stringify(strayed.slice(0, 80)));
-    /* Nor does the stop button follow. renderBusy() read the one global
-     * S.busy, so the chat switched to showed 停 -- one tap from aborting a
-     * story that was no longer on screen. */
+    /* Nor does the stop button follow: 停 aborts the call it is tapped beside,
+     * so offering it here was one tap from killing a story off screen. Live 送,
+     * because this conversation can now start a turn of its own while the story
+     * is still being written. */
     const btn = await exec(`
       var b = document.querySelector("#send");
       return { text: b.textContent, off: b.disabled, title: b.title };`);
-    check(btn.text === "\u9001" && btn.off === true,
-      "the send button does not offer to stop a generation in another chat",
+    check(btn.text === "\u9001" && btn.off === false,
+      "another conversation keeps a live send button while a story is written",
       JSON.stringify(btn));
     await exec("window.__resolve('\u4ed6\u53bb\u4e86\u5b66\u6821\u3002');");
     await waitFor(
@@ -3830,6 +3831,46 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(listOrder.indexOf("Story time") === 0 && listOrder.indexOf("Chat") === 1,
       "the chat list puts the story that just grew above the chat on screen",
       JSON.stringify(listOrder));
+
+    /* TWO TURNS AT ONCE, each stoppable on its own. S.busy was one boolean for
+     * the whole app, so a story being written refused every other
+     * conversation's send(), and `inflight` was one AbortController that every
+     * callModel() reassigned, so a stop hit whichever call had started last.
+     * The grader and the explain sheet always ran alongside a turn; only those
+     * two globals made a turn look exclusive. */
+    await exec(`
+      localStorage.setItem("hsk1chat.chats", "[]");
+      localStorage.setItem("hsk1chat.chatMsgs", "{}");
+      return true;`);
+    await go(base);
+    await exec(
+      "window.__calls = [];" +
+      "window.callModel = function (m, mx, model, signal) {" +
+      "  return new Promise(function (r) {" +
+      "    window.__calls.push({ signal: signal, resolve: r }); }); };" +
+      "window.newChat('story'); window.storyStep(false);");
+    await waitFor("window.__calls.length >= 1", "the story's call");
+    await exec(
+      "window.newChat('chat');" +
+      "document.querySelector('#input').value = '\u4f60\u597d\u3002';" +
+      "window.send();");
+    await waitFor("window.__calls.length >= 2", "the chat's call alongside it");
+    const both = await exec(`
+      return { calls: window.__calls.length,
+               button: document.querySelector("#send").textContent };`);
+    check(both.button === "\u505c",
+      "a chat can start its own turn while a story is still being written",
+      JSON.stringify(both));
+    /* And the stop in this conversation reaches this conversation's call. Read
+     * off the signals the stub was handed, because that is the wiring that was
+     * wrong: one shared controller meant the abort landed anywhere. */
+    const aborted = await exec(`
+      window.stopTurn();
+      return { story: window.__calls[0].signal.aborted,
+               chat: window.__calls[window.__calls.length - 1].signal.aborted };`);
+    check(aborted.chat === true && aborted.story === false,
+      "stop aborts the call in the conversation it was tapped in, and no other",
+      JSON.stringify(aborted));
 
     /* "try again" on a failed segment used to pop every message looking for a
      * user turn a story does not have, then return before persist() and
