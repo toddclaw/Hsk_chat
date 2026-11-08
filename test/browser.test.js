@@ -91,6 +91,11 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript",
 function serve(port) {
   const srv = http.createServer((req, res) => {
     let p = decodeURI(req.url.split("?")[0]);
+    /* A preview deploy is served from /preview/<branch>/, and previewOf() reads
+     * the branch off the path -- so the suite has to be able to ask for that
+     * shape. Mapped back onto the same files: there is only ever one copy in
+     * the repo, and the point is the URL, not the content. */
+    p = p.replace(/^\/preview\/[^/]+\//, "/");
     if (p === "/") p = "/index.html";
     const f = path.join(ROOT, p);
     // Never serve outside the repo, even if a test asks for it by mistake.
@@ -5379,6 +5384,52 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(fcSet.every(w => fcCandidates2.indexOf(w) === -1),
       "a second Flashcard Chat does not re-offer a word the first still holds",
       JSON.stringify(fcSet) + " vs " + JSON.stringify(fcCandidates2));
+
+    /* ------------------------------------------ am I on the preview or not?
+
+     * Asked for on 2026-11-08, after a card saying v142 turned out to be
+     * running as v141: the version number stopped being a reliable way to tell
+     * which build was on screen, because merge resolutions had reshuffled it
+     * twice. The branch name cannot be reshuffled.
+     *
+     * Driven through a real preview-shaped URL rather than a stub, because the
+     * whole point is that the value is derived from where the page was served
+     * from. The harness maps /preview/<branch>/ back onto the same files. */
+    const pvUrl = base.replace(/\/index\.html$/, "/preview/auto-test-branch/index.html");
+    await go(pvUrl);
+    await waitFor("document.querySelector('#pvChip')", "the preview build to boot");
+    check(await exec(`return document.querySelector('#pvChip').hidden;`) === false,
+      "preview: the marker is shown when served from a preview path");
+    check(await exec(`return document.querySelector('#pvChip').textContent;`) === "auto-test-branch",
+      "preview: and names the BRANCH, which a version number cannot be confused with");
+    check(await exec(`return document.documentElement.classList.contains('preview');`) === true,
+      "preview: the document is marked, which is what colours the header");
+    /* Settings carries the detail, since the chip is deliberately terse.
+     * renderVersion() is async and not awaited by its caller, so wait for the
+     * table to exist and THEN assert its text -- a waitFor on the text itself
+     * throws on failure and takes the whole suite down with it, reporting a
+     * timeout instead of what was actually on screen. */
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor(`document.querySelector('#version table')`,
+      "the version table to be built");
+    const pvTable = await exec(`return document.querySelector('#version').textContent;`);
+    check(/PREVIEW/.test(pvTable) && /auto-test-branch/.test(pvTable),
+      "preview: Settings names the deploy and the branch", pvTable);
+
+    /* And the real app must be untouched: no chip, no class, and it says so
+     * rather than staying silent, so an unmarked page is never ambiguous. */
+    await go(base);
+    await waitFor("document.querySelector('#pvChip')", "the real app to boot");
+    check(await exec(`return document.querySelector('#pvChip').hidden;`) === true,
+      "the real app shows no preview marker");
+    check(await exec(`return document.documentElement.classList.contains('preview');`) === false,
+      "and is not marked as one");
+    await exec(`document.querySelector('#btnSet').click(); return true;`);
+    await waitFor(`document.querySelector('#version table')`,
+      "the real app's version table to be built");
+    const realTable = await exec(`return document.querySelector('#version').textContent;`);
+    check(/the real app/.test(realTable) && !/PREVIEW/.test(realTable),
+      "and Settings says so outright rather than leaving it ambiguous", realTable);
 
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
