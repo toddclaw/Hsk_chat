@@ -1263,7 +1263,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v147 — 2026-11-08";
+const VERSION   = "v154 — 2026-11-08";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4005,14 +4005,14 @@ function zhVoice() {
   return voices.find(v => /^zh/i.test(v.lang || "")) || null;
 }
 
-function speak(text, btn) {
+function speak(text, btn, opts) {
   if (!("speechSynthesis" in window)) { if (btn) btn.textContent = "no speech"; return; }
   speechSynthesis.cancel();                       // a second tap stops the first
   const u = new SpeechSynthesisUtterance(text);
-  const v = zhVoice();
+  const v = (opts && opts.voice) || zhVoice();
   if (v) u.voice = v;
   u.lang = v ? v.lang : (S.script === "trad" ? "zh-TW" : "zh-CN");
-  u.rate = S.speechRate;
+  u.rate = (opts && opts.rate) || S.speechRate;
   if (!v && btn) {
     btn.textContent = "no 中文 voice";
     setTimeout(() => { btn.textContent = "speak"; }, 2000);
@@ -5350,7 +5350,7 @@ function fillActivities() {
    * a button: it opens the sheet and puts the select back where it was. */
   $("#activity").insertAdjacentHTML("beforeend",
     '<option value="__gapfill">Gap-fill</option>' +
-    '<option value="__toneid">Tone ID</option>');
+    '<option value="__toneid">' + toneMenuLabel() + "</option>");
   const act = HSKPrompt.ACTIVITIES[cur];
   /* The set activities show their standing description here and nothing live.
    * Ghost Words used to repeat its word list; Flashcard Chat dropped the same
@@ -6090,12 +6090,14 @@ function closeGapFill() {
  * are settled there and this is the thin first slice of them: a whole word,
  * one answer per syllable, neutral as a real fifth answer.
  *
- * NOT YET, and each has its own task: cycling every installed voice (task 3),
- * sandhi (task 4), and credit plus a round-length setting (task 6). Until
+ * NOT YET, and each has its own task: sandhi (task 4), and credit plus a
+ * round-length setting (task 6). Until
  * task 4 lands, sandhi-affected words are kept OUT of the pool rather than
  * marked against a citation form the speaker will not say. */
 const TONE_ROUND = 20;          // task 6 makes this a setting; the default stays 20
 const TONE_LABELS = ["\u00b7", "\u0304", "\u0301", "\u030c", "\u0300"];
+const TONE_RATES = [1, 0.85, 1.15];   // multiples of the learner's own speech rate
+const NO_ZH_VOICE = "No Chinese voice found on this device. iOS: Settings \u2192 Accessibility \u2192 Spoken Content \u2192 Voices \u2192 Chinese.";
 
 let toneRound = null, toneAt = 0, toneSyl = 0, toneGot = [], toneRight = 0;
 
@@ -6125,7 +6127,7 @@ function toneItems() {
 }
 
 function openToneId() {
-  toneRound = toneItems(); toneAt = 0; toneSyl = 0; toneGot = []; toneRight = 0;
+  toneRound = toneVoices().length ? toneItems() : []; toneAt = 0; toneSyl = 0; toneGot = []; toneRight = 0;
   renderToneId();
   openSheet("#toneSheet");
   if (toneRound.length) toneSpeak();
@@ -6139,9 +6141,34 @@ function closeToneId() {
 /* Exposed for the browser suite, which cannot know which word was drawn. */
 function toneItem() { return toneRound && toneRound[toneAt] ? toneRound[toneAt] : null; }
 
+/* Every Mandarin voice on the device: hearing several talkers is what the
+ * training evidence credits, so this deliberately is not zhVoice(). Cantonese
+ * is out because a zh-HK voice reads the same characters with different tones,
+ * and the learner would be marked wrong for hearing it correctly. */
+function toneVoices() {
+  if (!("speechSynthesis" in window)) return [];
+  return (speechSynthesis.getVoices() || []).filter(v =>
+    /^zh/i.test(v.lang || "") && !/[-_](hk|mo)\b|yue/i.test(v.lang || ""));
+}
+
+function toneMenuLabel() {
+  return toneVoices().length ? "Tone ID" : "Tone ID (needs a Chinese voice)";
+}
+
+/* getVoices() can still be empty when the menu is first built. */
+function refreshToneMenu() {
+  const o = $('#activity option[value="__toneid"]');
+  if (o) o.textContent = toneMenuLabel();
+}
+
+/* Voice and rate both derive from the item's position, so ↻ repeats what was
+ * just heard. The rate steps once per full pass through the voices: stepped
+ * together, each voice would only ever be heard at one speed. */
 function toneSpeak() {
-  const it = toneItem();
-  if (it) speak(it.w, null);
+  const it = toneItem(), vs = toneVoices();
+  if (!it || !vs.length) return;
+  const step = TONE_RATES[Math.floor(toneAt / vs.length) % TONE_RATES.length];
+  speak(it.w, null, { voice: vs[toneAt % vs.length], rate: Math.max(0.5, S.speechRate * step) });
 }
 
 function renderToneId() {
@@ -6149,8 +6176,10 @@ function renderToneId() {
   if (!toneRound) return;
   if (!toneRound.length) {
     prog.textContent = "";
-    body.innerHTML = '<div class="hint">Nothing to play yet. Tone ID draws on your level\u2019s '
-      + 'own word list, and needs a Chinese voice installed on this device.</div>';
+    body.innerHTML = '<div class="hint">' + (!toneVoices().length
+      ? "Tone ID plays each word aloud, so it needs a Mandarin voice. "
+        + ("speechSynthesis" in window ? NO_ZH_VOICE : "This browser has no speech support.")
+      : "Nothing to play yet. Tone ID draws on your level\u2019s own word list.") + "</div>";
     return;
   }
   if (toneAt >= toneRound.length) {
@@ -7649,6 +7678,8 @@ $("#activity").onchange = e => {
   if (e.target.value === "__toneid") { fillActivities(); openToneId(); return; }
   startActivity(e.target.value); fillActivities();
 };
+$("#activity").addEventListener("focus", refreshToneMenu);
+if ("speechSynthesis" in window) speechSynthesis.addEventListener("voiceschanged", refreshToneMenu);
 $("#levelChip").onclick = () => openSheet("#setSheet");
 /* One setting, three controls that show it: the header picker, the Settings
  * picker and the paste-an-id box. Whichever one moves, the other two follow --
@@ -7920,7 +7951,7 @@ $("#btnSet").onclick = () => {
   $("#voiceNote").textContent = !("speechSynthesis" in window)
     ? "This browser has no speech support."
     : v ? "Using " + v.name + " (" + v.lang + ")."
-        : "No Chinese voice found on this device. iOS: Settings → Accessibility → Spoken Content → Voices → Chinese.";
+        : NO_ZH_VOICE;
   $("#fontSize").value = S.font;
   $("#showStarters").checked = S.starters;
   $("#ankiDeck").value = S.anki.deck; $("#ankiType").value = S.anki.type;
