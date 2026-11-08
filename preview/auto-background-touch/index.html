@@ -49,6 +49,20 @@ header{
 /* Flex items default to min-width:auto, so a select cannot shrink below the
    width of its longest option -- a model id like "Qwen3 30B A3B Instruct 2507"
    then pushed the buttons off the right edge of the screen. */
+/* Preview marker. Only ever present on a preview deploy, so the real app is
+   untouched -- no element, no rule, nothing to regress. Deliberately NOT
+   --accent: this file already gives that colour the meaning "this is live"
+   (see .copy.cached), and a preview is the opposite of live.
+
+   The chip shrinks before anything else in the header. The comment below
+   records a model id once pushing the buttons off the right edge, so a new
+   header item has to be the one that gives way. */
+html.preview header{border-bottom:2px solid var(--bad)}
+#pvChip{
+  flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:transparent; border:1px solid var(--bad); color:var(--bad);
+  border-radius:10px; padding:4px 8px; font-size:11px; letter-spacing:.04em;
+}
 header select{background:var(--panel2); border:1px solid var(--line); border-radius:10px;
   padding:8px 6px; min-height:var(--tap); min-width:0}
 #activityNote{font-size:12px; color:var(--dim); padding:6px 10px; line-height:1.5;
@@ -416,6 +430,7 @@ footer{
 </style>
 
 <header>
+  <span id="pvChip" hidden></span>
   <select id="activity" title="Activity"></select>
   <button id="levelChip" title="Vocabulary level">HSK 1</button>
   <button id="btnPy" title="Pinyin">拼</button>
@@ -1240,7 +1255,22 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v146 — 2026-11-08";
+const VERSION   = "v148 — 2026-11-08";
+
+/* Which deploy this is, read off the URL rather than baked in at build time.
+ * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
+ * /Hsk_chat/, so the page can always tell -- and a value derived from where
+ * the page actually came from cannot drift out of date the way a stamped-in
+ * string can. Returns "" for the real app.
+ *
+ * The BRANCH NAME is the useful identifier, not the version number: numbers
+ * have been reshuffled twice by merge resolutions, and a branch name says what
+ * is being tested. Asked for 2026-11-08, after a v142 card turned out to be
+ * running as v141. */
+function previewOf() {
+  const m = String(location.pathname).match(/\/preview\/([^/]+)\//);
+  return m ? m[1] : "";
+}
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -6183,7 +6213,9 @@ function answerGap(word, btn) {
  * service worker activated, and the data it loaded. If the first two disagree,
  * an update is half-applied and a relaunch will finish it. */
 async function renderVersion() {
-  const rows = [["app", VERSION]];
+  const pv = previewOf();
+  const rows = pv ? [["deploy", "PREVIEW \u2014 " + pv], ["app", VERSION]]
+                  : [["deploy", "the real app"], ["app", VERSION]];
   try {
     const names = await caches.keys();
     rows.push(["worker cache", names.length ? names.join(", ") : "none"]);
@@ -7724,7 +7756,8 @@ function renderSectionNotes() {
   $("#secLearningNote").textContent =
     goalLv && S.goalList.length ? goalRead + "% to " + goalLv.label : "";
   $("#secSyncNote").textContent = S.sync.on ? (syncUser ? "on" : "signed out") : "off";
-  $("#secVersionNote").textContent = VERSION.split(" ")[0];
+  const pv = previewOf();
+  $("#secVersionNote").textContent = VERSION.split(" ")[0] + (pv ? " · preview" : "");
 }
 
 $("#btnSet").onclick = () => {
@@ -8430,7 +8463,21 @@ $("#setSheet").addEventListener("click", e => {
    * from here on is captured -- including whatever goes wrong during boot
    * itself, which is otherwise the least observable part of the session. */
   captureConsole();
-  console.log("[boot] " + VERSION + " " + navigator.userAgent);
+  /* Set before anything else paints, so a preview is marked from the first
+   * frame rather than appearing to be the real app for a moment. */
+  const pv = previewOf();
+  if (pv) {
+    /* documentElement, not body: this file ships no <body> tag at all, so
+     * the body is implicit -- applyFont() puts its own global flag here for
+     * the same reason. */
+    document.documentElement.classList.add("preview");
+    const chip = $("#pvChip");
+    chip.textContent = pv;
+    chip.title = "You are on the PREVIEW of branch " + pv + ", not the real app";
+    chip.hidden = false;
+  }
+  console.log("[boot] " + VERSION + (pv ? " preview:" + pv : " (real app)")
+    + " " + navigator.userAgent);
   applyFont(S.font);
   /* Before anything renders: S.history has to be the array inside S.chatMsgs,
    * not a separate copy, or every turn added this session lands in one and is
