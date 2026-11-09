@@ -38,7 +38,7 @@
     },
     {
       "title": "Sandhi — teach it, and accept both forms",
-      "done": false,
+      "done": true,
       "demoable": true
     },
     {
@@ -52,9 +52,9 @@
       "demoable": true
     }
   ],
-  "updatedAt": "2026-11-08T00:00:00Z",
+  "updatedAt": "2026-11-09T00:00:00Z",
   "approvedAt": "2026-11-03",
   "approvedBy": "Todd, in conversation. Recorded here by hand because the routine cannot read the page from its environment, so an Approve pressed on the page would never reach it.",
   "baseNote": "main (v140) merged into this branch 2026-11-03, before task 1, so the implementation sits on top of v139's story-repair scoping and v140's 20 Questions marker rather than a v138-era base.",
-  "lastRunNote": "Task 3 done 2026-11-08 as v154. Tone ID now cycles every Mandarin voice on the device, one per word, and steps the speed each full pass through the voices. Cantonese (zh-HK) voices are deliberately excluded: they read the same characters with different tones, so the learner would be marked wrong for hearing correctly. With no Mandarin voice the menu entry and sheet say so and nothing plays. Next is task 4, sandhi. The page was unreachable again, so this file is the only record."
+  "lastRunNote": "Task 4 done 2026-11-09 as v156. Sandhi words are in the pool and all three readings score right: the stored one, the spoken one, and the citation one. The wordlists already store 不 and 一 as spoken (21 and 39 words), so the only rule computed from the data is third-before-third (142 words); no HSK 1-6 word has three thirds in a row. Next is task 5, the face-aware day cap. The page was unreachable again, so this file is the only record."
 }

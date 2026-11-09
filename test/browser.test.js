@@ -4983,22 +4983,6 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec(`return !!document.querySelector('#toneNext');`) === true,
       "tone ID: with a control to go on to the next word");
 
-    /* Sandhi is task 4. Until it lands, a word whose spoken tones differ from
-     * its stored ones must not be in the pool at all -- scoring it against the
-     * citation form would mark the learner wrong for hearing correctly. */
-    check(await exec(`
-      var r = [];
-      for (var i = 0; i < 400; i++) {
-        var round = window.toneItems();
-        for (var j = 0; j < round.length; j++) {
-          var it = round[j];
-          if (window.toneSandhiRisk(it.tones, it.w)) r.push(it.w);
-        }
-        if (r.length) break;
-      }
-      return r.length;`) === 0,
-      "tone ID: no sandhi-affected word reaches the pool while it cannot be scored");
-
     /* Talker variability: what the learner hears across a run of words. */
     await exec(`document.querySelector('#toneNext').click(); return true;`);
     const toneHeard = JSON.parse(await exec(`
@@ -5016,6 +5000,47 @@ check(usedGroups && usedGroups.first === "\u7684",
       "tone ID: the speed varies, within a sane band", JSON.stringify(toneHeard));
     check(await exec(`return window.__zhCalls;`) === 0,
       "tone ID: the drill does not fall back to the single default voice");
+
+    /* Sandhi. Every word is planted through toneEntry() so the checks read
+     * what a known word renders, not whatever the shuffle drew. */
+    await exec(`window.__toneItems = window.toneItems; return true;`);
+    const toneTry = async (w, p, answers) => JSON.parse(await exec(`
+      window.toneItems = function () { return [window.toneEntry(${JSON.stringify({ w, p })})]; };
+      window.openToneId();
+      ${JSON.stringify(answers)}.forEach(function (t) {
+        document.querySelector('.tonechoice[data-t="' + t + '"]').click();
+      });
+      var b = document.querySelector('#toneBody'), r = b.querySelector('.tonerule');
+      var out = { ok: b.querySelectorAll('.toneslot.ok').length,
+        bad: b.querySelectorAll('.toneslot.bad').length,
+        text: b.textContent, rule: r ? r.textContent : "" };
+      document.querySelector('#toneNext').click();
+      out.right = parseInt(b.querySelector('b').textContent, 10);
+      return JSON.stringify(out);`));
+    let toneT = await toneTry("\u4f60\u597d", "n\u01d0h\u01ceo", [2, 3]);
+    check(toneT.ok === 2 && toneT.right === 1, "tone ID: \u4f60\u597d answered as said, 2-3, is right", JSON.stringify(toneT));
+    check(toneT.text.includes("n\u01d0h\u01ceo") && toneT.rule.includes("n\u00edh\u01ceo") && toneT.rule.includes("third"),
+      "tone ID: the reveal teaches the spoken form and names the rule", JSON.stringify(toneT));
+    toneT = await toneTry("\u4f60\u597d", "n\u01d0h\u01ceo", [3, 3]);
+    check(toneT.ok === 2 && toneT.right === 1, "tone ID: \u4f60\u597d answered as citation, 3-3, is not punished", JSON.stringify(toneT));
+    toneT = await toneTry("\u4f60\u597d", "n\u01d0h\u01ceo", [1, 3]);
+    check(toneT.bad === 1 && toneT.right === 0, "tone ID: a tone that fits neither form is still wrong", JSON.stringify(toneT));
+    toneT = await toneTry("\u4e0d\u8981", "b\u00fay\u00e0o", [2, 4]);
+    check(toneT.ok === 2 && toneT.rule.includes("\u4e0d"), "tone ID: \u4e0d\u8981 as said is right and names the \u4e0d rule", JSON.stringify(toneT));
+    toneT = await toneTry("\u4e0d\u8981", "b\u00fay\u00e0o", [4, 4]);
+    check(toneT.ok === 2 && toneT.right === 1, "tone ID: \u4e0d\u8981 as citation, 4-4, is not punished", JSON.stringify(toneT));
+    toneT = await toneTry("\u4e00\u5b9a", "y\u00edd\u00ecng", [1, 4]);
+    check(toneT.ok === 2 && toneT.rule.includes("\u4e00"), "tone ID: \u4e00\u5b9a as citation is not punished and names the \u4e00 rule", JSON.stringify(toneT));
+    toneT = await toneTry("\u4eca\u5929", "j\u012bnti\u0101n", [1, 1]);
+    check(toneT.ok === 2 && toneT.rule === "", "tone ID: a word with no sandhi gets no rule line", JSON.stringify(toneT));
+    check(await exec(`return window.toneEntry({ w: "\u5c55\u89c8\u9986", p: "zh\u01cenl\u01cengu\u01cen" });`) === null,
+      "tone ID: three thirds in a row is kept out of the pool");
+    await exec(`window.toneItems = window.__toneItems; return true;`);
+    check(await exec(`
+      for (var i = 0; i < 400; i++) {
+        if (window.toneItems().some(function (it) { return JSON.stringify(it.plain) !== JSON.stringify(it.spoken); })) return true;
+      }
+      return false;`) === true, "tone ID: words with sandhi now reach the pool");
 
     await exec(`document.querySelector('#toneX').click(); return true;`);
     check(await exec(`return document.querySelector('#toneSheet').classList.contains('open');`) === false,
