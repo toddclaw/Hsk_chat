@@ -5431,6 +5431,62 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(/the real app/.test(realTable) && !/PREVIEW/.test(realTable),
       "and Settings says so outright rather than leaving it ambiguous", realTable);
 
+    /* The backup file: what one device writes, another merges, through the
+     * same code a cloud pull uses. Learner-visible checks only: the chat list
+     * and the transcript, on a device that has none of it. */
+    const bkSeed = chats => exec(`
+      var ids = ["aaaaaaaa-0000-4000-8000-000000000001", "bbbbbbbb-0000-4000-8000-000000000002"], msgs = {};
+      var cs = ${JSON.stringify(chats)}.map(function (n, i) {
+        msgs[ids[i]] = [{ id: "c" + ids[i].slice(1), role: "user", text: "\u6211\u53bb" + n, cid: ids[i], created_at: "2026-11-0" + (i + 1) + "T00:00:00.000Z" }];
+        return { id: ids[i], title: n, created_at: "2026-11-0" + (i + 1) + "T00:00:00.000Z", updated_at: "2026-11-0" + (i + 1) + "T00:00:00.000Z", deleted: false };
+      });
+      localStorage.setItem("hsk1chat.chats", JSON.stringify(cs));
+      localStorage.setItem("hsk1chat.chatMsgs", JSON.stringify(msgs));
+      localStorage.setItem("hsk1chat.chatId", JSON.stringify(ids[0]));
+      localStorage.setItem("hsk1chat.apiKey", JSON.stringify("sk-backup-secret"));
+      return true;`);
+    const bkTitles = () => exec(`return Array.from(document.querySelectorAll('#chatList .ctitle')).map(function (x) { return x.textContent; }).join("|");`);
+    const bkLoad = text => exec(`return window.loadBackup(arguments[0]).then(function () { return document.querySelector('#backupNote').textContent; });`, [text]);
+
+    await bkSeed(["FileChatA", "FileChatB"]);
+    await go(base);
+    const bkText = await exec(`return window.backupText();`);
+    const bkFile = JSON.parse(bkText);
+    check(bkFile.format === "hsk-chat-backup" && bkFile.conversations.length === 2 && bkFile.messages.length === 2,
+      "backup file: holds every conversation and message", bkText.slice(0, 300));
+    check(!bkText.includes("sk-backup-secret") && !/"key"\s*:/.test(bkText),
+      "backup file: the API key is not in it");
+
+    await exec(`localStorage.removeItem("hsk1chat.chats"); localStorage.removeItem("hsk1chat.chatMsgs"); localStorage.removeItem("hsk1chat.chatId"); return true;`);
+    await go(base);
+    check(!(await bkTitles()).includes("FileChatA"), "backup file: the second device starts without those chats", await bkTitles());
+    const bkNote = await bkLoad(bkText);
+    check(bkNote.includes("Merged 2 conversations and 2 messages"), "backup file: loading says what it merged", bkNote);
+    const bkList = await bkTitles();
+    check(bkList.includes("FileChatA") && bkList.includes("FileChatB"), "backup file: both chats appear in the chat list", bkList);
+    await exec(`Array.from(document.querySelectorAll('#chatList .ctitle')).filter(function (x) { return x.textContent === "FileChatA"; })[0].click(); return true;`);
+    await waitFor(`document.querySelector('#log').textContent.includes("FileChatA")`, "the merged chat's messages to render");
+    check(/\u6211\u53bbFileChatA/.test(await exec(`return document.querySelector('#log').textContent;`)),
+      "backup file: and opening a merged chat shows its messages");
+
+    /* A chat on the receiving device is untouched, and a delete travels. */
+    const bkDel = JSON.parse(bkText);
+    bkDel.conversations[1].deleted_at = "2026-11-08T00:00:00.000Z";
+    bkDel.conversations = bkDel.conversations.slice(1);   // only B, so A's survival is the device's own
+    bkDel.messages = [];
+    await bkLoad(JSON.stringify(bkDel));
+    const bkAfter = await bkTitles();
+    check(!bkAfter.includes("FileChatB"), "backup file: a chat deleted in the file is deleted here", bkAfter);
+    check(bkAfter.includes("FileChatA"), "backup file: and a chat the file does not mention stays", bkAfter);
+    await bkLoad(bkText);
+    check(!(await bkTitles()).includes("FileChatB"), "backup file: loading an older file does not resurrect a deleted chat", await bkTitles());
+
+    const bkJunk = await bkLoad('{"format":"something else"}');
+    check(bkJunk.includes("not an HSK Chat backup") && (await bkTitles()).includes("FileChatA"),
+      "backup file: a wrong file is refused and changes nothing", bkJunk);
+    check((await bkLoad("not json at all")).includes("not an HSK Chat backup"),
+      "backup file: and so is a file that is not JSON");
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

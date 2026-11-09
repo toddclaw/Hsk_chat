@@ -905,6 +905,17 @@ footer{
       <!-- Outside the block above, which renderSyncSection() hides the moment sync is
            switched off -- the outcome of the deletion has to outlive that. -->
       <div class="note" id="syncWipeNote"></div>
+
+    <label for="backupFile">Backup file</label>
+      <div class="note">Everything sync keeps, in a file you move yourself: between a preview
+      and the real app, between devices without internet, or to keep. Loading merges the file
+      into this device, so nothing here is lost, and a chat deleted in the file is deleted here
+      too. Settings come from the file if it is newer. Your API key is never in the file.</div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button id="backupSave" type="button">Save to a file</button>
+      </div>
+      <input type="file" id="backupFile" style="margin-top:8px">
+      <div class="note" id="backupNote"></div>
   </details>
 
   <details class="sec">
@@ -1255,7 +1266,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v157 — 2026-11-09";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3789,14 +3800,16 @@ function syncErrText(e) {
   return out;
 }
 
-async function pullAndMerge() {
+async function pullAndMerge(file) {
   // Also guards against a redundant concurrent call -- boot() checks for an
   // existing session explicitly, and the onAuthChange listener below can
   // fire for that same session at nearly the same moment.
-  if (!S.sync.on || !syncUser || syncBusy) return;
+  if (syncBusy || (!file && (!S.sync.on || !syncUser))) return;
   syncBusy = true; renderSyncStatus("Syncing…");
   try {
-    const [convRows, msgRows, extraRows, learningRows, knownRows, retrievalRows, prefsRow] = await Promise.all([
+    /* A backup file is the same rows from somewhere else, so the merge below,
+     * tombstones included, needs no second copy. */
+    const [convRows, msgRows, extraRows, learningRows, knownRows, retrievalRows, prefsRow] = file || await Promise.all([
       HSKSync.pullConversations(syncUser.id),
       HSKSync.pullMessages(syncUser.id),
       HSKSync.pullVocab("vocab_extra", syncUser.id),
@@ -3901,6 +3914,45 @@ async function pullAndMerge() {
   } finally {
     syncBusy = false;
   }
+}
+
+/* The whole synced database as one file, in the rows the cloud holds. The API
+ * key is in no row, because prefsSnapshot() never names it. */
+const BACKUP_TABLES = ["conversations", "messages", "vocab_extra", "vocab_learning", "vocab_known", "retrievals"];
+
+function backupText() {
+  const now = new Date().toISOString(), messages = [];
+  Object.keys(S.chatMsgs).forEach(cid => (S.chatMsgs[cid] || []).forEach(t => {
+    const row = HSKSync.messageToRow(t, null, cid);
+    if (row) messages.push(row);
+  }));
+  return JSON.stringify({
+    format: "hsk-chat-backup", saved_at: now, version: VERSION,
+    conversations: S.chats.map(c => HSKSync.conversationToRow(c, null)).filter(Boolean),
+    messages: messages,
+    vocab_extra: HSKSync.vocabToRows(S.extra, null),
+    vocab_learning: HSKSync.vocabToRows(S.learning, null),
+    vocab_known: HSKSync.vocabToRows(S.known, null),
+    retrievals: S.retrievals.map(e => HSKSync.retrievalToRow(e, null)).filter(Boolean),
+    prefs: { data: HSKSync.prefsSnapshot(S), updated_at: now }
+  });
+}
+
+async function loadBackup(text) {
+  const note = $("#backupNote");
+  let f = null;
+  try { f = JSON.parse(text); } catch (e) { /* the check below says so */ }
+  if (!f || f.format !== "hsk-chat-backup" || !BACKUP_TABLES.every(t => Array.isArray(f[t]))) {
+    note.textContent = "That file is not an HSK Chat backup. Nothing was changed.";
+    return;
+  }
+  if (syncBusy) { note.textContent = "A sync is running. Try again in a moment."; return; }
+  syncLastError = "";
+  await pullAndMerge(BACKUP_TABLES.map(t => f[t]).concat([f.prefs || null]));
+  note.textContent = syncLastError ? "Could not load that file: " + syncLastError
+    : "Merged " + f.conversations.length + " conversations and " + f.messages.length + " messages from the file.";
+  // The pull path just said "Synced", and the upload it queued has not happened.
+  if (!syncLastError && S.sync.on && syncUser) renderSyncStatus("Sending the file\u2019s changes\u2026");
 }
 
 async function signInForSync() {
@@ -8254,6 +8306,16 @@ $("#syncOn").onchange = async e => {
 };
 $("#syncSignIn").onclick = signInForSync;
 $("#syncNow").onclick = () => pullAndMerge();
+$("#backupSave").onclick = () => {
+  deliver(backupText(), "hsk-chat-backup-" + ghostDayKey() + ".json", $("#backupSave"));
+  $("#backupNote").textContent = "Backup file made. Put it somewhere the other device can reach.";
+};
+$("#backupFile").onchange = async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  await loadBackup(await f.text());
+  e.target.value = "";   // or picking the same file again fires no change
+};
 $("#syncSignOut").onclick = signOutOfSync;
 
 $("#browseChatModel").onclick = () => openModelPicker("chat");
