@@ -413,6 +413,7 @@ footer{
 .tonereveal{text-align:center; margin-top:14px; font-size:20px}
 .tonereveal.bad{color:var(--bad)}
 .tonereveal.ok{color:var(--ok)}
+.tonerule{text-align:center; margin-top:6px}
 /* Issue submission form */
 #issueSection{border-top:1px solid var(--line); padding-top:16px; margin-top:16px}
 #issueSection textarea{width:100%; min-height:120px; background:var(--panel2); border:1px solid var(--line);
@@ -1263,7 +1264,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v154 — 2026-11-08";
+const VERSION   = "v156 — 2026-11-09";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -6087,13 +6088,10 @@ function closeGapFill() {
  * tone marks is already in every wordlist entry.
  *
  * Spec: docs/superpowers/specs/2026-11-03-tone-id-design.md. Five decisions
- * are settled there and this is the thin first slice of them: a whole word,
- * one answer per syllable, neutral as a real fifth answer.
+ * are settled there: a whole word, one answer per syllable, neutral as a real
+ * fifth answer, and sandhi as the lesson.
  *
- * NOT YET, and each has its own task: sandhi (task 4), and credit plus a
- * round-length setting (task 6). Until
- * task 4 lands, sandhi-affected words are kept OUT of the pool rather than
- * marked against a citation form the speaker will not say. */
+ * NOT YET, and it has its own task: credit plus a round-length setting (task 6). */
 const TONE_ROUND = 20;          // task 6 makes this a setting; the default stays 20
 const TONE_LABELS = ["\u00b7", "\u0304", "\u0301", "\u030c", "\u0300"];
 const TONE_RATES = [1, 0.85, 1.15];   // multiples of the learner's own speech rate
@@ -6101,29 +6099,48 @@ const NO_ZH_VOICE = "No Chinese voice found on this device. iOS: Settings \u2192
 
 let toneRound = null, toneAt = 0, toneSyl = 0, toneGot = [], toneRight = 0;
 
-/* Until task 4 teaches sandhi, a word whose spoken tones differ from its
- * stored ones cannot be scored, so it is excluded. Third tone before third
- * shifts, and 不 and 一 shift before certain tones -- in every case only
- * when a syllable follows, which is why a single-syllable word is always safe. */
-function toneSandhiRisk(tones, w) {
-  if (tones.length < 2) return false;
-  for (let i = 0; i + 1 < tones.length; i++) if (tones[i] === 3 && tones[i + 1] === 3) return true;
-  return w[0] === "\u4e0d" || w[0] === "\u4e00";
+/* One drawn word, or null when it cannot be scored honestly. `tones` is what
+ * the wordlist stores, `spoken` what a voice should say, `plain` the
+ * syllable-by-syllable form. All three are right answers: the evidence that
+ * voices apply sandhi is iOS only, and a learner who hears a citation tone
+ * must not be marked wrong for a voice the app did not choose. */
+function toneEntry(e) {
+  if (!e || !e.w || !e.p) return null;
+  const syls = HSKPinyin.split(e.p), tones = HSKPinyin.tones(e.p);
+  if (!syls || !tones || tones.length !== syls.length) return null;   // the parser would be guessing
+  const spoken = HSKPinyin.sandhi(tones, e.w), plain = HSKPinyin.citation(tones, e.w);
+  if (!spoken || !plain) return null;
+  return { w: e.w, p: e.p, syls: syls, tones: tones, spoken: spoken, plain: plain };
 }
 
-/* The level's own list, shuffled, minus what cannot be scored yet. */
+/* The level's own list, shuffled, minus what cannot be scored. */
 function toneItems() {
-  const out = [];
-  (S.base || []).forEach(e => {
-    if (!e || !e.w || !e.p) return;
-    const syls = HSKPinyin.split(e.p);
-    if (!syls) return;                       // the parser would be guessing
-    const tones = HSKPinyin.tones(e.p);
-    if (!tones || tones.length !== syls.length) return;
-    if (toneSandhiRisk(tones, e.w)) return;
-    out.push({ w: e.w, p: e.p, syls: syls, tones: tones });
+  return sampleOf((S.base || []).map(toneEntry).filter(Boolean), TONE_ROUND);
+}
+
+function toneHit(it, i) {
+  const g = toneGot[i];
+  return g === it.tones[i] || g === it.spoken[i] || g === it.plain[i];
+}
+
+/* What the reveal teaches, empty for a word with no sandhi. Each change of
+ * tone can only come from one rule, so the pair names it. */
+function toneNote(it) {
+  const rules = [];
+  it.plain.forEach((c, i) => {
+    const s = it.spoken[i];
+    if (c === s) return;
+    const r = c === 3 ? "Two third tones in a row: the first is said as a second."
+      : c === 4 ? "\u4e0d is said b\u00fa before a fourth tone."
+      : s === 2 ? "\u4e00 is said y\u00ed before a fourth tone."
+      : "\u4e00 is said y\u00ec before tones 1, 2 and 3.";
+    if (rules.indexOf(r) < 0) rules.push(r);
   });
-  return sampleOf(out, TONE_ROUND);
+  if (!rules.length) return "";
+  const said = it.spoken.some((t, i) => t !== it.tones[i])
+    ? "Said " + it.syls.map((sy, i) => it.spoken[i] !== it.tones[i] ? HSKPinyin.retone(sy, it.spoken[i]) : sy).join("") + ". "
+    : "";
+  return said + rules.join(" ");
 }
 
 function openToneId() {
@@ -6197,7 +6214,7 @@ function renderToneId() {
   let h = '<div class="toneword">' + escapeHtml(it.w) + "</div>";
   h += '<div class="toneslots">' + it.syls.map((sy, i) => {
     let cls = "toneslot";
-    if (done) cls += toneGot[i] === it.tones[i] ? " ok" : " bad";
+    if (done) cls += toneHit(it, i) ? " ok" : " bad";
     else if (i === toneGot.length) cls += " now";
     const got = toneGot[i];
     return '<span class="' + cls + '">'
@@ -6212,8 +6229,10 @@ function renderToneId() {
   }
   h += "</div>";
   if (done) {
-    const ok = it.syls.every((sy, i) => toneGot[i] === it.tones[i]);
+    const ok = it.syls.every((sy, i) => toneHit(it, i));
+    const note = toneNote(it);
     h += '<div class="tonereveal ' + (ok ? "ok" : "bad") + '">' + escapeHtml(it.p) + "</div>"
+      + (note ? '<div class="hint tonerule">' + escapeHtml(note) + "</div>" : "")
       + '<div class="tonechoices"><button class="tonechoice" id="toneNext" type="button">Next</button></div>';
   }
   body.innerHTML = h;
@@ -6231,7 +6250,7 @@ function answerTone(t) {
   if (!it || toneGot.length >= it.syls.length) return;
   toneGot.push(t);
   if (toneGot.length === it.syls.length
-      && it.syls.every((sy, i) => toneGot[i] === it.tones[i])) toneRight++;
+      && it.syls.every((sy, i) => toneHit(it, i))) toneRight++;
   renderToneId();
 }
 

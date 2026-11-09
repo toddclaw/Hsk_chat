@@ -148,7 +148,52 @@
     return s && s.map(function (x) { return x.tone; });
   }
 
-  var api = { split: split, tones: tones, SYLLABLES: SYLLABLES };
+  var MARK = { 1: "\u0304", 2: "\u0301", 3: "\u030C", 4: "\u0300" };
+
+  // One Han character per tone, or null. An erhua 儿 has no syllable of its own.
+  function chars(tones, w) {
+    var c = Array.from(w).filter(function (x) { return /\p{Script=Han}/u.test(x); });
+    if (c.length !== tones.length) c = c.filter(function (x) { return x !== "\u513F"; });
+    return c.length === tones.length ? c : null;
+  }
+
+  // The tones as said. Without w only the third-tone rule can apply, since 不
+  // and 一 are told apart by character, not by tone. Null means do not quiz it:
+  // three thirds in a row depend on phrasing, so there is no rule to teach.
+  // A neutral next syllable shifts nothing. 一一 stays yīyī: it is a repetition.
+  function sandhi(tones, w) {
+    for (var i = 0; i + 2 < tones.length; i++) {
+      if (tones[i] === 3 && tones[i + 1] === 3 && tones[i + 2] === 3) return null;
+    }
+    var c = w ? chars(tones, w) : [];
+    if (!c) return null;
+    return tones.map(function (t, i) {
+      var next = tones[i + 1];
+      if (t === 3 && next === 3) return 2;
+      if (c[i] === "\u4E0D" && t === 4 && next === 4) return 2;
+      if (c[i] === "\u4E00" && t === 1 && next && c[i + 1] !== "\u4E00") return next === 4 ? 2 : 4;
+      return t;
+    });
+  }
+
+  // The tones as a dictionary would give them syllable by syllable. The wordlists
+  // already store 不 and 一 as spoken (búyào), so this is the way back. A neutral
+  // 不, as in 对不起, really is neutral.
+  function citation(tones, w) {
+    var c = chars(tones, w);
+    return c && tones.map(function (t, i) {
+      if (!t) return t;
+      return c[i] === "\u4E0D" ? 4 : c[i] === "\u4E00" ? 1 : t;
+    });
+  }
+
+  // One marked syllable, with its mark swapped for tone t (1-4).
+  function retone(syl, t) {
+    return syl.normalize("NFD").replace(/[\u0304\u0301\u030C\u0300]/, MARK[t]).normalize("NFC");
+  }
+
+  var api = { split: split, tones: tones, sandhi: sandhi, citation: citation,
+              retone: retone, SYLLABLES: SYLLABLES };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.HSKPinyin = api;
