@@ -417,12 +417,47 @@
    */
   var client = null;
 
+  /* What sync has moved since the app was opened, as bytes before compression.
+   * Settings shows it. */
+  var moved = { sent: 0, received: 0 };
+  function usage() { return { sent: moved.sent, received: moved.received }; }
+
+  /* On a bad connection a request dies with "TypeError: Load failed": debug_log
+   * has 92 of them in four days, and nothing else. Every table's reads and
+   * upserts are safe to repeat because rows carry client-generated ids; the log
+   * is a plain insert and sign-in may spend a one-use token, so those two go
+   * through once.
+   *
+   * The answer is read here, on a copy, because the connection can also die
+   * between the headers and the end of the body, which supabase-js would report
+   * as a failure of its own, out of reach of a retry. */
+  var RETRY_WAITS = [1000, 3000];
+  function retryingFetch(fetchFn, wait) {
+    wait = wait || function (ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); };
+    return async function (url, init) {
+      var repeatable = /\/rest\/v1\/(?!debug_log)/.test(String(url));
+      for (var i = 0; ; i++) {
+        try {
+          if (init && typeof init.body === "string") moved.sent += new Blob([init.body]).size;
+          var res = await fetchFn(url, init);
+          moved.received += (await res.clone().blob()).size;
+          return res;
+        } catch (e) {
+          if (!repeatable || (e && e.name === "AbortError") || i >= RETRY_WAITS.length) throw e;
+          await wait(RETRY_WAITS[i]);
+        }
+      }
+    };
+  }
+
   // anonKey: the project's *publishable* key (Project Settings -> API in the
   // Supabase dashboard -- called "anon key" before Supabase's 2026 rename).
   // Safe to embed in client-side code; RLS is what actually gates access.
   function configure(url, anonKey) {
     if (typeof window === "undefined" || !window.supabase) return null;
-    client = window.supabase.createClient(url, anonKey);
+    client = window.supabase.createClient(url, anonKey, {
+      global: { fetch: retryingFetch(function (u, i) { return fetch(u, i); }) }
+    });
     return client;
   }
 
@@ -438,8 +473,27 @@
   }
   function onAuthChange(cb) { return client.auth.onAuthStateChange(cb); }
 
+  /* Every push offers every message, so one upload used to be the whole
+   * history in a single request: the request most likely to die on a bad
+   * connection, and when it did the next try began again from nothing. In
+   * pieces, remembering what landed, a retry carries on from the failure and
+   * a settled message costs nothing.
+   * ponytail: remembered for this page load only, so the first push after
+   * opening the app still offers everything; storing it would mean keeping it
+   * true across every delete, on every device. */
+  var PUSH_ROWS = 200;
+  var landed = new Map();
+  function landedKey(row) { return JSON.stringify(Object.assign({}, row, { updated_at: null })); }
   async function pushMessages(rows) {
-    if (!rows.length) return;
+    var todo = rows.filter(function (r) { return landed.get(r.id) !== landedKey(r); });
+    for (var i = 0; i < todo.length; i += PUSH_ROWS) {
+      var piece = todo.slice(i, i + PUSH_ROWS);
+      await upsertMessages(piece);
+      piece.forEach(function (r) { landed.set(r.id, landedKey(r)); });
+    }
+  }
+
+  async function upsertMessages(rows) {
     /* An unmigrated database has no conversation_id column, and upserting one
      * fails the whole batch -- so the conversation grouping is dropped rather
      * than the messages. Backing up the conversation matters more than
@@ -481,12 +535,12 @@
       if (isMissingSchema(r.error)) {
         if (schemaHasKind !== false) {
           schemaHasKind = false;
-          return pushMessages(rows);
+          return upsertMessages(rows);
         }
         if (schemaHasConvId !== false || schemaHasGrade !== false) {
           schemaHasConvId = false;
           schemaHasGrade = false;
-          return pushMessages(rows);
+          return upsertMessages(rows);
         }
       }
       throw r.error;
@@ -749,12 +803,14 @@
   // Messages belonging to one conversation, gone for good. The tombstone in
   // `conversations` is what tells other devices; this just reclaims the rows.
   async function deleteConversationMessages(userId, conversationId) {
+    landed.clear();
     var r = await client.from("messages").delete()
       .eq("user_id", userId).eq("conversation_id", conversationId);
     if (r.error && !isMissingSchema(r.error)) throw r.error;
   }
 
   async function deleteAllMessages(userId) {
+    landed.clear();
     var r = await client.from("messages").delete().eq("user_id", userId);
     if (r.error) throw r.error;
   }
@@ -775,6 +831,7 @@
    * rejected batch cannot say which tables were already cleared. Whatever threw
    * stops the run and reaches the caller, which reports it. */
   async function deleteAllCloudData(userId) {
+    landed.clear();
     for (var i = 0; i < USER_TABLES.length; i++) {
       var r = await client.from(USER_TABLES[i]).delete().eq("user_id", userId);
       /* A table not yet on this database -- the deploy window between the
@@ -810,6 +867,8 @@
     pullConversations: pullConversations,
     pushConversations: pushConversations,
     deleteConversationMessages: deleteConversationMessages,
+    retryingFetch: retryingFetch,
+    usage: usage,
     conversationsSupported: conversationsSupported,
     gradesSupported: gradesSupported,
     activitySupported: activitySupported,

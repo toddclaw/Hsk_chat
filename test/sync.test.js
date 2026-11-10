@@ -749,6 +749,127 @@ function freshSync() {
       "scopes=" + JSON.stringify(scopes));
   })();
 
+  // --- Issue #61: a flaky connection ---------------------------------------
+  /* The real failure, from debug_log: 92 pushes in four days, every one
+   * "TypeError: Load failed". */
+  const dropped = () => Promise.reject(new TypeError("Load failed"));
+  const answer = text => new Response(text);
+  const script = steps => {
+    const f = (url, init) => { f.calls++; return steps.shift()(url, init); };
+    f.calls = 0;
+    return f;
+  };
+  const waits = [];
+  const noWait = ms => { waits.push(ms); return Promise.resolve(); };
+  const REST = "https://example.invalid/rest/v1/messages";
+
+  {
+    const S1 = freshSync();
+    const f = script([dropped, dropped, () => answer("ok")]);
+    const res = await S1.retryingFetch(f, noWait)(REST, { method: "POST", body: "abc" });
+    check(f.calls === 3 && await res.text() === "ok",
+      "two dropped requests are ridden out, and the answer is still readable", String(f.calls));
+    check(waits.join() === "1000,3000", "waiting longer each time", waits.join());
+    check(S1.usage().sent === 9 && S1.usage().received === 2,
+      "every attempt's upload is counted, and the one download", JSON.stringify(S1.usage()));
+  }
+  {
+    /* Headers arrive, then the connection dies inside the body. supabase-js
+     * would turn this into an error of its own, so the retry has to see it. */
+    const S2 = freshSync();
+    const bodyDies = () => Promise.resolve({
+      clone: () => ({ blob: () => Promise.reject(new TypeError("Load failed")) })
+    });
+    const f = script([bodyDies, () => answer("ok")]);
+    await S2.retryingFetch(f, noWait)(REST, {});
+    check(f.calls === 2, "a connection lost mid-answer is retried too", String(f.calls));
+  }
+  {
+    const f = script([dropped, dropped, dropped, dropped]);
+    let thrown = null;
+    await freshSync().retryingFetch(f, noWait)(REST, {}).catch(e => { thrown = e; });
+    check(f.calls === 3 && thrown && thrown.message === "Load failed",
+      "three failures is the end, and the error is the real one", String(f.calls));
+
+    const aborted = script([() => Promise.reject(Object.assign(new Error("x"), { name: "AbortError" }))]);
+    await freshSync().retryingFetch(aborted, noWait)(REST, {}).catch(() => {});
+    check(aborted.calls === 1, "a request that was cancelled stays cancelled", String(aborted.calls));
+
+    /* Replaying a sign-in could spend a one-use token, and the log's insert
+     * is the one write here that is not idempotent. */
+    for (const url of ["https://example.invalid/auth/v1/token", "https://example.invalid/rest/v1/debug_log"]) {
+      const once = script([dropped, dropped]);
+      await freshSync().retryingFetch(once, noWait)(url, {}).catch(() => {});
+      check(once.calls === 1, "not retried: " + url, String(once.calls));
+    }
+  }
+  {
+    const upserts = [];
+    let failOn = -1;
+    const done = error => ({ then: resolve => { resolve({ data: [], error: error }); return Promise.resolve(); } });
+    const chain = () => Object.assign(done(null), { eq: chain });
+    global.window = { supabase: { createClient: () => ({
+      from: () => ({
+        upsert: rows => {
+          upserts.push(rows.map(r => r.id));
+          return done(upserts.length - 1 === failOn ? { message: "TypeError: Load failed" } : null);
+        },
+        delete: () => chain()
+      })
+    }) } };
+    const S3 = freshSync();
+    S3.configure("https://example.invalid", "publishable");
+    const rowsNow = () => Array.from({ length: 450 }, (_, i) =>
+      S3.messageToRow({ id: "m" + i, role: "user", text: "你好", created_at: "2026-11-01T00:00:00Z" },
+                      USER, "c1"));
+
+    failOn = 1;
+    let threw = false;
+    await S3.pushMessages(rowsNow()).catch(() => { threw = true; });
+    check(threw && upserts.length === 2 && upserts[0].length === 200,
+      "a big push goes in pieces, and a failed piece still fails the push",
+      JSON.stringify(upserts.map(u => u.length)));
+
+    upserts.length = 0; failOn = -1;
+    await S3.pushMessages(rowsNow());
+    check(upserts.length === 2 && upserts[0][0] === "m200" &&
+          upserts[0].length + upserts[1].length === 250,
+      "the retry starts where the failure was, not from the first message",
+      JSON.stringify(upserts.map(u => u.length)));
+
+    upserts.length = 0;
+    await S3.pushMessages(rowsNow());
+    check(upserts.length === 0, "nothing changed, nothing sent, whatever the timestamp says",
+      JSON.stringify(upserts.map(u => u.length)));
+
+    const edited = rowsNow();
+    edited[7].translation = "hello";
+    upserts.length = 0;
+    await S3.pushMessages(edited);
+    check(upserts.length === 1 && upserts[0].join() === "m7",
+      "an edited message is sent, and only it", JSON.stringify(upserts));
+
+    /* The memory of what landed describes the server, so it dies with it. */
+    await S3.deleteAllMessages(USER);
+    upserts.length = 0;
+    await S3.pushMessages(edited);
+    check(upserts.reduce((n, u) => n + u.length, 0) === 450,
+      "after deleting the cloud copy, everything goes up again",
+      JSON.stringify(upserts.map(u => u.length)));
+    upserts.length = 0;
+    await S3.deleteAllCloudData(USER);
+    await S3.pushMessages(edited);
+    check(upserts.reduce((n, u) => n + u.length, 0) === 450,
+      "and the same after deleting all cloud data",
+      JSON.stringify(upserts.map(u => u.length)));
+    upserts.length = 0;
+    await S3.deleteConversationMessages(USER, "c1");
+    await S3.pushMessages(edited);
+    check(upserts.reduce((n, u) => n + u.length, 0) === 450,
+      "and after deleting one conversation's messages",
+      JSON.stringify(upserts.map(u => u.length)));
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail) { /* ------------------------------------------------------ the console log
  *

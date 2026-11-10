@@ -182,7 +182,8 @@ const INSTALL_MOCK = `
 window.__t = { calls: [] };
 window.confirm = function () { return true; };
 window.supabase = {
-  createClient: function () {
+  createClient: function (url, key, opts) {
+    window.__t.fetch = opts && opts.global && opts.global.fetch;
     function builder(table) {
       var q = { _table: table, _op: null };
       q.select = function () { q._op = "select"; return q; };
@@ -1575,6 +1576,27 @@ check(usedGroups && usedGroups.first === "\u7684",
     await waitFor("document.querySelector('#syncSignedIn').style.display !== 'none'",
       "the signed-in sync section");
     check(true, "switching sync on reaches a signed-in state against the mock");
+
+    /* Issue #61: on a bad connection a request dies with "Load failed". The
+     * client's own fetch has to ride one out, and Settings has to say how much
+     * data sync moved. The mock replaces supabase-js, so this drives the fetch
+     * the app actually handed to createClient. */
+    await exec(`
+      var attempts = 0, real = window.fetch;
+      window.fetch = function () {
+        return ++attempts === 1 ? Promise.reject(new TypeError("Load failed"))
+                                : Promise.resolve(new Response("x".repeat(3072)));
+      };
+      window.__t.fetch("https://x.invalid/rest/v1/messages", { method: "POST", body: "y".repeat(2048) })
+        .then(function (r) { return r.text(); })
+        .then(function (t) { window.__t.fetched = t.length; window.fetch = real; });
+      return true;`);
+    await waitFor("window.__t.fetched === 3072", "the sync fetch to survive a dropped request");
+    check(true, "a dropped sync request is retried and its answer arrives");
+    await exec(`document.querySelector('#syncNow').click(); return true;`);
+    await waitFor("/4 KB sent, 3 KB received/.test(document.querySelector('#syncUsage').textContent)",
+      "Settings to report the data sync moved");
+    check(true, "Settings says how much data sync sent, counting the upload that was dropped");
 
     /* The first pull says "Synced just now" and then renderSyncSection() runs
      * immediately after it -- here at the end of the toggle handler, and again

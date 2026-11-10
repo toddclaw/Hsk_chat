@@ -893,6 +893,7 @@ footer{
           <button id="syncSignOut" type="button">Sign out</button>
         </div>
         <div class="note" id="syncStatus"></div>
+        <div class="note" id="syncUsage"></div>
         <!-- Only reachable while signed in: there is no cloud copy to delete
              otherwise, and the user id the rows are keyed by comes from the session. -->
         <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -1255,7 +1256,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v158 — 2026-11-10";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -3968,6 +3969,10 @@ function renderSyncStatus(text) {
   syncStatus = text;
   const el = $("#syncStatus");
   if (el) el.textContent = text;
+  const u = HSKSync.usage(), line = $("#syncUsage");
+  const size = n => n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB";
+  if (line) line.textContent = u.sent + u.received
+    ? "Since opening the app: " + size(u.sent) + " sent, " + size(u.received) + " received" : "";
 }
 
 // Shows the right one of "off" / "sign in" / "signed in" in Settings.
