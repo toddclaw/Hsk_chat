@@ -33,14 +33,21 @@
            "-" + (day.length < 2 ? "0" + day : day);
   }
 
+  /* A row with no face is gap-fill's, as sync.js and the column default it. */
+  function faceOf(r) { return r.face || "gapfill"; }
+
   /* n counts DISTINCT ok days. Two devices offline on the same day push two
    * rows, and that is the intended shape -- the table has no unique constraint
    * precisely so the second push is absorbed rather than rejected, which only
-   * works if counting is by day here. */
-  function countsFrom(rows) {
+   * works if counting is by day here.
+   *
+   * With a face, only that face's rows count, so tone taps cannot raise the n
+   * that picks gap-fill's words. Without one, every face pools. */
+  function countsFrom(rows, face) {
     var out = {};
     (rows || []).forEach(function (r) {
       if (!r || !r.word || !r.day) return;
+      if (face && faceOf(r) !== face) return;
       var c = out[r.word] || (out[r.word] = { n: 0, days: {} });
       if (c.days[r.day] === undefined) c.days[r.day] = false;
       if (r.ok && !c.days[r.day]) { c.days[r.day] = true; c.n++; }
@@ -51,7 +58,7 @@
     return out;
   }
 
-  /* One row per word per day, in both directions. A wrong answer occupies the
+  /* One row per word per day per face, in both directions. A wrong answer occupies the
    * day without adding to n: you cannot retry the same word for credit until
    * tomorrow, and you are not punished twice for one bad afternoon. RESEARCH.md
    * argues the symmetry under "Retiring a ghost word".
@@ -62,7 +69,8 @@
     var list = rows || [];
     if (!entry || !entry.word || !entry.day) return list;
     var taken = list.some(function (r) {
-      return r && r.word === entry.word && r.day === entry.day;
+      return r && r.word === entry.word && r.day === entry.day &&
+             faceOf(r) === faceOf(entry);
     });
     return taken ? list : list.concat([entry]);
   }

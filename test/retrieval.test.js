@@ -47,6 +47,29 @@ check(cappedWrong.length === 1,
 check(R.credit(base, row("香蕉", "2026-09-01")).length === 2,
   "a different word on the same day is fine");
 
+/* Faces do not share a day. A gap-fill answer on 我 must not use up the tone
+ * slot for 我, and a tone tap must not raise the n that picks gap-fill's words. */
+const gapRow = row("苹果", "2026-09-01", true, "gapfill");
+const toneRow = Object.assign(row("苹果", "2026-09-01", true, "toneid"), { id: "tone" });
+check(R.credit([gapRow], toneRow).length === 2,
+  "the same word-day in another face is a second row");
+check(R.credit([gapRow], Object.assign({}, gapRow, { id: "again" })).length === 1,
+  "the same word-day in the same face is still refused");
+const faceless = { id: "old", word: "苹果", day: "2026-09-01", ok: true };
+check(R.credit([faceless], gapRow).length === 1,
+  "a row with no face is a gap-fill row, as sync and the column both default it");
+check(R.credit([faceless], toneRow).length === 2,
+  "and does not take the tone slot");
+
+const mixed = [gapRow, row("苹果", "2026-09-02", true, "toneid"), row("香蕉", "2026-09-03", true, "gapfill")];
+const toneOnly = R.countsFrom(mixed, "toneid");
+check(toneOnly["苹果"].n === 1 && !toneOnly["苹果"].days["2026-09-01"] && !toneOnly["香蕉"],
+  "countsFrom with a face ignores every other face", JSON.stringify(toneOnly));
+check(R.countsFrom(mixed)["苹果"].n === 2 && R.countsFrom(mixed)["香蕉"].n === 1,
+  "countsFrom with no face still pools everything", JSON.stringify(R.countsFrom(mixed)));
+check(R.countsFrom([faceless], "gapfill")["苹果"].n === 1,
+  "a row with no face counts as gap-fill when gap-fill asks");
+
 // --- constants --------------------------------------------------------------
 check(R.ROUND === 10 && R.CANDIDATES === 4 && R.MIN_WORDS === 4,
   "constants are exported, not re-typed by callers");

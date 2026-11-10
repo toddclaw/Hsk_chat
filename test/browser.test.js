@@ -5168,6 +5168,30 @@ check(usedGroups && usedGroups.first === "\u7684",
       "reopening clears it a second time, independent of the close path",
       JSON.stringify(cleared));
 
+    /* A tone answer today must not use up gap-fill's question on the same
+     * word: 朋友 is the only word worth asking about here, so if the faces
+     * shared a day the learner would get "Done for today" and no blank. */
+    await exec(`
+      localStorage.setItem("hsk1chat.retrievals", JSON.stringify([
+        { id: "f1111111-1111-4111-8111-111111111111", word: "朋友",
+          day: HSKMistakes.dayKey(new Date().toISOString()), ok: true,
+          face: "toneid", created_at: new Date().toISOString() }
+      ]));
+      return true;`);
+    await go(base);
+    await waitFor("document.querySelector('#activity option[value=\"__gapfill\"]')",
+      "the app after reseeding with a tone answer today");
+    await exec(`
+      var sel = document.querySelector('#activity');
+      sel.value = "__gapfill";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#gapSheet').classList.contains('open')",
+      "the gap-fill sheet to open after a tone answer today");
+    check(await exec(`return !!document.querySelector('#gapBlank');`) === true,
+      "a tone answer today does not take gap-fill's question on that word",
+      await exec(`return document.querySelector('#gapSheet').textContent.slice(0, 120);`));
+
     /* ------------------------------------- gap-fill, traditional script */
 
     /* The out-of-level guarantee is the product, and in traditional mode it

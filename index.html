@@ -6052,7 +6052,7 @@ function gapItems() {
       all.concat((S.chatMsgs[cid] || []).map(t =>
         Object.assign({}, t, { conversation_id: cid }))), []),
     starters: starterTexts(),
-    counts: retrievalCounts(),
+    counts: retrievalCounts("gapfill"),
     learning: S.learning,
     mistakes: gapMistakeWords(),
     pool: gapPool(),
@@ -6333,7 +6333,7 @@ function gapEmpty() {
       '<b>Introduce words from the next level</b> in Settings → Learning, ' +
       'chat for a day, then come back.</div>';
   }
-  const counts = retrievalCounts(), today = ghostDayKey();
+  const counts = retrievalCounts("gapfill"), today = ghostDayKey();
   const allDone = worthWords.every(w => counts[w] && counts[w].days[today]);
   if (allDone) {
     return '<div class="hint"><b>Done for today</b><br>' +
@@ -7117,7 +7117,7 @@ function ghostDayKey() { return HSKMistakes.dayKey(new Date().toISOString()); }
 
 /* Counts, derived on demand. Cheap: this list is one row per word per day, not
  * a scan of every message the way ghostProgressMap() is. */
-function retrievalCounts() { return HSKRetrieval.countsFrom(S.retrievals); }
+function retrievalCounts(face) { return HSKRetrieval.countsFrom(S.retrievals, face); }
 
 /* One row per word per day, in both directions -- the cap lives in
  * HSKRetrieval.credit(), so the tap handler cannot get it wrong. The id and
