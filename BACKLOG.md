@@ -1383,9 +1383,9 @@ Still open, in rough descending order of how much they would annoy someone:
   state and it is on the cheap model, so it is a wording problem, not a cost one.
 - ~~**`renderChats()`'s message count includes the topic message**~~ — **fixed, v138**: the
   count skips every `MARKER_ROLES` row, so drills and set activities stopped over-counting too.
-- **A question that exhausted its repair attempts is still stored `kind: "question"`**, so
-  `anyStoryQuestion()` opens the composer for a question the partner never really managed to
-  ask.
+- ~~**A question that exhausted its repair attempts is still stored `kind: "question"`**~~ —
+  **fixed, v160**: `anyStoryQuestion()` skips a `failed` question, so the composer stays shut
+  and the strip still says "Ask me about it". Retry still reads `kind` and asks again.
 - **The composer stays enabled while a segment generates.** `send()` no-ops on `S.busy`, so a
   sentence typed during generation is silently dropped rather than queued or refused.
 - **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand

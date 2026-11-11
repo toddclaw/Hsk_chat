@@ -3849,6 +3849,15 @@ check(usedGroups && usedGroups.first === "\u7684",
     await go(base);
     await waitFor("document.querySelector('#log .msg.bot')",
       "the seeded story with a failed question mid-story");
+    /* A question that ran out of tries is stored as the fallback 我不知道 with
+     * kind "question". It was never really asked, so the story is still
+     * listening: no answer box, and the button still offers to ask. */
+    check(await exec("return document.querySelector('#input').disabled;") === true,
+      "a question that failed every try does not open the composer");
+    check(await exec(
+      "return Array.prototype.some.call(document.querySelectorAll('#starters button')," +
+      "function (b) { return b.textContent === 'Ask me about it'; });") === true,
+      "and the button still says \"Ask me about it\", not \"Ask me another\"");
     await exec(
       "window.__models = [];" +
       "window.callModel = function (m, t, model) {" +

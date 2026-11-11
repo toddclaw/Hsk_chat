@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v160 — 2026-11-11";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -4804,8 +4804,12 @@ function storyTold(msgs) {
 
 // Whether the partner has asked about this story yet, at any pause -- not
 // only the last one. Drives both the button label and the composer.
+/* A question that used up every try is stored as the fallback 我不知道 with
+ * `failed` set. It was never asked, so it opens nothing: no composer, and the
+ * strip still offers "Ask me about it". retryLast() reads `kind` directly and
+ * still retries it as a question. */
 function anyStoryQuestion() {
-  return S.history.some(t => t.kind === "question");
+  return S.history.some(t => t.kind === "question" && !t.failed);
 }
 
 /* The story's subject, and the cast the model declared for it.
