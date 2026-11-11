@@ -595,6 +595,20 @@ in this path, and none is needed.
 These are unmeasured. If round length or candidate count turns out to matter,
 measure it and change this section with the code.
 
+**Tone ID's round is 20 words, and it is a setting (`toneSize`, 5–40).** Same
+engine, its own face: a tone answer is a `retrievals` row with `face: "toneid"`,
+capped one per word per day, and it feeds neither `GHOST_USES` nor the pacing
+arithmetic — classifying a tone is weaker evidence of knowing a word than
+choosing it for a blank. 20 rather than gap-fill's 10 because an item is one
+listen and one tap per syllable, so a round still fits in about two minutes
+while doubling the retrievals. The evidence behind the activity is Wang,
+Spence, Jongman & Sereno (1999) — identification +21%, generalising to new
+words and new voices, held at six months — and Wang, Jongman & Sereno (2003),
+where the same perception-only training improved production 18%. Their dose
+was **eight 40-minute sessions**. Nothing says it scales down linearly to two
+minutes a day, which is why the number is the learner's to change and not a
+constant. Unmeasured, like the rest of this section.
+
 ## Production
 
 **Follows from the literature: there is no threshold, and inventing one would be false

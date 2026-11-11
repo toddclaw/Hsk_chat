@@ -112,6 +112,8 @@ check(Sync.PREFS_KEYS.indexOf("teachModel") !== -1, "PREFS_KEYS names teachModel
 check(Sync.PREFS_KEYS.indexOf("teachPrompts") !== -1, "PREFS_KEYS names teachPrompts");
 check(Sync.PREFS_KEYS.indexOf("drillTurns") !== -1,
   "drillTurns syncs -- it is a preference, not a per-device counter");
+check(Sync.PREFS_KEYS.indexOf("toneSize") !== -1,
+  "toneSize syncs -- the Tone ID round length is a preference");
 check(Sync.PREFS_KEYS.indexOf("ghostUses") !== -1,
   "the ghost-word threshold travels between devices like every other preference");
 check(Sync.PREFS_KEYS.indexOf("report") !== -1,

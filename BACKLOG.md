@@ -538,7 +538,16 @@ afternoon after that.
 
 ---
 
-## Tone drills
+## ~~Tone drills~~ — built, v159
+
+**Shipped** on `build/tone-id`, v154–v159: a Tone ID activity that plays a whole
+word through every installed Mandarin voice at varying speed, asks the tone of
+every syllable with neutral as a fifth answer, and teaches sandhi while
+accepting both the spoken and the citation form. Each finished word banks one
+`retrievals` row a day under `face: "toneid"`, separate from gap-fill's slot and
+from ghost retirement. A round is 20 words by default, set in Settings. Spec and
+plan: `docs/superpowers/specs/2026-11-03-tone-id-design.md`. Still unknown, and
+the reason it shipped small: whether it gets used. The entry as researched:
 
 **Asked for:** 2026-09-12. **Researched** 2026-09-12, and the research moved it:
 the cheap version is the one with the evidence behind it. **Another face of the

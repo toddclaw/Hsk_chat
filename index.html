@@ -624,6 +624,13 @@ footer{
       is lost, get it right again later and you win the day back. Days you have already
       banked are safe either way. See <b>How your writing is judged</b> below.</div>
 
+    <label for="toneSize">Words in a Tone ID round</label>
+      <select id="toneSize"></select>
+      <div class="note">How many words <b>Tone ID</b> plays before showing your score. The
+      studies behind it trained for eight sessions of forty minutes, so any number here is a
+      guess — pick what you will actually finish. Each word counts once a day however many
+      rounds you play.</div>
+
       <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
         <button id="clearHistory" class="danger">Clear conversation</button>
       </div>
@@ -1264,7 +1271,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v156 — 2026-11-09";
+const VERSION   = "v159 — 2026-11-11";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -1272,6 +1279,7 @@ const KEY_URL   = "https://openrouter.ai/api/v1/key";
 const ATTEMPT_CHOICES = [1, 2, 3, 4, 5, 6];   // total tries per turn, repairs included
 const DRILL_CHOICES = [3, 4, 5, 6, 7, 8, 9, 10];  // correct sentences to finish a drill
 const GHOST_CHOICES = [1, 2, 3, 4, 5, 6];         // correct uses to retire a ghost word
+const TONE_CHOICES = [5, 10, 15, 20, 30, 40];     // words in a Tone ID round
 const GHOST_CHECK_MAX = 3;                        // ghost words verdicted per message
 const WINDOW    = 20;       // turns sent to the API
 const FALLBACKS = ["我不知道。", "我不会说。"];
@@ -1334,6 +1342,7 @@ const K = {
   prompt:"hsk1chat.systemPrompt", attempts:"hsk1chat.attempts", anki:"hsk1chat.anki",
   drillTurns:"hsk1chat.drillTurns",
   ghostUses:"hsk1chat.ghostUses",
+  toneSize:"hsk1chat.toneSize",
   retrievals:"hsk1chat.retrievals",
   report:"hsk1chat.report", reportAt:"hsk1chat.reportAt",
   font:"hsk1chat.fontSize", starters:"hsk1chat.showStarters", script:"hsk1chat.script",
@@ -1388,6 +1397,7 @@ const S = {
   attempts: store.get(K.attempts, 3),         // generation + repairs before the fallback
   drillTurns: store.get(K.drillTurns, 6),     // correct sentences to finish a drill
   ghostUses: store.get(K.ghostUses, 3),       // correct uses, on separate days, to retire a ghost word
+  toneSize: store.get(K.toneSize, 20),        // words in a Tone ID round; RESEARCH.md, "What a retrieval counts"
   report:  store.get(K.report, ""),           // the last progress report, as written
   reportAt: store.get(K.reportAt, ""),        // when it was written; the delta baseline
   anki:    store.get(K.anki, { deck: "Default", type: "Basic", front: "Front", back: "Back" }),
@@ -3859,6 +3869,7 @@ async function pullAndMerge() {
       store.set(K.mode, S.mode); store.set(K.pinyin, S.pinyin);
       store.set(K.autoAdd, S.autoAdd); store.set(K.length, S.replyLength); store.set(K.prompt, S.prompt);
       store.set(K.attempts, S.attempts); store.set(K.anki, S.anki); store.set(K.font, S.font);
+      store.set(K.toneSize, S.toneSize);
       store.set(K.starters, S.starters); store.set(K.script, S.script); store.set(K.speechRate, S.speechRate);
       store.set(K.freeOnly, S.freeOnly); store.set(K.modelSort, S.modelSort);
       store.set(K.grader, S.grader); store.set(K.gate, S.gate);
@@ -6091,8 +6102,8 @@ function closeGapFill() {
  * are settled there: a whole word, one answer per syllable, neutral as a real
  * fifth answer, and sandhi as the lesson.
  *
- * NOT YET, and it has its own task: credit plus a round-length setting (task 6). */
-const TONE_ROUND = 20;          // task 6 makes this a setting; the default stays 20
+ * Credit is a retrieval row under face "toneid", one per word per day, and
+ * feeds nothing else: not ghost retirement, not pacing (spec decision 5). */
 const TONE_LABELS = ["\u00b7", "\u0304", "\u0301", "\u030c", "\u0300"];
 const TONE_RATES = [1, 0.85, 1.15];   // multiples of the learner's own speech rate
 const NO_ZH_VOICE = "No Chinese voice found on this device. iOS: Settings \u2192 Accessibility \u2192 Spoken Content \u2192 Voices \u2192 Chinese.";
@@ -6115,7 +6126,7 @@ function toneEntry(e) {
 
 /* The level's own list, shuffled, minus what cannot be scored. */
 function toneItems() {
-  return sampleOf((S.base || []).map(toneEntry).filter(Boolean), TONE_ROUND);
+  return sampleOf((S.base || []).map(toneEntry).filter(Boolean), S.toneSize || 20);
 }
 
 function toneHit(it, i) {
@@ -6202,7 +6213,9 @@ function renderToneId() {
   if (toneAt >= toneRound.length) {
     prog.textContent = "";
     body.innerHTML = '<div class="hint"><b>' + toneRight + " / " + toneRound.length
-      + "</b><br>words with every tone right.</div>";
+      + "</b><br>words with every tone right.<br>"
+      + '<button id="toneRedo" class="primary">Again</button></div>';
+    $("#toneRedo").onclick = () => openToneId();
     return;
   }
   const it = toneRound[toneAt];
@@ -6249,8 +6262,10 @@ function answerTone(t) {
   const it = toneItem();
   if (!it || toneGot.length >= it.syls.length) return;
   toneGot.push(t);
-  if (toneGot.length === it.syls.length
-      && it.syls.every((sy, i) => toneHit(it, i))) toneRight++;
+  if (toneGot.length < it.syls.length) return renderToneId();
+  const ok = it.syls.every((sy, i) => toneHit(it, i));
+  if (ok) toneRight++;
+  recordRetrieval(it.w, ok, "toneid");
   renderToneId();
 }
 
@@ -7984,6 +7999,9 @@ $("#btnSet").onclick = () => {
   $("#ghostUses").innerHTML = GHOST_CHOICES.map(n =>
     '<option value="' + n + '"' + (n === S.ghostUses ? " selected" : "") + ">" + n +
     (n === 3 ? " — default" : "") + "</option>").join("");
+  $("#toneSize").innerHTML = TONE_CHOICES.map(n =>
+    '<option value="' + n + '"' + (n === S.toneSize ? " selected" : "") + ">" + n +
+    (n === 20 ? " — default" : "") + "</option>").join("");
   $("#replyLength").innerHTML = Object.keys(HSKPrompt.LENGTHS).map(k =>
     '<option value="' + k + '"' + (k === S.replyLength ? " selected" : "") + ">" +
     escapeHtml(HSKPrompt.LENGTHS[k].label) + "</option>").join("");
@@ -8017,6 +8035,7 @@ function commitSettings() {
   S.attempts = Number($("#attempts").value) || 3; store.set(K.attempts, S.attempts);
   S.drillTurns = Number($("#drillTurns").value) || 6; store.set(K.drillTurns, S.drillTurns);
   S.ghostUses = Number($("#ghostUses").value) || 3; store.set(K.ghostUses, S.ghostUses);
+  S.toneSize = Number($("#toneSize").value) || 20; store.set(K.toneSize, S.toneSize);
   S.anki = {
     deck:  $("#ankiDeck").value.trim()  || "Default",
     type:  $("#ankiType").value.trim()  || "Basic",

@@ -5035,12 +5035,48 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(toneT.ok === 2 && toneT.rule === "", "tone ID: a word with no sandhi gets no rule line", JSON.stringify(toneT));
     check(await exec(`return window.toneEntry({ w: "\u5c55\u89c8\u9986", p: "zh\u01cenl\u01cengu\u01cen" });`) === null,
       "tone ID: three thirds in a row is kept out of the pool");
+
+    /* Task 6: credit. 你好 was played three rounds above, so the one-a-day cap
+     * is what keeps it to one row -- and the first round, answered right, is
+     * the one that counts. */
+    const toneRows = JSON.parse(await exec(`return JSON.stringify(JSON.parse(
+      localStorage.getItem("hsk1chat.retrievals") || "[]").filter(function (r) { return r.face === "toneid"; }));`));
+    const niHao = toneRows.filter(r => r.word === "\u4f60\u597d");
+    check(niHao.length === 1 && niHao[0].ok === true,
+      "tone ID: a finished word writes one toneid row a day, however many rounds play it", JSON.stringify(toneRows));
+    check(toneRows.some(r => r.word === "\u4eca\u5929"),
+      "tone ID: every word answered is credited, not just the first", JSON.stringify(toneRows));
     await exec(`window.toneItems = window.__toneItems; return true;`);
     check(await exec(`
       for (var i = 0; i < 400; i++) {
         if (window.toneItems().some(function (it) { return JSON.stringify(it.plain) !== JSON.stringify(it.spoken); })) return true;
       }
       return false;`) === true, "tone ID: words with sandhi now reach the pool");
+
+    /* Task 6: the round size is a setting, read off what the learner sees. */
+    check(await exec(`document.querySelector('#btnSet').click();
+      return document.querySelector('#toneSize').value;`) === "20",
+      "tone ID: the round-size setting defaults to 20");
+    const toneFive = await exec(`
+      document.querySelector('#toneSize').value = "5";
+      window.commitSettings();
+      window.openToneId();
+      return document.querySelector('#toneProgress').textContent;`);
+    check(toneFive === "1 / 5", "tone ID: setting the round to 5 makes a five-word round", toneFive);
+    const toneEnd = await exec(`
+      for (var i = 0; i < 5; i++) {
+        var it = window.toneItem();
+        it.tones.forEach(function (t) { document.querySelector('.tonechoice[data-t="' + t + '"]').click(); });
+        document.querySelector('#toneNext').click();
+      }
+      return document.querySelector('#toneBody').textContent + "|" + !!document.querySelector('#toneRedo');`);
+    check(toneEnd.startsWith("5 / 5") && toneEnd.endsWith("|true"),
+      "tone ID: the round ends on a score with an Again button", toneEnd);
+    check(await exec(`document.querySelector('#toneRedo').click();
+      return document.querySelector('#toneProgress').textContent;`) === "1 / 5",
+      "tone ID: Again starts a new round of the same size");
+    await exec(`document.querySelector('#btnSet').click();
+      document.querySelector('#toneSize').value = "20"; window.commitSettings(); return true;`);
 
     await exec(`document.querySelector('#toneX').click(); return true;`);
     check(await exec(`return document.querySelector('#toneSheet').classList.contains('open');`) === false,

@@ -4,7 +4,7 @@
   "_discovery": "No extra channel is needed to find this. STEP 1 already lists unmerged branches; any origin/build/* branch IS the active build, and this file sits at this path on it: git show origin/build/<slug>:docs/superpowers/build-state.json",
   "slug": "tone-id",
   "title": "Tone ID.",
-  "phase": "building",
+  "phase": "done",
   "approval": "approved",
   "branch": "build/tone-id",
   "specPath": "docs/superpowers/specs/2026-11-03-tone-id-design.md",
@@ -48,13 +48,13 @@
     },
     {
       "title": "Credit, the round summary, and the round-size setting",
-      "done": false,
+      "done": true,
       "demoable": true
     }
   ],
-  "updatedAt": "2026-11-10T00:00:00Z",
+  "updatedAt": "2026-11-11T00:00:00Z",
   "approvedAt": "2026-11-03",
   "approvedBy": "Todd, in conversation. Recorded here by hand because the routine cannot read the page from its environment, so an Approve pressed on the page would never reach it.",
   "baseNote": "main (v140) merged into this branch 2026-11-03, before task 1, so the implementation sits on top of v139's story-repair scoping and v140's 20 Questions marker rather than a v138-era base.",
-  "lastRunNote": "Task 5 done 2026-11-10. A tone answer and a gap-fill answer no longer share a word's daily slot, and gap-fill counts only its own rows. Nothing a learner sees changes until task 6 writes tone rows, so the version did not move. Next is task 6, which closes the build. The page was unreachable again, so this file is the only record."
+  "lastRunNote": "Task 6 done 2026-11-11 (v159): finished words bank a toneid retrieval, the round ends on a score with Again, and the round size is a synced setting (default 20). Every task is ticked; the build is ready to merge. The page was unreachable again, so this file is the only record."
 }
