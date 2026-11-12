@@ -1271,7 +1271,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v162 — 2026-11-12";
+const VERSION   = "v163 — 2026-11-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4010,10 +4010,36 @@ function fillSyncUI() { renderSyncSection(); }
  * short enough that the fallback still feels like part of the same tap. */
 const SPEAK_WATCHDOG_MS = 900;
 
+/* THE VOICE LIST COMES BACK EMPTY SOMETIMES, and asking again a moment later
+ * returns the voices. iOS 18 does this -- getVoices() is populated
+ * asynchronously and is also emptied and refilled around a page being
+ * backgrounded -- and every read here was live, so a tap that landed in the
+ * empty window found no Chinese voice on a phone that has several. That is
+ * what "at least once it said no 中文 voice" was, reported 2026-11-12 on
+ * iOS 18.7 right after installing more Mandarin voices.
+ *
+ * So the last non-empty list is kept and used when the live one is empty. The
+ * live list wins whenever it has anything, because a voice object from before
+ * an engine reset can be stale, and a stale object is itself a silent failure. */
+let voicesSeen = [];
+function allVoices() {
+  if (!("speechSynthesis" in window)) return [];
+  const live = speechSynthesis.getVoices() || [];
+  if (live.length) voicesSeen = live;
+  return live.length ? live : voicesSeen;
+}
+
+/* What this device offers, for the log. The one line that answers "why was it
+ * silent" without asking Todd to reproduce anything. */
+function voiceInventory() {
+  return allVoices().map(v =>
+    v.name + "/" + v.lang + (v.localService === false ? "/remote" : "")).join(", ") || "none";
+}
+
 function zhVoice() {
   if (!("speechSynthesis" in window)) return null;
   const want = S.script === "trad" ? ["zh-TW", "zh-HK", "zh-CN"] : ["zh-CN", "zh-SG", "zh-TW"];
-  const voices = speechSynthesis.getVoices() || [];
+  const voices = allVoices();
   for (const tag of want) {
     const v = voices.find(v => (v.lang || "").replace("_", "-").toLowerCase() === tag.toLowerCase());
     if (v) return v;
@@ -4034,15 +4060,32 @@ function zhVoice() {
  * Also logged, so debug_log answers this from the phone rather than from a guess. */
 function speak(text, btn, opts) {
   if (!("speechSynthesis" in window)) { if (btn) btn.textContent = "no speech"; return; }
-  speechSynthesis.cancel();                       // a second tap stops the first
+  /* ONLY CANCEL SOMETHING THAT IS ACTUALLY SPEAKING. A cancel() in the same
+   * tick as the speak() that follows it drops the new utterance on WebKit, so
+   * the unconditional cancel that was here to let a second tap stop the first
+   * was also able to swallow a first tap. Asking first costs nothing and keeps
+   * both calls inside the user gesture, which iOS requires -- deferring the
+   * speak() to a timer would lose that gesture and is the wrong fix. */
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  /* A PAUSED ENGINE QUEUES SILENTLY. iOS can leave speechSynthesis paused after
+   * the page has been backgrounded, and every later utterance then waits in a
+   * queue that is never drained, with no error and nothing to see. */
+  const wasPaused = !!speechSynthesis.paused;
+  if (wasPaused && speechSynthesis.resume) speechSynthesis.resume();
   const u = new SpeechSynthesisUtterance(text);
   const v = (opts && opts.voice) || zhVoice();
   if (v) u.voice = v;
   u.lang = v ? v.lang : (S.script === "trad" ? "zh-TW" : "zh-CN");
   u.rate = (opts && opts.rate) || S.speechRate;
-  if (!v && btn) {
-    btn.textContent = "no 中文 voice";
-    setTimeout(() => { btn.textContent = "speak"; }, 2000);
+  if (!v) {
+    /* The inventory, not just the verdict: the list is what says whether the
+     * device has no Chinese voice or merely handed back an empty array. */
+    console.warn("[speak] no zh voice for " + (S.script === "trad" ? "trad" : "simp") +
+                 "; device offers " + voiceInventory());
+    if (btn) {
+      btn.textContent = "no 中文 voice";
+      setTimeout(() => { btn.textContent = "speak"; }, 2000);
+    }
   }
   const fail = opts && opts.onFail;
   const name = (v && v.name) || "default";
@@ -4051,15 +4094,18 @@ function speak(text, btn, opts) {
     if (settled) return;
     settled = true;
     console.warn("[speak] nothing spoken (" + reason + ") voice=" + name +
-                 " lang=" + u.lang + " rate=" + u.rate);
+                 " lang=" + u.lang + " rate=" + u.rate + " paused=" + wasPaused +
+                 " voices=" + voiceInventory());
     if (fail) fail(reason);
   };
   u.onstart = () => { settled = true; };
   u.onerror = e => give((e && e.error) || "error");
   speechSynthesis.speak(u);
-  /* Only armed for a caller that asked. Without onFail this is the old
-   * behaviour exactly, so the speak buttons elsewhere are untouched. */
-  if (fail) setTimeout(() => give("silent"), SPEAK_WATCHDOG_MS);
+  /* ARMED FOR EVERY CALLER, because the button beside a message was silent too
+   * and logged nothing: the watchdog was the one place that could have said so.
+   * Without onFail it only writes the line -- no behaviour change, and that
+   * line is what the next tap on his phone will be diagnosed from. */
+  setTimeout(() => give("silent"), SPEAK_WATCHDOG_MS);
 }
 
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
@@ -6192,8 +6238,8 @@ function openToneId() {
   toneSilent = "";
   /* What this device actually offers, once per round, so debug_log can answer
    * "why was it quiet" from the phone it was quiet on. */
-  console.log("[tone] voices: " + (toneVoices().map(v =>
-    v.name + "/" + v.lang + (v.localService === false ? "/remote" : "")).join(", ") || "none"));
+  console.log("[tone] usable: " + (toneVoices().map(v => v.name + "/" + v.lang).join(", ")
+    || "none") + " | device: " + voiceInventory());
   renderToneId();
   openSheet("#toneSheet");
   if (toneRound.length) toneSpeak();
@@ -6213,7 +6259,7 @@ function toneItem() { return toneRound && toneRound[toneAt] ? toneRound[toneAt] 
  * and the learner would be marked wrong for hearing it correctly. */
 function toneVoices() {
   if (!("speechSynthesis" in window)) return [];
-  const zh = (speechSynthesis.getVoices() || []).filter(v =>
+  const zh = allVoices().filter(v =>
     /^zh/i.test(v.lang || "") && !/[-_](hk|mo)\b|yue/i.test(v.lang || ""));
   /* On-device voices first, and alone when there are any. iOS and Android both
    * LIST voices they cannot speak without a download or a network fetch, and
