@@ -4947,7 +4947,11 @@ check(usedGroups && usedGroups.first === "\u7684",
           var name = (u.voice && u.voice.name) || "default";
           if ((window.__silent || []).indexOf(name) === -1 && u.onstart) u.onstart();
         },
-        cancel: function () {}, addEventListener: function () {} } });
+        cancel: function () { window.__cancels++; },
+        resume: function () { window.__resumes++; },
+        speaking: false, pending: false, paused: false,
+        addEventListener: function () {} } });
+      window.__cancels = 0; window.__resumes = 0;
       window.SpeechSynthesisUtterance = function (t) { this.text = t; };
       window.__zhCalls = 0;
       window.__zhVoice = window.zhVoice;
@@ -5164,6 +5168,50 @@ check(usedGroups && usedGroups.first === "\u7684",
       JSON.stringify(localOnly));
 
     await exec(`document.querySelector('#toneX').click(); window.__silent = []; return true;`);
+
+    /* AN EMPTY VOICE LIST IS NOT A MISSING VOICE. Reported 2026-11-12 on iOS
+     * 18.7, right after installing several Mandarin voices: the speak button in
+     * 20 Questions said "no 中文 voice". getVoices() is populated
+     * asynchronously and is emptied and refilled around backgrounding, and
+     * every read was live, so a tap landing in that window found nothing. The
+     * last non-empty list is kept and used when the live one is empty. */
+    await exec(`
+      window.__voices = [{ name: "A", lang: "zh-CN", localService: true }];
+      window.zhVoice();                       // one good read fills the cache
+      window.__voices = [];                   // ...then iOS hands back nothing
+      return true;`);
+    check(await exec(`var v = window.zhVoice(); return v && v.name;`) === "A",
+      "speech: a momentarily empty voice list falls back to the last one seen");
+    check(await exec(`
+      window.__spoken = [];
+      window.speak("\u4f60\u597d", null);
+      return window.__spoken.length && window.__spoken[0].voice;`) === "A",
+      "speech: so the word is still spoken rather than reported as having no voice");
+
+    /* A cancel() in the same tick as the speak() after it drops the utterance on
+     * WebKit, so the unconditional cancel could swallow a first tap. */
+    check(await exec(`
+      window.__cancels = 0; window.__voices = [{ name: "A", lang: "zh-CN", localService: true }];
+      window.speak("\u4f60\u597d", null);
+      return window.__cancels;`) === 0,
+      "speech: nothing is cancelled when nothing is speaking");
+    check(await exec(`
+      window.__cancels = 0;
+      window.speechSynthesis.speaking = true;
+      window.speak("\u4f60\u597d", null);
+      window.speechSynthesis.speaking = false;
+      return window.__cancels;`) === 1,
+      "speech: but a second tap still stops the first");
+
+    /* iOS can leave the engine paused after backgrounding, and a paused engine
+     * queues every later utterance silently, with no error to see. */
+    check(await exec(`
+      window.__resumes = 0;
+      window.speechSynthesis.paused = true;
+      window.speak("\u4f60\u597d", null);
+      window.speechSynthesis.paused = false;
+      return window.__resumes;`) === 1,
+      "speech: a paused engine is resumed before speaking, not left queueing");
 
     /* No Mandarin voice: says so in the menu and the sheet, and stays silent. */
     await exec(`
