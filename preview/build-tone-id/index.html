@@ -1271,7 +1271,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v159 — 2026-11-11";
+const VERSION   = "v162 — 2026-11-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4006,6 +4006,10 @@ function fillSyncUI() { renderSyncSection(); }
  * asked for. The Web Speech API needs a Chinese voice installed on the device
  * to be any use -- without one the browser either stays silent or reads the
  * characters with an English voice, so say which rather than appearing broken. */
+/* Long enough that a slow engine starting normally is not called a failure,
+ * short enough that the fallback still feels like part of the same tap. */
+const SPEAK_WATCHDOG_MS = 900;
+
 function zhVoice() {
   if (!("speechSynthesis" in window)) return null;
   const want = S.script === "trad" ? ["zh-TW", "zh-HK", "zh-CN"] : ["zh-CN", "zh-SG", "zh-TW"];
@@ -4017,6 +4021,17 @@ function zhVoice() {
   return voices.find(v => /^zh/i.test(v.lang || "")) || null;
 }
 
+/* DID ANYTHING ACTUALLY COME OUT? speechSynthesis.speak() accepts an utterance
+ * and then says nothing at all in at least three situations: a voice the device
+ * lists but cannot speak (iOS lists undownloaded and network voices), a rate the
+ * engine rejects, and a cancel() in the same tick as the speak() that follows it.
+ * None of them throws, none fires an event every engine agrees on, and this
+ * function used to return the same way whether the word was spoken or swallowed.
+ *
+ * So a caller that needs to know passes `onFail`, and gets it on an error event
+ * or when nothing has started speaking by the time one plausibly would have.
+ * The watchdog is what catches the silent cases -- the ones with no event at all.
+ * Also logged, so debug_log answers this from the phone rather than from a guess. */
 function speak(text, btn, opts) {
   if (!("speechSynthesis" in window)) { if (btn) btn.textContent = "no speech"; return; }
   speechSynthesis.cancel();                       // a second tap stops the first
@@ -4029,7 +4044,22 @@ function speak(text, btn, opts) {
     btn.textContent = "no 中文 voice";
     setTimeout(() => { btn.textContent = "speak"; }, 2000);
   }
+  const fail = opts && opts.onFail;
+  const name = (v && v.name) || "default";
+  let settled = false;
+  const give = reason => {
+    if (settled) return;
+    settled = true;
+    console.warn("[speak] nothing spoken (" + reason + ") voice=" + name +
+                 " lang=" + u.lang + " rate=" + u.rate);
+    if (fail) fail(reason);
+  };
+  u.onstart = () => { settled = true; };
+  u.onerror = e => give((e && e.error) || "error");
   speechSynthesis.speak(u);
+  /* Only armed for a caller that asked. Without onFail this is the old
+   * behaviour exactly, so the speak buttons elsewhere are untouched. */
+  if (fail) setTimeout(() => give("silent"), SPEAK_WATCHDOG_MS);
 }
 
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
@@ -6109,6 +6139,9 @@ const TONE_RATES = [1, 0.85, 1.15];   // multiples of the learner's own speech r
 const NO_ZH_VOICE = "No Chinese voice found on this device. iOS: Settings \u2192 Accessibility \u2192 Spoken Content \u2192 Voices \u2192 Chinese.";
 
 let toneRound = null, toneAt = 0, toneSyl = 0, toneGot = [], toneRight = 0;
+/* Why this round is quiet, "" when it is not. Per round, not per app: it is
+ * about this device's speech and the learner reads it inside the sheet. */
+let toneSilent = "";
 
 /* One drawn word, or null when it cannot be scored honestly. `tones` is what
  * the wordlist stores, `spoken` what a voice should say, `plain` the
@@ -6156,6 +6189,11 @@ function toneNote(it) {
 
 function openToneId() {
   toneRound = toneVoices().length ? toneItems() : []; toneAt = 0; toneSyl = 0; toneGot = []; toneRight = 0;
+  toneSilent = "";
+  /* What this device actually offers, once per round, so debug_log can answer
+   * "why was it quiet" from the phone it was quiet on. */
+  console.log("[tone] voices: " + (toneVoices().map(v =>
+    v.name + "/" + v.lang + (v.localService === false ? "/remote" : "")).join(", ") || "none"));
   renderToneId();
   openSheet("#toneSheet");
   if (toneRound.length) toneSpeak();
@@ -6175,8 +6213,17 @@ function toneItem() { return toneRound && toneRound[toneAt] ? toneRound[toneAt] 
  * and the learner would be marked wrong for hearing it correctly. */
 function toneVoices() {
   if (!("speechSynthesis" in window)) return [];
-  return (speechSynthesis.getVoices() || []).filter(v =>
+  const zh = (speechSynthesis.getVoices() || []).filter(v =>
     /^zh/i.test(v.lang || "") && !/[-_](hk|mo)\b|yue/i.test(v.lang || ""));
+  /* On-device voices first, and alone when there are any. iOS and Android both
+   * LIST voices they cannot speak without a download or a network fetch, and
+   * one of those produces silence rather than an error -- which is exactly what
+   * cycling through every zh voice walked straight into, while the single
+   * speak button next to a message never did because zhVoice() lands on the
+   * installed default. localService is undefined on engines that do not report
+   * it, so only an explicit false is excluded. */
+  const local = zh.filter(v => v.localService !== false);
+  return local.length ? local : zh;
 }
 
 function toneMenuLabel() {
@@ -6192,11 +6239,24 @@ function refreshToneMenu() {
 /* Voice and rate both derive from the item's position, so ↻ repeats what was
  * just heard. The rate steps once per full pass through the voices: stepped
  * together, each voice would only ever be heard at one speed. */
-function toneSpeak() {
+function toneSpeak(retry) {
   const it = toneItem(), vs = toneVoices();
   if (!it || !vs.length) return;
   const step = TONE_RATES[Math.floor(toneAt / vs.length) % TONE_RATES.length];
-  speak(it.w, null, { voice: vs[toneAt % vs.length], rate: Math.max(0.5, S.speechRate * step) });
+  /* The retry drops both things this activity does that no other speech path
+   * does -- a hand-picked voice and an altered rate -- and asks for the word the
+   * way the button beside a message asks for it. If THAT is silent too, the
+   * device is not going to speak and the learner is told, because an activity
+   * whose whole content is audio must never look playable in silence. */
+  const voice = retry ? zhVoice() : vs[toneAt % vs.length];
+  const rate = retry ? S.speechRate : Math.max(0.5, S.speechRate * step);
+  speak(it.w, null, { voice: voice, rate: rate, onFail: reason => {
+    if (!retry) { console.warn("[tone] retrying on the default voice"); return toneSpeak(true); }
+    toneSilent = reason === "not-allowed"
+      ? "Your browser blocked the audio. Tap " + "\u21bb" + " to play it."
+      : "This device accepted the word but played nothing. " + NO_ZH_VOICE;
+    renderToneId();
+  } });
 }
 
 function renderToneId() {
@@ -6220,11 +6280,15 @@ function renderToneId() {
   }
   const it = toneRound[toneAt];
   prog.textContent = (toneAt + 1) + " / " + toneRound.length;
+  /* Above the word, because it explains why the word made no sound and a hint
+   * under the answer row would be read after the guess rather than before. */
+  const quiet = toneSilent
+    ? '<div class="hint tonequiet">' + escapeHtml(toneSilent) + "</div>" : "";
   const done = toneGot.length === it.syls.length;
 
   /* Plain characters, never tokenSpan: a data-py attribute would let the
    * global pinyin toggle print the answer over the question. */
-  let h = '<div class="toneword">' + escapeHtml(it.w) + "</div>";
+  let h = quiet + '<div class="toneword">' + escapeHtml(it.w) + "</div>";
   h += '<div class="toneslots">' + it.syls.map((sy, i) => {
     let cls = "toneslot";
     if (done) cls += toneHit(it, i) ? " ok" : " bad";
@@ -6250,7 +6314,7 @@ function renderToneId() {
   }
   body.innerHTML = h;
 
-  $("#toneAgain").onclick = () => toneSpeak();
+  $("#toneAgain").onclick = () => { toneSilent = ""; toneSpeak(); };
   Array.from(body.querySelectorAll(".tonechoice[data-t]")).forEach(b => {
     b.onclick = () => answerTone(Number(b.dataset.t));
   });
