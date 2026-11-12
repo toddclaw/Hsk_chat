@@ -4931,11 +4931,22 @@ check(usedGroups && usedGroups.first === "\u7684",
       window.__ttsDesc = Object.getOwnPropertyDescriptor(window, "speechSynthesis");
       window.__ttsU = window.SpeechSynthesisUtterance;
       window.__spoken = [];
-      window.__voices = [{ name: "A", lang: "zh-CN" }, { name: "Canto", lang: "zh-HK" },
-                         { name: "B", lang: "zh_TW" }, { name: "Eng", lang: "en-US" }];
+      window.__silent = [];
+      window.__voices = [{ name: "A", lang: "zh-CN", localService: true },
+                         { name: "Canto", lang: "zh-HK", localService: true },
+                         { name: "B", lang: "zh_TW", localService: true },
+                         { name: "Eng", lang: "en-US", localService: true }];
       Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
         getVoices: function () { return window.__voices; },
-        speak: function (u) { window.__spoken.push({ text: u.text, voice: u.voice && u.voice.name, rate: u.rate }); },
+        /* Fires onstart, because a real engine does and the app now watches for
+           it. window.__silent names voices that take the utterance and then say
+           nothing -- the iOS behaviour this stub could not express before, and
+           the reason Tone ID was quiet on a real phone while the suite was green. */
+        speak: function (u) {
+          window.__spoken.push({ text: u.text, voice: u.voice && u.voice.name, rate: u.rate });
+          var name = (u.voice && u.voice.name) || "default";
+          if ((window.__silent || []).indexOf(name) === -1 && u.onstart) u.onstart();
+        },
         cancel: function () {}, addEventListener: function () {} } });
       window.SpeechSynthesisUtterance = function (t) { this.text = t; };
       window.__zhCalls = 0;
@@ -5081,6 +5092,78 @@ check(usedGroups && usedGroups.first === "\u7684",
     await exec(`document.querySelector('#toneX').click(); return true;`);
     check(await exec(`return document.querySelector('#toneSheet').classList.contains('open');`) === false,
       "tone ID: the X closes the sheet");
+
+    /* ACCEPTED AND SILENT. Todd, 2026-11-12: "I don't hear anything when it
+     * starts or when I touch the redo button on the far left." Both go through
+     * toneSpeak(), which reached speechSynthesis.speak() and returned the same
+     * way whether the word was spoken or swallowed -- so the activity looked
+     * playable and said nothing. A voice the device lists but cannot speak does
+     * exactly this, with no error event, and only Tone ID hits it because only
+     * Tone ID cycles through every zh voice instead of the installed default. */
+    /* RECOVERS. The cycled voice is silent, the installed default is not, so the
+     * learner hears the word anyway and is told nothing -- a device with one bad
+     * voice among several should just work. zh_TW is first in the round while
+     * zhVoice() picks the exact zh-CN match, which is what makes the retry
+     * visibly different from the attempt. */
+    await exec(`
+      window.__spoken = [];
+      window.__silent = ["Mute"];
+      window.__voices = [{ name: "Mute", lang: "zh_TW", localService: true },
+                         { name: "Works", lang: "zh-CN", localService: true }];
+      window.fillActivities();
+      var sel = document.querySelector('#activity');
+      sel.value = "__toneid";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
+      "the tone ID sheet to open on a part-mute device");
+    await waitFor("window.__spoken.length >= 2", "the retry on the default voice");
+    const recovered = JSON.parse(await exec(`
+      return JSON.stringify({ spoken: window.__spoken,
+        quiet: document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1 });`));
+    check(recovered.spoken.length === 2 && recovered.spoken[0].voice === "Mute"
+          && recovered.spoken[1].voice === "Works",
+      "tone ID: a voice that plays nothing falls back to the installed one",
+      JSON.stringify(recovered.spoken));
+    check(recovered.quiet === false,
+      "tone ID: and says nothing about it, because the learner did hear the word");
+    await exec(`document.querySelector('#toneX').click(); return true;`);
+
+    /* ACCEPTED AND SILENT, every voice. Then it must say so: an activity whose
+     * whole content is audio may not look playable in silence. */
+    await exec(`
+      window.__spoken = [];
+      window.__silent = ["A", "B"];
+      window.__voices = [{ name: "A", lang: "zh-CN", localService: true },
+                         { name: "B", lang: "zh_TW", localService: true }];
+      window.fillActivities();
+      var sel = document.querySelector('#activity');
+      sel.value = "__toneid";
+      sel.dispatchEvent(new Event("change"));
+      return true;`);
+    await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
+      "the tone ID sheet to open on a mute device");
+    await waitFor("document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1",
+      "the sheet to admit it played nothing");
+    check(await exec(`return window.__spoken.length;`) === 2,
+      "tone ID: the retry is tried once, not in a loop");
+    check((await exec(`return document.querySelector('#toneBody').textContent;`))
+            .includes("Spoken Content"),
+      "tone ID: and the message gives the iOS path to a voice that works");
+    check(await exec(`return document.querySelectorAll('.tonechoice[data-t]').length;`) === 5,
+      "tone ID: the word is still answerable, so one mute device does not end the round");
+
+    /* A listed voice the device would have to fetch is not used while an
+     * on-device one exists: preferring it is what made the round silent. */
+    const localOnly = JSON.parse(await exec(`
+      window.__voices = [{ name: "Remote", lang: "zh-CN", localService: false },
+                         { name: "OnDevice", lang: "zh-CN", localService: true }];
+      return JSON.stringify(window.toneVoices().map(function (v) { return v.name; }));`));
+    check(localOnly.join() === "OnDevice",
+      "tone ID: an on-device voice is used in preference to one needing a download",
+      JSON.stringify(localOnly));
+
+    await exec(`document.querySelector('#toneX').click(); window.__silent = []; return true;`);
 
     /* No Mandarin voice: says so in the menu and the sheet, and stays silent. */
     await exec(`
