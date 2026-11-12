@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v161 — 2026-11-12";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -4989,10 +4989,9 @@ function setStoryTopic(text, cast, hist) {
  * so it is excluded either way, which is correct: the topic is what the
  * learner asked for, not part of what they read.
  *
- * Accepted gap: renaming the chat by hand in the round trip between this
- * call starting and the reply landing can still be overwritten -- `renamed`
- * is checked once, up front, not re-checked after the `await`. Narrow (one
- * network round trip) and best-effort, so left as is. */
+ * `renamed` is checked again after the `await` (v161): a title typed by hand
+ * during the round trip used to be overwritten when the reply landed. The
+ * chat is re-read by id too, since sync may have replaced the object. */
 async function titleStory(id) {
   const c = chatById(id);
   if (!c || c.renamed) return;
@@ -5013,15 +5012,17 @@ async function titleStory(id) {
      * already rejected once as a way of relaxing it. lexWith(needsSoFar(null))
      * is the same lexicon every reply and every rendered bubble already
      * validates against, reused rather than bespoke. It reads the CURRENT
-     * conversation, not necessarily `id` -- the same narrow, accepted gap as
-     * the `renamed` check above and for the same reason: one network round
+     * conversation, not necessarily `id` -- a narrow, accepted gap for the same
+     * reason as the one `renamed` used to have: one network round
      * trip, best-effort. Failing closed costs nothing here, because the
      * fallback is not silence: touchChat() already wrote the derived title
      * (the first segment, which already passed validate() to be told at all)
      * on every persist() since, so skipping the assignment leaves that
      * standing rather than leaving the chat untitled. */
+    const now = chatById(id);
+    if (!now || now.renamed) return;
     if (title && HSK.validate(title, lexWith(needsSoFar(null))).length === 0) {
-      c.title = title; saveChats(); queueSync("conversations"); renderChats();
+      now.title = title; saveChats(); queueSync("conversations"); renderChats();
     }
   } catch (e) {
     console.warn("could not title the story", e);   // the derived title stands

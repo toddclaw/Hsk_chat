@@ -1388,9 +1388,8 @@ Still open, in rough descending order of how much they would annoy someone:
   ask.
 - **The composer stays enabled while a segment generates.** `send()` no-ops on `S.busy`, so a
   sentence typed during generation is silently dropped rather than queued or refused.
-- **`titleStory()` re-checks `renamed` before its await, not after**, so a title typed by hand
-  during the round trip can still be clobbered. Narrow, and accepted in the function's own
-  comment.
+- ~~**`titleStory()` re-checks `renamed` before its await, not after**~~ — **fixed, v161**: it
+  re-reads the chat by id after the await and leaves a hand-typed title alone.
 - ~~**In the Told state the "Ask me another" button renders as a plain chip**~~ — **fixed,
   v142**: once every segment is told it is the only control left, and takes the accent.
 - **`persist()` always touches `currentChat()`**, so a background write from a conversation the

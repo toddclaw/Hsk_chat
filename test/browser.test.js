@@ -4289,6 +4289,22 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(await exec("return window.currentChat().title;") === "mine",
       "and a title the learner typed is left alone");
 
+    /* v161: `renamed` used to be checked only before the await, so a title
+     * typed while the title call was in flight was overwritten when it landed. */
+    await exec(
+      "var c = window.currentChat(); c.renamed = false; c.title = 'derived';" +
+      "window.saveChats(); window.renderChats();" +
+      "window.callModel = function () { return new Promise(function (r) { window.__titleDone = r; }); };" +
+      "window.__titling = window.titleStory(c.id);");
+    await exec(
+      "var c = window.currentChat(); c.title = 'typed'; c.renamed = true;" +
+      "window.saveChats(); window.renderChats();" +
+      "window.__titleDone('\\u4e00\\u53ea\\u5c0f\\u732b'); return window.__titling.then(function () { return 1; });");
+    const typedRow = await exec(
+      "return document.querySelector('#chatList .chatrow .ctitle').textContent;");
+    check(/typed$/.test(typedRow) && typedRow.indexOf("\u4e00\u53ea\u5c0f\u732b") < 0,
+      "a title typed while the title call was in flight survives it landing", typedRow);
+
     /* Final review, blocking 3: the model's title used to reach renderChats()
      * as a plain text node, no HSK.segment(), no validate() -- the one place in
      * the app a model's Chinese landed on screen without going through either.
