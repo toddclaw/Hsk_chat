@@ -1533,6 +1533,12 @@ small table by week, or a single "you are learning about 9 words a week, up from
 in words beats a chart nobody reads, and it is the same gauge-versus-prompt
 argument RESEARCH.md makes about the production list.
 
+**First step built, v166.** Learning rows carry no date, so "words learned"
+has no history to show; what does is a word's first CORRECT use in your own
+writing, which every graded message timestamps. The goal chart now has a "new
+words used" row: this week, last week, and the two before. Whether seeing it
+changes anything is the open half.
+
 **What would settle it:** pick one number — words learned per week is the
 strongest candidate, since it is the thing the pacing constants actually control
 — and show it for the last several weeks. If seeing the rate changes what you do,

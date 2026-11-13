@@ -279,6 +279,32 @@
     return out;
   }
 
+  /* How many words you wrote correctly for the FIRST time, per week, newest
+   * week first: out[0] is the last 7 days, out[1] the 7 before, and so on.
+   * The one rate the app can state from what it already stores -- learning
+   * rows carry no date, but every graded message does, so a word's first
+   * clean use is the day it entered your own writing. Rolling 7-day windows
+   * back from `now`, not calendar weeks, so no locale decides where Monday is.
+   * BACKLOG.md, "My own progress data, over time, shown to me". */
+  function firstUseByWeek(turns, wordsOf, now, weeks) {
+    var first = {};
+    (turns || []).forEach(function (t) {
+      var ms = Date.parse(String((t && t.created_at) || ""));
+      if (isNaN(ms)) return;
+      (wordsOf(t) || []).forEach(function (w) {
+        if (ghostVerdict(t && t.grade, w) !== "ok") return;
+        if (!(w in first) || ms < first[w]) first[w] = ms;
+      });
+    });
+    var out = [];
+    for (var i = 0; i < weeks; i++) out.push(0);
+    Object.keys(first).forEach(function (w) {
+      var i = Math.floor((now - first[w]) / (7 * 86400000));
+      if (i >= 0 && i < weeks) out[i]++;
+    });
+    return out;
+  }
+
   /* How much of the history predates the current grader, counted in two kinds
    * of work because they cost two very different amounts.
    *
@@ -448,6 +474,7 @@
   var api = { counts: counts, credited: credited,
               needsMigration: needsMigration,
               ghostVerdict: ghostVerdict, ghostProgress: ghostProgress,
+              firstUseByWeek: firstUseByWeek,
               dayKey: dayKey,
               drillTagOf: drillTagOf, drillExampleOf: drillExampleOf,
               drillWordOf: drillWordOf,

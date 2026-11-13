@@ -578,5 +578,25 @@ check(gp([gturn(new Date(2026, 8, 18, 8, 0, 0).toISOString(), true),
           gturn(evening.toISOString(), true)])["说话"].n === 1,
   "morning and evening of one local day are still a single credit");
 
+// --- new words per week ---------------------------------------------------
+/* A word counts once, in the week of its FIRST correct use; a wrong use is not
+ * a first use; and anything older than the window falls off the end. */
+const WK = 7 * 86400000, T0 = Date.parse("2026-11-13T12:00:00Z");
+const ago = ms => new Date(T0 - ms).toISOString();
+const says = t => t.words;
+const fw = turns => M.firstUseByWeek(turns, says, T0, 3).join(",");
+const wt = (when, words, ok) => ({ role: "user", created_at: when, words: words,
+  grade: ok === false ? { ok: false, errors: [{ tag: "x" }] } : { ok: true, errors: [] } });
+check(fw([wt(ago(WK / 7), ["说话", "可以"])]) === "2,0,0",
+  "two words first written correctly yesterday are two this week", fw([wt(ago(WK / 7), ["说话", "可以"])]));
+check(fw([wt(ago(WK + 1000), ["说话"]), wt(ago(1000), ["说话"])]) === "0,1,0",
+  "a word counts in the week it was FIRST used, not every week it is used again");
+check(fw([wt(ago(2 * WK + 1000), ["说话"], false), wt(ago(1000), ["说话"])]) === "1,0,0",
+  "a wrong use is not a first use");
+check(fw([wt(ago(5 * WK), ["说话"])]) === "0,0,0",
+  "a word first used before the window is in none of its weeks");
+check(fw([{ role: "user", words: ["说话"], grade: { ok: true } }]) === "0,0,0",
+  "a turn with no timestamp counts nowhere");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) { console.log("\nFailures:\n - " + bad.join("\n - ")); process.exit(1); }

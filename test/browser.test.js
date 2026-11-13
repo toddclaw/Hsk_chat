@@ -5431,6 +5431,41 @@ check(usedGroups && usedGroups.first === "\u7684",
     check(/the real app/.test(realTable) && !/PREVIEW/.test(realTable),
       "and Settings says so outright rather than leaving it ambiguous", realTable);
 
+    /* ------------------------------------------- new words used, per week */
+
+    /* The one rate on the progress panel. A word written correctly for the
+     * first time today has to move "this week" by one, and the same word again
+     * must not move it a second time -- the row counts first uses, not uses.
+     * The word is picked in the page as one the learner has never written, so
+     * the check does not depend on what earlier sections happened to seed. */
+    const nwWord = await exec(`
+      var used = window.producedWords();
+      return ["\u98de\u673a", "\u533b\u751f", "\u51fa\u79df\u8f66", "\u6c34\u679c", "\u7535\u5f71"]
+        .filter(function (w) { return !used.has(w); })[0] || "";`);
+    check(nwWord !== "", "a word the learner has never written is available to seed");
+    const nwRow = async () => {
+      await exec(`document.querySelector('#btnSet').click(); return true;`);
+      await waitFor("document.querySelector('#newWordsRate')", "the new-words row");
+      return await exec(`return document.querySelector('#newWordsRate').textContent;`);
+    };
+    const nwThisWeek = t => { const m = /(\d+) this week/.exec(t || ""); return m ? Number(m[1]) : NaN; };
+    const nwBefore = await nwRow();
+    check(/new words used/.test(nwBefore) && /last week/.test(nwBefore),
+      "the progress panel states new words used per week", nwBefore);
+    const nwSaved = await exec("return localStorage.getItem('hsk1chat.chatMsgs');");
+    await exec(
+      "var m = JSON.parse(localStorage.getItem('hsk1chat.chatMsgs') || '{}');" +
+      "var t = function (id) { return { role: 'user', id: id, text: arguments[1]," +
+      "  created_at: new Date().toISOString(), grade: { ok: true, errors: [] } }; };" +
+      "m.nwrate = [t('nw1', arguments[0]), t('nw2', arguments[0])];" +
+      "localStorage.setItem('hsk1chat.chatMsgs', JSON.stringify(m)); return true;", [nwWord]);
+    await go(base);
+    const nwAfter = await nwRow();
+    check(nwThisWeek(nwAfter) === nwThisWeek(nwBefore) + 1,
+      "a word written correctly for the first time today adds exactly one to this week",
+      nwBefore + " -> " + nwAfter);
+    await exec("localStorage.setItem('hsk1chat.chatMsgs', arguments[0]); return true;", [nwSaved]);
+
   } catch (e) {
     fail++; bad.push("harness: " + (e && e.message || e));
   } finally {

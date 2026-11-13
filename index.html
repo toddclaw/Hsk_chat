@@ -647,7 +647,9 @@ footer{
       how many more you need before the goal level reads comfortably. It is a far smaller
       number than the words left on the list, because the commonest words carry most of the
       running text and you already have them — published research puts adequate comprehension
-      at 95% lexical coverage and comfortable independent reading at 98%.</div>
+      at 95% lexical coverage and comfortable independent reading at 98%.
+      <br><b>New words used</b> counts the words you wrote correctly for the first time,
+      this week and each of the three before it — how fast your own writing is growing.</div>
 
     <label style="margin-top:14px">Progress to the next level</label>
       <div class="stats" id="nextProgress"></div>
@@ -1255,7 +1257,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v166 — 2026-11-13";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -6972,18 +6974,22 @@ function recordRetrieval(word, ok, face) {
  * the Ghost Words activity -- the same ceiling the drill banner's own scan
  * already carries. Cache it behind a dirty flag if a long history ever makes a
  * render feel slow. */
-function ghostProgressMap() {
+function ownGradedTurns() {
   const turns = [];
   Object.keys(S.chatMsgs || {}).forEach(function (cid) {
     (S.chatMsgs[cid] || []).forEach(function (t) {
       if (t && t.role === "user" && t.grade && ownWriting(t)) turns.push(t);
     });
   });
-  return HSKMistakes.ghostProgress(turns, function (t) {
-    return HSK.segment(t.text, S.lex)
-      .filter(function (tok) { return tok.kind === "word"; })
-      .map(function (tok) { return tok.text; });
-  });
+  return turns;
+}
+function wordsOfTurn(t) {
+  return HSK.segment(t.text, S.lex)
+    .filter(function (tok) { return tok.kind === "word"; })
+    .map(function (tok) { return tok.text; });
+}
+function ghostProgressMap() {
+  return HSKMistakes.ghostProgress(ownGradedTurns(), wordsOfTurn);
 }
 
 /* ------------------------------------------------------ the set activities */
@@ -7375,7 +7381,16 @@ function renderGoalProgress() {
       "<i>" + pct + "% you can read</i></div>" +
     "<table><tr><td>to " + mark + "%</td><td>" +
       (toGo ? toGo + " more word" + (toGo === 1 ? "" : "s") + ", commonest first"
-            : "there already") + "</td></tr></table>";
+            : "there already") + "</td></tr>" + newWordsRow() + "</table>";
+}
+
+/* The one rate on a panel of snapshots: words you wrote correctly for the
+ * first time, this week and the three before, newest first. A rate in words
+ * rather than a chart -- BACKLOG.md, "My own progress data, over time". */
+function newWordsRow() {
+  const w = HSKMistakes.firstUseByWeek(ownGradedTurns(), wordsOfTurn, Date.now(), 4);
+  return '<tr id="newWordsRate"><td>new words used</td><td>' + w[0] + " this week · " +
+    w[1] + " last week · " + w[2] + ", " + w[3] + " the weeks before</td></tr>";
 }
 
 function renderNextProgress() {
