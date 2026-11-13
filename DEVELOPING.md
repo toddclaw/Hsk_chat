@@ -13,6 +13,7 @@ and the one to check first for whether the number was arbitrary or argued.
 Not published to the site (`.github/publish-files` is an allowlist, and this
 file is deliberately not on it).
 
+
 ## Contents
 
 - [Getting set up](#getting-set-up)
@@ -23,6 +24,7 @@ file is deliberately not on it).
 - [What a partner turn goes through](#what-a-partner-turn-goes-through)
 - [The validator](#the-validator)
 - [Git and GitHub](#git-and-github)
+- [The iPhone's silent switch mutes the browser's speech](#the-iphones-silent-switch-mutes-the-browsers-speech)
 
 ## Getting set up
 
@@ -940,3 +942,43 @@ working" is visible rather than inferred.
 - **`gh pr edit --base` can fail** on a Projects-classic deprecation error. The
   REST API works:
   `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f base=main`
+
+## The iPhone's silent switch mutes the browser's speech
+
+Four rounds of debugging on 2026-11-12 ended here, so it is written down.
+
+Todd reported Tone ID playing nothing, then the plain speak button playing
+nothing, on an iPhone with several Mandarin voices installed. The cause was the
+**side silent switch**. It mutes Safari's Web Speech API while other apps still
+make sound on vibrate, and native speech — highlight text in Notes, tap Speak —
+keeps working, so nothing about the phone looks muted.
+
+What the search cost, and what each step ruled out:
+
+- The app could not tell a spoken word from a swallowed one. `speak()` set no
+  `onstart` and no `onerror`, so it returned identically either way. Everything
+  below needed that instrumentation first; it is now permanent.
+- `debug_log` off the phone answered in one tap what three rounds of guessing
+  had not. It gave the device (iOS 18.7, Safari 27.2), `paused=false`, and the
+  whole voice inventory.
+- **The voices he installed are not exposed to the browser at all.** Only the
+  stock pair, `Tingting/zh-CN` and `Meijia/zh-TW`, appear. Installing more
+  Mandarin voices cannot help a web page.
+- **`getVoices()` returns every voice twice** on iOS 18. Tone ID was counting
+  four Mandarin voices on a device with two. Deduped by name and language.
+- **iOS queues utterances**, so `onstart` for one waits until the previous has
+  finished. A 900ms watchdog read that queue latency as failure: the log caught
+  an utterance declared silent at 05:13:59.8 that began speaking at 05:14:01.4.
+  The watchdog is 2500ms now and is not armed when something is already
+  speaking.
+- A three-step escalation ladder (the caller's rate, the engine's rate, no voice
+  object) was built to bisect the remaining suspects and then **deleted** once
+  the log cleared them: `spoke, voice=Meijia rate=0.8` exonerated both the rate
+  and the named voice object. It had to go rather than stay as insurance,
+  because queued retries mean one tap speaks the word three times.
+
+The lesson worth carrying: **a silent output device is a configuration state the
+code must be able to name.** The app now says "the side silent switch mutes the
+browser's speech" before it blames the voices, because that is the one cause
+nobody guesses — and the speak button beside a message says `muted?` rather than
+doing nothing at all.

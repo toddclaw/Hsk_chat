@@ -5121,20 +5121,16 @@ check(usedGroups && usedGroups.first === "\u7684",
       return true;`);
     await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
       "the tone ID sheet to open on a part-mute device");
-    await waitFor("window.__spoken.length >= 3", "the ladder to reach the last step");
-    const recovered = JSON.parse(await exec(`
-      return JSON.stringify({ spoken: window.__spoken,
-        quiet: document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1 });`));
-    /* Step 0 as asked, step 1 at the engine's own speed, step 2 with no voice
-       object at all -- which is where the stub's default voice speaks. */
-    check(recovered.spoken.length === 3
-          && recovered.spoken[0].voice === "Mute" && recovered.spoken[0].rate === 0.8
-          && recovered.spoken[1].voice === "Mute" && recovered.spoken[1].rate === 1
-          && !recovered.spoken[2].voice && recovered.spoken[2].rate === 1,
-      "speech: a silent voice escalates -- same voice at default speed, then no voice at all",
-      JSON.stringify(recovered.spoken));
-    check(recovered.quiet === false,
-      "tone ID: and the learner is told nothing, because a step did speak");
+    await waitFor("document.querySelector('#toneBody').textContent.indexOf('silent switch') !== -1",
+      "the sheet to name the silent switch");
+    const recovered = JSON.parse(await exec(`return JSON.stringify(window.__spoken);`));
+    /* ONE utterance, not three. v164 escalated through a ladder to identify
+       which of three suspects swallowed the word; the answer was none of them
+       (the iPhone's side silent switch), and iOS queueing made the ladder speak
+       a word up to three times over. */
+    check(recovered.length === 1 && recovered[0].voice === "Mute",
+      "speech: a word is asked for once, not escalated through a ladder",
+      JSON.stringify(recovered));
     await exec(`document.querySelector('#toneX').click(); return true;`);
 
     /* ACCEPTED AND SILENT, every voice. Then it must say so: an activity whose
@@ -5153,24 +5149,43 @@ check(usedGroups && usedGroups.first === "\u7684",
       return true;`);
     await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
       "the tone ID sheet to open on a mute device");
-    await waitFor("document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1",
-      "the sheet to admit it played nothing");
-    check(await exec(`return window.__spoken.length;`) === 3,
-      "speech: the ladder stops at its last step rather than looping");
-    check((await exec(`return document.querySelector('#toneBody').textContent;`))
-            .includes("Spoken Content"),
-      "tone ID: and the message gives the iOS path to a voice that works");
+    await waitFor("document.querySelector('#toneBody').textContent.indexOf('silent switch') !== -1",
+      "the sheet to name the silent switch");
+    check(await exec(`return window.__spoken.length;`) === 1,
+      "speech: and once per tap when the device is wholly mute");
+    /* The switch FIRST: it mutes the browser's speech while other apps still
+     * make sound on vibrate, which is why it cost four rounds to find. */
+    const muteMsg = await exec(`return document.querySelector('#toneBody').textContent;`);
+    check(muteMsg.includes("silent switch") && muteMsg.indexOf("silent switch") < muteMsg.indexOf("Mandarin voice"),
+      "tone ID: and names the silent switch before blaming the voices", muteMsg);
     check(await exec(`return document.querySelectorAll('.tonechoice[data-t]').length;`) === 5,
       "tone ID: the word is still answerable, so one mute device does not end the round");
 
-    /* A step that speaks ends the ladder: no further utterances, nothing said
-     * to the learner. */
+    /* A WAIT BEHIND ANOTHER UTTERANCE IS NOT A FAULT. iOS queues, so onstart
+     * for one waits until the last has finished -- the log caught an utterance
+     * declared silent at 05:13:59.8 that began speaking at 05:14:01.4. The
+     * watchdog is not armed at all when something is already speaking. */
     check(await exec(`
-      window.__spoken = []; window.__silent = [];
+      window.__spoken = []; window.__silent = ["A"];
       window.__voices = [{ name: "A", lang: "zh-CN", localService: true }];
-      window.speak("\u4f60\u597d", null);
-      return window.__spoken.length;`) === 1,
-      "speech: a voice that works is asked once and the ladder stops there");
+      window.speechSynthesis.speaking = true;
+      var b = document.createElement("button");
+      window.speak("\u4f60\u597d", b);
+      window.speechSynthesis.speaking = false;
+      return b.textContent;`) === "",
+      "speech: an utterance queued behind another is not reported as silent");
+
+    /* The button beside a message had no way to say this, which is how a muted
+     * phone read as a broken app. */
+    await exec(`window.__spoken = []; window.__silent = ["A"];
+      window.__voices = [{ name: "A", lang: "zh-CN", localService: true }];
+      window.__btn = document.createElement("button");
+      window.__btn.textContent = "speak";
+      window.speak("\u4f60\u597d", window.__btn);
+      return true;`);
+    await waitFor("window.__btn.textContent === 'muted?'",
+      "the speak button to report the silence");
+    check(true, "speech: the speak button beside a message reports a silent device");
 
     /* iOS 18 returns the whole voice list twice, which had Tone ID counting
      * four Mandarin voices on a device with two. */

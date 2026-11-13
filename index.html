@@ -1271,7 +1271,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v164 — 2026-11-12";
+const VERSION   = "v165 — 2026-11-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4008,7 +4008,9 @@ function fillSyncUI() { renderSyncSection(); }
  * characters with an English voice, so say which rather than appearing broken. */
 /* Long enough that a slow engine starting normally is not called a failure,
  * short enough that the fallback still feels like part of the same tap. */
-const SPEAK_WATCHDOG_MS = 900;
+/* Wide enough for a slow start on a phone. The 900ms this began as was reading
+ * iOS queue latency as failure -- see the note in speak(). */
+const SPEAK_WATCHDOG_MS = 2500;
 /* So the log distinguishes "speech has never worked on this device" from
  * "nothing was logged": the first success says so, once per session. */
 let spokeOnce = false;
@@ -4104,57 +4106,50 @@ function speak(text, btn, opts) {
     }
   }
   const fail = opts && opts.onFail;
-  const baseRate = (opts && opts.rate) || S.speechRate;
-  const lang = (v && v.lang) || (S.script === "trad" ? "zh-TW" : "zh-CN");
-  let done = false, active = -1;
 
-  /* THREE CANDIDATES LEFT, so the ladder bisects them instead of costing
-   * another day's round trip. From Todd's phone, v163: Tingting/zh-CN is
-   * present, the engine was not paused, the tap was a real gesture and the
-   * utterance raised no error -- it was simply swallowed. What remains is the
-   * rate, the voice OBJECT (iOS hands out duplicates and they are not equally
-   * usable), or the device refusing this voice at all. Each step drops one
-   * suspect, and whichever step speaks is logged by name, so one tap says
-   * which it was.
+  /* ONE UTTERANCE. v164 escalated through three -- the caller's rate, then the
+   * engine's own, then no voice object at all -- to find out which of three
+   * suspects was swallowing the word on Todd's iPhone. The answer was none of
+   * them: THE SIDE SILENT SWITCH MUTES SAFARI'S WEB SPEECH API, and the log
+   * then recorded "spoke on step 0 ... voice=Meijia rate=0.8", clearing both
+   * the rate and the named voice object.
    *
-   * Steps after the first run ~900ms later and so OUTSIDE the user gesture.
-   * iOS usually keeps speech unlocked once a gesture-initiated utterance has
-   * been accepted, which this one was, but if every step is silent that is one
-   * possible reason as well as a real mute -- the log says which step reached
-   * which state, so it stays visible rather than being assumed away. */
-  const WHY = ["as asked", "engine default speed", "no voice object, language only"];
-  const attempt = step => {
-    if (done) return;
-    active = step;
-    const u = new SpeechSynthesisUtterance(text);
-    const pick = step === 2 ? null : v;       // step 2 lets iOS choose for the lang
-    if (pick) u.voice = pick;
-    u.lang = lang;
-    u.rate = step === 0 ? baseRate : 1;
-    u.onstart = () => {
-      done = true;
-      if (step || !spokeOnce) {
-        spokeOnce = true;
-        console.log("[speak] spoke on step " + step + " (" + WHY[step] + ") voice=" +
-                    ((u.voice && u.voice.name) || "chosen by the device") +
-                    " lang=" + u.lang + " rate=" + u.rate);
-      }
-    };
-    u.onerror = e => stepFailed(step, (e && e.error) || "error", u);
-    speechSynthesis.speak(u);
-    setTimeout(() => stepFailed(step, "silent", u), SPEAK_WATCHDOG_MS);
+   * The ladder had to go rather than stay as insurance, because it was actively
+   * wrong: iOS QUEUES utterances, so onstart for one waits until the last has
+   * finished, and the 900ms watchdog was reading queue latency as failure. The
+   * log caught it doing exactly that -- an utterance declared silent at
+   * 05:13:59.8 began speaking at 05:14:01.4 -- and three queued attempts from
+   * one tap is a word spoken three times over.
+   *
+   * What stays is the watchdog, for the log and for telling the learner, with a
+   * window wide enough for a slow start and ARMED ONLY when nothing is already
+   * speaking: a wait behind another utterance is not a fault. */
+  const name = (v && v.name) || "chosen by the device";
+  const queued = speechSynthesis.speaking || speechSynthesis.pending;
+  let settled = false;
+  u.onstart = () => {
+    settled = true;
+    if (!spokeOnce) {
+      spokeOnce = true;
+      console.log("[speak] spoke, voice=" + name + " lang=" + u.lang + " rate=" + u.rate);
+    }
   };
-  const stepFailed = (step, reason, u) => {
-    if (done || step !== active) return;      // onerror and the watchdog both fire
-    console.warn("[speak] step " + step + " (" + WHY[step] + ") " + reason +
-                 " voice=" + ((u.voice && u.voice.name) || "none") +
-                 " lang=" + u.lang + " rate=" + u.rate +
-                 (step === 0 ? " paused=" + wasPaused + " voices=" + voiceInventory() : ""));
-    if (step < WHY.length - 1) return attempt(step + 1);
-    done = true;
+  const give = reason => {
+    if (settled) return;
+    settled = true;
+    console.warn("[speak] nothing spoken (" + reason + ") voice=" + name + " lang=" + u.lang +
+                 " rate=" + u.rate + " paused=" + wasPaused + " voices=" + voiceInventory());
     if (fail) fail(reason);
+    else if (btn) {
+      /* The speak button beside a message had no way to say this, which is how
+       * a muted phone read as a broken app for two rounds. */
+      btn.textContent = "muted?";
+      setTimeout(() => { btn.textContent = "speak"; }, 2500);
+    }
   };
-  attempt(0);
+  u.onerror = e => give((e && e.error) || "error");
+  speechSynthesis.speak(u);
+  if (!queued) setTimeout(() => give("silent"), SPEAK_WATCHDOG_MS);
 }
 
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
@@ -6232,6 +6227,10 @@ function closeGapFill() {
 const TONE_LABELS = ["\u00b7", "\u0304", "\u0301", "\u030c", "\u0300"];
 const TONE_RATES = [1, 0.85, 1.15];   // multiples of the learner's own speech rate
 const NO_ZH_VOICE = "No Chinese voice found on this device. iOS: Settings \u2192 Accessibility \u2192 Spoken Content \u2192 Voices \u2192 Chinese.";
+/* THE SILENT SWITCH, first, because it is the one nobody guesses: on an iPhone
+ * it mutes the browser's speech while other apps still make sound on vibrate,
+ * which is exactly why this cost four rounds of debugging on 2026-11-12. */
+const SPEECH_MUTED = "Nothing played. On an iPhone the side silent switch mutes the browser's speech, even though other apps still make sound on vibrate \u2014 check that first.";
 
 let toneRound = null, toneAt = 0, toneSyl = 0, toneGot = [], toneRight = 0;
 /* Why this round is quiet, "" when it is not. Per round, not per app: it is
@@ -6349,7 +6348,7 @@ function toneSpeak() {
     onFail: reason => {
       toneSilent = reason === "not-allowed"
         ? "Your browser blocked the audio. Tap \u21bb to play it."
-        : "This device accepted the word but played nothing. " + NO_ZH_VOICE;
+        : SPEECH_MUTED + " If it is off, this device may have no usable Mandarin voice.";
       renderToneId();
     }
   });
