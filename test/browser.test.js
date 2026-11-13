@@ -5121,23 +5121,29 @@ check(usedGroups && usedGroups.first === "\u7684",
       return true;`);
     await waitFor("document.querySelector('#toneSheet').classList.contains('open')",
       "the tone ID sheet to open on a part-mute device");
-    await waitFor("window.__spoken.length >= 2", "the retry on the default voice");
+    await waitFor("window.__spoken.length >= 3", "the ladder to reach the last step");
     const recovered = JSON.parse(await exec(`
       return JSON.stringify({ spoken: window.__spoken,
         quiet: document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1 });`));
-    check(recovered.spoken.length === 2 && recovered.spoken[0].voice === "Mute"
-          && recovered.spoken[1].voice === "Works",
-      "tone ID: a voice that plays nothing falls back to the installed one",
+    /* Step 0 as asked, step 1 at the engine's own speed, step 2 with no voice
+       object at all -- which is where the stub's default voice speaks. */
+    check(recovered.spoken.length === 3
+          && recovered.spoken[0].voice === "Mute" && recovered.spoken[0].rate === 0.8
+          && recovered.spoken[1].voice === "Mute" && recovered.spoken[1].rate === 1
+          && !recovered.spoken[2].voice && recovered.spoken[2].rate === 1,
+      "speech: a silent voice escalates -- same voice at default speed, then no voice at all",
       JSON.stringify(recovered.spoken));
     check(recovered.quiet === false,
-      "tone ID: and says nothing about it, because the learner did hear the word");
+      "tone ID: and the learner is told nothing, because a step did speak");
     await exec(`document.querySelector('#toneX').click(); return true;`);
 
     /* ACCEPTED AND SILENT, every voice. Then it must say so: an activity whose
      * whole content is audio may not look playable in silence. */
     await exec(`
       window.__spoken = [];
-      window.__silent = ["A", "B"];
+      /* "default" too: the ladder's last step passes no voice object, so a
+         device that truly says nothing has to be silent for that step as well. */
+      window.__silent = ["A", "B", "default"];
       window.__voices = [{ name: "A", lang: "zh-CN", localService: true },
                          { name: "B", lang: "zh_TW", localService: true }];
       window.fillActivities();
@@ -5149,13 +5155,34 @@ check(usedGroups && usedGroups.first === "\u7684",
       "the tone ID sheet to open on a mute device");
     await waitFor("document.querySelector('#toneBody').textContent.indexOf('played nothing') !== -1",
       "the sheet to admit it played nothing");
-    check(await exec(`return window.__spoken.length;`) === 2,
-      "tone ID: the retry is tried once, not in a loop");
+    check(await exec(`return window.__spoken.length;`) === 3,
+      "speech: the ladder stops at its last step rather than looping");
     check((await exec(`return document.querySelector('#toneBody').textContent;`))
             .includes("Spoken Content"),
       "tone ID: and the message gives the iOS path to a voice that works");
     check(await exec(`return document.querySelectorAll('.tonechoice[data-t]').length;`) === 5,
       "tone ID: the word is still answerable, so one mute device does not end the round");
+
+    /* A step that speaks ends the ladder: no further utterances, nothing said
+     * to the learner. */
+    check(await exec(`
+      window.__spoken = []; window.__silent = [];
+      window.__voices = [{ name: "A", lang: "zh-CN", localService: true }];
+      window.speak("\u4f60\u597d", null);
+      return window.__spoken.length;`) === 1,
+      "speech: a voice that works is asked once and the ladder stops there");
+
+    /* iOS 18 returns the whole voice list twice, which had Tone ID counting
+     * four Mandarin voices on a device with two. */
+    const deduped = JSON.parse(await exec(`
+      window.__voices = [{ name: "Tingting", lang: "zh-CN", localService: true },
+                         { name: "Meijia", lang: "zh-TW", localService: true },
+                         { name: "Tingting", lang: "zh-CN", localService: true },
+                         { name: "Meijia", lang: "zh-TW", localService: true }];
+      return JSON.stringify(window.toneVoices().map(function (v) { return v.name; }));`));
+    check(deduped.join() === "Tingting,Meijia",
+      "speech: a duplicated voice list is counted once per voice",
+      JSON.stringify(deduped));
 
     /* A listed voice the device would have to fetch is not used while an
      * on-device one exists: preferring it is what made the round silent. */

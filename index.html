@@ -1271,7 +1271,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v163 — 2026-11-12";
+const VERSION   = "v164 — 2026-11-12";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -4009,6 +4009,9 @@ function fillSyncUI() { renderSyncSection(); }
 /* Long enough that a slow engine starting normally is not called a failure,
  * short enough that the fallback still feels like part of the same tap. */
 const SPEAK_WATCHDOG_MS = 900;
+/* So the log distinguishes "speech has never worked on this device" from
+ * "nothing was logged": the first success says so, once per session. */
+let spokeOnce = false;
 
 /* THE VOICE LIST COMES BACK EMPTY SOMETIMES, and asking again a moment later
  * returns the voices. iOS 18 does this -- getVoices() is populated
@@ -4024,8 +4027,21 @@ const SPEAK_WATCHDOG_MS = 900;
 let voicesSeen = [];
 function allVoices() {
   if (!("speechSynthesis" in window)) return [];
-  const live = speechSynthesis.getVoices() || [];
-  if (live.length) voicesSeen = live;
+  let live = speechSynthesis.getVoices() || [];
+  /* iOS 18 returns the whole list TWICE -- "Samantha/en-US, Samantha/en-US,
+   * ... Tingting/zh-CN, ... Tingting/zh-CN" in the log from Todd's phone --
+   * so Tone ID counted four Mandarin voices where the device has two and
+   * cycled two of its slots onto repeats. Deduped by name and language; the
+   * first object of a pair is kept. */
+  if (live.length) {
+    const seen = {};
+    live = live.filter(v => {
+      const k = (v.name || "") + "|" + (v.lang || "");
+      if (seen[k]) return false;
+      seen[k] = 1; return true;
+    });
+    voicesSeen = live;
+  }
   return live.length ? live : voicesSeen;
 }
 
@@ -4088,24 +4104,57 @@ function speak(text, btn, opts) {
     }
   }
   const fail = opts && opts.onFail;
-  const name = (v && v.name) || "default";
-  let settled = false;
-  const give = reason => {
-    if (settled) return;
-    settled = true;
-    console.warn("[speak] nothing spoken (" + reason + ") voice=" + name +
-                 " lang=" + u.lang + " rate=" + u.rate + " paused=" + wasPaused +
-                 " voices=" + voiceInventory());
+  const baseRate = (opts && opts.rate) || S.speechRate;
+  const lang = (v && v.lang) || (S.script === "trad" ? "zh-TW" : "zh-CN");
+  let done = false, active = -1;
+
+  /* THREE CANDIDATES LEFT, so the ladder bisects them instead of costing
+   * another day's round trip. From Todd's phone, v163: Tingting/zh-CN is
+   * present, the engine was not paused, the tap was a real gesture and the
+   * utterance raised no error -- it was simply swallowed. What remains is the
+   * rate, the voice OBJECT (iOS hands out duplicates and they are not equally
+   * usable), or the device refusing this voice at all. Each step drops one
+   * suspect, and whichever step speaks is logged by name, so one tap says
+   * which it was.
+   *
+   * Steps after the first run ~900ms later and so OUTSIDE the user gesture.
+   * iOS usually keeps speech unlocked once a gesture-initiated utterance has
+   * been accepted, which this one was, but if every step is silent that is one
+   * possible reason as well as a real mute -- the log says which step reached
+   * which state, so it stays visible rather than being assumed away. */
+  const WHY = ["as asked", "engine default speed", "no voice object, language only"];
+  const attempt = step => {
+    if (done) return;
+    active = step;
+    const u = new SpeechSynthesisUtterance(text);
+    const pick = step === 2 ? null : v;       // step 2 lets iOS choose for the lang
+    if (pick) u.voice = pick;
+    u.lang = lang;
+    u.rate = step === 0 ? baseRate : 1;
+    u.onstart = () => {
+      done = true;
+      if (step || !spokeOnce) {
+        spokeOnce = true;
+        console.log("[speak] spoke on step " + step + " (" + WHY[step] + ") voice=" +
+                    ((u.voice && u.voice.name) || "chosen by the device") +
+                    " lang=" + u.lang + " rate=" + u.rate);
+      }
+    };
+    u.onerror = e => stepFailed(step, (e && e.error) || "error", u);
+    speechSynthesis.speak(u);
+    setTimeout(() => stepFailed(step, "silent", u), SPEAK_WATCHDOG_MS);
+  };
+  const stepFailed = (step, reason, u) => {
+    if (done || step !== active) return;      // onerror and the watchdog both fire
+    console.warn("[speak] step " + step + " (" + WHY[step] + ") " + reason +
+                 " voice=" + ((u.voice && u.voice.name) || "none") +
+                 " lang=" + u.lang + " rate=" + u.rate +
+                 (step === 0 ? " paused=" + wasPaused + " voices=" + voiceInventory() : ""));
+    if (step < WHY.length - 1) return attempt(step + 1);
+    done = true;
     if (fail) fail(reason);
   };
-  u.onstart = () => { settled = true; };
-  u.onerror = e => give((e && e.error) || "error");
-  speechSynthesis.speak(u);
-  /* ARMED FOR EVERY CALLER, because the button beside a message was silent too
-   * and logged nothing: the watchdog was the one place that could have said so.
-   * Without onFail it only writes the line -- no behaviour change, and that
-   * line is what the next tap on his phone will be diagnosed from. */
-  setTimeout(() => give("silent"), SPEAK_WATCHDOG_MS);
+  attempt(0);
 }
 
 /* Copy without the pinyin. Selecting by hand works too -- the ruby is
@@ -6285,24 +6334,25 @@ function refreshToneMenu() {
 /* Voice and rate both derive from the item's position, so ↻ repeats what was
  * just heard. The rate steps once per full pass through the voices: stepped
  * together, each voice would only ever be heard at one speed. */
-function toneSpeak(retry) {
+function toneSpeak() {
   const it = toneItem(), vs = toneVoices();
   if (!it || !vs.length) return;
   const step = TONE_RATES[Math.floor(toneAt / vs.length) % TONE_RATES.length];
-  /* The retry drops both things this activity does that no other speech path
-   * does -- a hand-picked voice and an altered rate -- and asks for the word the
-   * way the button beside a message asks for it. If THAT is silent too, the
-   * device is not going to speak and the learner is told, because an activity
-   * whose whole content is audio must never look playable in silence. */
-  const voice = retry ? zhVoice() : vs[toneAt % vs.length];
-  const rate = retry ? S.speechRate : Math.max(0.5, S.speechRate * step);
-  speak(it.w, null, { voice: voice, rate: rate, onFail: reason => {
-    if (!retry) { console.warn("[tone] retrying on the default voice"); return toneSpeak(true); }
-    toneSilent = reason === "not-allowed"
-      ? "Your browser blocked the audio. Tap " + "\u21bb" + " to play it."
-      : "This device accepted the word but played nothing. " + NO_ZH_VOICE;
-    renderToneId();
-  } });
+  /* No retry of its own any more: speak()'s ladder already drops the altered
+   * rate and then the hand-picked voice, which is exactly what this used to do
+   * by hand. onFail now means every one of those steps was silent, so the
+   * device is not going to speak and the learner is told -- an activity whose
+   * whole content is audio must never look playable in silence. */
+  speak(it.w, null, {
+    voice: vs[toneAt % vs.length],
+    rate: Math.max(0.5, S.speechRate * step),
+    onFail: reason => {
+      toneSilent = reason === "not-allowed"
+        ? "Your browser blocked the audio. Tap \u21bb to play it."
+        : "This device accepted the word but played nothing. " + NO_ZH_VOICE;
+      renderToneId();
+    }
+  });
 }
 
 function renderToneId() {
