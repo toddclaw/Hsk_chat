@@ -1205,6 +1205,17 @@ return true;
       "the collapsed Learning row carries the number without opening it",
       await exec(`return document.querySelector('#secLearningNote').textContent;`));
 
+    /* Boot and a synced goal change both fire loadGoalList() unawaited, so
+     * the note is rendered before the list lands. Blank it the way that race
+     * does (drawn before the list existed) and let the list land: the row has
+     * to fill in by itself. */
+    const lateNote = await exec(`
+      document.querySelector('#secLearningNote').textContent = "";
+      return loadGoalList().then(function () {
+        return document.querySelector('#secLearningNote').textContent; });`);
+    check(/% to HSK 7-9/.test(lateNote),
+      "the Learning row fills in when the goal list lands after it was drawn", lateNote);
+
     /* ----------------------------------------- goal-level progress bar */
 
     const goalProg = await exec(`

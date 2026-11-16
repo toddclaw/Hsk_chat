@@ -80,7 +80,11 @@ something silently.
 - ~~`judge()` undefined in `tools/story-ab.js`~~ — **fixed 2026-09-14.** Which
   published continuity figures were zero by accident is still open.
 - The `loadGoalList()` race in `browser.test.js` — closes out `run.sh`'s retry.
-  **Still open**: it touches `boot()` and wants its own change.
+  **Half fixed, v167**: the race was in the app as well — the collapsed Learning
+  row was drawn before the list landed and never redrawn, so it sat blank, or
+  after a synced goal change showed the old list's percentage under the new
+  level's name. `loadGoalList()` now redraws it. The suite can still read it
+  before the list lands, so the retry stays until `go()` waits on it too.
 - Place names past the validator — burns retries on a starter the app itself ships.
   **Still open**, and the first thing to fix before any A/B is re-run.
 - 为什么 at HSK 1 — burns repairs at the level where pacing is most fragile.

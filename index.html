@@ -1255,7 +1255,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v148 — 2026-11-08";
+const VERSION   = "v167 — 2026-11-16";
 
 /* Which deploy this is, read off the URL rather than baked in at build time.
  * Previews are served from /Hsk_chat/preview/<branch>/ and the real app from
@@ -1626,7 +1626,11 @@ async function loadGoalList() {
   try {
     S.goalList = await levelList(S.goalLevel);
   } catch (e) { console.warn("goal list load failed", e); }
-  renderGoalProgress();
+  /* The collapsed Learning row quotes the same number, and every caller but
+   * one fires this without awaiting it: Settings opened at first run showed
+   * the row blank, and a goal level pulled by sync labelled the OLD list's
+   * percentage with the new level's name. Refresh it where the list lands. */
+  renderGoalProgress(); renderSectionNotes();
 }
 
 async function loadLevel(n) {
