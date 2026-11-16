@@ -401,7 +401,12 @@ footer{
 .gapchoice.bad{border-color:var(--bad); color:var(--bad)}
 /* Tone ID. The word is shown WITHOUT pinyin -- no tokenSpan, no data-py -- for
    the same reason the gap blank is not a token span: the pinyin is the answer. */
-.toneword{font-size:40px; text-align:center; margin:8px 0 4px; letter-spacing:4px}
+.toneword{font-size:40px; text-align:center; margin:8px 0 4px; letter-spacing:4px;
+  min-height:1.2em}
+/* The word is not shown until it has been answered, so this is what stands in
+   its place. Same box and height, so nothing moves on the reveal. */
+.toneword.unheard{font-size:15px; letter-spacing:normal; color:var(--dim);
+  display:flex; align-items:center; justify-content:center}
 .toneslots{display:flex; justify-content:center; gap:8px; margin:12px 0}
 .toneslot{min-width:44px; min-height:44px; display:flex; align-items:center; justify-content:center;
   border:1px solid var(--line); border-radius:10px; font-size:20px; color:var(--dim)}
@@ -1271,7 +1276,7 @@ const REF_LIST = "data/hsk7.json";
 
 /* Bump on every deploy, together with CACHE in sw.js. Shown in Settings so a
  * phone can be checked against what is actually deployed. */
-const VERSION   = "v165 — 2026-11-12";
+const VERSION   = "v166 — 2026-11-15";
 
 const API_URL   = "https://openrouter.ai/api/v1/chat/completions";
 const MODELS_URL= "https://openrouter.ai/api/v1/models";
@@ -6381,9 +6386,22 @@ function renderToneId() {
     ? '<div class="hint tonequiet">' + escapeHtml(toneSilent) + "</div>" : "";
   const done = toneGot.length === it.syls.length;
 
-  /* Plain characters, never tokenSpan: a data-py attribute would let the
-   * global pinyin toggle print the answer over the question. */
-  let h = quiet + '<div class="toneword">' + escapeHtml(it.w) + "</div>";
+  /* THE CHARACTERS ARE THE ANSWER, so they are not shown until it is given.
+   * Todd, 2026-11-15: "I'm finding in many cases, I can tell the correct tones
+   * from the characters without even listening." Decision 7 in the spec.
+   *
+   * The pinyin was already guarded against for exactly this reason -- the note
+   * that used to sit here was about keeping the global pinyin toggle from
+   * printing the answer over the question -- and the characters leak it just as
+   * surely to anyone who knows the word. Answering from lexical memory means
+   * the perceptual training the evidence credits never runs, and it writes a
+   * `retrievals` row claiming to be a tone identification that is not one.
+   *
+   * Plain characters on the reveal, never tokenSpan: a data-py attribute would
+   * put the pinyin back over the word on the next render. */
+  let h = quiet + (done
+    ? '<div class="toneword">' + escapeHtml(it.w) + "</div>"
+    : '<div class="toneword unheard">listen, then tap one tone per syllable</div>');
   h += '<div class="toneslots">' + it.syls.map((sy, i) => {
     let cls = "toneslot";
     if (done) cls += toneHit(it, i) ? " ok" : " bad";
