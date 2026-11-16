@@ -116,6 +116,24 @@ the app did not choose. This costs nothing: the detector is needed either way,
 and it is the only option that cannot teach something false on an untested
 device.
 
+**7. The characters are hidden until the answer is given.** Settled by Todd on
+2026-11-15, after using it: *"I'm finding in many cases, I can tell the correct
+tones from the characters without even listening."* He is right, and this
+document shipped the leak — it guarded the **pinyin** against exactly this
+(`index.html`, the note on `.toneword`) and did not notice that a character
+gives the tone away to anyone who knows the word.
+
+It matters for both halves of the activity. The transfer evidence above is from
+*perception-only* training, so an answer read off the orthography means the
+mechanism the evidence credits never runs. And every answer writes a
+`retrievals` row with `face: "toneid"`, so a round answered from lexical memory
+records vocabulary knowledge under a label that claims tone identification.
+
+The syllable slots stay visible: how MANY tones to give is the one thing the
+learner legitimately cannot get from the audio. The word appears on the reveal,
+beside the pinyin, which also keeps the sound-to-form pairing the hidden version
+would otherwise lose — it just arrives after the answer rather than before it.
+
 ## Architecture
 
 ### `pinyin.js` — a new pure module

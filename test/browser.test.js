@@ -4974,8 +4974,24 @@ check(usedGroups && usedGroups.first === "\u7684",
       "tone ID: five answers -- four tones and neutral, which is a real answer here");
     check(await exec(`return document.querySelectorAll('.toneslot').length;`) === tIt.syls.length,
       "tone ID: one slot per syllable, so a two-syllable word asks twice");
-    check(await exec(`return document.querySelector('.toneword').textContent;`) === tIt.w,
-      "tone ID: the word is shown");
+    /* THE WORD IS NOT ON SCREEN UNTIL IT HAS BEEN ANSWERED. Decision 7: the
+     * characters give the tone away to anyone who knows the word, so a round
+     * could be completed without listening -- which skips the perceptual
+     * training the evidence is about and mislabels the retrieval it records.
+     * Asserted against the rendered sheet, because that is what leaks. */
+    const hidden = await exec(`
+      var it = window.toneItem();
+      var body = document.querySelector('#toneBody').textContent;
+      return JSON.stringify({ word: it.w, pinyin: it.p, shown: body,
+        slots: document.querySelectorAll('.toneslot').length,
+        syls: it.syls.length });`);
+    const hid = JSON.parse(hidden);
+    check(hid.shown.indexOf(hid.word) === -1,
+      "tone ID: the characters are not on screen before the answer", hidden);
+    check(hid.slots === hid.syls,
+      "tone ID: but the syllable count still is, which the audio cannot give",
+      hidden);
+
     /* The pinyin IS the answer, so it must not be reachable before answering --
      * not in the text, and not through a data-py the global pinyin toggle would
      * render over the top. This is the same trap the gap blank avoids. */
@@ -4993,6 +5009,10 @@ check(usedGroups && usedGroups.first === "\u7684",
     }
     check((await exec(`return document.querySelector('#toneBody').textContent;`)).includes(tIt.p),
       "tone ID: once every syllable is answered the pinyin is revealed");
+    /* And the characters with it: the sound-to-form pairing still happens, it
+     * just arrives after the guess instead of giving it away. */
+    check((await exec(`return document.querySelector('.toneword').textContent;`)) === tIt.w,
+      "tone ID: and the characters appear beside it", tIt.w);
     check(await exec(`return document.querySelectorAll('.toneslot.ok').length;`) === tIt.syls.length,
       "tone ID: and every slot reads as correct");
     check(await exec(`return !!document.querySelector('#toneNext');`) === true,
