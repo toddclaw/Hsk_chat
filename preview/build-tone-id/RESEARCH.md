@@ -2171,6 +2171,33 @@ Stated plainly so nobody cites this file for more than it holds.
 - [Questioning levels](https://magisterp.com/2020/07/19/questioning-levels-goodbye-yes-and-no/),
   Magister P. — the ladder argued by output demand rather than difficulty.
 
+**Tone perception and production**
+
+- Wang, Y., Spence, M. M., Jongman, A. & Sereno, J. A. (1999). *Training American
+  listeners to perceive Mandarin tones.* Journal of the Acoustical Society of
+  America. Identification +21%, generalising to new words (+18%) and to voices
+  never heard in training (+25%), still present at six months. The evidence the
+  activity was nominated on.
+- Wang, Y., Jongman, A. & Sereno, J. A. (2003). *Acoustic and perceptual
+  evaluation of Mandarin tone productions before and after perceptual training.*
+  Journal of the Acoustical Society of America. Production improved 18% after
+  **perception-only** training, with nobody correcting the learners'
+  pronunciation — which is why an app that cannot hear the learner can still
+  teach tones.
+- [The Hacking Chinese guide to Mandarin tones](https://www.hackingchinese.com/the-hacking-chinese-guide-to-mandarin-tones/),
+  Olle Linge — Todd's own reference, and it corroborates two choices made here
+  independently. **Talker variability:** "This has to be done across many
+  different speakers to be effective", which is what the sheet's voice cycling
+  is for. **Tone pairs:** the 20 two-syllable combinations are its primary
+  drill, mastered one word per pair and then transferred — the same argument as
+  decision 1, whole words with every syllable answered, which Todd took against
+  the single-syllable recommendation. It also puts tones in isolation first and
+  is blunt that sentences are the hard part. Its meaning-free exercise ("choose
+  any syllable you like, such as *yi* or *ma*, and pronounce each of the
+  combinations using only this syllable") is a PRODUCTION drill, not a
+  perception one, so it is adjacent to training on nonsense syllables rather
+  than evidence for it.
+
 **HSK 3.0**
 
 - [New HSK 3.0: all 9 levels and
